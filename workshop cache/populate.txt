@@ -1,0 +1,52 @@
+@ShutdownOnFailedCommand 1
+
+login anonymous
+
+// Also used: https://github.com/rrrfffrrr/Insurgency-server-plugins
+workshop_download_item 222880 3551935737    //TUG Scripts 3.9 (10,12,14p)
+workshop_download_item 222880 3548813711    // TUG Scripts 3.8 (10p)
+workshop_download_item 222880 3548226554    // TUG 3.7 Scripts (8p)
+workshop_download_item 222880 3071910412    // A Cheaper Christmas Suprise (repackage)
+workshop_download_item 222880 3058769642    // TUG 1.1 Scripts Pistols & Fire
+workshop_download_item 222880 3058055843    // TUG 1.0 Scripts Pistols & Fire
+workshop_download_item 222880 3048326419    // TUG 3.6 Scripts (14p) - needs 1952184042, 2544601599
+workshop_download_item 222880 3039907582    // TUG 3.5 Scripts (14p) - needs 1952184042, 2544601599
+workshop_download_item 222880 3039388961    // TUG 3.4 Scripts (14p) - needs 1952184042, 2544601599
+workshop_download_item 222880 2984351786    // TUG WW2 Scripts (B)
+workshop_download_item 222880 2983737308    // TUG WW2 Sounds
+workshop_download_item 222880 2983659381    // TUG WW2 Scripts
+workshop_download_item 222880 2908499942    // TUG Voting
+workshop_download_item 222880 2889664599    // TUG Sandstorm Source Sounds
+workshop_download_item 222880 2888270783    // TUG Sandstorm Source addons
+workshop_download_item 222880 2888270167    // TUG Sandstorm Source scripts
+workshop_download_item 222880 2880546896    // TUG 3.2 Scripts (14p) - needs 1952184042, 2544601599
+workshop_download_item 222880 2834243418    // SEC icon (spade)
+workshop_download_item 222880 2767467973    // Tug Upgrades3
+workshop_download_item 222880 2767466217    // Tug Sounds3
+workshop_download_item 222880 2749114575    // Tug M110 (SASS)
+workshop_download_item 222880 2749105820    // Tug SIG MCX
+workshop_download_item 222880 2744435243    // Tug M1897
+workshop_download_item 222880 2744181131    // Tug Green smoke (US)
+workshop_download_item 222880 2744179612    // Tug Arty Smoke (INS)
+workshop_download_item 222880 2733437858    // Tug 35AB Plus
+workshop_download_item 222880 2608888489    // Goat5
+workshop_download_item 222880 2594365894    // GitGud Othermaps Votepack
+workshop_download_item 222880 2593516111    // GitGud Weapons 1.0.1
+workshop_download_item 222880 2593514575    // GitGud Theaters 1.0.1
+workshop_download_item 222880 2593513399    // GitGud Sounds 1.0.1
+workshop_download_item 222880 2588723505    // GitGud Sounds Dev
+workshop_download_item 222880 2587572897    // GitGud Weapons Dev
+workshop_download_item 222880 2587571465    // GitGud Theaters Dev
+workshop_download_item 222880 2587448554    // GitGud Pistols and Fire theater
+workshop_download_item 222880 2578619784    // GitGud Weapons
+workshop_download_item 222880 2578618468    // GitGud Sounds
+workshop_download_item 222880 2578617068    // GitGud Theater
+workshop_download_item 222880 2461383341    // 35 Angry Bawts for insurgency.lol server CFF
+workshop_download_item 222880 2460937555    // 35 Angry Bawts for insurgency.lol server CFF
+workshop_download_item 222880 2458270637    // 35 Angry Bawts for insurgency.lol server CFF
+workshop_download_item 222880 2340927383    // 35 Angry Bawts for insurgency.lol server
+
+workshop_download_item 222880 1952184042    // The Armory - Sandstorm: Source
+workshop_download_item 222880 2544601599    // The Armory - Sandstorm: Source [Expansion]
+
+quit
