@@ -67,6 +67,35 @@ RUN \
     find /plugins/sourcemod -type f -name "*.so" -exec chmod 755 {} \; && \
     find /plugins/sourcemod -type f -not -name "*.so" -exec chmod 644 {} \;
 
+# This target is used to compile SourceMod plugins.
+FROM ubuntu:24.04 AS gameserver-compiled-mods
+
+# Download SourceMod for the compiler
+
+RUN \
+    dpkg --add-architecture i386 && \
+    apt update && \
+    DEBIAN_FRONTEND=noninteractive apt install --no-install-recommends -y curl ca-certificates libc6:i386 lib32stdc++6 && \
+    rm -rf /var/lib/apt/lists/* && \
+    mkdir -p /sourcemod && \
+    curl -fsSL -o - https://sm.alliedmods.net/smdrop/1.12/sourcemod-1.12.0-git7217-linux.tar.gz \
+    | tar -xz -C /sourcemod && \
+    # Output dir
+    mkdir -p /plugins/sourcemod/addons/sourcemod/plugins
+
+# Download the Battleye disabler plugin and build it
+RUN \
+    mkdir -p /plugins-source/ins_battleye_disabler && \
+    curl -fsSL -o /plugins-source/ins_battleye_disabler/ins_battleye_disabler.sp https://raw.githubusercontent.com/Grey83/SourceMod-plugins/a9e0230f3ae554633b349a56eb6474208ae16c84/SM/scripting/ins_battleye_disabler%201.0.0.sp && \
+    /sourcemod/addons/sourcemod/scripting/spcomp /plugins-source/ins_battleye_disabler/ins_battleye_disabler.sp -o /plugins/sourcemod/addons/sourcemod/plugins/ins_battleye_disabler.smx && \
+    rm -rf /plugins-source/ins_battleye_disabler
+
+# Fixup file permissions
+RUN \
+    find /plugins/sourcemod -type d -exec chmod 755 {} \; && \
+    find /plugins/sourcemod -type f -name "*.so" -exec chmod 755 {} \; && \
+    find /plugins/sourcemod -type f -not -name "*.so" -exec chmod 644 {} \;
+
 # This must use an older debian image. Newer images cause the server to segfault on startup, because for some
 # reason the server attempts to allocate more than 4GB of memory and fails.
 # TODO see if this can be updated at all. Testing takes a long time (about an hour per test), so I'm holding off for now.
@@ -92,6 +121,9 @@ COPY --from=gameserver-mods --chown=0:0 /plugins/mmsource/ /opt/insurgency-serve
 COPY --from=gameserver-mods --chown=0:0 /plugins/sourcemod/ /opt/insurgency-server/insurgency/
 # TODO symlink this or configure source mod to write this elsewhere
 COPY --from=gameserver-builder --chown=1000:1000 --chmod=755 /empty-directory /opt/insurgency-server/insurgency/addons/sourcemod/logs
+
+# Copy in compiled plugins
+COPY --from=gameserver-compiled-mods --chown=1000:1000 /plugins/sourcemod/ /opt/insurgency-server/insurgency/
 
 # Copy the default config
 COPY ["server config/base/", "/"]
