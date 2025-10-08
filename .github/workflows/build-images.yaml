@@ -47,7 +47,7 @@ jobs:
 
       - name: Determine if image should be pushed
         run: |
-          if [ "${GITHUB_EVENT_NAME}" = "push" ]; then
+          if [ "${GITHUB_EVENT_NAME}" = "push" ] || [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ]; then
             echo "PUSH_ALL=true" >> "${GITHUB_ENV}"
           else
             echo "PUSH_ALL=false" >> "${GITHUB_ENV}"
