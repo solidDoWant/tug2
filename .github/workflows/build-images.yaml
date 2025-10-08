@@ -54,6 +54,12 @@ jobs:
           fi
         if: *any_images_need_built
 
+      - name: Free up runner disk space (there isn't enough space to build the images otherwise)
+        uses: jlumbroso/free-disk-space@54081f138730dfa15788a46383842cd2f914a1be # v1.3.1
+        with:
+          tool-cache: true
+        if: *any_images_need_built
+
       - name: Set up Docker with the containerd image store enabled
         uses: docker/setup-docker-action@b60f85385d03ac8acfca6d9996982511d8620a19 # v4.3.0
         with:
