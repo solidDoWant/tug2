@@ -111,7 +111,7 @@ RUN \
 # This must use an older debian image. Newer images cause the server to segfault on startup, because for some
 # reason the server attempts to allocate more than 4GB of memory and fails.
 # TODO see if this can be updated at all. Testing takes a long time (about an hour per test), so I'm holding off for now.
-FROM gcr.io/distroless/static-debian9 AS gameserver
+FROM debian:jessie AS gameserver
 
 USER 1000:1000
 
