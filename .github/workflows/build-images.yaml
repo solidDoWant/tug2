@@ -58,10 +58,13 @@ jobs:
           fi
         if: *any_images_need_built
 
+      - name: Expose GitHub token to Docker
+        uses: crazy-max/ghaction-github-runtime@3cb05d89e1f492524af3d41a1c98c83bc3025124  # v3.1.0
+
       - name: Build the base server image
-        run: make base-image
+        run: make base-image EXTRA_DOCKER_ARGS="--cache-to type=gha,scope=base-image,mode=max --cache-from type=gha,scope=base-image"
         if: *any_images_need_built
 
       - name: Build the main server image
-        run: make server-image-main VERSION="${VERSION}" PUSH_ALL="${PUSH_ALL}"
+        run: make server-image-main VERSION="${VERSION}" PUSH_ALL="${PUSH_ALL}" EXTRA_DOCKER_ARGS="--cache-to type=gha,scope=main-image,mode=max --cache-from type=gha,scope=main-image"
         if: *any_images_need_built

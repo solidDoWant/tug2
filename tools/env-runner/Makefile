@@ -57,7 +57,7 @@ CONTAINER_IMAGE_TAG = $(CONTAINER_REGISTRY)/$(BINARY_NAME):$(VERSION)
 LOCAL_BUILDERS += container-image
 .PHONY: container-image
 container-image: binary	## Build the container image for the local platform.
-	docker buildx build --platform linux/$(LOCALARCH) -t $(CONTAINER_IMAGE_TAG) --load .
+	docker buildx build --platform linux/$(LOCALARCH) -t $(CONTAINER_IMAGE_TAG) $(EXTRA_DOCKER_ARGS) --load .
 
 .PHONY: clean
 clean:	## Clean up all build artifacts.
