@@ -56,6 +56,16 @@ jobs:
 
       - name: Free up runner disk space (there isn't enough space to build the images otherwise)
         uses: jlumbroso/free-disk-space@54081f138730dfa15788a46383842cd2f914a1be # v1.3.1
+        with:
+          # Only remove a little bit to speed up the workflow
+          tool-cache: false # This can't be removed currently because the build process needs Go (TODO)
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: false
+          docker-images: false
+          swap-storage: false
+
         if: *any_images_need_built
 
       - name: Set up Docker with the containerd image store enabled
