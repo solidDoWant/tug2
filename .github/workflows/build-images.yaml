@@ -32,12 +32,6 @@ jobs:
             main-server-image:
               - server config/main/**
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@e468171a9de216ec08956ac3ada2f0791b6bd435 # v3.11.1
-        if: &any_images_need_built >-
-          steps.changes.outputs.all-images == 'true' ||
-          steps.changes.outputs.main-server-image == 'true'
-
       - name: Determine image version
         run: |
           if [ "${GITHUB_EVENT_NAME}" = "pull_request" ]; then
@@ -58,8 +52,23 @@ jobs:
           fi
         if: *any_images_need_built
 
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@e468171a9de216ec08956ac3ada2f0791b6bd435 # v3.11.1
+        if: &any_images_need_built >-
+          steps.changes.outputs.all-images == 'true' ||
+          steps.changes.outputs.main-server-image == 'true'
+
+      - name: Log in to ghcr.io
+        uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef  # v3.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+        if: *any_images_need_built
+
       - name: Expose GitHub token to Docker
         uses: crazy-max/ghaction-github-runtime@3cb05d89e1f492524af3d41a1c98c83bc3025124  # v3.1.0
+        if: *any_images_need_built
 
       - name: Build the base server image
         run: make base-image EXTRA_DOCKER_ARGS="--cache-to type=gha,scope=base-image,mode=max --cache-from type=gha,scope=base-image"
