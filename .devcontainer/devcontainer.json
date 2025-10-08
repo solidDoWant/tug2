@@ -13,7 +13,8 @@
 			"extensions": [
 				"ms-azuretools.vscode-docker",
 				"docker.docker",
-				"yzhang.markdown-all-in-one"
+				"yzhang.markdown-all-in-one",
+				"GitHub.vscode-github-actions"
 			]
 		}
 	}
