@@ -28,6 +28,7 @@ jobs:
               - Dockerfile
               - Makefile
               - tools/**
+              - .github/workflows/build-images.yaml
             main-server-image:
               - server config/main/**
 
