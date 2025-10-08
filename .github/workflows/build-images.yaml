@@ -81,10 +81,13 @@ jobs:
         uses: crazy-max/ghaction-github-runtime@3cb05d89e1f492524af3d41a1c98c83bc3025124  # v3.1.0
         if: *any_images_need_built
 
+      # Caching is disabled because GH runners completely break when uploading layers to the cache. I've hit this issue multiple times at work
+      # and GH's "premium support" always takes 6+ months to get it fixed. I'm not even going to bother trying to engage them to fix this.
+
       - name: Build the base server image
-        run: make base-image EXTRA_DOCKER_ARGS="--cache-to type=gha,scope=base-image,mode=max --cache-from type=gha,scope=base-image"
+        run: make base-image # EXTRA_DOCKER_ARGS="--cache-to type=gha,scope=base-image,mode=max --cache-from type=gha,scope=base-image"
         if: *any_images_need_built
 
       - name: Build the main server image
-        run: make server-image-main VERSION="${VERSION}" PUSH_ALL="${PUSH_ALL}" EXTRA_DOCKER_ARGS="--cache-to type=gha,scope=main-image,mode=max --cache-from type=gha,scope=main-image"
+        run: make server-image-main VERSION="${VERSION}" PUSH_ALL="${PUSH_ALL}" # EXTRA_DOCKER_ARGS="--cache-to type=gha,scope=main-image,mode=max --cache-from type=gha,scope=main-image"
         if: *any_images_need_built
