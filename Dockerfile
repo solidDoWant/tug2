@@ -123,7 +123,7 @@ COPY --from=gameserver-mods --chown=0:0 /plugins/sourcemod/ /opt/insurgency-serv
 COPY --from=gameserver-builder --chown=1000:1000 --chmod=755 /empty-directory /opt/insurgency-server/insurgency/addons/sourcemod/logs
 
 # Copy in compiled plugins
-COPY --from=gameserver-compiled-mods --chown=1000:1000 /plugins/sourcemod/ /opt/insurgency-server/insurgency/
+COPY --from=gameserver-compiled-mods --chown=0:0 /plugins/sourcemod/ /opt/insurgency-server/insurgency/
 
 # Copy the default config
 COPY ["server config/base/", "/"]
