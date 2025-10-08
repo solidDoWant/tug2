@@ -38,6 +38,10 @@ server-image-%: base-image	## Build the container image for the specified server
 .PHONY: server-images
 server-images: server-image-main	## Build all server images.
 
+.PHONY: print-name-server-image-%
+print-name-server-image-%:	## Print the full name of the specified server image. Usage: make print-name-server-image-SERVER_NAME
+	@echo "$(CONTAINER_REGISTRY)-$*:$(VERSION)"
+
 .PHONY: clean
 clean:	## Clean up all built images and temporary files.
 	@docker image rm -f "$(CONTAINER_REGISTRY)-base:$(VERSION)" 2> /dev/null > /dev/null || true

@@ -105,3 +105,15 @@ jobs:
       - name: Build the main server image
         run: make server-image-main VERSION="${VERSION}" PUSH_ALL="${PUSH_ALL}" # EXTRA_DOCKER_ARGS="--cache-to type=gha,scope=main-image,mode=max --cache-from type=gha,scope=main-image"
         if: *any_images_need_built
+
+      - name: Record the built image version to GH summary
+        if: *any_images_need_built
+        run: |
+          MAIN_SERVER_IMAGE_NAME="$(make print-name-server-image-main VERSION="${VERSION}")"
+          cat << EOF >> "${GITHUB_STEP_SUMMARY}"
+          ## Built image versions
+
+          | Image                  | Version                                                            |
+          |------------------------|--------------------------------------------------------------------|
+          | Main server image      | [\`${MAIN_SERVER_IMAGE_NAME}\`](https://${MAIN_SERVER_IMAGE_NAME}) |
+          EOF
