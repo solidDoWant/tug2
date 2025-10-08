@@ -37,6 +37,7 @@ moving to dedicated nodes and/or a colo datacenter.
 * Figure out GSLT ownership (need community input)
 * Document availability expectations
 * Backups
+* Checksum downloaded files
 
 ## How-to guides
 

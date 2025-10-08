@@ -7,7 +7,7 @@ RUN \
     # Install the game files
     mkdir -p /opt/insurgency-server && \
     # Note: error message "Error! App '237410' state is 0x202 after update job." means not enough disk space.
-    steamcmd +force_install_dir /opt/insurgency-server +login anonymous +app_update 237410 +quit && \
+    steamcmd +force_install_dir /opt/insurgency-server +login anonymous +app_update 237410 validate +quit && \
     # Remove files for other platforms
     rm -rf /opt/insurgency-server/srcds{.exe,_osx,_osx64,_x64.exe,_run} && \
     find /opt/insurgency-server/ \( -name '*.dll' -or -name '*.exe' -or -name '*.dylib' -or -name 'osx64' \) -delete && \
@@ -24,14 +24,6 @@ FROM ghcr.io/gameservermanagers/steamcmd:ubuntu-24.04 AS gameserver-mods
 
 # TODO this will be used to download workshop mods, third party plugins, etc.
 
-RUN \
-    # Install curl for downloading mods
-    apt update && \
-    DEBIAN_FRONTEND=noninteractive apt install --no-install-recommends -y curl ca-certificates && \
-    rm -rf /var/lib/apt/lists/*
-
-RUN mkdir /plugins
-
 # Example workshop mod download:
 # RUN steamcmd +login anonymous +workshop_download_item 222880 123456789
 
@@ -41,20 +33,68 @@ RUN mkdir /plugins
 #    curl -fsSL -o /plugins/someplugin/someplugin.so https://example.com/someplugin.so && \
 #    curl -fsSL -o /plugins/someplugin/someplugin.txt https://example.com/someplugin.txt
 
+RUN \
+    # Install curl for downloading mods
+    apt update && \
+    DEBIAN_FRONTEND=noninteractive apt install --no-install-recommends -y curl ca-certificates && \
+    rm -rf /var/lib/apt/lists/*
 
-FROM gcr.io/distroless/static-debian12 AS gameserver
+RUN mkdir /plugins
+
+# MetaMod Source
+RUN \
+    mkdir -p /plugins/mmsource && \
+    curl -fsSL -o - https://mms.alliedmods.net/mmsdrop/1.12/mmsource-1.12.0-git1219-linux.tar.gz \
+    | tar -xz -C /plugins/mmsource && \
+    # Remove extra files
+    rm -rf /plugins/mmsource/addons/metamod/bin/linux64 /plugins/mmsource/addons/metamod/readme.txt /plugins/mmsource/addons/metamod_x64.vdf && \
+    find /plugins/mmsource/addons/metamod/bin -name '*.so' -not \( -name 'server.so' -or -name 'server_i486.so' -or -name 'metamod.2.insurgency.so' \) -delete && \
+    # Fixup file permissions
+    find /plugins/mmsource -type d -exec chmod 755 {} \; && \
+    find /plugins/mmsource -type f -name "*.so" -exec chmod 755 {} \; && \
+    find /plugins/mmsource -type f -not -name "*.so" -exec chmod 644 {} \;
+
+# SourceMod
+RUN \
+    mkdir -p /plugins/sourcemod && \
+    curl -fsSL -o - https://sm.alliedmods.net/smdrop/1.12/sourcemod-1.12.0-git7217-linux.tar.gz \
+    | tar -xz -C /plugins/sourcemod && \
+    # Remove extra files
+    rm -rf /plugins/sourcemod/addons/sourcemod/bin/x64 /plugins/sourcemod/addons/sourcemod/logs && \
+    find /plugins/sourcemod/addons/sourcemod/bin -name '*.so' -not \( -name 'sourcemod.2.insurgency.so' -or -name 'sourcemod_mm_i486.so' -or -name 'sourcemod_mm.x64.so' -or -name 'sourcemod.logic.so' -or -name 'sourcepawn.jit.x86.so' \) -delete && \
+    # Fixup file permissions
+    find /plugins/sourcemod -type d -exec chmod 755 {} \; && \
+    find /plugins/sourcemod -type f -name "*.so" -exec chmod 755 {} \; && \
+    find /plugins/sourcemod -type f -not -name "*.so" -exec chmod 644 {} \;
+
+# This must use an older debian image. Newer images cause the server to segfault on startup, because for some
+# reason the server attempts to allocate more than 4GB of memory and fails.
+# TODO see if this can be updated at all. Testing takes a long time (about an hour per test), so I'm holding off for now.
+FROM gcr.io/distroless/static-debian9 AS gameserver
 
 USER 1000:1000
 
+# Copy the game server files
 COPY --from=gameserver-builder --chown=1000:1000 /empty-directory /opt/insurgency-server
 COPY --from=gameserver-builder /opt/insurgency-server/ /opt/insurgency-server/
+
 # Copy i386 ld. The server executable is 32 bit and specifies this interpreter, making it incompatible
 # with the 64 bit interpreter and libraries.
 COPY --from=gameserver-builder /usr/lib/ld-linux.so.2 /lib/ld-linux.so.2
 COPY --from=gameserver-builder /usr/lib/i386-linux-gnu /lib/i386-linux-gnu
+
 # Copy the tool used for providing env vars as args
 # If this errors, verify that the env-runner image was built.
 COPY --from=ghcr.io/soliddowant/env-runner /env-runner /usr/bin/env-runner
+
+# Copy in plugins
+COPY --from=gameserver-mods --chown=0:0 /plugins/mmsource/ /opt/insurgency-server/insurgency/
+COPY --from=gameserver-mods --chown=0:0 /plugins/sourcemod/ /opt/insurgency-server/insurgency/
+# TODO symlink this or configure source mod to write this elsewhere
+COPY --from=gameserver-builder --chown=1000:1000 --chmod=755 /empty-directory /opt/insurgency-server/insurgency/addons/sourcemod/logs
+
+# Copy the default config
+COPY ["server config/base/", "/"]
 
 ENV LD_LIBRARY_PATH=/opt/insurgency-server:/opt/insurgency-server/bin
 ENV SERVER_CONFIG_FILE_PATH=server.cfg
@@ -78,9 +118,6 @@ ENTRYPOINT [    \
     "+map", "${STARTING_MAP}"  \
 ]
 
-
 FROM gameserver AS gameserver-main
-
-ENV MAX_PLAYERS=14
 
 COPY ["server config/main/", "/"]

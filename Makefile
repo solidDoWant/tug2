@@ -33,7 +33,7 @@ base-image: env-runner-image
 
 .PHONY: server-image-%
 server-image-%: base-image	## Build the container image for the specified server. Usage: make server-image-SERVER_NAME
-	docker build --target gameserver-$* -t "$(CONTAINER_REGISTRY)-$*:$(VERSION)" $(PUSH_ARG) "$(PROJECT_DIR)"
+	docker build --target gameserver-$* -t "$(CONTAINER_REGISTRY)-$*:$(VERSION)" $(PUSH_ARG) --load "$(PROJECT_DIR)"
 
 .PHONY: server-images
 server-images: server-image-main	## Build all server images.
