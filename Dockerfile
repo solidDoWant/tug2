@@ -75,7 +75,11 @@ FROM ubuntu:24.04 AS gameserver-compiled-mods
 RUN \
     dpkg --add-architecture i386 && \
     apt update && \
-    DEBIAN_FRONTEND=noninteractive apt install --no-install-recommends -y curl ca-certificates libc6:i386 lib32stdc++6 && \
+    DEBIAN_FRONTEND=noninteractive apt install --no-install-recommends -y \
+        # Used for downloading resources
+        curl ca-certificates \
+        # Needed by the SourceMod compiler
+        libc6:i386 lib32stdc++6 && \
     rm -rf /var/lib/apt/lists/* && \
     mkdir -p /sourcemod && \
     curl -fsSL -o - https://sm.alliedmods.net/smdrop/1.12/sourcemod-1.12.0-git7217-linux.tar.gz \
@@ -83,12 +87,20 @@ RUN \
     # Output dir
     mkdir -p /plugins/sourcemod/addons/sourcemod/plugins
 
-# Download the Battleye disabler plugin and build it
+# Build the Battleye disabler plugin
 RUN \
     mkdir -p /plugins-source/ins_battleye_disabler && \
     curl -fsSL -o /plugins-source/ins_battleye_disabler/ins_battleye_disabler.sp https://raw.githubusercontent.com/Grey83/SourceMod-plugins/a9e0230f3ae554633b349a56eb6474208ae16c84/SM/scripting/ins_battleye_disabler%201.0.0.sp && \
     /sourcemod/addons/sourcemod/scripting/spcomp /plugins-source/ins_battleye_disabler/ins_battleye_disabler.sp -o /plugins/sourcemod/addons/sourcemod/plugins/ins_battleye_disabler.smx && \
     rm -rf /plugins-source/ins_battleye_disabler
+
+# Build the annoucement plugin
+RUN \
+    mkdir -p /plugins-source/announcement && \
+    curl -fsSL -o /plugins-source/announcement/announcement.sp https://raw.githubusercontent.com/rrrfffrrr/Insurgency-server-plugins/refs/heads/master/scripting/announcement.sp && \
+    /sourcemod/addons/sourcemod/scripting/spcomp /plugins-source/announcement/announcement.sp -o /plugins/sourcemod/addons/sourcemod/plugins/announcement.smx && \
+    echo "Welcome to TUG!" > /plugins/sourcemod/addons/sourcemod/announcement.txt && \
+    rm -rf /plugins-source/announcement
 
 # Fixup file permissions
 RUN \
