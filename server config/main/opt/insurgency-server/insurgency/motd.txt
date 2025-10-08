@@ -1,1 +1,4 @@
 TUG 2
+
+Server is in super-ultra-pre-alpha.
+See discord for details.
