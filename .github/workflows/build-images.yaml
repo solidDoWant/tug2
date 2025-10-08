@@ -44,7 +44,7 @@ jobs:
         if: &any_images_need_built >-
           steps.changes.outputs.all-images == 'true' ||
           steps.changes.outputs.main-server-image == 'true'
-          
+
       - name: Determine if image should be pushed
         run: |
           if [ "${GITHUB_EVENT_NAME}" = "push" ]; then
