@@ -137,6 +137,10 @@ COPY --from=gameserver-builder --chown=1000:1000 --chmod=755 /empty-directory /o
 # Copy in compiled plugins
 COPY --from=gameserver-compiled-mods --chown=0:0 /plugins/sourcemod/ /opt/insurgency-server/insurgency/
 
+# Copy TLS certs
+COPY --from=gameserver-builder /etc/ssl/certs/ /etc/ssl/certs/
+COPY --from=gameserver-builder /usr/share/ca-certificates/ /usr/share/ca-certificates/
+
 # Copy the default config
 COPY ["server config/base/", "/"]
 
