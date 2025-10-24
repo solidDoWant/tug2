@@ -83,33 +83,30 @@ jobs:
         uses: docker/setup-buildx-action@e468171a9de216ec08956ac3ada2f0791b6bd435 # v3.11.1
         if: *any_images_need_built
 
-      - name: Log in to ghcr.io
+      - name: Log in to private registry
         uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef  # v3.6.0
         with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-        if: *any_images_need_built
-
-      - name: Expose GitHub token to Docker
-        uses: crazy-max/ghaction-github-runtime@3cb05d89e1f492524af3d41a1c98c83bc3025124  # v3.1.0
+          registry: ${{ secrets.CONTAINER_REGISTRY }}
+          username: ${{ secrets.CONTAINER_REGISTRY_USERNAME }}
+          password: ${{ secrets.CONTAINER_REGISTRY_PASSWORD }}
         if: *any_images_need_built
 
       # Caching is disabled because GH runners completely break when uploading layers to the cache. I've hit this issue multiple times at work
       # and GH's "premium support" always takes 6+ months to get it fixed. I'm not even going to bother trying to engage them to fix this.
-
       - name: Build the base server image
         run: make base-image # EXTRA_DOCKER_ARGS="--cache-to type=gha,scope=base-image,mode=max --cache-from type=gha,scope=base-image"
         if: *any_images_need_built
 
       - name: Build the main server image
-        run: make server-image-main VERSION="${VERSION}" PUSH_ALL="${PUSH_ALL}" # EXTRA_DOCKER_ARGS="--cache-to type=gha,scope=main-image,mode=max --cache-from type=gha,scope=main-image"
+        env:
+          CONTAINER_REGISTRY: ${{ secrets.CONTAINER_REGISTRY }}
+        run: make server-image-main VERSION="${VERSION}" CONTAINER_REGISTRY="${CONTAINER_REGISTRY}/tug2" PUSH_ALL="${PUSH_ALL}" # EXTRA_DOCKER_ARGS="--cache-to type=gha,scope=main-image,mode=max --cache-from type=gha,scope=main-image"
         if: *any_images_need_built
 
       - name: Record the built image version to GH summary
         if: *any_images_need_built
         run: |
-          MAIN_SERVER_IMAGE_NAME="$(make print-name-server-image-main VERSION="${VERSION}")"
+          MAIN_SERVER_IMAGE_NAME="$(make print-name-server-image-main VERSION="${VERSION}"" CONTAINER_REGISTRY='${SECRET_PUBLIC_DOMAIN_NAME}/tug2')"
           cat << EOF >> "${GITHUB_STEP_SUMMARY}"
           ## Built image versions
 

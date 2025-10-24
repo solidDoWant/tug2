@@ -32,7 +32,7 @@ run: fmt vet ## Run the tool
 ##@ Build and Release
 
 VERSION = latest
-CONTAINER_REGISTRY = ghcr.io/soliddowant
+CONTAINER_REGISTRY = tug2
 
 BUILD_DIR := $(PROJECT_DIR)/build
 

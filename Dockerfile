@@ -1,6 +1,8 @@
 # This produces a container with the insurgency server already installed. This prevents installation from occuring on every single startup. The tradeoff is a much
 # larger (10 GB) container image with copyrighted content, which can't be pushed to public repos (e.g. ghcr.io, dockerhub)
 
+ARG ENV_RUNNER_IMAGE_NAME=ghcr.io/soliddowant/env-runner:latest
+
 FROM ghcr.io/gameservermanagers/steamcmd:ubuntu-24.04 AS gameserver-builder
 
 RUN \
@@ -12,7 +14,10 @@ RUN \
     rm -rf /opt/insurgency-server/srcds{.exe,_osx,_osx64,_x64.exe,_run} && \
     find /opt/insurgency-server/ \( -name '*.dll' -or -name '*.exe' -or -name '*.dylib' -or -name 'osx64' \) -delete && \
     # Remove the joystick config file to reduce logging noise
-    rm -f /opt/insurgency-server/insurgency/cfg/joystick.cfg
+    rm -f /opt/insurgency-server/insurgency/cfg/joystick.cfg && \
+    # Symlink 'GAMEaddons' dir due to insurgency bug
+    ln -s addons /opt/insurgency-server/insurgency/GAMEaddons && \
+    ln -s ../addons /opt/insurgency-server/bin/GAMEaddons
 
 # This is a trick to get the /opt/insurgency-server directory in the gameserver stage owned by 1000:1000.
 # By copying this empty directory with `chown=1000:1000` to /opt/insurgency-server, the following copies
@@ -108,10 +113,20 @@ RUN \
     find /plugins/sourcemod -type f -name "*.so" -exec chmod 755 {} \; && \
     find /plugins/sourcemod -type f -not -name "*.so" -exec chmod 644 {} \;
 
+# Dumb workaround for docker limitation where you can't copy from an image specified by a build arg
+FROM ${ENV_RUNNER_IMAGE_NAME} AS env-runner
+
 # This must use an older debian image. Newer images cause the server to segfault on startup, because for some
 # reason the server attempts to allocate more than 4GB of memory and fails.
 # TODO see if this can be updated at all. Testing takes a long time (about an hour per test), so I'm holding off for now.
-FROM debian:jessie AS gameserver
+FROM debian:bullseye AS gameserver
+
+RUN \
+    dpkg --add-architecture i386 && \
+    apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends -y \
+    ca-certificates \
+    libc6:i386 libncurses5:i386 libstdc++6:i386 && \
+    rm -rf /var/lib/apt/lists/*
 
 USER 1000:1000
 
@@ -119,14 +134,10 @@ USER 1000:1000
 COPY --from=gameserver-builder --chown=1000:1000 /empty-directory /opt/insurgency-server
 COPY --from=gameserver-builder /opt/insurgency-server/ /opt/insurgency-server/
 
-# Copy i386 ld. The server executable is 32 bit and specifies this interpreter, making it incompatible
-# with the 64 bit interpreter and libraries.
-COPY --from=gameserver-builder /usr/lib/ld-linux.so.2 /lib/ld-linux.so.2
-COPY --from=gameserver-builder /usr/lib/i386-linux-gnu /lib/i386-linux-gnu
 
 # Copy the tool used for providing env vars as args
 # If this errors, verify that the env-runner image was built.
-COPY --from=ghcr.io/soliddowant/env-runner /env-runner /usr/bin/env-runner
+COPY --from=env-runner /env-runner /usr/bin/env-runner
 
 # Copy in plugins
 COPY --from=gameserver-mods --chown=0:0 /plugins/mmsource/ /opt/insurgency-server/insurgency/

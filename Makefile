@@ -3,8 +3,10 @@ PROJECT_DIR := $(shell dirname $(realpath $(firstword $(MAKEFILE_LIST))))
 
 PUSH_ALL ?= false
 VERSION = 0.0.1-dev
-CONTAINER_REGISTRY = ghcr.io/soliddowant/tug2
+CONTAINER_REGISTRY = tug2
+CONTAINER_REPOSITORY = $(CONTAINER_REGISTRY)/insurgency
 PUSH_ARG = $(if $(findstring t,$(PUSH_ALL)),--push)
+DOCKER_ARGS = --build-arg ENV_RUNNER_IMAGE_NAME=$(CONTAINER_REGISTRY)/env-runner:latest
 
 ##@ General
 
@@ -29,11 +31,11 @@ env-runner-image:
 
 .PHONY: base-image
 base-image: env-runner-image
-	docker build --target gameserver -t "$(CONTAINER_REGISTRY)-base:$(VERSION)" $(EXTRA_DOCKER_ARGS) "$(PROJECT_DIR)"
+	docker build --target gameserver -t "$(CONTAINER_REPOSITORY)-base:$(VERSION)" $(DOCKER_ARGS) $(EXTRA_DOCKER_ARGS) "$(PROJECT_DIR)"
 
 .PHONY: server-image-%
 server-image-%: base-image	## Build the container image for the specified server. Usage: make server-image-SERVER_NAME
-	docker build --target gameserver-$* -t "$(CONTAINER_REGISTRY)-$*:$(VERSION)" $(PUSH_ARG) --load $(EXTRA_DOCKER_ARGS) "$(PROJECT_DIR)"
+	docker build --target gameserver-$* -t "$(CONTAINER_REPOSITORY)-$*:$(VERSION)" $(PUSH_ARG) --load $(DOCKER_ARGS) $(EXTRA_DOCKER_ARGS) "$(PROJECT_DIR)"
 
 .PHONY: server-images
 server-images: server-image-main	## Build all server images.
