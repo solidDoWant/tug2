@@ -64,7 +64,9 @@ Changes are implemented through GitHub's "pull request" (PR) feature. Here's a h
 
 ### How do I add a workshop item (map, theater, weapons, etc)?
 
-TODO - this is still being tested
+1. Identify which workshop item you want to install.
+2. Navigate to `server config/<server name>/opt/insurgency-server/insurgency/subscribed_file_ids.txt`.
+3. Add the workshop item's ID to the file. There should be one ID per line.
 
 ### How do I add third-party files like a custom plugin?
 

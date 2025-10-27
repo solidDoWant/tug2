@@ -1,0 +1,69 @@
+// Official NWI playlist
+// See example.playlist for documentation/format guide
+
+"playlist"
+{
+	"name"					"#Playlist_Coop"
+	"description"				"#Playlist_Coop_Desc"
+	
+	"require_maxplayers_min"		"24"	// Min player slots required for this playlist
+
+// This will be controlled via mapcycle.txt	
+//	"allowed_maps"
+//	{
+//		"sinjar_coop"				"checkpoint"
+//		"revolt_coop"				"checkpoint"
+//		"buhriz_coop"				"checkpoint"
+//		"market_coop"				"checkpoint"
+//		"heights_coop"				"checkpoint"
+//		"contact_coop"				"checkpoint"
+//		"district_coop"				"checkpoint"
+//		"ministry_coop"				"checkpoint"
+//		"siege_coop"				"checkpoint"
+//		"tell_coop"				"checkpoint"
+//		"ins_abdallah_coop_fix" "checkpoint"
+//		"crash_course" "checkpoint"
+//		"the_burbs_coop" "checkpoint"
+//		"iron_express" "checkpoint"
+//	}
+	
+	"cvars"
+	{
+		"mp_friendlyfire"			"1"	// friendly fire
+		"mp_tkpunish"				"1"	// How to punish team killing ( 0 = none, 1 = warning, 2 = kill )
+		"sv_hud_deathmessages"			"0"	// death messages
+		"sv_hud_targetindicator"		"1"	// show friendly player names when looking at them
+		"mp_timer_preround"			"15"	// timer for the pre-round (before the round starts, usually after a previous round ends or on mp_restartround 1)
+		"mp_timer_postround"			"15"	// timer for the post-round (after the round starts)
+		"mp_timer_postgame"			"10"	// timer for the post-game (at the end of a game / map rotation)
+		"mp_timer_pregame"			"10"	// timer for the pre-game (before the game starts, usually after map change or on mp_restartgame 1)
+		"sv_deadvoice"				"0"	// enabling this will allow the dead and living to VOIP each other
+		"sv_deadtalk"				"0"	// enabling this will allow the dead and living to chat text each other
+		"sv_deadtalk_team"			"1"	// is deadchat limited to just your team?
+		"mp_coop_lobbysize"			"12"	// lobby size
+		"mp_coop_min_bots"			"35"	// number of bots when there is 1 player on the server
+		"mp_coop_max_bots"			"224"	// number of bots when there are 14 players on the server
+		"ins_bot_count_checkpoint_max" "224"	// maximum number of bots for checkpoint
+		"bot_damage"				"1"	// the amount of damage bots give off compared to normal players
+		"mp_voice_use_3d_voip"			"1"	// disabling this will turn off the 3d voip system and allow all players to hear one another
+		"sv_vote_issue_changegamemode_allowed"	"0"	// no changegamemode
+	}
+	
+	"forced_cvars"
+	{
+		"mp_theater_override"			"theater_35angrybots12p_medic_default"
+		"mp_minteamplayers"			"1"	// min players on each team to start the match
+		"sv_nwi_banlist"			"1"	// global ban list
+		"host_timescale"			"1.0"
+	}
+	
+	"filters"
+	{
+		// Minimum player count filter, removing this key will remove this filter.
+		"players"
+		{
+			"min"					"0"	// Minimum slider value
+			"max"					"7"	// Maximum slider value
+		}
+	}
+}

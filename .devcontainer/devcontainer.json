@@ -14,7 +14,8 @@
 				"ms-azuretools.vscode-docker",
 				"docker.docker",
 				"yzhang.markdown-all-in-one",
-				"GitHub.vscode-github-actions"
+				"GitHub.vscode-github-actions",
+				"Sarrus.sourcepawn-vscode"
 			]
 		}
 	}

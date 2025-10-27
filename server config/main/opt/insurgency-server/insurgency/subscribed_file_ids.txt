@@ -1,0 +1,12 @@
+859127166 // The Armory Expanded 35AB Version Weapons Expansion
+// 1952184042 // The Armory - Sandstorm Source
+// 2544601599 // The Armory - Sandstorm Source Expansion
+// 927374621 // The Armory Expanded 35AB Version Weapons Expansion Assets and Resources 
+// 2750162587 // The Armory Expanded 35AB Version Conquer Support
+890084623 // Map vote images
+1432912836 // Vote Screen for Cooperation mode Map Collection - more map vote images
+878171320 // AE_miscaddons - sound fix see https://steamcommunity.com/workshop/filedetails/discussion/859127166/1697175413680978909/#c1697175413685307801
+1380424575 // ins_abdallah_coop_fix - map
+880051898 // Veteran Insurgents (Fixed) - randomized ins skins
+1595712656 // Hesco Bastions (HD) - reskin mesh barriers
+3593974545 // Test collection 1

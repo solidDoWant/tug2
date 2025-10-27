@@ -27,10 +27,7 @@ RUN mkdir /empty-directory
 
 FROM ghcr.io/gameservermanagers/steamcmd:ubuntu-24.04 AS gameserver-mods
 
-# TODO this will be used to download workshop mods, third party plugins, etc.
-
-# Example workshop mod download:
-# RUN steamcmd +login anonymous +workshop_download_item 222880 123456789
+# TODO this will be used to third party plugins.
 
 # Example third party plugin download:
 # RUN \
@@ -76,7 +73,6 @@ RUN \
 FROM ubuntu:24.04 AS gameserver-compiled-mods
 
 # Download SourceMod for the compiler
-
 RUN \
     dpkg --add-architecture i386 && \
     apt update && \
@@ -94,17 +90,17 @@ RUN \
 
 # Build the Battleye disabler plugin
 RUN \
-    mkdir -p /plugins-source/ins_battleye_disabler && \
+    mkdir -p /plugins-source/ins_battleye_disabler /plugins/sourcemod/ins_battleye_disabler/addons/sourcemod/plugins && \
     curl -fsSL -o /plugins-source/ins_battleye_disabler/ins_battleye_disabler.sp https://raw.githubusercontent.com/Grey83/SourceMod-plugins/a9e0230f3ae554633b349a56eb6474208ae16c84/SM/scripting/ins_battleye_disabler%201.0.0.sp && \
-    /sourcemod/addons/sourcemod/scripting/spcomp /plugins-source/ins_battleye_disabler/ins_battleye_disabler.sp -o /plugins/sourcemod/addons/sourcemod/plugins/ins_battleye_disabler.smx && \
+    /sourcemod/addons/sourcemod/scripting/spcomp /plugins-source/ins_battleye_disabler/ins_battleye_disabler.sp -o /plugins/sourcemod/ins_battleye_disabler/addons/sourcemod/plugins/ins_battleye_disabler.smx && \
     rm -rf /plugins-source/ins_battleye_disabler
 
 # Build the annoucement plugin
 RUN \
-    mkdir -p /plugins-source/announcement && \
+    mkdir -p /plugins-source/announcement /plugins/sourcemod/annoucement/addons/sourcemod/plugins && \
     curl -fsSL -o /plugins-source/announcement/announcement.sp https://raw.githubusercontent.com/rrrfffrrr/Insurgency-server-plugins/refs/heads/master/scripting/announcement.sp && \
-    /sourcemod/addons/sourcemod/scripting/spcomp /plugins-source/announcement/announcement.sp -o /plugins/sourcemod/addons/sourcemod/plugins/announcement.smx && \
-    echo "Welcome to TUG!" > /plugins/sourcemod/addons/sourcemod/announcement.txt && \
+    /sourcemod/addons/sourcemod/scripting/spcomp /plugins-source/announcement/announcement.sp -o /plugins/sourcemod/annoucement/addons/sourcemod/plugins/announcement.smx && \
+    echo "Welcome to TUG!" > /plugins/sourcemod/annoucement/addons/sourcemod/announcement.txt && \
     rm -rf /plugins-source/announcement
 
 # Fixup file permissions
@@ -128,12 +124,9 @@ RUN \
     libc6:i386 libncurses5:i386 libstdc++6:i386 && \
     rm -rf /var/lib/apt/lists/*
 
-USER 1000:1000
-
 # Copy the game server files
 COPY --from=gameserver-builder --chown=1000:1000 /empty-directory /opt/insurgency-server
 COPY --from=gameserver-builder /opt/insurgency-server/ /opt/insurgency-server/
-
 
 # Copy the tool used for providing env vars as args
 # If this errors, verify that the env-runner image was built.
@@ -146,18 +139,18 @@ COPY --from=gameserver-mods --chown=0:0 /plugins/sourcemod/ /opt/insurgency-serv
 COPY --from=gameserver-builder --chown=1000:1000 --chmod=755 /empty-directory /opt/insurgency-server/insurgency/addons/sourcemod/logs
 
 # Copy in compiled plugins
-COPY --from=gameserver-compiled-mods --chown=0:0 /plugins/sourcemod/ /opt/insurgency-server/insurgency/
-
-# Copy TLS certs
-COPY --from=gameserver-builder /etc/ssl/certs/ /etc/ssl/certs/
-COPY --from=gameserver-builder /usr/share/ca-certificates/ /usr/share/ca-certificates/
+COPY --from=gameserver-compiled-mods --chown=0:0 /plugins/sourcemod/ins_battleye_disabler/ /opt/insurgency-server/insurgency/
+COPY --from=gameserver-compiled-mods --chown=0:0 /plugins/sourcemod/annoucement/ /opt/insurgency-server/insurgency/
 
 # Copy the default config
 COPY ["server config/base/", "/"]
 
+USER 1000:1000
+
 ENV LD_LIBRARY_PATH=/opt/insurgency-server:/opt/insurgency-server/bin
 ENV SERVER_CONFIG_FILE_PATH=server.cfg
-ENV MAX_PLAYERS=24
+# This is the max that the game allows and determines how many bots can exist at once
+ENV MAX_PLAYERS=49
 ENV STARTING_MAP=embassy_coop
 
 # GAME_SERVER_LOGIN_TOKEN (https://docs.linuxgsm.com/steamcmd/gslt) args will be added by server administrator
@@ -166,7 +159,7 @@ ENV STARTING_MAP=embassy_coop
 ENTRYPOINT [    \
     "env-runner",  \
     "/opt/insurgency-server/srcds_linux", \
-    "-game", "-insurgency", \
+    "-game", "insurgency", \
     "-tickrate", "64", \
     "-workshop",    \
     "-norestart",   \
@@ -174,9 +167,20 @@ ENTRYPOINT [    \
     "+sv_setsteamaccount", "${GAME_SERVER_LOGIN_TOKEN}",   \
     "+rcon_password", "${RCON_PASSWORD}",   \
     "+servercfgfile", "${SERVER_CONFIG_FILE_PATH}",    \
-    "+map", "${STARTING_MAP}"  \
+    "+map", "${STARTING_MAP}",  \
+    "+sv_pure", "0" \
 ]
 
 FROM gameserver AS gameserver-main
 
+# Start the server once to generate any missing files (like workshop items), then exit
+# Adding `+quit` to the CLI will cause the server to segfault, but this can be safely ignored.
+COPY ["server config/main/opt/insurgency-server/insurgency/subscribed_file_ids.txt", "/opt/insurgency-server/insurgency/subscribed_file_ids.txt"]
+
+# Start the server once to generate any missing files (like workshop items), then exit
+# Adding `+quit` to the CLI will cause the server to segfault, but this can be safely ignored.
+RUN /opt/insurgency-server/srcds_linux -game insurgency +map embassy_coop -workshop +servercfgfile server.cfg +quit; EC=$?; \
+    if [ $EC -ne 0 ] && [ $EC -ne 139 ]; then exit $EC; fi
+
+# Copy in the remaining main config files
 COPY ["server config/main/", "/"]
