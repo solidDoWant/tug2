@@ -1,23 +1,34 @@
-# This produces a container with the insurgency server already installed. This prevents installation from occuring on every single startup. The tradeoff is a much
+# This produces a container with the Insurgency server already installed. This prevents installation from occuring on every single startup. The tradeoff is a much
 # larger (10 GB) container image with copyrighted content, which can't be pushed to public repos (e.g. ghcr.io, dockerhub)
 
+# This produces a Linux container image, but the Insurgency server is actually a Windows x64 binary running under Wine.
+# As a result, plugins and mods must be the Windows versions.
+# This approach fixes several issues with the Linux version of the Insurgency server, including:
+# * The 32-bit Linux server has a memory leak when downloading or checking workshop items, causing it to hit the 4 GB memory limit and crash.
+# * The Linux server has undocumented Linux kernel requirements, causing it to crash on some modern kernels (such as those used by default by Talos).
+
+# The Windows x64 version of the Insurgency server runs fine under Wine, but SourceMod has a bug with it (see https://github.com/alliedmodders/sourcemod/issues/2370),
+# so the 32-bit version and 32-bit plugins are used instead.
+
 ARG ENV_RUNNER_IMAGE_NAME=ghcr.io/soliddowant/env-runner:latest
+ARG METAMOD_VERSION=1.12.0-git1219
+ARG SOURCEMOD_VERSION=1.12.0-git7217
 
 FROM ghcr.io/gameservermanagers/steamcmd:ubuntu-24.04 AS gameserver-builder
 
 RUN \
-    # Install the game files
+    # Install the game files (Windows x64 version)
     mkdir -p /opt/insurgency-server && \
     # Note: error message "Error! App '237410' state is 0x202 after update job." means not enough disk space.
-    steamcmd +force_install_dir /opt/insurgency-server +login anonymous +app_update 237410 validate +quit && \
-    # Remove files for other platforms
-    rm -rf /opt/insurgency-server/srcds{.exe,_osx,_osx64,_x64.exe,_run} && \
-    find /opt/insurgency-server/ \( -name '*.dll' -or -name '*.exe' -or -name '*.dylib' -or -name 'osx64' \) -delete && \
+    steamcmd +force_install_dir /opt/insurgency-server +login anonymous +@sSteamCmdForcePlatformType windows +app_update 237410 validate +quit && \
+    # Link console.log to /var/run/insurgency/console.log to allow it to be stored on another filesystem (like a memory-backed filesystem)
+    # This will keep it from filling up the disk, and not wear out the drive with constant writes.
+    ln -s /var/run/insurgency/console.log /opt/insurgency-server/insurgency/console.log && \
+    # Remove files for other platforms (keep Windows files)
+    rm -rf /opt/insurgency-server/srcds{_linux,_osx,_osx64,_run} && \
+    find /opt/insurgency-server/ \( -name '*.dylib' -or -name 'osx64' -or -name '*.so' \) -delete && \
     # Remove the joystick config file to reduce logging noise
-    rm -f /opt/insurgency-server/insurgency/cfg/joystick.cfg && \
-    # Symlink 'GAMEaddons' dir due to insurgency bug
-    ln -s addons /opt/insurgency-server/insurgency/GAMEaddons && \
-    ln -s ../addons /opt/insurgency-server/bin/GAMEaddons
+    rm -f /opt/insurgency-server/insurgency/cfg/joystick.cfg
 
 # This is a trick to get the /opt/insurgency-server directory in the gameserver stage owned by 1000:1000.
 # By copying this empty directory with `chown=1000:1000` to /opt/insurgency-server, the following copies
@@ -25,54 +36,72 @@ RUN \
 # without having the ability to overwrite existing files (such as libraries loaded with `dlopen`).
 RUN mkdir /empty-directory
 
-FROM ghcr.io/gameservermanagers/steamcmd:ubuntu-24.04 AS gameserver-mods
-
-# TODO this will be used to third party plugins.
-
-# Example third party plugin download:
-# RUN \
-#    mkdir -p /plugins/someplugin && \
-#    curl -fsSL -o /plugins/someplugin/someplugin.so https://example.com/someplugin.so && \
-#    curl -fsSL -o /plugins/someplugin/someplugin.txt https://example.com/someplugin.txt
+FROM ghcr.io/gameservermanagers/steamcmd:ubuntu-24.04 AS gameserver-mods-base
 
 RUN \
-    # Install curl for downloading mods
+    # Install curl and unzip for downloading mods
     apt update && \
-    DEBIAN_FRONTEND=noninteractive apt install --no-install-recommends -y curl ca-certificates && \
+    DEBIAN_FRONTEND=noninteractive apt install --no-install-recommends -y curl ca-certificates unzip && \
     rm -rf /var/lib/apt/lists/*
 
-RUN mkdir /plugins
+RUN mkdir /insurgency
 
-# MetaMod Source
-RUN \
-    mkdir -p /plugins/mmsource && \
-    curl -fsSL -o - https://mms.alliedmods.net/mmsdrop/1.12/mmsource-1.12.0-git1219-linux.tar.gz \
-    | tar -xz -C /plugins/mmsource && \
-    # Remove extra files
-    rm -rf /plugins/mmsource/addons/metamod/bin/linux64 /plugins/mmsource/addons/metamod/readme.txt /plugins/mmsource/addons/metamod_x64.vdf && \
-    find /plugins/mmsource/addons/metamod/bin -name '*.so' -not \( -name 'server.so' -or -name 'server_i486.so' -or -name 'metamod.2.insurgency.so' \) -delete && \
-    # Fixup file permissions
-    find /plugins/mmsource -type d -exec chmod 755 {} \; && \
-    find /plugins/mmsource -type f -name "*.so" -exec chmod 755 {} \; && \
-    find /plugins/mmsource -type f -not -name "*.so" -exec chmod 644 {} \;
+# Example mod download:
+#
+# FROM gameserver-mods-base AS gameserver-mods-someplugin
+#
+# RUN \
+#    mkdir -p /plugins/someplugin && \
+#    curl -fsSL -o /insurgency/addons/someplugin.so https://example.com/someplugin.so && \
+#    curl -fsSL -o /insurgency/addons/someplugin/someplugin.txt https://example.com/someplugin.txt
 
-# SourceMod
+FROM gameserver-mods-base AS gameserver-mods-metamod
+
+# MetaMod Source (Windows version)
+ARG METAMOD_VERSION
 RUN \
-    mkdir -p /plugins/sourcemod && \
-    curl -fsSL -o - https://sm.alliedmods.net/smdrop/1.12/sourcemod-1.12.0-git7217-linux.tar.gz \
-    | tar -xz -C /plugins/sourcemod && \
+    curl -fsSL -o /tmp/mmsource.zip https://mms.alliedmods.net/mmsdrop/1.12/mmsource-${METAMOD_VERSION}-windows.zip && \
+    unzip -q /tmp/mmsource.zip -d /insurgency && \
+    rm /tmp/mmsource.zip && \
     # Remove extra files
-    rm -rf /plugins/sourcemod/addons/sourcemod/bin/x64 /plugins/sourcemod/addons/sourcemod/logs && \
-    find /plugins/sourcemod/addons/sourcemod/bin -name '*.so' -not \( -name 'sourcemod.2.insurgency.so' -or -name 'sourcemod_mm_i486.so' -or -name 'sourcemod_mm.x64.so' -or -name 'sourcemod.logic.so' -or -name 'sourcepawn.jit.x86.so' \) -delete && \
-    # Fixup file permissions
-    find /plugins/sourcemod -type d -exec chmod 755 {} \; && \
-    find /plugins/sourcemod -type f -name "*.so" -exec chmod 755 {} \; && \
-    find /plugins/sourcemod -type f -not -name "*.so" -exec chmod 644 {} \;
+    rm -rf /insurgency/addons/metamod_x64.vdf && \
+    rm -rf /insurgency/addons/metamod/{README.txt,metaplugins.ini} && \
+    rm -rf /insurgency/addons/metamod/bin/win64 && \
+    find /insurgency/addons/metamod/bin -name 'metamod.2.*.dll' -not -name 'metamod.2.insurgency.dll' -delete && \
+    find /insurgency -type d -exec chmod 755 {} \;
+
+FROM gameserver-mods-base AS gameserver-mods-sourcemod
+
+# SourceMod (Windows version)
+ARG SOURCEMOD_VERSION
+RUN \
+    curl -fsSL -o /tmp/sourcemod.zip https://sm.alliedmods.net/smdrop/1.12/sourcemod-${SOURCEMOD_VERSION}-windows.zip && \
+    unzip -q /tmp/sourcemod.zip -d /insurgency && \
+    rm /tmp/sourcemod.zip && \
+    # Disable auto updates
+    sed -i 's/^\(.*"DisableAutoUpdate"[[:space:]]*\)"no"/\1"yes"/' /insurgency/addons/sourcemod/configs/core.cfg && \
+    # Remove extra files
+    rm -rf /insurgency/addons/sourcemod/*.txt && \
+    rm -rf /insurgency/sourcemod/bin/x64 && \
+    find /insurgency/addons/sourcemod/bin -name 'sourcemod.2.*.dll' -not -name 'sourcemod.2.insurgency.dll' -delete && \
+    rm -rf /insurgency/addons/sourcemod/extensions/x64 && \
+    find /insurgency/addons/sourcemod/bin -name 'game.*.ext.2.*.dll' -not -name 'game.insurgency.ext.2.insurgency.dll' -delete && \
+    find /insurgency/addons/sourcemod/bin -name 'sdkhooks.ext.2.*.dll' -not -name 'sdkhooks.ext.2.insurgency.dll' -delete && \
+    find /insurgency/addons/sourcemod/bin -name 'sdktools.ext.2.*.dll' -not -name 'sdktools.ext.2.insurgency.dll' -delete && \
+    rm -rf /insurgency/addons/sourcemod/gamedata/{sm-tf2.games.txt,sm-cstrike.games} && \
+    find /insurgency/addons/sourcemod/gamedata -name 'engine.*.txt' -not -name 'engine.insurgency.txt' -delete && \
+    find /insurgency/addons/sourcemod/gamedata -name 'game.*.txt' -not -name 'game.insurgency.txt' -delete && \
+    rm -rf /insurgency/addons/sourcemod/logs && \
+    rm -rf /insurgency/addons/sourcemod/plugins/nextmap.smx && \
+    rm -rf /insurgency/addons/sourcemod/scripting && \
+    find /insurgency/addons/sourcemod/translations -name 'nextmap.phrases.txt' -delete && \
+    find /insurgency -type d -exec chmod 755 {} \;
 
 # This target is used to compile SourceMod plugins.
-FROM ubuntu:24.04 AS gameserver-compiled-mods
+FROM ubuntu:24.04 AS sourcemod-plugins-base
 
 # Download SourceMod for the compiler
+ARG SOURCEMOD_VERSION
 RUN \
     dpkg --add-architecture i386 && \
     apt update && \
@@ -83,45 +112,51 @@ RUN \
         libc6:i386 lib32stdc++6 && \
     rm -rf /var/lib/apt/lists/* && \
     mkdir -p /sourcemod && \
-    curl -fsSL -o - https://sm.alliedmods.net/smdrop/1.12/sourcemod-1.12.0-git7217-linux.tar.gz \
+    curl -fsSL -o - https://sm.alliedmods.net/smdrop/1.12/sourcemod-${SOURCEMOD_VERSION}-linux.tar.gz \
     | tar -xz -C /sourcemod && \
-    # Output dir
-    mkdir -p /plugins/sourcemod/addons/sourcemod/plugins
+    # Source, Output dir
+    mkdir -p /insurgency/addons/sourcemod/plugins
+
+FROM sourcemod-plugins-base AS sourcemod-plugins-battleye-disabler
 
 # Build the Battleye disabler plugin
 RUN \
-    mkdir -p /plugins-source/ins_battleye_disabler /plugins/sourcemod/ins_battleye_disabler/addons/sourcemod/plugins && \
-    curl -fsSL -o /plugins-source/ins_battleye_disabler/ins_battleye_disabler.sp https://raw.githubusercontent.com/Grey83/SourceMod-plugins/a9e0230f3ae554633b349a56eb6474208ae16c84/SM/scripting/ins_battleye_disabler%201.0.0.sp && \
-    /sourcemod/addons/sourcemod/scripting/spcomp /plugins-source/ins_battleye_disabler/ins_battleye_disabler.sp -o /plugins/sourcemod/ins_battleye_disabler/addons/sourcemod/plugins/ins_battleye_disabler.smx && \
-    rm -rf /plugins-source/ins_battleye_disabler
+    mkdir /plugin-source && \
+    curl -fsSL -o /plugin-source/ins_battleye_disabler.sp https://raw.githubusercontent.com/Grey83/SourceMod-plugins/a9e0230f3ae554633b349a56eb6474208ae16c84/SM/scripting/ins_battleye_disabler%201.0.0.sp && \
+    /sourcemod/addons/sourcemod/scripting/spcomp /plugin-source/ins_battleye_disabler.sp -o /insurgency/addons/sourcemod/plugins/ins_battleye_disabler.smx && \
+    rm -rf /plugin-source && \
+    # Fixup file permissions
+    find /insurgency -type d -exec chmod 755 {} \;
+
+FROM sourcemod-plugins-base AS sourcemod-plugins-annoucement
 
 # Build the annoucement plugin
 RUN \
-    mkdir -p /plugins-source/announcement /plugins/sourcemod/annoucement/addons/sourcemod/plugins && \
-    curl -fsSL -o /plugins-source/announcement/announcement.sp https://raw.githubusercontent.com/rrrfffrrr/Insurgency-server-plugins/refs/heads/master/scripting/announcement.sp && \
-    /sourcemod/addons/sourcemod/scripting/spcomp /plugins-source/announcement/announcement.sp -o /plugins/sourcemod/annoucement/addons/sourcemod/plugins/announcement.smx && \
-    echo "Welcome to TUG!" > /plugins/sourcemod/annoucement/addons/sourcemod/announcement.txt && \
-    rm -rf /plugins-source/announcement
-
-# Fixup file permissions
-RUN \
-    find /plugins/sourcemod -type d -exec chmod 755 {} \; && \
-    find /plugins/sourcemod -type f -name "*.so" -exec chmod 755 {} \; && \
-    find /plugins/sourcemod -type f -not -name "*.so" -exec chmod 644 {} \;
+    mkdir /plugin-source && \
+    curl -fsSL -o /plugin-source/announcement.sp https://raw.githubusercontent.com/rrrfffrrr/Insurgency-server-plugins/refs/heads/master/scripting/announcement.sp && \
+    /sourcemod/addons/sourcemod/scripting/spcomp /plugin-source/announcement.sp -o /insurgency/addons/sourcemod/plugins/announcement.smx && \
+    echo "Welcome to TUG!" > /insurgency/addons/sourcemod/announcement.txt && \
+    rm -rf /plugin-source && \
+    # Fixup file permissions
+    find /insurgency -type d -exec chmod 755 {} \;
 
 # Dumb workaround for docker limitation where you can't copy from an image specified by a build arg
 FROM ${ENV_RUNNER_IMAGE_NAME} AS env-runner
 
-# This must use an older debian image. Newer images cause the server to segfault on startup, because for some
-# reason the server attempts to allocate more than 4GB of memory and fails.
-# TODO see if this can be updated at all. Testing takes a long time (about an hour per test), so I'm holding off for now.
-FROM debian:bullseye AS gameserver
+# Using Ubuntu 25:05 is needed for new enough for Wine support for the Windows x64 server
+FROM ubuntu:25.04 AS gameserver
 
 RUN \
     dpkg --add-architecture i386 && \
     apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends -y \
     ca-certificates \
-    libc6:i386 libncurses5:i386 libstdc++6:i386 && \
+    wine \
+    wine32:i386 \
+    libwine \
+    fonts-wine  \
+    xvfb \
+    xauth \
+    x11-utils && \
     rm -rf /var/lib/apt/lists/*
 
 # Copy the game server files
@@ -133,21 +168,33 @@ COPY --from=gameserver-builder /opt/insurgency-server/ /opt/insurgency-server/
 COPY --from=env-runner /env-runner /usr/bin/env-runner
 
 # Copy in plugins
-COPY --from=gameserver-mods --chown=0:0 /plugins/mmsource/ /opt/insurgency-server/insurgency/
-COPY --from=gameserver-mods --chown=0:0 /plugins/sourcemod/ /opt/insurgency-server/insurgency/
+COPY --from=gameserver-mods-metamod --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
+COPY --from=gameserver-mods-sourcemod --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
 # TODO symlink this or configure source mod to write this elsewhere
 COPY --from=gameserver-builder --chown=1000:1000 --chmod=755 /empty-directory /opt/insurgency-server/insurgency/addons/sourcemod/logs
 
 # Copy in compiled plugins
-COPY --from=gameserver-compiled-mods --chown=0:0 /plugins/sourcemod/ins_battleye_disabler/ /opt/insurgency-server/insurgency/
-COPY --from=gameserver-compiled-mods --chown=0:0 /plugins/sourcemod/annoucement/ /opt/insurgency-server/insurgency/
+COPY --from=sourcemod-plugins-battleye-disabler --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
+COPY --from=sourcemod-plugins-annoucement --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
 
 # Copy the default config
 COPY ["server config/base/", "/"]
 
+# Copy the entrypoint wrapper script that will tail console.log to stdout
+COPY --chmod=755 server-entrypoint.sh /usr/local/bin/server-entrypoint.sh
+
+# Setup Wine environment
+# Unfortunately due to Wine ownership checks, this forces the container to run as this SPECIFIC UID:GID.
 USER 1000:1000
 
-ENV LD_LIBRARY_PATH=/opt/insurgency-server:/opt/insurgency-server/bin
+ENV WINEARCH=win32
+ENV WINEPREFIX=/home/ubuntu/.wine
+ENV XDG_RUNTIME_DIR=/home/ubuntu/.local/share
+
+RUN \
+    mkdir -p "${WINEPREFIX}" "${XDG_RUNTIME_DIR}" && \
+    wine wineboot --init && wineserver --wait
+
 ENV SERVER_CONFIG_FILE_PATH=server.cfg
 # This is the max that the game allows and determines how many bots can exist at once
 ENV MAX_PLAYERS=49
@@ -156,9 +203,16 @@ ENV STARTING_MAP=embassy_coop
 # GAME_SERVER_LOGIN_TOKEN (https://docs.linuxgsm.com/steamcmd/gslt) args will be added by server administrator
 # RCON_PASSWORD args will be added by server administrator
 # Arg reference: https://developer.valvesoftware.com/wiki/Command_line_options#Source_Dedicated_Server
+# Note: server-entrypoint.sh tails console.log to stdout for monitoring
 ENTRYPOINT [    \
+    "server-entrypoint.sh", \
     "env-runner",  \
-    "/opt/insurgency-server/srcds_linux", \
+    "wine", \
+    "/opt/insurgency-server/srcds.exe", \
+    "-noconsole", \
+    "-condebug", \
+    "-conclearlog", \
+    "-ip", "0.0.0.0", \
     "-game", "insurgency", \
     "-tickrate", "64", \
     "-workshop",    \
@@ -179,7 +233,9 @@ COPY ["server config/main/opt/insurgency-server/insurgency/subscribed_file_ids.t
 
 # Start the server once to generate any missing files (like workshop items), then exit
 # Adding `+quit` to the CLI will cause the server to segfault, but this can be safely ignored.
-RUN /opt/insurgency-server/srcds_linux -game insurgency +map embassy_coop -workshop +servercfgfile server.cfg +quit; EC=$?; \
+# Note: Running as user 1000:1000 (inherited from base stage) - Wine prefix was created with proper ownership
+# The entrypoint script tails console.log to stdout for build-time debugging
+RUN server-entrypoint.sh wine /opt/insurgency-server/srcds.exe -condebug -game insurgency +map embassy_coop -workshop +servercfgfile server.cfg +quit; EC=$?; \
     if [ $EC -ne 0 ] && [ $EC -ne 139 ]; then exit $EC; fi
 
 # Copy in the remaining main config files
