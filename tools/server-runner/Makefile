@@ -37,8 +37,8 @@ CONTAINER_REGISTRY = tug2
 BUILD_DIR := $(PROJECT_DIR)/build
 
 BINARY_DIR = $(BUILD_DIR)/binaries
-BINARY_NAME = env-runner
-GO_SOURCE_FILES = main.go
+BINARY_NAME = server-runner
+GO_SOURCE_FILES = $(wildcard *.go)
 GO_LDFLAGS := -s -w
 
 LOCALOS := $(shell uname -s | tr '[:upper:]' '[:lower:]')

@@ -10,7 +10,7 @@
 # The Windows x64 version of the Insurgency server runs fine under Wine, but SourceMod has a bug with it (see https://github.com/alliedmodders/sourcemod/issues/2370),
 # so the 32-bit version and 32-bit plugins are used instead.
 
-ARG ENV_RUNNER_IMAGE_NAME=ghcr.io/soliddowant/env-runner:latest
+ARG SERVER_RUNNER_IMAGE_NAME=ghcr.io/soliddowant/server-runner:latest
 ARG METAMOD_VERSION=1.12.0-git1219
 ARG SOURCEMOD_VERSION=1.12.0-git7217
 
@@ -21,9 +21,9 @@ RUN \
     mkdir -p /opt/insurgency-server && \
     # Note: error message "Error! App '237410' state is 0x202 after update job." means not enough disk space.
     steamcmd +force_install_dir /opt/insurgency-server +login anonymous +@sSteamCmdForcePlatformType windows +app_update 237410 validate +quit && \
-    # Link console.log to /var/run/insurgency/console.log to allow it to be stored on another filesystem (like a memory-backed filesystem)
+    # Link console.log to /opt/insurgency-server/run/console.log to allow it to be stored on another filesystem (like a memory-backed filesystem)
     # This will keep it from filling up the disk, and not wear out the drive with constant writes.
-    ln -s /var/run/insurgency/console.log /opt/insurgency-server/insurgency/console.log && \
+    ln -s /opt/insurgency-server/run/console.log /opt/insurgency-server/insurgency/console.log && \
     # Remove files for other platforms (keep Windows files)
     rm -rf /opt/insurgency-server/srcds{_linux,_osx,_osx64,_run} && \
     find /opt/insurgency-server/ \( -name '*.dylib' -or -name 'osx64' -or -name '*.so' \) -delete && \
@@ -141,7 +141,7 @@ RUN \
     find /insurgency -type d -exec chmod 755 {} \;
 
 # Dumb workaround for docker limitation where you can't copy from an image specified by a build arg
-FROM ${ENV_RUNNER_IMAGE_NAME} AS env-runner
+FROM ${SERVER_RUNNER_IMAGE_NAME} AS server-runner
 
 # Using Ubuntu 25:05 is needed for new enough for Wine support for the Windows x64 server
 FROM ubuntu:25.04 AS gameserver
@@ -152,6 +152,7 @@ RUN \
     ca-certificates \
     wine \
     wine32:i386 \
+    winbind \
     libwine \
     fonts-wine  \
     xvfb \
@@ -164,8 +165,8 @@ COPY --from=gameserver-builder --chown=1000:1000 /empty-directory /opt/insurgenc
 COPY --from=gameserver-builder /opt/insurgency-server/ /opt/insurgency-server/
 
 # Copy the tool used for providing env vars as args
-# If this errors, verify that the env-runner image was built.
-COPY --from=env-runner /env-runner /usr/bin/env-runner
+# If this errors, verify that the server-runner image was built.
+COPY --from=server-runner /server-runner /usr/bin/server-runner
 
 # Copy in plugins
 COPY --from=gameserver-mods-metamod --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
@@ -179,9 +180,6 @@ COPY --from=sourcemod-plugins-annoucement --chown=0:0 /insurgency /opt/insurgenc
 
 # Copy the default config
 COPY ["server config/base/", "/"]
-
-# Copy the entrypoint wrapper script that will tail console.log to stdout
-COPY --chmod=755 server-entrypoint.sh /usr/local/bin/server-entrypoint.sh
 
 # Setup Wine environment
 # Unfortunately due to Wine ownership checks, this forces the container to run as this SPECIFIC UID:GID.
@@ -199,25 +197,30 @@ ENV SERVER_CONFIG_FILE_PATH=server.cfg
 # This is the max that the game allows and determines how many bots can exist at once
 ENV MAX_PLAYERS=49
 ENV STARTING_MAP=embassy_coop
+ENV PORT=27015
+
+WORKDIR /opt/insurgency-server/run
 
 # GAME_SERVER_LOGIN_TOKEN (https://docs.linuxgsm.com/steamcmd/gslt) args will be added by server administrator
 # RCON_PASSWORD args will be added by server administrator
 # Arg reference: https://developer.valvesoftware.com/wiki/Command_line_options#Source_Dedicated_Server
-# Note: server-entrypoint.sh tails console.log to stdout for monitoring
 ENTRYPOINT [    \
-    "server-entrypoint.sh", \
-    "env-runner",  \
+    "server-runner",  \
+    "-rcon-port", "${PORT}", \
+    "-rcon-password", "${RCON_PASSWORD}", \
+    "--", \
     "wine", \
     "/opt/insurgency-server/srcds.exe", \
-    "-noconsole", \
     "-condebug", \
-    "-conclearlog", \
     "-ip", "0.0.0.0", \
     "-game", "insurgency", \
     "-tickrate", "64", \
     "-workshop",    \
     "-norestart",   \
     "-maxplayers", "${MAX_PLAYERS}", \
+    "-strictportbind",  \
+    "-port", "${PORT}", \
+    "-nohltv", \
     "+sv_setsteamaccount", "${GAME_SERVER_LOGIN_TOKEN}",   \
     "+rcon_password", "${RCON_PASSWORD}",   \
     "+servercfgfile", "${SERVER_CONFIG_FILE_PATH}",    \
@@ -234,9 +237,7 @@ COPY ["server config/main/opt/insurgency-server/insurgency/subscribed_file_ids.t
 # Start the server once to generate any missing files (like workshop items), then exit
 # Adding `+quit` to the CLI will cause the server to segfault, but this can be safely ignored.
 # Note: Running as user 1000:1000 (inherited from base stage) - Wine prefix was created with proper ownership
-# The entrypoint script tails console.log to stdout for build-time debugging
-RUN server-entrypoint.sh wine /opt/insurgency-server/srcds.exe -condebug -game insurgency +map embassy_coop -workshop +servercfgfile server.cfg +quit; EC=$?; \
-    if [ $EC -ne 0 ] && [ $EC -ne 139 ]; then exit $EC; fi
+RUN server-runner -- wine /opt/insurgency-server/srcds.exe -condebug -game insurgency -workshop +servercfgfile server.cfg +map embassy_coop +quit
 
 # Copy in the remaining main config files
 COPY ["server config/main/", "/"]
