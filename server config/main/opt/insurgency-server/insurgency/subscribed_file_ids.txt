@@ -9,4 +9,215 @@
 1380424575 // ins_abdallah_coop_fix - map
 880051898 // Veteran Insurgents (Fixed) - randomized ins skins
 1595712656 // Hesco Bastions (HD) - reskin mesh barriers
-3593974545 // Test collection 1
+2510398645 // crash_course - map
+346843105 // the_burbs_coop - map
+1988310157 // Iron Express - map
+1093292666 // baghdad_coop_b5 - map
+2035514246 // Pripyat - map
+2347162033 // bridge_coop_2021 - map
+2508715344 // cementplant - map
+498255733 // clean_sweep_coop_ws - map
+393352418 // karkand_coop - map
+2886399835 // GIOCONDA ERON MARKET - map
+2296749488 // kunar - map
+1989120573 // aof_mapdata.vpk - voting images, custom sounds for AoF maps
+1989124779 // arcate_aof (checkpoint) - map
+1989125473 // dedust1p2_aof (checkpoint) - map
+1998338008 // gizab_aof (checkpoint) - map
+2010242125 // kandagal_aof (checkpoint) - map
+2461902631 // limansk_aof (checkpoint) - map
+1989129424 // station_aof (checkpoint) - map
+1083630976 // winter_rescue_ws (2020 fix) - map
+2599050685 // hideout_aof (checkpoint) - map
+2110527993 // peak_coop - map
+1388556079 // ps7_co_b91 - map
+2015565348 // Szepezd Redux Co-op - map
+2678703408 // Dust - No Clips - map
+2240929834 // Badel 2020 - map
+1568832749 // cs_downtown_coop - map
+1963814261 // Haditha - map
+2575290829 // as_tundra_v3_ins - map
+1269418802 // BB Desertpass Coop - map
+1769796161 // desert_hell_coop_remix - map
+2818856572 // Almaden [almaden_coop] - map
+2778393463 // Hideout Open [hideout_coop] - map
+498257082 // fortress_coop_ws - map
+1617934454 // Glycencity Coop - map
+2373005014 // CSGO Workout - map
+2575302067 // pl_minecraft_redstone_f15_ins_b - map
+2010282416 // ins_tosca_v1 - map
+1734873741 // de_mirage_csco_pb4 - map
+939870068 // trenches6_coop_v1_2 - map
+939859861 // cs_motel_coop_nd_v1_3 - map
+2696258019 // Congress [congress_open_coop] - map
+2680458180 // Dunkirk [dunkirk_pve] - map
+2361038040 // citadel_coop - map
+1787552582 // karkand_redux_p2 - map
+2705735526 // Haditha Dam 2022 - map
+2265996024 // Italy Redux - map
+2071869506 // Left 4 Dead 2 Bridge - map
+2766356125 // SOTU Keep v1 - map
+335578709 // Hijacked Final Workshop Version - (hijacked_ws) - map
+2886400751 // GIOCONDA ERON SANDHILL - map
+2574250983 // prophet_coop2021 - map
+2980224364 // block_party_fixed - map
+292081732 // launch_control_coop_ws - map
+1479939653 // pipeline_coop - map
+1562834364 // ins_chinatown - map
+2635219866 // Depot Open [depot_checkpoint] - map
+1597536823 // ins_mountain_escape_v1_3 - map
+1161583627 // market_night_coop - checkpoint - map
+1163373032 // district_night_coop - checkpoint - map
+1188029105 // uprising_open_coop - checkpoint - map
+1193834259 // buhriz_open_coop - checkpoint - map
+2168116352 // de_centered assets - assets for de_centered_v1
+2168078889 // de_centered_v1 - map
+1172671775 // warehouse_coopv3b4 - map
+1501650494 // Docks_coopb2_day - map
+1641814825 // ins_roadrage - map
+1642037631 // is_battlebag - map
+939871975 // shrine_coop - map
+1388543513 // hurtlocker_coop_legacy - map
+523594320 // osama_b3_checkpoint - map
+1574936010 // cutoff4-9 - map
+2886400318 // GIOCONDA ERON PANJ - map
+1482148634 // facilityb2_coop_v1_1 - map
+2886398797 // GIOCONDA ERON FOREST - map
+2169943977 // Fairgrounds - map
+2522001554 // Saint Lo (Assets) - assets for ins_saint_lo_v1 TODO need to add `"sounds"			"scripts/audio/doi_sounds_world.txt"` to theaters
+2521980943 // Saint Lo - map
+1194875426 // oms_corridor_coopb3 - map
+939856603 // convoy_day_apc_coop_v1_1 - map
+2412285987 // SoTu_M_is_for_Madness - map
+599730897 // dust2_checkpoint - map
+2736585272 // Chilly Assets - assets for ins_chilly_p1
+2736577284 // Chilly - map
+2688056722 // Gizab BM - map
+1905422214 // insz_favela - map
+2148192104 // Inferno New [inferno_new_v1] - map
+292080383 // jail_break_coop_ws - map
+2835956934 // laboratory - map
+2832406643 // The Sacrifice [the_sacrifice] - map
+2840759249 // Downtown [downtown_coop] - map
+2850176903 // Oilfield [Beta] - map
+2886399534 // GIOCONDA ERON KANDAGAL - map
+2933351645 // GIOCONDA ERON INSCROSSING - map
+1304334030 // block26_b1 - map
+2886401508 // GIOCONDA ERON WHITE STREETS - map
+2886401419 // GIOCONDA ERON VILLAGE - map
+2886400867 // GIOCONDA ERON SMALLTOWN - map
+2538211718 // Drycanal_coop_old
+2876174607 // fortress_coop_fixed - map
+1189448765 // miransh_alpha - map
+1970592914 // Waterway Islands - map
+2888145663 // game_day - map
+1576811737 // docks_day coop checkpoint - map
+1190497035 // market_open_coop - checkpoint - map
+2890756233 // jail_break_fix - map
+2888146733 // tunnel_rats - map
+424224898 // warehouse_coopv2u1 - map
+2208434069 // Cobblestone - map
+2168884875 // de_centered_nv1 - map
+1202839339 // de_vertigo_coop - checkpoint - map
+2899910052 // SoTu Pyramid v2 - map
+2802314613 // Hard Rain [hard_rain] - map
+862973282 // BB Gauntlet - map
+2034193905 // Gauntlet - map
+1571676579 // de_prodigy_coop - map
+2907513227 // 2022_BB_Arena_1 - map
+2836590374 // 72街仓库 cs_assault - map
+1586281347 // dusty_anguish_coopvfix - map
+672667761 // Chateau Tunnels 2.0 - map
+500913221 // caves_coop3 - map
+2910284180 // baghdad_remastered - map
+498252536 // invasion_coop_ws - map
+2112742937 // Aqueduct - map
+2267598925 // Prison 2020 - map
+1642088392 // ins_leveled - map
+607285980 // bb river coop - map
+2886397883 // GIOCONDA ERON BUNKERS - map
+1457936959 // bastion_coop - map
+1388547184 // ikazuchi_jungle_coop_b3 - map
+1642064080 // ins_kabul - map
+1264090927 // l4d_airport_terminal_b3 - map
+2927739938 // liberty_mall - map
+2933360838 // GIOCONDA ERON CHERNOMAYSK - map
+2940882082 // GIOCONDA ERON SPIRITS - map
+2940872461 // GIOCONDA ERON SEAPORT - map
+1586281667 // jack_hammer_coopvfix - map
+2959755350 // bombshelter - map
+1180002850 // nomercy_coopv1 - map
+2962802373 // cityhall - map
+2967215012 // l4d_garage_alley_day - map
+2138928341 // Coldwater - map
+1912410260 // SoTu Spiral - map
+352148389 // angle_iron_coop_ws - map
+1388127544 // bb_subyard_beta5 - map
+2603024361 // Marquis - map
+1148522368 // healthcenter_coop2.0[fixed specularmap] - map
+3015824154 // Gold Rush - map
+3015821699 // Dustbowl - map
+3022473579 // GIOCONDA ERON KORDON - map
+1388118900 // bb_lighthouse_gold - map
+3041234121 // shop_invasion_coop_b2 - map
+2966432441 // dead_air - map
+1469832785 // cs_office_coop_b2 - map
+1584514038 // Christmas House - map
+2107007637 // Breach - map
+3104109873 // GIOCONDA ERON MOUNTAINS - map
+1130993973 // downtown_coopv1a - map
+1908980534 // ins_arcate_npb1 - map
+2010901052 // ins_tosca_nv1 - map
+2670949874 // ministry_coop_oldv1 - map
+3268502951 // fairgrounds_open_b4 - map
+3260723441 // Coldwater (Tugged 2024) - map
+3337875920 // kunar_fixed_a3 - map
+2816092186 // Taboo Coop - map
+939888961 // de_safehouse_coop_v1_4_nde2 - map
+2567903738 // Breville [breville_pve] - map
+922982416 // ins_panzer_tag (insurgency version) - map
+400214755 // Abdallah - map
+2670960489 // Dusty Nights - Checkpoint + Hunt - by Chief C - map
+492051918 // the_raid_coop_ws - map
+2419142919 // Dog Red (ins_dog_red) from DOI mod - map
+1100976090 // Operation Intrude 2.0 - map
+605055192 // crossbow - map
+890747795 // Showdown (Cod 4 Remake) - map
+2784911431 // Tet [tet_x64] - map
+1722833808 // tet_b1 - map
+2769526047 // Salerno [salerno_pve] - map
+822609478 // ins_bridgeatremagen_coop - map
+501104499 // Prospect COOP - map
+815189600 // cs_workout_v1 - map
+2573340176 // Rhineland [rhineland_pve] - map
+795846849 // mountain_lake_coopv1_1 - map
+650616844 // Estates_b4 - map
+1393527442 // point_blank_fix - map
+3008318690 // Payback [payback_x64] - map
+2575293565 // ar_dizzy_ins - map
+532461305 // badlands_b1 - map
+573278223 // Panama Canal - map
+1125220551 // caves_coop - map
+2352663377 // Convoy [convoy_pve] - map
+2483881948 // Frequency Open [frequency_open_coop] - map
+432649454 // ps7 insurgency-2 - map
+2787485611 // Cu Chi Tunnels [cu_chi_tunnels_x64] - map
+283120201 // bunker_busting_coop_ws - map
+2876168227 // bunker_busting - map
+2606328136 // Pow Raid [pow_raid_x64] - map
+1832309723 // SoTu City - map
+2627393585 // Crete [crete] - map
+2674972433 // DOI Resistance Fix - map
+426712960 // Almaden - map
+2717691676 // Flakturm - map
+426742049 // Karkar - map
+517972533 // zagros_convoy_b5 - map
+2588320140 // Bastogne [ins_bastogne] - map
+1715300726 // takbar_b6 - map
+2597084197 // car_parking_ins_b - map
+2575300560 // operation_metro_b_ins - map
+440046323 // SHELLSHOCK - map
+2191010494 // Dust New - map
+1893781116 // badlands_b2 - map
+2168901741 // de_centered assets(night) - assets for de_centered_nv1
+2010310686 // Tosca assets - assets for ins_tosca_nv1
