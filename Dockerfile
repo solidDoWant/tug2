@@ -114,8 +114,8 @@ RUN \
     mkdir -p /sourcemod && \
     curl -fsSL -o - https://sm.alliedmods.net/smdrop/1.12/sourcemod-${SOURCEMOD_VERSION}-linux.tar.gz \
     | tar -xz -C /sourcemod && \
-    # Source, Output dir
-    mkdir -p /insurgency/addons/sourcemod/plugins
+    # Create output dirs
+    mkdir -p /insurgency/addons/sourcemod/plugins/disabled /insurgency/cfg
 
 FROM sourcemod-plugins-base AS sourcemod-plugins-battleye-disabler
 
@@ -135,8 +135,35 @@ RUN \
     mkdir /plugin-source && \
     curl -fsSL -o /plugin-source/announcement.sp https://raw.githubusercontent.com/rrrfffrrr/Insurgency-server-plugins/refs/heads/master/scripting/announcement.sp && \
     /sourcemod/addons/sourcemod/scripting/spcomp /plugin-source/announcement.sp -o /insurgency/addons/sourcemod/plugins/announcement.smx && \
-    echo "Welcome to TUG!" > /insurgency/addons/sourcemod/announcement.txt && \
     rm -rf /plugin-source && \
+    # Create a default announcement file
+    echo "Welcome to TUG!" > /insurgency/addons/sourcemod/announcement.txt && \
+    # Fixup file permissions
+    find /insurgency -type d -exec chmod 755 {} \;
+
+FROM sourcemod-plugins-base AS sourcemod-plugins-marquis-fix
+
+# Build the marquis map fix plugin
+RUN \
+    mkdir /plugin-source && \
+    curl -fsSL -o /plugin-source/marquis_fix.sp https://raw.githubusercontent.com/NullifidianSF/insurgency_public/e6eb683a6ba407b5bba29b74817e0c0bcb9d6a0c/addons/sourcemod/scripting/marquis_fix.sp && \
+    /sourcemod/addons/sourcemod/scripting/spcomp /plugin-source/marquis_fix.sp -o /insurgency/addons/sourcemod/plugins/disabled/marquis_fix.smx && \
+    rm -rf /plugin-source && \
+    # Create a config file to only load this plugin when the marquis map is running
+    echo "sm plugins load disabled/marquis_fix.smx"  > /insurgency/cfg/server_marquis.cfg && \
+    # Fixup file permissions
+    find /insurgency -type d -exec chmod 755 {} \;
+
+FROM sourcemod-plugins-base AS sourcemod-plugins-citadel-coop-spawn-fix
+
+# Build the citadel coop spawn fix plugin
+RUN \
+    mkdir /plugin-source && \
+    curl -fsSL -o /plugin-source/citadel_coop_spawn_fix.sp https://raw.githubusercontent.com/NullifidianSF/insurgency_public/e6eb683a6ba407b5bba29b74817e0c0bcb9d6a0c/addons/sourcemod/scripting/citadel_coop_spawn_fix.sp && \
+    /sourcemod/addons/sourcemod/scripting/spcomp /plugin-source/citadel_coop_spawn_fix.sp -o /insurgency/addons/sourcemod/plugins/disabled/citadel_coop_spawn_fix.smx && \
+    rm -rf /plugin-source && \
+    # Create a config file to only load this plugin when the citadel_coop map is running
+    echo "sm plugins load disabled/citadel_coop_spawn_fix.smx"  > /insurgency/cfg/server_citadel_coop.cfg && \
     # Fixup file permissions
     find /insurgency -type d -exec chmod 755 {} \;
 
@@ -238,6 +265,10 @@ COPY ["server config/main/opt/insurgency-server/insurgency/subscribed_file_ids.t
 # Adding `+quit` to the CLI will cause the server to segfault, but this can be safely ignored.
 # Note: Running as user 1000:1000 (inherited from base stage) - Wine prefix was created with proper ownership
 RUN server-runner -- wine /opt/insurgency-server/srcds.exe -condebug -game insurgency -workshop +servercfgfile server.cfg +map embassy_coop +quit
+
+# Copy in the map-specific plugins
+COPY --from=sourcemod-plugins-marquis-fix --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
+COPY --from=sourcemod-plugins-citadel-coop-spawn-fix --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
 
 # Copy in the remaining main config files
 COPY ["server config/main/", "/"]
