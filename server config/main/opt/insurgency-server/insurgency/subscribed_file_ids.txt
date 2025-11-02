@@ -100,6 +100,7 @@
 2832406643 // The Sacrifice [the_sacrifice] - map
 2840759249 // Downtown [downtown_coop] - map
 2850176903 // Oilfield [Beta] - map
+2851587444 // Oilfield (Assets) - assets for oilfield_pve TODO need to add `"sounds"			"scripts/game_sounds_oilfield_pve.txt"` to theaters
 2886399534 // GIOCONDA ERON KANDAGAL - map
 2933351645 // GIOCONDA ERON INSCROSSING - map
 1304334030 // block26_b1 - map
@@ -221,3 +222,18 @@
 1893781116 // badlands_b2 - map
 2168901741 // de_centered assets(night) - assets for de_centered_nv1
 2010310686 // Tosca assets - assets for ins_tosca_nv1
+1379716589 // Maps CPSetup.txt Fix - fixes for badlands_b1, the_raid_coop_ws, point_blank, ikazuchi_jungle_coop_b2_night, desert_island_v11
+2327421432 // Fixed Navmesh for custom maps - bot navmesh fixes for cs_workout_v1, jack_hammer_coopv1_2, dusty_anguish_coopv1_1, amber_spirits_coop
+2908499942 // TUG Voting - add missing votemap images
+586951234 // bilibili server tactical maps(minimap)战术地图 - add missing minimaps for some custom maps
+2544674426 // DOI soundscapes - sounds for DOI maps
+2169963412 // L4D2 soundscapes - sounds for L4D2 maps
+2767466217 // Tug Sounds3 - missing sounds (e.g. medic "let me heal you")
+2744179612 // Tug Arty Smoke (INS) - pink smoke (insurgents) TODO needs plugin based off of https://github.com/rrrfffrrr/Insurgency-server-plugins?tab=readme-ov-file#FireSupport
+2744181131 // Tug Green smoke (US) - green smoke (sec) TODO needs plugin based off of https://github.com/rrrfffrrr/Insurgency-server-plugins?tab=readme-ov-file#FireSupport
+2744435243 // Tug M1897 - M1897 shotgun
+2834243418 // SEC icon (spade) - icon on class selection screen
+2393118985 // Masterchief Assets-Two - contains gas grenande particles (TODO re-upload particles only to reduce download size)
+2749105820 // Tug SIG MCX - MCX weapon files for theater
+2749114575 // Tug M110 (SASS) - M110 weapon files for theater
+3551935737 // TUG Scripts 3.9 (10,12,14p) - theater with old server config

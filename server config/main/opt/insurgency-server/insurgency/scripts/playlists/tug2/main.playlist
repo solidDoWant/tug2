@@ -1,6 +1,3 @@
-// Official NWI playlist
-// See example.playlist for documentation/format guide
-
 "playlist"
 {
 	"name"					"#Playlist_Coop"
@@ -51,7 +48,7 @@
 	
 	"forced_cvars"
 	{
-		"mp_theater_override"			"theater_35angrybots12p_medic_default"
+		"mp_theater_override"			"theater_tug_39_medicbomber_12p_default_checkpoint"
 		"mp_minteamplayers"			"1"	// min players on each team to start the match
 		"sv_nwi_banlist"			"1"	// global ban list
 		"host_timescale"			"1.0"
