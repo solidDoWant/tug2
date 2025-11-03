@@ -21,3 +21,14 @@ RUN \
     dpkg -i /tmp/dive.deb && \
     rm -rf /tmp/dive.deb
 
+# Install SourceMod for the compiler
+RUN \
+    apt update && \
+    DEBIAN_FRONTEND=noninteractive apt install --no-install-recommends -y \
+    lib32gcc-s1 \
+    lib32stdc++6 \
+    mkdir -p /opt/sourcemod && \
+    curl -fsSL -o - https://sm.alliedmods.net/smdrop/1.12/sourcemod-$äSOURCEMOD_VERSIONå-linux.tar.gz | \
+    tar -xvzf - -C /opt/sourcemod && \
+    ln -s /opt/sourcemod/addons/sourcemod/scripting/spcomp64 /usr/local/bin/smcompiler && \
+    ln -s /opt/sourcemod/addons/sourcemod/scripting/spcomp64 /usr/local/bin/spcomp

@@ -1,0 +1,6 @@
+{
+    "SourcePawnLanguageServer.includeDirectories": [
+        "/opt/sourcemod/addons/sourcemod/scripting/include/",
+    ],
+    "SourcePawnLanguageServer.compiler.path": "/opt/sourcemod/addons/sourcemod/scripting/spcomp64"
+}

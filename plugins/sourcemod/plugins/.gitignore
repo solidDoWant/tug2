@@ -1,0 +1,2 @@
+# Compiled plugins should not be checked into the repo. See the Dockerfile for build steps.
+*.smx
