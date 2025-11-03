@@ -90,8 +90,8 @@
 939856603 // convoy_day_apc_coop_v1_1 - map
 2412285987 // SoTu_M_is_for_Madness - map
 599730897 // dust2_checkpoint - map
-2736585272 // Chilly Assets - assets for ins_chilly_p1
-2736577284 // Chilly - map
+// 2736585272 // Chilly Assets - assets for ins_chilly_p1
+// 2736577284 // Chilly - map REMOVED DUE TO CLIENT CRASHING
 2688056722 // Gizab BM - map
 1905422214 // insz_favela - map
 2148192104 // Inferno New [inferno_new_v1] - map
