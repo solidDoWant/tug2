@@ -92,6 +92,7 @@ public void OnPluginStart()
 
     // Hook events
     HookEvent("player_pick_squad", Event_PlayerPickSquad);
+    HookEvent("player_spawn", Event_PlayerSpawn);
 
     // Find netprop offsets
     g_EquippedGearOffset = FindSendPropInfo("CINSPlayer", "m_EquippedGear");
@@ -136,23 +137,19 @@ public void OnClientDisconnect(int client)
 {
     if (IsFakeClient(client)) return;
 
-    // Auto-save on disconnect
-    if (g_PlayerCurrentClass[client][0] != '\0')
-    {
-        SaveLoadoutFromEntity(client, true);
-    }
+    // No need to save on disconnect - loadout is auto-saved on spawn and resupply
+    // Loadouts should not be saved on disconnect because player loadout will change naturally during gameplay, so the state at plugin end does not necessarily reflect their intended saved loadout
+    // Just clean up tracking variables
+    g_PlayerCurrentClass[client][0] = '\0';
+    g_LastSaveTime[client]          = 0.0;
+    g_LastLoadTime[client]          = 0.0;
 }
 
 public void OnPluginEnd()
 {
-    // Save all active loadouts
-    for (int i = 1; i <= MaxClients; i++)
-    {
-        if (IsClientInGame(i) && !IsFakeClient(i) && g_PlayerCurrentClass[i][0] != '\0')
-        {
-            SaveLoadoutFromEntity(i, true);
-        }
-    }
+    // Loadouts should not be saved on shutdown because:
+    // * There is a race condition with database disconnect and full plugin termination
+    // * Player loadout will change naturally during gameplay, so the state at plugin end does not necessarily reflect their intended saved loadout
 }
 
 // =====================================================
@@ -236,14 +233,38 @@ public void Event_PlayerPickSquad(Event event, const char[] name, bool dontBroad
     event.GetString("class_template", classTemplate, sizeof(classTemplate));
 
     // Auto-save previous class loadout before switching
+    // TODO maybe this should be removed, because the player's loadout may have changed from the desired state
     if (g_PlayerCurrentClass[client][0] != '\0' && !StrEqual(g_PlayerCurrentClass[client], classTemplate))
         SaveLoadoutFromEntity(client, true);    // Auto-save with notification
 
     // Update current class
     strcopy(g_PlayerCurrentClass[client], sizeof(g_PlayerCurrentClass[]), classTemplate);
 
-    // Auto-load saved loadout
-    CreateTimer(0.5, Timer_AutoLoadLoadout, GetClientUserId(client), TIMER_FLAG_NO_MAPCHANGE);
+    // Auto-load saved loadout with longer delay to ensure player is fully spawned
+    CreateTimer(1.0, Timer_AutoLoadLoadout, GetClientUserId(client), TIMER_FLAG_NO_MAPCHANGE);
+}
+
+public void Event_PlayerSpawn(Event event, const char[] name, bool dontBroadcast)
+{
+    int client = GetClientOfUserId(event.GetInt("userid"));
+    if (client < 1 || IsFakeClient(client)) return;
+
+    // Player has spawned with their loadout finalized - auto-save it
+    if (g_PlayerCurrentClass[client][0] != '\0')
+    {
+        // Small delay to ensure loadout is fully applied
+        CreateTimer(0.3, Timer_AutoSaveLoadout, GetClientUserId(client), TIMER_FLAG_NO_MAPCHANGE);
+    }
+}
+
+public Action Timer_AutoSaveLoadout(Handle timer, int userid)
+{
+    int client = GetClientOfUserId(userid);
+    if (client < 1 || !IsClientInGame(client)) return Plugin_Handled;
+
+    // Silent auto-save (no chat message)
+    SaveLoadoutFromEntity(client, true);
+    return Plugin_Handled;
 }
 
 public Action Timer_AutoLoadLoadout(Handle timer, int userid)
@@ -494,45 +515,60 @@ void SaveLoadoutFromEntity(int client, bool isAutoSave)
         }
     }
 
-    // Save each type to database
-    SaveLoadoutTypeAsync(client, "gear", gearBuffer, isAutoSave);
-    SaveLoadoutTypeAsync(client, "primary", primaryBuffer, isAutoSave);
-    SaveLoadoutTypeAsync(client, "secondary", secondaryBuffer, isAutoSave);
-    SaveLoadoutTypeAsync(client, "explosive", explosiveBuffer, isAutoSave);
-
-    if (isAutoSave)
-    {
-        char message[256];
-        g_CvarMsgAutoSaved.GetString(message, sizeof(message));
-        CPrintToChat(client, message);
-        return;
-    }
-
-    char message[256];
-    g_CvarMsgSaved.GetString(message, sizeof(message));
-    CPrintToChat(client, message);
+    // Save all types to database in a single transaction
+    SaveLoadoutTransaction(client, gearBuffer, primaryBuffer, secondaryBuffer, explosiveBuffer, isAutoSave);
 }
 
 // =====================================================
 // Save Loadout to Database
 // =====================================================
 
-void SaveLoadoutTypeAsync(int client, const char[] type, const char[] itemBuffer, bool isAutoSave)
+void SaveLoadoutTransaction(int client, const char[] gearBuffer, const char[] primaryBuffer, const char[] secondaryBuffer, const char[] explosiveBuffer, bool isAutoSave)
 {
     if (g_Database == null) return;
 
     // Escape strings for SQL
     char escapedSteamId[64];
     char escapedClass[256];
-    char escapedType[32];
-    char escapedItems[512];
-
     g_Database.Escape(g_PlayerSteamId[client], escapedSteamId, sizeof(escapedSteamId));
     g_Database.Escape(g_PlayerCurrentClass[client], escapedClass, sizeof(escapedClass));
-    g_Database.Escape(type, escapedType, sizeof(escapedType));
 
-    char query[2048];
-    char itemValue[550];    // Size for 'NULL' or quoted escaped string
+    // Build all 4 queries into a single transaction
+    char transaction[4096];
+    char tempQuery[1024];
+
+    strcopy(transaction, sizeof(transaction), "BEGIN;");
+
+    // Build query for each loadout type
+    BuildLoadoutQuery(tempQuery, sizeof(tempQuery), escapedSteamId, escapedClass, "gear", gearBuffer, isAutoSave);
+    Format(transaction, sizeof(transaction), "%s %s", transaction, tempQuery);
+
+    BuildLoadoutQuery(tempQuery, sizeof(tempQuery), escapedSteamId, escapedClass, "primary", primaryBuffer, isAutoSave);
+    Format(transaction, sizeof(transaction), "%s %s", transaction, tempQuery);
+
+    BuildLoadoutQuery(tempQuery, sizeof(tempQuery), escapedSteamId, escapedClass, "secondary", secondaryBuffer, isAutoSave);
+    Format(transaction, sizeof(transaction), "%s %s", transaction, tempQuery);
+
+    BuildLoadoutQuery(tempQuery, sizeof(tempQuery), escapedSteamId, escapedClass, "explosive", explosiveBuffer, isAutoSave);
+    Format(transaction, sizeof(transaction), "%s %s", transaction, tempQuery);
+
+    Format(transaction, sizeof(transaction), "%s COMMIT;", transaction);
+
+    // Execute transaction with callback
+    DataPack pack = new DataPack();
+    pack.WriteCell(GetClientUserId(client));
+    pack.WriteCell(isAutoSave);
+
+    g_Database.Query(OnLoadoutSaved, transaction, pack);
+}
+
+void BuildLoadoutQuery(char[] buffer, int maxlen, const char[] steamId, const char[] classTemplate, const char[] type, const char[] itemBuffer, bool isAutoSave)
+{
+    char escapedType[32];
+    char escapedItems[512];
+    char itemValue[550];
+
+    g_Database.Escape(type, escapedType, sizeof(escapedType));
 
     // Prepare item value (NULL or quoted string)
     if (itemBuffer[0] != '\0')
@@ -545,12 +581,44 @@ void SaveLoadoutTypeAsync(int client, const char[] type, const char[] itemBuffer
         strcopy(itemValue, sizeof(itemValue), "NULL");
     }
 
-    // Single query for both cases
-    Format(query, sizeof(query),
-           "INSERT INTO loadouts (steam_id, class_template, item_type, itemid, is_auto_saved, updated_at, update_count) " ... "VALUES ('%s', '%s', '%s', %s, %s, CURRENT_TIMESTAMP, 1) " ... "ON CONFLICT (steam_id, class_template, item_type) DO UPDATE SET " ... "itemid = EXCLUDED.itemid, " ... "is_auto_saved = EXCLUDED.is_auto_saved, " ... "updated_at = CURRENT_TIMESTAMP, " ... "update_count = loadouts.update_count + 1",
-           escapedSteamId, escapedClass, escapedType, itemValue, isAutoSave ? "TRUE" : "FALSE");
+    Format(buffer, maxlen,
+           "INSERT INTO loadouts (steam_id, class_template, item_type, itemid, is_auto_saved, updated_at, update_count) " ... "VALUES ('%s', '%s', '%s', %s, %s, CURRENT_TIMESTAMP, 1) " ... "ON CONFLICT (steam_id, class_template, item_type) DO UPDATE SET " ... "itemid = EXCLUDED.itemid, " ... "is_auto_saved = EXCLUDED.is_auto_saved, " ... "updated_at = CURRENT_TIMESTAMP, " ... "update_count = loadouts.update_count + 1;",
+           steamId, classTemplate, escapedType, itemValue, isAutoSave ? "TRUE" : "FALSE");
+}
 
-    g_Database.Query(SQL_CheckError, query);
+void OnLoadoutSaved(Database db, DBResultSet results, const char[] error, DataPack pack)
+{
+    pack.Reset();
+    int  userid     = pack.ReadCell();
+    bool isAutoSave = pack.ReadCell();
+    delete pack;
+
+    int client = GetClientOfUserId(userid);
+
+    if (results == null)
+    {
+        LogError("Failed to save loadout: %s", error);
+        SQL_CheckError(db, results, error, 0);
+        if (client > 0 && !isAutoSave)
+            SendFailedMessage(client);
+        return;
+    }
+
+    // Only send success message if client is still connected
+    if (client < 1)
+        return;
+
+    if (isAutoSave)
+    {
+        char message[256];
+        g_CvarMsgAutoSaved.GetString(message, sizeof(message));
+        CPrintToChat(client, message);
+        return;
+    }
+
+    char message[256];
+    g_CvarMsgSaved.GetString(message, sizeof(message));
+    CPrintToChat(client, message);
 }
 
 // =====================================================
@@ -612,6 +680,15 @@ void OnLoadoutRetrieved(Database db, DBResultSet results, const char[] error, Da
     char secondaryArray[MAX_LOADOUT_ITEMS][ITEM_STRING_SIZE];
     char explosiveArray[MAX_LOADOUT_ITEMS][ITEM_STRING_SIZE];
 
+    // Initialize all arrays to empty strings
+    for (int i = 0; i < MAX_LOADOUT_ITEMS; i++)
+    {
+        gearArray[i][0]      = '\0';
+        primaryArray[i][0]   = '\0';
+        secondaryArray[i][0] = '\0';
+        explosiveArray[i][0] = '\0';
+    }
+
     char itemBuffer[LOADOUT_BUFFER_SIZE];
     char itemType[ITEM_TYPE_SIZE];
 
@@ -626,25 +703,25 @@ void OnLoadoutRetrieved(Database db, DBResultSet results, const char[] error, Da
 
         if (StrEqual(itemType, "gear"))
         {
-            ExplodeString(itemBuffer, ";", gearArray, sizeof(gearArray), sizeof(gearArray[]));
+            ExplodeString(itemBuffer, ";", gearArray, MAX_LOADOUT_ITEMS, sizeof(gearArray[]));
             continue;
         }
 
         if (StrEqual(itemType, "primary"))
         {
-            ExplodeString(itemBuffer, ";", primaryArray, sizeof(primaryArray), sizeof(primaryArray[]));
+            ExplodeString(itemBuffer, ";", primaryArray, MAX_LOADOUT_ITEMS, sizeof(primaryArray[]));
             continue;
         }
 
         if (StrEqual(itemType, "secondary"))
         {
-            ExplodeString(itemBuffer, ";", secondaryArray, sizeof(secondaryArray), sizeof(secondaryArray[]));
+            ExplodeString(itemBuffer, ";", secondaryArray, MAX_LOADOUT_ITEMS, sizeof(secondaryArray[]));
             continue;
         }
 
         if (StrEqual(itemType, "explosive"))
         {
-            ExplodeString(itemBuffer, ";", explosiveArray, sizeof(explosiveArray), sizeof(explosiveArray[]));
+            ExplodeString(itemBuffer, ";", explosiveArray, MAX_LOADOUT_ITEMS, sizeof(explosiveArray[]));
             continue;
         }
     }
@@ -659,6 +736,13 @@ void OnLoadoutRetrieved(Database db, DBResultSet results, const char[] error, Da
 
 void ApplyLoadoutFromArrays(int client, char[][] gearArray, char[][] primaryArray, char[][] secondaryArray, char[][] explosiveArray, bool showMessages)
 {
+    // Validate client is in game and alive
+    if (!IsClientInGame(client))
+        return;
+
+    if (!IsPlayerAlive(client))
+        return;
+
     // Clear current loadout
     FakeClientCommand(client, "inventory_sell_all");
 
