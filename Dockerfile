@@ -74,7 +74,7 @@ FROM gameserver-mods-base AS gameserver-mods-sourcemod
 
 # SourceMod (Windows version)
 ARG SOURCEMOD_VERSION
-RUN \
+RUN --mount=type=bind,source=./plugins/sourcemod,target=/plugin-source \
     curl -fsSL -o /tmp/sourcemod.zip https://sm.alliedmods.net/smdrop/1.12/sourcemod-${SOURCEMOD_VERSION}-windows.zip && \
     unzip -q /tmp/sourcemod.zip -d /insurgency && \
     rm /tmp/sourcemod.zip && \
@@ -95,6 +95,10 @@ RUN \
     rm -rf /insurgency/addons/sourcemod/plugins/nextmap.smx && \
     rm -rf /insurgency/addons/sourcemod/scripting && \
     find /insurgency/addons/sourcemod/translations -name 'nextmap.phrases.txt' -delete && \
+    # Copy in the modified, idempotent SQL scripts
+    cp -r /plugin-source/configs/sql-init-scripts/pgsql/create_admins.sql /insurgency/addons/sourcemod/configs/sql-init-scripts/pgsql/create_admins.sql && \
+    cp -r /plugin-source/configs/sql-init-scripts/pgsql/clientprefs-pgsql.sql /insurgency/addons/sourcemod/configs/sql-init-scripts/pgsql/clientprefs-pgsql.sql && \
+    # Fixup file permissions
     find /insurgency -type d -exec chmod 755 {} \;
 
 # This target is used to compile SourceMod plugins.
