@@ -7,9 +7,9 @@ Thanks [Bot Chris](https://github.com/santosoch/insurgency) and [Nullifidian](ht
 ## Features
 
 - **Per-Class Loadout Saving**: Each class template has its own saved loadout
+- **Manual Save**: Players explicitly save loadouts with `!savelo` command
 - **Automatic Loading**: Saved loadouts automatically apply when selecting a class
-- **Auto-Save on Disconnect**: Current loadout is automatically saved when disconnecting or changing classes
-- **PostgreSQL Backend**: Simple, efficient database schema with semicolon-separated IDs
+- **PostgreSQL Backend**: Simple, efficient single-row schema with semicolon-separated IDs
 - **Rate Limiting**: Built-in abuse prevention with configurable cooldowns
 - **Entity Inspection**: Direct reading from game entities - no theater files required
 - **Configurable Messages**: All user-facing messages customizable via ConVars
@@ -34,7 +34,7 @@ createdb insurgency_loadouts
 Run the schema creation script:
 
 ```bash
-psql -d insurgency_loadouts -f schema.sql
+psql -d insurgency_loadouts -f loadout_saver.sql
 ```
 
 ### 2. Database Configuration
@@ -75,11 +75,12 @@ Add database connection details to `addons/sourcemod/configs/databases.cfg`:
 
 ### Player Commands
 
-| Command    | Description                                    | Cooldown  |
-| ---------- | ---------------------------------------------- | --------- |
-| `!savelo`  | Save your current loadout for the active class | 3 seconds |
-| `!clearlo` | Clear your saved loadout for the active class  | 3 seconds |
-| `!loadlo`  | Manually load your saved loadout               | 100ms     |
+| Command        | Description                                    | Cooldown  |
+| -------------- | ---------------------------------------------- | --------- |
+| `!savelo`      | Save your current loadout for the active class | 3 seconds |
+| `!clearlo`     | Clear your saved loadout for the active class  | None      |
+| `!clearlo all` | Clear all saved loadouts for all classes       | None      |
+| `!loadlo`      | Manually load your saved loadout               | 100ms     |
 
 ### How It Works
 
@@ -87,23 +88,15 @@ Add database connection details to `addons/sourcemod/configs/databases.cfg`:
 2. **Select Class**: Player picks a class (e.g., `template_rifleman_security_coop`)
 3. **Auto-Load**: If a saved loadout exists for this class, it's automatically applied
 4. **Equip Weapons**: Player customizes their loadout in-game
-5. **Save**: Player types `!savelo` to save their current loadout
+5. **Manual Save**: Player types `!savelo` to save their current loadout
 6. **Reconnect**: When the player rejoins and selects the same class, their loadout is restored
 
-### Auto-Save Behavior
+### Save Behavior
 
-The plugin automatically saves your loadout in these situations:
-
-- **Changing Classes**: When you switch to a different class
-- **Disconnecting**: When you leave the server
-- **Map Change**: When the map changes (triggers disconnect)
-- **Plugin Unload**: When the plugin is reloaded/unloaded
-
-Auto-saved loadouts are marked with `is_auto_saved = TRUE` in the database. These can be overwritten by:
-- Another auto-save (class change/disconnect)
-- A manual save using `!savelo` (changes `is_auto_saved` to `FALSE`)
-
-Manual saves (`!savelo`) are never auto-overwritten - you must explicitly save again to update them.
+Loadouts are **only saved manually** using the `!savelo` command. This ensures:
+- Players have full control over when loadouts are saved
+- No accidental overwrites during gameplay
+- Loadout represents exactly what the player wants, not a mid-game state
 
 ## Configuration
 
@@ -111,15 +104,17 @@ The plugin creates a config file at `cfg/sourcemod/plugin.loadoutsaver.cfg` on f
 
 ### ConVars
 
-| ConVar                       | Default                                                                | Description                            |
-| ---------------------------- | ---------------------------------------------------------------------- | -------------------------------------- |
-| `sm_loadoutsaver_version`    | `1.0.0`                                                                | Plugin version (read-only)             |
-| `sm_loadout_msg_saved`       | `{olivedrab}[Loadout]{default} Loadout saved successfully!`            | Message shown when loadout is saved    |
-| `sm_loadout_msg_cleared`     | `{olivedrab}[Loadout]{default} Loadout cleared!`                       | Message shown when loadout is cleared  |
-| `sm_loadout_msg_loaded`      | `{olivedrab}[Loadout]{default} Loadout loaded successfully!`           | Message shown when loadout is loaded   |
-| `sm_loadout_msg_failed`      | `{red}[Loadout]{default} Failed to process loadout.`                   | Message shown when operation fails     |
-| `sm_loadout_msg_ratelimit`   | `{red}[Loadout]{default} Please wait before using this command again.` | Message shown when rate limited        |
-| `sm_loadout_msg_equipfailed` | `{red}[Loadout]{default} Failed to equip: {1}`                         | Message shown when item fails to equip |
+| ConVar                       | Default                                                              | Description                              |
+| ---------------------------- | -------------------------------------------------------------------- | ---------------------------------------- |
+| `sm_loadoutsaver_version`    | `2.0.0`                                                              | Plugin version (read-only)               |
+| `sm_loadout_msg_saved`       | `{olivedrab}[Loadout]{default} Loadout saved!`                       | Message shown when loadout is saved      |
+| `sm_loadout_msg_cleared`     | `{olivedrab}[Loadout]{default} Loadout cleared!`                     | Message shown when loadout is cleared    |
+| `sm_loadout_msg_cleared_all` | `{olivedrab}[Loadout]{default} All loadouts cleared!`                | Message shown when all loadouts cleared  |
+| `sm_loadout_msg_loaded`      | `{olivedrab}[Loadout]{default} Loadout loaded!`                      | Message shown when loadout is loaded     |
+| `sm_loadout_msg_failed`      | `{red}[Loadout]{default} Failed to process loadout.`                 | Message shown when operation fails       |
+| `sm_loadout_msg_supply`      | `{red}[Loadout]{default} Can't save loadout that costs more than...` | Message shown when loadout too expensive |
+| `sm_loadout_save_cooldown`   | `3.0`                                                                | Cooldown for save command (seconds)      |
+| `sm_loadout_load_cooldown`   | `0.1`                                                                | Cooldown for load command (seconds)      |
 
 Messages support color tags from the `morecolors` library. See [Color Tags](#color-tags) below.
 
@@ -134,35 +129,36 @@ sm_loadout_msg_loaded "{blue}[i]{default} Loadout restored."
 
 ## Database Schema
 
-The plugin uses a simple PostgreSQL database schema with semicolon-separated IDs:
+The plugin uses a simple PostgreSQL database schema with one row per player/class combo:
 
 ### Table Structure
 
 **loadouts** table:
 - `steam_id` (VARCHAR(32)): Player's Steam ID
 - `class_template` (VARCHAR(128)): Class template name
-- `item_type` (VARCHAR(16)): Equipment type ('gear', 'primary', 'secondary', 'explosive')
-- `itemid` (TEXT): Semicolon-separated list of theater IDs
-- `is_auto_saved` (BOOLEAN): Whether this was auto-saved or manually saved
+- `gear` (TEXT): Semicolon-separated list of gear theater IDs
+- `primary_weapon` (TEXT): Semicolon-separated list (weapon ID; upgrade IDs)
+- `secondary_weapon` (TEXT): Semicolon-separated list (weapon ID; upgrade IDs)
+- `explosive` (TEXT): Semicolon-separated list (weapon ID; upgrade IDs)
 - `created_at` (TIMESTAMP): Initial creation timestamp
 - `updated_at` (TIMESTAMP): Last update timestamp
 - `last_seen_at` (TIMESTAMP): Last time player was seen
 - `update_count` (INTEGER): Number of times loadout was updated
-- Primary Key: `(steam_id, class_template, item_type)`
+- Primary Key: `(steam_id, class_template)`
 
 ### Storage Format
 
 Each equipment type is stored as a semicolon-separated string of theater IDs:
 
 - **gear**: `39;47;52` (armor ID; head ID; vest ID; etc.)
-- **primary**: `5;12;13;14` (weapon ID; upgrade1 ID; upgrade2 ID; etc.)
-- **secondary**: `8;15` (weapon ID; upgrade1 ID; etc.)
+- **primary_weapon**: `5;12;13;14` (weapon ID; upgrade1 ID; upgrade2 ID; etc.)
+- **secondary_weapon**: `8;15` (weapon ID; upgrade1 ID; etc.)
 - **explosive**: `20;21` (weapon ID; upgrade1 ID; etc.)
 
 ### Schema Benefits
 
 - **Simplicity**: Easy to read and debug - just semicolon-separated numbers
-- **Performance**: Indexed for fast lookups with minimal overhead
+- **Performance**: Single row per player/class, indexed for fast lookups
 - **Compatibility**: Works with any theater configuration automatically
 - **Efficiency**: No complex JSON parsing required
 - **Flexibility**: Easy to manually edit or inspect database contents
@@ -172,20 +168,28 @@ Each equipment type is stored as a semicolon-separated string of theater IDs:
 When a player saves a loadout for `template_rifleman_security_coop`:
 
 ```sql
--- Four rows are inserted/updated (one per equipment type)
-INSERT INTO loadouts (steam_id, class_template, item_type, itemid, is_auto_saved)
-VALUES 
-  ('STEAM_0:1:12345678', 'template_rifleman_security_coop', 'gear', '39;47', FALSE),
-  ('STEAM_0:1:12345678', 'template_rifleman_security_coop', 'primary', '5;12;13', FALSE),
-  ('STEAM_0:1:12345678', 'template_rifleman_security_coop', 'secondary', '8;15', FALSE),
-  ('STEAM_0:1:12345678', 'template_rifleman_security_coop', 'explosive', '20', FALSE)
-ON CONFLICT (steam_id, class_template, item_type) DO UPDATE
-SET itemid = EXCLUDED.itemid, is_auto_saved = EXCLUDED.is_auto_saved, updated_at = CURRENT_TIMESTAMP;
+-- Single row is inserted/updated
+INSERT INTO loadouts (steam_id, class_template, gear, primary_weapon, secondary_weapon, explosive)
+VALUES (
+  'STEAM_0:1:12345678',
+  'template_rifleman_security_coop',
+  '39;47',      -- gear
+  '5;12;13',    -- primary + upgrades
+  '8;15',       -- secondary + upgrades
+  '20'          -- explosive
+)
+ON CONFLICT (steam_id, class_template) DO UPDATE
+SET gear = EXCLUDED.gear,
+    primary_weapon = EXCLUDED.primary_weapon,
+    secondary_weapon = EXCLUDED.secondary_weapon,
+    explosive = EXCLUDED.explosive,
+    updated_at = CURRENT_TIMESTAMP,
+    update_count = loadouts.update_count + 1;
 ```
 
 When loading, the plugin:
-1. Queries all 4 rows for the player's steam_id and class_template
-2. Splits each `itemid` string by semicolons using `ExplodeString()`
+1. Queries the single row for the player's steam_id and class_template
+2. Splits each column's string by semicolons using `ExplodeString()`
 3. Executes buy commands in order:
    - `inventory_buy_gear 39`
    - `inventory_buy_gear 47`
@@ -268,7 +272,7 @@ The plugin uses Insurgency's entity system to directly read loadout data:
 **Problem**: `Please wait before using this command again`
 
 **Solutions**:
-- Wait 3 seconds between `!savelo` and `!clearlo` commands
+- Wait 3 seconds between `!savelo` commands
 - Wait 100ms between `!loadlo` commands
 - This is intentional abuse prevention
 
@@ -317,7 +321,7 @@ cd addons/sourcemod/scripting
 
 View active loadouts:
 ```sql
-SELECT steam_id, class_template, item_type, itemid, updated_at 
+SELECT steam_id, class_template, updated_at 
 FROM loadouts 
 ORDER BY updated_at DESC;
 ```
@@ -326,12 +330,12 @@ View loadout details for a player:
 ```sql
 SELECT * FROM loadouts 
 WHERE steam_id = 'STEAM_0:1:12345678'
-ORDER BY class_template, item_type;
+ORDER BY class_template;
 ```
 
 Count loadouts per player:
 ```sql
-SELECT steam_id, COUNT(DISTINCT class_template) as class_count 
+SELECT steam_id, COUNT(*) as class_count 
 FROM loadouts 
 GROUP BY steam_id 
 ORDER BY class_count DESC;

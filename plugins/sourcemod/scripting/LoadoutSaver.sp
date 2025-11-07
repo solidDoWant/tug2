@@ -1,6 +1,5 @@
 // (C) 2025 LoadoutSaver sdw
 // Insurgency (2014) Loadout Saving Plugin
-// Entity Inspection Version (No Theater File Required!)
 
 #pragma semicolon 1
 #pragma newdecls required
@@ -39,7 +38,6 @@ ConVar   g_CvarMsgSaved;
 ConVar   g_CvarMsgCleared;
 ConVar   g_CvarMsgClearedAll;
 ConVar   g_CvarMsgLoaded;
-ConVar   g_CvarMsgAutoSaved;
 ConVar   g_CvarMsgFailed;
 ConVar   g_CvarMsgSupplyError;
 ConVar   g_CvarSaveCooldown;
@@ -57,7 +55,6 @@ ConVar   g_CvarSupplyTokenBase;
 
 // Buffer sizes
 #define LOADOUT_BUFFER_SIZE 256
-#define ITEM_TYPE_SIZE      32
 #define ITEM_STRING_SIZE    64
 
 // Game limits (based on Insurgency entity structure)
@@ -76,7 +73,6 @@ public void OnPluginStart()
     g_CvarMsgCleared     = CreateConVar("sm_loadout_msg_cleared", "{olivedrab}[Loadout]{default} Loadout cleared!", "Message when cleared");
     g_CvarMsgClearedAll  = CreateConVar("sm_loadout_msg_cleared_all", "{olivedrab}[Loadout]{default} All loadouts cleared!", "Message when all loadouts cleared");
     g_CvarMsgLoaded      = CreateConVar("sm_loadout_msg_loaded", "{olivedrab}[Loadout]{default} Loadout loaded!", "Message when loaded");
-    g_CvarMsgAutoSaved   = CreateConVar("sm_loadout_msg_autosaved", "{olivedrab}[Loadout]{default} Loadout autosaved!", "Message when autosaved");
     g_CvarMsgFailed      = CreateConVar("sm_loadout_msg_failed", "{red}[Loadout]{default} Failed to process loadout.", "Message on failure");
     g_CvarMsgSupplyError = CreateConVar("sm_loadout_msg_supply", "{red}[Loadout]{default} Can't save loadout that costs more than starting supply ({1})!", "Message when too expensive");
     g_CvarSaveCooldown   = CreateConVar("sm_loadout_save_cooldown", "3.0", "Cooldown for save command (seconds)", _, true, 0.0);
@@ -88,25 +84,20 @@ public void OnPluginStart()
     RegConsoleCmd("sm_savelo", Command_SaveLoadout, "Save your current loadout");
     RegConsoleCmd("sm_clearlo", Command_ClearLoadout, "Clear your saved loadout (use 'all' to clear all classes)");
     RegConsoleCmd("sm_loadlo", Command_LoadLoadout, "Load your saved loadout");
-    RegConsoleCmd("inventory_reset", Command_InventoryReset, "Hook reset button to load saved loadout");    // TODO see if I can remove this
+    RegConsoleCmd("inventory_reset", Command_InventoryReset, "Hook reset button to load saved loadout");
 
     // Hook events
     HookEvent("player_pick_squad", Event_PlayerPickSquad);
-    HookEvent("player_spawn", Event_PlayerSpawn);
 
     // Find netprop offsets
     g_EquippedGearOffset = FindSendPropInfo("CINSPlayer", "m_EquippedGear");
     if (g_EquippedGearOffset == -1)
-    {
         SetFailState("Failed to find m_EquippedGear offset!");
-    }
 
     // Get supply token base convar
     g_CvarSupplyTokenBase = FindConVar("mp_supply_token_base");
     if (g_CvarSupplyTokenBase == null)
-    {
         LogError("Failed to find mp_supply_token_base convar - supply validation disabled");
-    }
 
     // Connect to database
     ConnectDatabase();
@@ -137,19 +128,10 @@ public void OnClientDisconnect(int client)
 {
     if (IsFakeClient(client)) return;
 
-    // No need to save on disconnect - loadout is auto-saved on spawn and resupply
-    // Loadouts should not be saved on disconnect because player loadout will change naturally during gameplay, so the state at plugin end does not necessarily reflect their intended saved loadout
-    // Just clean up tracking variables
+    // Clean up tracking variables
     g_PlayerCurrentClass[client][0] = '\0';
     g_LastSaveTime[client]          = 0.0;
     g_LastLoadTime[client]          = 0.0;
-}
-
-public void OnPluginEnd()
-{
-    // Loadouts should not be saved on shutdown because:
-    // * There is a race condition with database disconnect and full plugin termination
-    // * Player loadout will change naturally during gameplay, so the state at plugin end does not necessarily reflect their intended saved loadout
 }
 
 // =====================================================
@@ -232,39 +214,11 @@ public void Event_PlayerPickSquad(Event event, const char[] name, bool dontBroad
     char classTemplate[128];
     event.GetString("class_template", classTemplate, sizeof(classTemplate));
 
-    // Auto-save previous class loadout before switching
-    // TODO maybe this should be removed, because the player's loadout may have changed from the desired state
-    if (g_PlayerCurrentClass[client][0] != '\0' && !StrEqual(g_PlayerCurrentClass[client], classTemplate))
-        SaveLoadoutFromEntity(client, true);    // Auto-save with notification
-
     // Update current class
     strcopy(g_PlayerCurrentClass[client], sizeof(g_PlayerCurrentClass[]), classTemplate);
 
-    // Auto-load saved loadout with longer delay to ensure player is fully spawned
+    // Auto-load saved loadout with delay to ensure player is fully spawned
     CreateTimer(1.0, Timer_AutoLoadLoadout, GetClientUserId(client), TIMER_FLAG_NO_MAPCHANGE);
-}
-
-public void Event_PlayerSpawn(Event event, const char[] name, bool dontBroadcast)
-{
-    int client = GetClientOfUserId(event.GetInt("userid"));
-    if (client < 1 || IsFakeClient(client)) return;
-
-    // Player has spawned with their loadout finalized - auto-save it
-    if (g_PlayerCurrentClass[client][0] != '\0')
-    {
-        // Small delay to ensure loadout is fully applied
-        CreateTimer(0.3, Timer_AutoSaveLoadout, GetClientUserId(client), TIMER_FLAG_NO_MAPCHANGE);
-    }
-}
-
-public Action Timer_AutoSaveLoadout(Handle timer, int userid)
-{
-    int client = GetClientOfUserId(userid);
-    if (client < 1 || !IsClientInGame(client)) return Plugin_Handled;
-
-    // Silent auto-save (no chat message)
-    SaveLoadoutFromEntity(client, true);
-    return Plugin_Handled;
 }
 
 public Action Timer_AutoLoadLoadout(Handle timer, int userid)
@@ -272,7 +226,7 @@ public Action Timer_AutoLoadLoadout(Handle timer, int userid)
     int client = GetClientOfUserId(userid);
     if (client < 1 || !IsClientInGame(client)) return Plugin_Handled;
 
-    LoadPlayerLoadout(client, true);    // Auto-load with messages
+    LoadPlayerLoadout(client, false);    // Auto-load silently
     return Plugin_Handled;
 }
 
@@ -297,7 +251,7 @@ public Action Command_SaveLoadout(int client, int args)
         return Plugin_Handled;
     }
 
-    SaveLoadoutFromEntity(client, false);    // Manual save
+    SaveLoadoutFromEntity(client);
     g_LastSaveTime[client] = GetGameTime();
     return Plugin_Handled;
 }
@@ -342,10 +296,7 @@ public Action Command_LoadLoadout(int client, int args)
 
     // Check cooldown
     float cooldown = g_CvarLoadCooldown.FloatValue;
-    if (GetGameTime() - g_LastLoadTime[client] < cooldown)
-    {
-        return Plugin_Handled;
-    }
+    if (GetGameTime() - g_LastLoadTime[client] < cooldown) return Plugin_Handled;
 
     LoadPlayerLoadout(client, true);    // Manual load with messages
     g_LastLoadTime[client] = GetGameTime();
@@ -358,10 +309,7 @@ public Action Command_InventoryReset(int client, int args)
 
     // Check cooldown
     float cooldown = g_CvarLoadCooldown.FloatValue;
-    if (GetGameTime() - g_LastLoadTime[client] < cooldown)
-    {
-        return Plugin_Continue;
-    }
+    if (GetGameTime() - g_LastLoadTime[client] < cooldown) return Plugin_Continue;
 
     // Try to load saved loadout instead of resetting
     LoadPlayerLoadout(client, false);    // Silent load
@@ -373,6 +321,35 @@ public Action Command_InventoryReset(int client, int args)
 // =====================================================
 // Entity Inspection - Read Loadout from Player
 // =====================================================
+
+void ExtractWeaponData(int weapon, char[] buffer, int maxlen)
+{
+    if (weapon <= 0)
+    {
+        buffer[0] = '\0';
+        return;
+    }
+
+    int weaponID = GetEntProp(weapon, Prop_Send, "m_hWeaponDefinitionHandle");
+    if (weaponID <= 0)
+    {
+        buffer[0] = '\0';
+        return;
+    }
+
+    Format(buffer, maxlen, "%d", weaponID);
+
+    // Get weapon upgrades
+    int upgradeOffset = GetEntSendPropOffs(weapon, "m_upgradeSlots");
+    if (upgradeOffset <= 0) return;
+
+    for (int i = 0; i < MAX_WEAPON_UPGRADES * 4; i += 4)
+    {
+        int upgradeID = GetEntData(weapon, upgradeOffset + i);
+        if (upgradeID > 0)
+            Format(buffer, maxlen, "%s;%d", buffer, upgradeID);
+    }
+}
 
 bool ValidateSupplyPoints(int client)
 {
@@ -402,32 +379,28 @@ bool ValidateSupplyPoints(int client)
     return true;
 }
 
-void SaveLoadoutFromEntity(int client, bool isAutoSave)
+void SaveLoadoutFromEntity(int client)
 {
     if (g_Database == null)
     {
-        if (!isAutoSave) SendFailedMessage(client);
+        SendFailedMessage(client);
         return;
     }
 
-    // Validate supply points before saving (always validate, even on auto-save)
-    if (!ValidateSupplyPoints(client))
-        return;
+    // Validate supply points before saving
+    if (!ValidateSupplyPoints(client)) return;
 
     char gearBuffer[LOADOUT_BUFFER_SIZE];
     char primaryBuffer[LOADOUT_BUFFER_SIZE];
     char secondaryBuffer[LOADOUT_BUFFER_SIZE];
     char explosiveBuffer[LOADOUT_BUFFER_SIZE];
 
-    gearBuffer[0]      = '\0';
-    primaryBuffer[0]   = '\0';
-    secondaryBuffer[0] = '\0';
-    explosiveBuffer[0] = '\0';
+    gearBuffer[0] = '\0';
 
     // Get gear from player entity
     if (g_EquippedGearOffset != -1)
     {
-        for (int i = 0; i < MAX_GEAR_SLOTS * 4; i += 4)    // 6 gear slots at 4-byte intervals
+        for (int i = 0; i < MAX_GEAR_SLOTS * 4; i += 4)
         {
             int gearID = GetEntData(client, g_EquippedGearOffset + i);
             if (gearID > 0)
@@ -440,181 +413,76 @@ void SaveLoadoutFromEntity(int client, bool isAutoSave)
         }
     }
 
-    // Get primary weapon (slot 0)
-    int primaryWeapon = GetPlayerWeaponSlot(client, 0);
-    if (primaryWeapon > 0)
-    {
-        int weaponID = GetEntProp(primaryWeapon, Prop_Send, "m_hWeaponDefinitionHandle");
-        if (weaponID > 0)
-        {
-            Format(primaryBuffer, sizeof(primaryBuffer), "%d", weaponID);
+    // Get weapons using helper function
+    ExtractWeaponData(GetPlayerWeaponSlot(client, 0), primaryBuffer, sizeof(primaryBuffer));
+    ExtractWeaponData(GetPlayerWeaponSlot(client, 1), secondaryBuffer, sizeof(secondaryBuffer));
+    ExtractWeaponData(GetPlayerWeaponSlot(client, 3), explosiveBuffer, sizeof(explosiveBuffer));
 
-            // Get weapon upgrades
-            int upgradeOffset = GetEntSendPropOffs(primaryWeapon, "m_upgradeSlots");
-            if (upgradeOffset > 0)
-            {
-                for (int i = 0; i < MAX_WEAPON_UPGRADES * 4; i += 4)    // 8 upgrade slots at 4-byte intervals
-                {
-                    int upgradeID = GetEntData(primaryWeapon, upgradeOffset + i);
-                    if (upgradeID > 0)
-                    {
-                        Format(primaryBuffer, sizeof(primaryBuffer), "%s;%d", primaryBuffer, upgradeID);
-                    }
-                }
-            }
-        }
-    }
-
-    // Get secondary weapon (slot 1)
-    int secondaryWeapon = GetPlayerWeaponSlot(client, 1);
-    if (secondaryWeapon > 0)
-    {
-        int weaponID = GetEntProp(secondaryWeapon, Prop_Send, "m_hWeaponDefinitionHandle");
-        if (weaponID > 0)
-        {
-            Format(secondaryBuffer, sizeof(secondaryBuffer), "%d", weaponID);
-
-            // Get weapon upgrades
-            int upgradeOffset = GetEntSendPropOffs(secondaryWeapon, "m_upgradeSlots");
-            if (upgradeOffset > 0)
-            {
-                for (int i = 0; i < MAX_WEAPON_UPGRADES * 4; i += 4)    // 8 upgrade slots at 4-byte intervals
-                {
-                    int upgradeID = GetEntData(secondaryWeapon, upgradeOffset + i);
-                    if (upgradeID > 0)
-                    {
-                        Format(secondaryBuffer, sizeof(secondaryBuffer), "%s;%d", secondaryBuffer, upgradeID);
-                    }
-                }
-            }
-        }
-    }
-
-    // Get explosive weapon (slot 3)
-    int explosiveWeapon = GetPlayerWeaponSlot(client, 3);
-    if (explosiveWeapon > 0)
-    {
-        int weaponID = GetEntProp(explosiveWeapon, Prop_Send, "m_hWeaponDefinitionHandle");
-        if (weaponID > 0)
-        {
-            Format(explosiveBuffer, sizeof(explosiveBuffer), "%d", weaponID);
-
-            // Get weapon upgrades
-            int upgradeOffset = GetEntSendPropOffs(explosiveWeapon, "m_upgradeSlots");
-            if (upgradeOffset > 0)
-            {
-                for (int i = 0; i < MAX_WEAPON_UPGRADES * 4; i += 4)    // 8 upgrade slots at 4-byte intervals
-                {
-                    int upgradeID = GetEntData(explosiveWeapon, upgradeOffset + i);
-                    if (upgradeID > 0)
-                    {
-                        Format(explosiveBuffer, sizeof(explosiveBuffer), "%s;%d", explosiveBuffer, upgradeID);
-                    }
-                }
-            }
-        }
-    }
-
-    // Save all types to database in a single transaction
-    SaveLoadoutTransaction(client, gearBuffer, primaryBuffer, secondaryBuffer, explosiveBuffer, isAutoSave);
+    // Save to database in a single query
+    SaveLoadoutToDatabase(client, gearBuffer, primaryBuffer, secondaryBuffer, explosiveBuffer);
 }
 
 // =====================================================
 // Save Loadout to Database
 // =====================================================
 
-void SaveLoadoutTransaction(int client, const char[] gearBuffer, const char[] primaryBuffer, const char[] secondaryBuffer, const char[] explosiveBuffer, bool isAutoSave)
+void SaveLoadoutToDatabase(int client, const char[] gearBuffer, const char[] primaryBuffer, const char[] secondaryBuffer, const char[] explosiveBuffer)
 {
     if (g_Database == null) return;
 
     // Escape strings for SQL
     char escapedSteamId[64];
     char escapedClass[256];
+    char escapedGear[512];
+    char escapedPrimary[512];
+    char escapedSecondary[512];
+    char escapedExplosive[512];
+
     g_Database.Escape(g_PlayerSteamId[client], escapedSteamId, sizeof(escapedSteamId));
     g_Database.Escape(g_PlayerCurrentClass[client], escapedClass, sizeof(escapedClass));
+    g_Database.Escape(gearBuffer, escapedGear, sizeof(escapedGear));
+    g_Database.Escape(primaryBuffer, escapedPrimary, sizeof(escapedPrimary));
+    g_Database.Escape(secondaryBuffer, escapedSecondary, sizeof(escapedSecondary));
+    g_Database.Escape(explosiveBuffer, escapedExplosive, sizeof(escapedExplosive));
 
-    // Build all 4 queries into a single transaction
-    char transaction[4096];
-    char tempQuery[1024];
+    // Prepare NULL or quoted values
+    char gearValue[550], primaryValue[550], secondaryValue[550], explosiveValue[550];
+    Format(gearValue, sizeof(gearValue), gearBuffer[0] != '\0' ? "'%s'" : "NULL", escapedGear);
+    Format(primaryValue, sizeof(primaryValue), primaryBuffer[0] != '\0' ? "'%s'" : "NULL", escapedPrimary);
+    Format(secondaryValue, sizeof(secondaryValue), secondaryBuffer[0] != '\0' ? "'%s'" : "NULL", escapedSecondary);
+    Format(explosiveValue, sizeof(explosiveValue), explosiveBuffer[0] != '\0' ? "'%s'" : "NULL", escapedExplosive);
 
-    strcopy(transaction, sizeof(transaction), "BEGIN;");
+    // Single UPSERT query
+    char query[2048];
+    Format(
+        query, sizeof(query),
+        "INSERT INTO loadouts (steam_id, class_template, gear, primary_weapon, secondary_weapon, explosive, updated_at, update_count) " ... "VALUES ('%s', '%s', %s, %s, %s, %s, CURRENT_TIMESTAMP, 1) " ... "ON CONFLICT (steam_id, class_template) DO UPDATE SET " ... "gear = EXCLUDED.gear, " ... "primary_weapon = EXCLUDED.primary_weapon, " ... "secondary_weapon = EXCLUDED.secondary_weapon, " ... "explosive = EXCLUDED.explosive, " ... "updated_at = CURRENT_TIMESTAMP, " ... "update_count = loadouts.update_count + 1",
+        escapedSteamId, escapedClass, gearValue, primaryValue, secondaryValue, explosiveValue);
 
-    // Build query for each loadout type
-    BuildLoadoutQuery(tempQuery, sizeof(tempQuery), escapedSteamId, escapedClass, "gear", gearBuffer, isAutoSave);
-    Format(transaction, sizeof(transaction), "%s %s", transaction, tempQuery);
-
-    BuildLoadoutQuery(tempQuery, sizeof(tempQuery), escapedSteamId, escapedClass, "primary", primaryBuffer, isAutoSave);
-    Format(transaction, sizeof(transaction), "%s %s", transaction, tempQuery);
-
-    BuildLoadoutQuery(tempQuery, sizeof(tempQuery), escapedSteamId, escapedClass, "secondary", secondaryBuffer, isAutoSave);
-    Format(transaction, sizeof(transaction), "%s %s", transaction, tempQuery);
-
-    BuildLoadoutQuery(tempQuery, sizeof(tempQuery), escapedSteamId, escapedClass, "explosive", explosiveBuffer, isAutoSave);
-    Format(transaction, sizeof(transaction), "%s %s", transaction, tempQuery);
-
-    Format(transaction, sizeof(transaction), "%s COMMIT;", transaction);
-
-    // Execute transaction with callback
     DataPack pack = new DataPack();
     pack.WriteCell(GetClientUserId(client));
-    pack.WriteCell(isAutoSave);
 
-    g_Database.Query(OnLoadoutSaved, transaction, pack);
-}
-
-void BuildLoadoutQuery(char[] buffer, int maxlen, const char[] steamId, const char[] classTemplate, const char[] type, const char[] itemBuffer, bool isAutoSave)
-{
-    char escapedType[32];
-    char escapedItems[512];
-    char itemValue[550];
-
-    g_Database.Escape(type, escapedType, sizeof(escapedType));
-
-    // Prepare item value (NULL or quoted string)
-    if (itemBuffer[0] != '\0')
-    {
-        g_Database.Escape(itemBuffer, escapedItems, sizeof(escapedItems));
-        Format(itemValue, sizeof(itemValue), "'%s'", escapedItems);
-    }
-    else
-    {
-        strcopy(itemValue, sizeof(itemValue), "NULL");
-    }
-
-    Format(buffer, maxlen,
-           "INSERT INTO loadouts (steam_id, class_template, item_type, itemid, is_auto_saved, updated_at, update_count) " ... "VALUES ('%s', '%s', '%s', %s, %s, CURRENT_TIMESTAMP, 1) " ... "ON CONFLICT (steam_id, class_template, item_type) DO UPDATE SET " ... "itemid = EXCLUDED.itemid, " ... "is_auto_saved = EXCLUDED.is_auto_saved, " ... "updated_at = CURRENT_TIMESTAMP, " ... "update_count = loadouts.update_count + 1;",
-           steamId, classTemplate, escapedType, itemValue, isAutoSave ? "TRUE" : "FALSE");
+    g_Database.Query(OnLoadoutSaved, query, pack);
 }
 
 void OnLoadoutSaved(Database db, DBResultSet results, const char[] error, DataPack pack)
 {
     pack.Reset();
-    int  userid     = pack.ReadCell();
-    bool isAutoSave = pack.ReadCell();
+    int userid = pack.ReadCell();
     delete pack;
-
-    int client = GetClientOfUserId(userid);
 
     if (results == null)
     {
         LogError("Failed to save loadout: %s", error);
         SQL_CheckError(db, results, error, 0);
-        if (client > 0 && !isAutoSave)
-            SendFailedMessage(client);
+
+        int client = GetClientOfUserId(userid);
+        if (client > 0) SendFailedMessage(client);
         return;
     }
 
-    // Only send success message if client is still connected
-    if (client < 1)
-        return;
-
-    if (isAutoSave)
-    {
-        char message[256];
-        g_CvarMsgAutoSaved.GetString(message, sizeof(message));
-        CPrintToChat(client, message);
-        return;
-    }
+    int client = GetClientOfUserId(userid);
+    if (client < 1) return;
 
     char message[256];
     g_CvarMsgSaved.GetString(message, sizeof(message));
@@ -639,9 +507,7 @@ void LoadPlayerLoadout(int client, bool showMessages)
     g_Database.Escape(g_PlayerSteamId[client], escapedSteamId, sizeof(escapedSteamId));
     g_Database.Escape(g_PlayerCurrentClass[client], escapedClass, sizeof(escapedClass));
 
-    Format(query, sizeof(query),
-           "SELECT item_type, itemid FROM loadouts WHERE steam_id = '%s' AND class_template = '%s'",
-           escapedSteamId, escapedClass);
+    Format(query, sizeof(query), "SELECT gear, primary_weapon, secondary_weapon, explosive FROM loadouts WHERE steam_id = '%s' AND class_template = '%s'", escapedSteamId, escapedClass);
 
     DataPack pack = new DataPack();
     pack.WriteCell(GetClientUserId(client));
@@ -668,11 +534,8 @@ void OnLoadoutRetrieved(Database db, DBResultSet results, const char[] error, Da
         return;
     }
 
-    if (!results.RowCount)
-        // No saved loadout - silently do nothing
-        return;
+    if (!results.FetchRow()) return;    // No saved loadout - silently do nothing
 
-    // Parse each row and build arrays
     // Arrays sized for: 1 weapon ID + MAX_WEAPON_UPGRADES upgrade IDs = 9 items
     // Or for gear: MAX_GEAR_SLOTS gear items = 6 items (+ padding to 9)
     char gearArray[MAX_LOADOUT_ITEMS][ITEM_STRING_SIZE];
@@ -689,41 +552,38 @@ void OnLoadoutRetrieved(Database db, DBResultSet results, const char[] error, Da
         explosiveArray[i][0] = '\0';
     }
 
-    char itemBuffer[LOADOUT_BUFFER_SIZE];
-    char itemType[ITEM_TYPE_SIZE];
+    char buffer[LOADOUT_BUFFER_SIZE];
 
-    while (results.FetchRow())
+    // Read gear column
+    if (!results.IsFieldNull(0))
     {
-        results.FetchString(0, itemType, sizeof(itemType));
-        results.FetchString(1, itemBuffer, sizeof(itemBuffer));
+        results.FetchString(0, buffer, sizeof(buffer));
+        if (buffer[0] != '\0')
+            ExplodeString(buffer, ";", gearArray, MAX_LOADOUT_ITEMS, sizeof(gearArray[]));
+    }
 
-        // Skip empty/NULL entries
-        if (itemBuffer[0] == '\0')
-            continue;
+    // Read primary_weapon column
+    if (!results.IsFieldNull(1))
+    {
+        results.FetchString(1, buffer, sizeof(buffer));
+        if (buffer[0] != '\0')
+            ExplodeString(buffer, ";", primaryArray, MAX_LOADOUT_ITEMS, sizeof(primaryArray[]));
+    }
 
-        if (StrEqual(itemType, "gear"))
-        {
-            ExplodeString(itemBuffer, ";", gearArray, MAX_LOADOUT_ITEMS, sizeof(gearArray[]));
-            continue;
-        }
+    // Read secondary_weapon column
+    if (!results.IsFieldNull(2))
+    {
+        results.FetchString(2, buffer, sizeof(buffer));
+        if (buffer[0] != '\0')
+            ExplodeString(buffer, ";", secondaryArray, MAX_LOADOUT_ITEMS, sizeof(secondaryArray[]));
+    }
 
-        if (StrEqual(itemType, "primary"))
-        {
-            ExplodeString(itemBuffer, ";", primaryArray, MAX_LOADOUT_ITEMS, sizeof(primaryArray[]));
-            continue;
-        }
-
-        if (StrEqual(itemType, "secondary"))
-        {
-            ExplodeString(itemBuffer, ";", secondaryArray, MAX_LOADOUT_ITEMS, sizeof(secondaryArray[]));
-            continue;
-        }
-
-        if (StrEqual(itemType, "explosive"))
-        {
-            ExplodeString(itemBuffer, ";", explosiveArray, MAX_LOADOUT_ITEMS, sizeof(explosiveArray[]));
-            continue;
-        }
+    // Read explosive column
+    if (!results.IsFieldNull(3))
+    {
+        results.FetchString(3, buffer, sizeof(buffer));
+        if (buffer[0] != '\0')
+            ExplodeString(buffer, ";", explosiveArray, MAX_LOADOUT_ITEMS, sizeof(explosiveArray[]));
     }
 
     // Apply loadout from arrays
@@ -737,69 +597,24 @@ void OnLoadoutRetrieved(Database db, DBResultSet results, const char[] error, Da
 void ApplyLoadoutFromArrays(int client, char[][] gearArray, char[][] primaryArray, char[][] secondaryArray, char[][] explosiveArray, bool showMessages)
 {
     // Validate client is in game and alive
-    if (!IsClientInGame(client))
-        return;
-
-    if (!IsPlayerAlive(client))
-        return;
+    if (!IsClientInGame(client)) return;
+    if (!IsPlayerAlive(client)) return;
 
     // Clear current loadout
     FakeClientCommand(client, "inventory_sell_all");
 
-    int weaponCount = 0;
-
     // Apply gear (up to MAX_GEAR_SLOTS items)
-    if (gearArray[0][0] != '\0')
+    for (int i = 0; i < MAX_LOADOUT_ITEMS; i++)
     {
-        for (int i = 0; i < MAX_LOADOUT_ITEMS; i++)
-        {
-            if (gearArray[i][0] == '\0')
-                break;
-            FakeClientCommand(client, "inventory_buy_gear %s", gearArray[i]);
-        }
+        if (gearArray[i][0] == '\0') break;
+        FakeClientCommand(client, "inventory_buy_gear %s", gearArray[i]);
     }
 
-    // Apply primary weapon and upgrades (1 weapon + up to MAX_WEAPON_UPGRADES upgrades)
-    if (primaryArray[0][0] != '\0')
-    {
-        FakeClientCommand(client, "inventory_buy_weapon %s", primaryArray[0]);
-        weaponCount++;
-
-        for (int i = 1; i < MAX_LOADOUT_ITEMS; i++)
-        {
-            if (primaryArray[i][0] == '\0')
-                break;
-            FakeClientCommand(client, "inventory_buy_upgrade %d %s", weaponCount, primaryArray[i]);
-        }
-    }
-
-    // Apply secondary weapon and upgrades (1 weapon + up to MAX_WEAPON_UPGRADES upgrades)
-    if (secondaryArray[0][0] != '\0')
-    {
-        FakeClientCommand(client, "inventory_buy_weapon %s", secondaryArray[0]);
-        weaponCount++;
-
-        for (int i = 1; i < MAX_LOADOUT_ITEMS; i++)
-        {
-            if (secondaryArray[i][0] == '\0')
-                break;
-            FakeClientCommand(client, "inventory_buy_upgrade %d %s", weaponCount, secondaryArray[i]);
-        }
-    }
-
-    // Apply explosive weapon and upgrades (1 weapon + up to MAX_WEAPON_UPGRADES upgrades)
-    if (explosiveArray[0][0] != '\0')
-    {
-        FakeClientCommand(client, "inventory_buy_weapon %s", explosiveArray[0]);
-        weaponCount++;
-
-        for (int i = 1; i < MAX_LOADOUT_ITEMS; i++)
-        {
-            if (explosiveArray[i][0] == '\0')
-                break;
-            FakeClientCommand(client, "inventory_buy_upgrade %d %s", weaponCount, explosiveArray[i]);
-        }
-    }
+    // Buy primary, secondary, and explosive
+    int weaponCount = 0;
+    weaponCount += BuyWeapons(client, primaryArray, weaponCount);
+    weaponCount += BuyWeapons(client, secondaryArray, weaponCount);
+    BuyWeapons(client, explosiveArray, weaponCount);
 
     // Auto-resupply if in resupply zone
     FakeClientCommand(client, "inventory_resupply");
@@ -810,6 +625,27 @@ void ApplyLoadoutFromArrays(int client, char[][] gearArray, char[][] primaryArra
         g_CvarMsgLoaded.GetString(message, sizeof(message));
         CPrintToChat(client, message);
     }
+}
+
+int BuyWeapons(int client, const char[][] itemArray, int upgradeSlot)
+{
+    int weaponsAdded = 0;
+    for (int i = 0; i < MAX_LOADOUT_ITEMS; i++)
+    {
+        if (itemArray[i][0] == '\0')
+            return weaponsAdded;
+
+        if (i == 0)
+        {
+            FakeClientCommand(client, "inventory_buy_weapon %s", itemArray[i]);
+            weaponsAdded++;
+            continue;
+        }
+
+        FakeClientCommand(client, "inventory_buy_upgrade %d %s", weaponsAdded + upgradeSlot, itemArray[i]);
+    }
+
+    return weaponsAdded;
 }
 
 // =====================================================
@@ -830,9 +666,7 @@ void ClearLoadout(int client)
     g_Database.Escape(g_PlayerSteamId[client], escapedSteamId, sizeof(escapedSteamId));
     g_Database.Escape(g_PlayerCurrentClass[client], escapedClass, sizeof(escapedClass));
 
-    Format(query, sizeof(query),
-           "DELETE FROM loadouts WHERE steam_id = '%s' AND class_template = '%s'",
-           escapedSteamId, escapedClass);
+    Format(query, sizeof(query), "DELETE FROM loadouts WHERE steam_id = '%s' AND class_template = '%s'", escapedSteamId, escapedClass);
 
     DataPack pack = new DataPack();
     pack.WriteCell(GetClientUserId(client));
@@ -874,9 +708,7 @@ void ClearAllLoadouts(int client)
     char escapedSteamId[64];
     g_Database.Escape(g_PlayerSteamId[client], escapedSteamId, sizeof(escapedSteamId));
 
-    Format(query, sizeof(query),
-           "DELETE FROM loadouts WHERE steam_id = '%s'",
-           escapedSteamId);
+    Format(query, sizeof(query), "DELETE FROM loadouts WHERE steam_id = '%s'", escapedSteamId);
 
     DataPack pack = new DataPack();
     pack.WriteCell(GetClientUserId(client));
