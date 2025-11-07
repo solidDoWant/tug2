@@ -97,7 +97,7 @@ Handle      gPendingFireSupport[2048];    // Max entities = 2048
 int         gGrenadeStationaryChecks[2048];    // Consecutive stationary checks per grenade
 
 const float STATIONARY_VELOCITY_THRESHOLD = 10.0;    // Units per second - grenade considered stationary below this
-const int   STATIONARY_CHECKS_REQUIRED    = 3;       // Number of consecutive 0.1s checks (0.3s total) before triggering
+const int   STATIONARY_CHECKS_REQUIRED    = 10;      // Number of consecutive 0.1s checks (0.3s total) before triggering
 
 // Fire support target offset
 // Raises the target point above ground level to ensure proper sky tracing and avoid ground clipping
