@@ -203,6 +203,22 @@ RUN --mount=type=bind,source=./plugins/sourcemod,target=/plugin-source \
     find /insurgency -type d -exec chmod 755 {} \; && \
     find /insurgency -type f -exec chmod 644 {} \;
 
+# Medic, respawns, stat tracking, bot respawns, dynamic difficulty adjustment, name role prefixes, dependency on inslib
+FROM sourcemod-plugins-base AS sourcemod-plugins-everythingelse
+
+# Build the loadout saver plugin
+COPY plugins/sourcemod/gamedata/ /insurgency/addons/sourcemod/gamedata/
+RUN --mount=type=bind,source=./plugins/sourcemod,target=/plugin-source \
+    /sourcemod/addons/sourcemod/scripting/spcomp --include=/plugin-source/scripting/include  /plugin-source/scripting/insurgency.sp -o /insurgency/addons/sourcemod/plugins/insurgency.smx && \
+    /sourcemod/addons/sourcemod/scripting/spcomp --include=/plugin-source/scripting/include  /plugin-source/scripting/c_dy_respawn_naong_ai_director.sp -o /insurgency/addons/sourcemod/plugins/c_dy_respawn_naong_ai_director.smx && \
+    mkdir -p /insurgency/cfg && \
+    touch /insurgency/cfg/plugin.respawn.cfg && \
+    mkdir -p /insurgency/addons/sourcemod/translations && \
+    cp /plugin-source/translations/{nearest_player,respawn}.phrases.txt /insurgency/addons/sourcemod/translations && \
+    # Fixup file permissions
+    find /insurgency -type d -exec chmod 755 {} \; && \
+    find /insurgency -type f -exec chmod 644 {} \;
+
 # Dumb workaround for docker limitation where you can't copy from an image specified by a build arg
 FROM ${SERVER_RUNNER_IMAGE_NAME} AS server-runner
 
@@ -240,7 +256,7 @@ COPY --from=gameserver-builder --chown=1000:1000 --chmod=755 /empty-directory /o
 # Copy in compiled plugins
 COPY --from=sourcemod-plugins-battleye-disabler --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
 COPY --from=sourcemod-plugins-annoucement --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
-COPY --from=sourcemod-plugins-loadoutsaver --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
+COPY --from=sourcemod-plugins-everythingelse --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
 
 # Copy the default config
 COPY ["server config/base/", "/"]
