@@ -87,7 +87,6 @@ oms_corridor_coopb3 checkpoint
 convoy_day_apc_coop_v1_1 checkpoint
 sotu_m_is_for_madness checkpoint
 dust2_checkpoint_b8 checkpoint
-ins_chilly_p1 checkpoint
 gizab_bm checkpoint
 insz_favela checkpoint
 inferno_new_v1 checkpoint
