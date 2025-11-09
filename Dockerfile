@@ -180,6 +180,20 @@ RUN --mount=type=bind,source=./plugins/sourcemod/scripting/include,target=/plugi
     # Fixup file permissions
     find /insurgency -type d -exec chmod 755 {} \;
 
+FROM sourcemod-plugins-base AS sourcemod-plugins-bot-names
+
+# Build the bot name plugin
+RUN \
+    mkdir -p /plugin-source /insurgency/addons/sourcemod/configs/botnames && \
+    curl -fsSL -o /plugin-source/bot_names.sp https://raw.githubusercontent.com/thecannons/Insurgency-dy-sourcemod/594f5d321010da16cc0ad78478921af4d80cfa80/scripting/botnames.sp && \
+    curl -fsSL -o /insurgency/addons/sourcemod/configs/botnames/arabic.txt https://raw.githubusercontent.com/thecannons/Insurgency-dy-sourcemod/594f5d321010da16cc0ad78478921af4d80cfa80/configs/botnames/arabic.txt && \
+    curl -fsSL -o /insurgency/addons/sourcemod/configs/botnames/default.txt https://raw.githubusercontent.com/thecannons/Insurgency-dy-sourcemod/594f5d321010da16cc0ad78478921af4d80cfa80/configs/botnames/default.txt && \
+    curl -fsSL -o /insurgency/addons/sourcemod/configs/botnames/pashto.txt https://raw.githubusercontent.com/thecannons/Insurgency-dy-sourcemod/594f5d321010da16cc0ad78478921af4d80cfa80/configs/botnames/pashto.txt && \
+    /sourcemod/addons/sourcemod/scripting/spcomp /plugin-source/bot_names.sp -o /insurgency/addons/sourcemod/plugins/bot_names.smx && \
+    rm -rf /plugin-source && \
+    # Fixup file permissions
+    find /insurgency -type d -exec chmod 755 {} \;
+
 FROM sourcemod-plugins-base AS sourcemod-plugins-firesupport
 
 # Build the fire support plugin
@@ -214,7 +228,7 @@ RUN --mount=type=bind,source=./plugins/sourcemod,target=/plugin-source \
 
 FROM sourcemod-plugins-base AS sourcemod-plugins-restrictedarea
 
-# Build the database migration plugin
+# Build the restricted area removal plugin
 COPY plugins/sourcemod/gamedata/ /insurgency/addons/sourcemod/gamedata/
 RUN --mount=type=bind,source=./plugins/sourcemod/scripting,target=/plugin-source/scripting \
     /sourcemod/addons/sourcemod/scripting/spcomp --include=/plugin-source/scripting/include  /plugin-source/scripting/restrictedarea.sp -o /insurgency/addons/sourcemod/plugins/restrictedarea.smx && \
