@@ -171,6 +171,15 @@ RUN \
     # Fixup file permissions
     find /insurgency -type d -exec chmod 755 {} \;
 
+FROM sourcemod-plugins-base AS sourcemod-plugins-counterattack-countdown
+
+# Build the counter attack countdown plugin
+RUN --mount=type=bind,source=./plugins/sourcemod/scripting/include,target=/plugin-source/scripting/include \
+    curl -fsSL -o /plugin-source/ca_countdown.sp https://raw.githubusercontent.com/NullifidianSF/insurgency_public/e6eb683a6ba407b5bba29b74817e0c0bcb9d6a0c/addons/sourcemod/scripting/ca_countdown.sp && \
+    /sourcemod/addons/sourcemod/scripting/spcomp /plugin-source/ca_countdown.sp -i /plugin-source/scripting/include -o /insurgency/addons/sourcemod/plugins/ca_countdown.smx && \
+    # Fixup file permissions
+    find /insurgency -type d -exec chmod 755 {} \;
+
 FROM sourcemod-plugins-base AS sourcemod-plugins-firesupport
 
 # Build the fire support plugin
@@ -206,7 +215,7 @@ RUN --mount=type=bind,source=./plugins/sourcemod,target=/plugin-source \
 # Medic, respawns, stat tracking, bot respawns, dynamic difficulty adjustment, name role prefixes, dependency on inslib
 FROM sourcemod-plugins-base AS sourcemod-plugins-everythingelse
 
-# Build the loadout saver plugin
+# Build the "everything else" plugins
 COPY plugins/sourcemod/gamedata/ /insurgency/addons/sourcemod/gamedata/
 RUN --mount=type=bind,source=./plugins/sourcemod,target=/plugin-source \
     /sourcemod/addons/sourcemod/scripting/spcomp --include=/plugin-source/scripting/include  /plugin-source/scripting/insurgency.sp -o /insurgency/addons/sourcemod/plugins/insurgency.smx && \
