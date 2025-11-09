@@ -1341,7 +1341,7 @@ public Action:Timer_MapStart(Handle:Timer)
 	
 	// Enemy remaining announce timer
 	if (g_isConquer != 1 && g_isOutpost != 1) 
-	CreateTimer(30.0, Timer_Enemies_Remaining,_ , TIMER_REPEAT | TIMER_FLAG_NO_MAPCHANGE);
+	CreateTimer(30.0, Timer_Enemies_Remaining, _ , TIMER_REPEAT | TIMER_FLAG_NO_MAPCHANGE);
 
 	// Player status check timer
 	CreateTimer(1.0, Timer_PlayerStatus,_ , TIMER_REPEAT | TIMER_FLAG_NO_MAPCHANGE);
@@ -1626,100 +1626,46 @@ public Action:Timer_PlayerStatus(Handle:Timer)
 }
 
 // Announce enemies remaining
-public Action:Timer_Enemies_Remaining(Handle:Timer)
+public Action Timer_Enemies_Remaining(Handle timer)
 {
-	// Check round state
-	if (g_iRoundStatus == 0) return Plugin_Continue;
-	
-	// Check enemy count
-	new alive_insurgents;
-	for (new i = 1; i <= MaxClients; i++)
-	{
-		if (IsClientInGame(i) && IsPlayerAlive(i) && IsFakeClient(i))
-		{
-			alive_insurgents++;
-		}
-	}
-/*	new validAntenna = -1;
-	validAntenna = FindValid_Antenna();
-	if (validAntenna != -1 || g_jammerRequired == 0)
-	{
-		// Announce
-		decl String:textToPrintChat[64];
-		decl String:textToPrint[64];
-		Format(textToPrintChat, sizeof(textToPrintChat), "[INTEL]Enemies alive: %d | Enemy reinforcements left: %d", alive_insurgents, g_iRemaining_lives_team_ins);
-		Format(textToPrint, sizeof(textToPrint), "[INTEL]Enemies alive: %d | Enemy reinforcements left: %d", alive_insurgents ,g_iRemaining_lives_team_ins);
-		PrintHintTextToAll(textToPrint);
-		PrintToChatAll(textToPrintChat);
+	char textToPrint[64];
+	ReportTotalEnemies(textToPrint, sizeof(textToPrint));
+	PrintHintTextToAll(textToPrint);
 
-		new timeReduce = (GetTeamSecCount() / 3);
-		if (timeReduce <= 0)
-			timeReduce = 3;
+	// For debugging also send the message to all players' chat
+	// TODO TEMP
+	PrintToChatAll(textToPrint);
 
-		new jammerSpawnReductionAmt = (g_iRespawnSeconds / timeReduce);
-		//Format(textToPrintChat, sizeof(textToPrintChat), "[INTEL]Jammer Active! | Reinforce time reduced by: %d seconds", jammerSpawnReductionAmt);
-		//PrintToChatAll(textToPrintChat);
-
-	}
-	else
-	{
-		// Announce
-		decl String:textToPrintChat[64];
-		decl String:textToPrint[64];
-		Format(textToPrintChat, sizeof(textToPrintChat), "[INTEL]Comms are down, build jammer to get enemy reports.");
-		Format(textToPrint, sizeof(textToPrintChat), "[INTEL]Comms are down, build jammer to get enemy reports.");
-		PrintHintTextToAll(textToPrint);
-		PrintToChatAll(textToPrintChat);
-		//Format(textToPrintChat, sizeof(textToPrintChat), "[INTEL]Jammer Inactive! | Reinforce time reduced by: %d seconds", 0);
-		//PrintToChatAll(textToPrintChat);
-	}
-	return Plugin_Continue;
-}
-*/
-
-	for (new client = 1; client <= MaxClients; client++)
-	{
-		new nTotalAliveEnemies = alive_insurgents + g_iRemaining_lives_team_ins;
-		if(IsClientInGame(client) && !IsFakeClient(client) && IsPlayerAlive(client))
-		{
-			new GetGearItemID = GetEntData(client, g_iPlayerEquipGear + (4 * 5));
-			if(GetGearItemID == RadioGearID)
-			{
-				PrintHintText(client, "Total enemies alive: %d", nTotalAliveEnemies);
-			}
-		}
-	}
 	return Plugin_Continue;
 }
 
-public Action:Check_Total_Enemies(client, args)
+public Action Check_Total_Enemies(int client, int args)
 {
-	// Check round state
-	if (g_iRoundStatus == 0) return Plugin_Continue;
-	
-	// Check enemy count
-	new alive_insurgents;
-	for (new i = 1; i <= MaxClients; i++)
-	{
-		if (IsClientConnected(i) && IsClientInGame(i) && IsPlayerAlive(i) && IsFakeClient(i))
-		{
-			alive_insurgents++;
-		}
-	}
-	decl String:textToPrint[64];
-	//new nTotalAliveEnemies = alive_insurgents + g_iRemaining_lives_team_ins;
-	
-	Format(textToPrint, sizeof(textToPrint), "Enemies alive: %d | Enemy reinforcements left: %d", alive_insurgents ,g_iRemaining_lives_team_ins);
+	char textToPrint[64];
+	ReportTotalEnemies(textToPrint, sizeof(textToPrint));
 	PrintHintText(client, "%s", textToPrint);
-	
+
 	return Plugin_Handled;
 }
 
-// This timer reinforces bot team if you do not capture point
-public Action:Timer_EnemyReinforce(Handle:Timer)
+stock void ReportTotalEnemies(char[] enemyMessage, int maxlength) 
 {
+	// Check round state
+	if (g_iRoundStatus == 0) return;
 	
-	
+	// Check enemy count
+	int alive_insurgents;
+	for (int i = 1; i <= MaxClients; i++)
+		if (IsClientConnected(i) && IsClientInGame(i) && IsPlayerAlive(i) && IsFakeClient(i))
+			alive_insurgents++;
+
+	// Announce
+	Format(enemyMessage, maxlength, "Enemies alive: %d | Enemy reinforcements left: %d", alive_insurgents, g_iRemaining_lives_team_ins);
+}
+
+// This timer reinforces bot team if you do not capture point
+public Action Timer_EnemyReinforce(Handle timer)
+{
 	// Check round state
 	if (g_iRoundStatus == 0) return Plugin_Continue;
 	
