@@ -147,7 +147,7 @@ stock LogTeamEvent(int team, const char[] verb, const char[] event, const char[]
 
 stock LogKillLoc(int attacker, int victim)
 {
-    if (attacker < 0 || victim < 0) return;
+    if (!IsValidPlayer(attacker) || !IsValidPlayer(victim)) return;
 
     float attacker_origin[3];
     GetClientAbsOrigin(attacker, attacker_origin);
