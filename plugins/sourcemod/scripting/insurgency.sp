@@ -315,7 +315,7 @@ public UpdateAllDataSources()
 	GetEntity_GameRulesProxy(1);
 	GetEntity_PlayerManager(1);
 	GetWeaponData();
-	GetTeams(false);
+	GetTeams();
 	GetStatus();
 //CreateTimer(4.5, GetStatus);
 }

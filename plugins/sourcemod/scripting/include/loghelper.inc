@@ -13,7 +13,7 @@ char  g_team_list[16][64];
 
 // Call this on map start to cache team names in g_team_list
 
-stock GetTeams(bool insmod = false)
+stock GetTeams()
 {
     int max_teams_count = GetTeamCount();
     for (int team_index = 0; (team_index < max_teams_count); team_index++)

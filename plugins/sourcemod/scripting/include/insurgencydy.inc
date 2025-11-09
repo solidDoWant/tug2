@@ -720,7 +720,7 @@ stock SetGrenadeAmmo(int client, int grenadeType, int grenadeAmount)
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-StartStuckDetection(iClient)
+stock StartStuckDetection(iClient)
 {
 	StuckCheck[iClient]++;
 	isStuck[iClient] = false;
