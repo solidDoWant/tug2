@@ -214,7 +214,8 @@ RUN --mount=type=bind,source=./plugins/sourcemod,target=/plugin-source \
     mkdir -p /insurgency/cfg && \
     touch /insurgency/cfg/plugin.respawn.cfg && \
     mkdir -p /insurgency/addons/sourcemod/translations && \
-    cp /plugin-source/translations/{nearest_player,respawn}.phrases.txt /insurgency/addons/sourcemod/translations && \
+    cp /plugin-source/translations/nearest_player.phrases.txt /plugin-source/translations/respawn.phrases.txt /insurgency/addons/sourcemod/translations && \
+    /sourcemod/addons/sourcemod/scripting/spcomp --include=/plugin-source/scripting/include  /plugin-source/scripting/d_dy_pull_rag.sp -o /insurgency/addons/sourcemod/plugins/d_dy_pull_rag.smx && \
     # Fixup file permissions
     find /insurgency -type d -exec chmod 755 {} \; && \
     find /insurgency -type f -exec chmod 644 {} \;
