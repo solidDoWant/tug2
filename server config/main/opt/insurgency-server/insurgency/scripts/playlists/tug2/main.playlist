@@ -35,15 +35,15 @@
 		"mp_timer_postround"			"15"	// timer for the post-round (after the round starts)
 		"mp_timer_postgame"			"10"	// timer for the post-game (at the end of a game / map rotation)
 		"mp_timer_pregame"			"10"	// timer for the pre-game (before the game starts, usually after map change or on mp_restartgame 1)
-		"sv_deadvoice"				"0"	// enabling this will allow the dead and living to VOIP each other
-		"sv_deadtalk"				"0"	// enabling this will allow the dead and living to chat text each other
+		"sv_deadvoice"				"1"	// enabling this will allow the dead and living to VOIP each other
+		"sv_deadtalk"				"1"	// enabling this will allow the dead and living to chat text each other
 		"sv_deadtalk_team"			"1"	// is deadchat limited to just your team?
 		"mp_coop_lobbysize"			"12"	// lobby size
 		"mp_coop_min_bots"			"35"	// number of bots when there is 1 player on the server
 		"mp_coop_max_bots"			"224"	// number of bots when there are 14 players on the server
 		"ins_bot_count_checkpoint_max" "224"	// maximum number of bots for checkpoint
 		"bot_damage"				"1"	// the amount of damage bots give off compared to normal players
-		"mp_voice_use_3d_voip"			"1"	// disabling this will turn off the 3d voip system and allow all players to hear one another
+		"mp_voice_use_3d_voip"			"0"	// disabling this will turn off the 3d voip system and allow all players to hear one another
 		"sv_vote_issue_changegamemode_allowed"	"0"	// no changegamemode
 	}
 	
