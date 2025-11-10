@@ -2,6 +2,7 @@
 {
 	"name"					"#Playlist_Coop"
 	"description"				"#Playlist_Coop_Desc"
+	"category"	"coop"
 	
 	"require_maxplayers_min"		"24"	// Min player slots required for this playlist
 
@@ -62,5 +63,9 @@
 			"min"					"0"	// Minimum slider value
 			"max"					"7"	// Maximum slider value
 		}
+
+		// Mod support, if enabled a filter is added allowing people to include/exclude servers which have sv_pure -1 or 0
+		// and support workshop items
+		"mod_support"				"1"
 	}
 }
