@@ -1,0 +1,3 @@
+Welcome to TUG!
+Join Discord for news: https://discord.gg/RAQgnjeQuE
+Server under new management. Report issues on Discord or at https://github.com/solidDoWant/tug2
