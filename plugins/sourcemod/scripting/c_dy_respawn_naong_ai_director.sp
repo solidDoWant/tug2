@@ -2278,49 +2278,52 @@ int CheckSpawnPointPlayers(float vecSpawn[3], int client, float tObjectiveDistan
 	return 1;
 }
 
-public GetPushPointIndex(Float:fRandomFloat, client)
+public int GetPushPointIndex(float fRandomFloat, int client)
 {
 	// Get the number of control points
-	new ncp = Ins_ObjectiveResource_GetProp("m_iNumControlPoints");
+	int ncp = Ins_ObjectiveResource_GetProp("m_iNumControlPoints");
 	
 	// Get active push point
-	new acp = Ins_ObjectiveResource_GetProp("m_nActivePushPointIndex");
+	int acp = Ins_ObjectiveResource_GetProp("m_nActivePushPointIndex");
 	
-	new m_nActivePushPointIndex = Ins_ObjectiveResource_GetProp("m_nActivePushPointIndex");
+	int m_nActivePushPointIndex = Ins_ObjectiveResource_GetProp("m_nActivePushPointIndex");
 	//Ins_ObjectiveResource_GetPropVector("m_vCPPositions",m_vCPPositions[m_nActivePushPointIndex],m_nActivePushPointIndex);
 	//new Float:distance = GetVectorDistance(vecSpawn,m_vCPPositions[m_nActivePushPointIndex]);
 	//Check last point	
-		
-	if (((acp+1) == ncp && Ins_InCounterAttack()) || g_spawnFrandom[client] < g_dynamicSpawnCounter_Perc || (Ins_InCounterAttack()) || (m_nActivePushPointIndex > 1))
+
+	bool isLastControlPoint = (acp+1) == ncp;
+
+	if ((isLastControlPoint && Ins_InCounterAttack()) || g_spawnFrandom[client] < g_dynamicSpawnCounter_Perc || (Ins_InCounterAttack()) || (m_nActivePushPointIndex > 1))
 	{
 		//PrintToServer("###POINT_MOD### | fRandomFloat: %f | g_dynamicSpawnCounter_Perc %f ",fRandomFloat, g_dynamicSpawnCounter_Perc);
-		if ((acp+1) == ncp && Ins_InCounterAttack())
+		if (isLastControlPoint && Ins_InCounterAttack())
 		{
+			// Spawn on the previous two points
 			if (g_spawnFrandom[client] < g_dynamicSpawnCounter_Perc)
 				m_nActivePushPointIndex--;
+			else
+				m_nActivePushPointIndex -= 2;
 		}
 		else
 		{
-			if (Ins_InCounterAttack() && (acp+1) != ncp)
+			if (Ins_InCounterAttack() && !isLastControlPoint)
 			{
-				if (fRandomFloat <= 0.5 && m_nActivePushPointIndex > 0)
-					m_nActivePushPointIndex--;
+				// Spawn on the next or previous point, but not the current one
+				if (g_spawnFrandom[client] < g_dynamicSpawn_Perc && m_nActivePushPointIndex > 1)
+					m_nActivePushPointIndex -= 2;
 				else
 					m_nActivePushPointIndex++;
 			}
 			else if (!Ins_InCounterAttack())
-			{
-				if (m_nActivePushPointIndex > 0)
-				{
+				if (m_nActivePushPointIndex > 1)
 					if (g_spawnFrandom[client] < g_dynamicSpawn_Perc)
-						m_nActivePushPointIndex--;
-				}
-			}
+						// Spawn two points back, so not on top of the currently held point
+						m_nActivePushPointIndex -= 2;
 		}
-
 	}
+
+	// Log where we are spawning for debugging
 	return m_nActivePushPointIndex;
-	
 }
 
 void GetSpawnPoint_SpawnPoint(int client, float spawnpoint[3])
@@ -2338,8 +2341,9 @@ void GetSpawnPoint_SpawnPoint(int client, float spawnpoint[3])
 	int acp = Ins_ObjectiveResource_GetProp("m_nActivePushPointIndex");
 
 	int m_nActivePushPointIndex = Ins_ObjectiveResource_GetProp("m_nActivePushPointIndex");
-	if (((acp+1) == ncp) || (Ins_InCounterAttack() && g_spawnFrandom[client] < g_dynamicSpawnCounter_Perc) || (!Ins_InCounterAttack() && g_spawnFrandom[client] < g_dynamicSpawn_Perc && acp > 1))
-		m_nActivePushPointIndex = GetPushPointIndex(fRandomFloat, client);
+	// if (((acp+1) == ncp) || (Ins_InCounterAttack() && g_spawnFrandom[client] < g_dynamicSpawnCounter_Perc) || (!Ins_InCounterAttack() && g_spawnFrandom[client] < g_dynamicSpawn_Perc && acp > 1))
+	// TODO rename this function. Instead of getting the control point index, it gets the control point index to spawn at
+	m_nActivePushPointIndex = GetPushPointIndex(fRandomFloat, client);
 
 				
 	int point = FindEntityByClassname(-1, "ins_spawnpoint");
@@ -4928,87 +4932,28 @@ public Action:RespawnPlayerCounter(Handle:Timer, any:client)
 
 
 // Respawn bot
-public Action:RespawnBot(Handle:Timer, any:client)
+public Action RespawnBot(Handle timer, any client)
 {
 	// Exit if client is not in game
-	if (!IsClientInGame(client) || IsPlayerAlive(client) || g_iRoundStatus == 0) return;
+	if (!IsClientInGame(client) || IsPlayerAlive(client) || g_iRoundStatus == 0) return Plugin_Continue;
 
-	decl String:sModelName[64];
+	char sModelName[64];
 	GetClientModel(client, sModelName, sizeof(sModelName));
-	if (StrEqual(sModelName, ""))
-	{
-		//PrintToServer("Invalid model: %s", sModelName);
-		return; //check if model is blank
-	}
-	else
-	{
-		PrintToServer("Valid model: %s", sModelName);
-	}
 	
 	// Check respawn type
 	if (g_iCvar_respawn_type_team_ins == 1 && g_iSpawnTokens[client] > 0)
 		g_iSpawnTokens[client]--;
 	else if (g_iCvar_respawn_type_team_ins == 2)
-	{
 		if (g_iRemaining_lives_team_ins > 0)
 		{
 			g_iRemaining_lives_team_ins--;
 			
 			if (g_iRemaining_lives_team_ins <= 0)
 				g_iRemaining_lives_team_ins = 0;
-			//PrintToServer("######################TEAM 2 LIVES REMAINING %i", g_iRemaining_lives_team_ins);
 		}
-	}
-	//PrintToServer("######################TEAM 2 LIVES REMAINING %i", g_iRemaining_lives_team_ins);
-	//PrintToServer("######################TEAM 2 LIVES REMAINING %i", g_iRemaining_lives_team_ins);
-	//PrintToServer("[RESPAWN] Respawning client %N who has %d lives remaining", client, g_iSpawnTokens[client]);
-	
-	// Call forcerespawn fucntion
 
 	SDKCall(g_hForceRespawn, client);
-}
-
-//Handle any work that needs to happen after the client is in the game
-public Action:RespawnBotPost(Handle:timer, any:client)
-{
-	/*
-	// Exit if client is not in game
-	if (!IsClientInGame(client)) return;
-
-	//PrintToServer("[BOTSPAWNS] called RespawnBotPost for client %N (%d)",client,client);
-	//g_iSpawning[client] = 0;
-	
-	if ((g_iHidingSpotCount) && !Ins_InCounterAttack())
-	{	
-		//PrintToServer("[BOTSPAWNS] HAS g_iHidingSpotCount COUNT");
-		
-		//Older Nav Spawning
-		// Get hiding point - Nav Spawning - Commented for Rehaul
-		new Float:flHidingSpot[3];
-		new iSpot = GetBestHidingSpot(client);
-
-		//PrintToServer("[BOTSPAWNS] FOUND Hiding spot %d",iSpot);
-		
-		//If found hiding spot
-		if (iSpot > -1)
-		{
-			// Set hiding spot
-			flHidingSpot[0] = GetArrayCell(g_hHidingSpots, iSpot, NavMeshHidingSpot_X);
-			flHidingSpot[1] = GetArrayCell(g_hHidingSpots, iSpot, NavMeshHidingSpot_Y);
-			flHidingSpot[2] = GetArrayCell(g_hHidingSpots, iSpot, NavMeshHidingSpot_Z);
-			
-			// Debug message
-			//new Float:vecOrigin[3];
-			//GetClientAbsOrigin(client,vecOrigin);
-			//new Float:distance = GetVectorDistance(flHidingSpot,vecOrigin);
-			//PrintToServer("[BOTSPAWNS] Teleporting %N to hiding spot %d at %f,%f,%f distance %f", client, iSpot, flHidingSpot[0], flHidingSpot[1], flHidingSpot[2], distance);
-			
-			// Teleport to hiding spot
-			TeleportEntity(client, flHidingSpot, NULL_VECTOR, NULL_VECTOR);
-		}
-	}
-	*/
-	
+	return Plugin_Continue;
 }
 
 // Player respawn timer
