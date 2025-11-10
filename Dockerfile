@@ -323,7 +323,6 @@ COPY --from=gameserver-builder --chown=1000:1000 --chmod=755 /empty-directory /o
 # Copy in compiled plugins
 COPY --from=sourcemod-plugins-battleye-disabler --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
 COPY --from=sourcemod-plugins-annoucement --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
-COPY --from=sourcemod-plugins-everythingelse --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
 
 # Copy the default config
 COPY ["server config/base/", "/"]
@@ -389,6 +388,16 @@ RUN server-runner -- wine /opt/insurgency-server/srcds.exe -condebug -game insur
 # Copy in the map-specific plugins
 COPY --from=sourcemod-plugins-marquis-fix --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
 COPY --from=sourcemod-plugins-citadel-coop-spawn-fix --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
+COPY --from=sourcemod-plugins-firesupport --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
+COPY --from=sourcemod-plugins-databasemigrator --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
+COPY --from=sourcemod-plugins-loadoutsaver --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
+COPY --from=sourcemod-plugins-counterattack-countdown --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
+COPY --from=sourcemod-plugins-restrictedarea --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
+COPY --from=sourcemod-plugins-bot-flashlights --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
+COPY --from=sourcemod-plugins-bot-names --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
+COPY --from=sourcemod-plugins-teamflash --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
+COPY --from=sourcemod-plugins-punitive-persistence --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
+COPY --from=sourcemod-plugins-everythingelse --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
 
 # Copy in the remaining main config files
 COPY ["server config/main/", "/"]
