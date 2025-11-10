@@ -1,4 +1,5 @@
 TUG 2
 
-Server is in super-ultra-pre-alpha.
-See discord for details.
+Server is under new management and in testing beta.
+See Discord for details: https://discord.gg/RAQgnjeQuE
+Report issues here: https://github.com/solidDoWant/tug2
