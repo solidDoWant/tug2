@@ -25,6 +25,16 @@ The servers are managed via a Kubernetes cluster comprised of several nodes. All
 replicated storage, and redundent 10 Gbps interconnects. If one physical server fails or is taken offline for maintenance, the TUG servers will
 automatically be restarted on another physical server. All servers share a sizable UPS.
 
+Within the Kubernetes cluster, game server instances are ran in virtual machines managed by [KubeVirt](https://github.com/kubevirt/kubevirt). This
+simultaneously allows for broader permissions, while also improving the server and hosting infra's security. In addition, this allows the server to
+be "live migrated" while the game is running. The cutover is fast enough that users don't even notice when it is happening. The actual deployment
+within the Kubernetes cluster is available [here](https://github.com/solidDoWant/infra-mk3/tree/master/cluster/gitops/tug2/insurgency).
+
+Some SourceMod plugins need to store data in a Postgres database. Outside of Postgres, zero data is persisted across game server restarts. SourceMod
+plugins using database access connect to a local [Envoy](https://www.envoyproxy.io/) instance that handles database proxying and authentication. The
+actual databases are managed via a [CloudNativePG](https://github.com/cloudnative-pg/cloudnative-pg) cluster within the Kubernetes cluster. Database
+instances run on separate nodes, so a database failover event should not impact plugins.
+
 Monitoring and alerting are setup to notify the sysadmin of issues. A status page may be made available in the future for users to verify if the
 servers are available.
 
@@ -33,7 +43,6 @@ Internet uplink redundency. This could lead to performance or availability issue
 moving to dedicated nodes and/or a colo datacenter.
 
 ### Remaining TODOs:
-* Deploy servers, link to config here
 * Figure out GSLT ownership (need community input)
 * Document availability expectations
 * Backups
@@ -76,3 +85,11 @@ Most external files like plugins should be "referenced" by this repo, rather tha
 3. Under whichever server(s) should use the third-party file, add a `COPY` command to copy from the `gameserver-mods` target to the `gameserver-<server name>` target, to whatever directory the file(s) should be installed to.
    The server root is at `/opt/insurgency-server`.
 
+### How do I add or remove admins?
+
+1. Determine the `Steam2 ID` (e.g. `STEAM_1:0:11101`) for the user to add or remove. If you know their Steam profile link, you can plug it into [here](https://steamdb.info/calculator/) to get this (even if their profile is private).
+2. Update [this file](./server%20config/main/opt/insurgency-server/insurgency/addons/sourcemod/configs/admins.cfg), adding or removing entries based upon the existing ones.
+
+### What do I do if the server disappears and/or the sysadmin is hit by a bus?
+
+See [CONTINUITY.md](./CONTINUITY.md).
