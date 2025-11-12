@@ -55,6 +55,69 @@ public void OnDatabaseConnected(Database db, const char[] error, any data)
     LogMessage("Successfully connected to database");
 }
 
+// Attempt to reconnect to the database
+void ReconnectDatabase()
+{
+    LogMessage("Attempting to reconnect to database...");
+    g_Database = null;
+    Database.Connect(OnDatabaseReconnected, "punitive-persistence");
+}
+
+public void OnDatabaseReconnected(Database db, const char[] error, any data)
+{
+    if (db == null)
+    {
+        LogError("Failed to reconnect to database: %s", error);
+        // Try again after a delay
+        CreateTimer(5.0, Timer_RetryReconnect);
+        return;
+    }
+
+    g_Database = db;
+    LogMessage("Successfully reconnected to database");
+}
+
+public Action Timer_RetryReconnect(Handle timer)
+{
+    if (g_Database == null)
+        ReconnectDatabase();
+    return Plugin_Stop;
+}
+
+public Action Timer_RetryPunishmentCheck(Handle timer, DataPack pack)
+{
+    // Check if database is back online
+    if (g_Database == null)
+    {
+        LogMessage("Database still offline, retrying punishment check in 2 seconds...");
+        CreateTimer(2.0, Timer_RetryPunishmentCheck, pack, TIMER_FLAG_NO_MAPCHANGE);
+        return Plugin_Stop;
+    }
+
+    // Extract data from pack
+    pack.Reset();
+    int  userid = pack.ReadCell();
+
+    char steamid[32], ip[64];
+    pack.ReadString(steamid, sizeof(steamid));
+    pack.ReadString(ip, sizeof(ip));
+
+    int client = GetClientOfUserId(userid);
+    if (client == 0)
+    {
+        // Player disconnected, no need to check
+        delete pack;
+        return Plugin_Stop;
+    }
+
+    // Retry the punishment check
+    LogMessage("Retrying punishment check for %s after database reconnection", steamid);
+    CheckActivePunishments(client, steamid, ip);
+
+    delete pack;
+    return Plugin_Stop;
+}
+
 // ============================================================
 // CLIENT CONNECTION - Reapply Active Punishments
 // ============================================================
@@ -98,17 +161,33 @@ public void OnActivePunishmentsChecked(Database db, DBResultSet results, const c
     char steamid[32], ip[64];
     pack.ReadString(steamid, sizeof(steamid));
     pack.ReadString(ip, sizeof(ip));
-    delete pack;
 
     if (results == null)
     {
+        // Check if the error is due to lost connection
+        if (StrContains(error, "no connection to the server", false) != -1)
+        {
+            LogError("Lost connection to database: %s - attempting to reconnect", error);
+
+            // Don't delete the pack yet, we'll retry after reconnection
+            CreateTimer(1.0, Timer_RetryPunishmentCheck, pack, TIMER_FLAG_NO_MAPCHANGE);
+
+            // Trigger reconnection
+            ReconnectDatabase();
+            return;
+        }
+
         LogError("Failed to check active punishments: %s", error);
+        delete pack;
         return;
     }
 
     int client = GetClientOfUserId(userid);
     if (client == 0)
+    {
+        delete pack;
         return;
+    }
 
     // Apply all active punishments
     bool gagged = false;
@@ -161,6 +240,8 @@ public void OnActivePunishmentsChecked(Database db, DBResultSet results, const c
         else if (muted)
             LogMessage("Reapplied mute to %s (%s)", name, steamid);
     }
+
+    delete pack;
 }
 
 // ============================================================
