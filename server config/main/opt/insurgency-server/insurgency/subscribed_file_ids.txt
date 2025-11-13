@@ -110,7 +110,6 @@
 2538211718 // Drycanal_coop_old
 2876174607 // fortress_coop_fixed - map
 1189448765 // miransh_alpha - map
-1970592914 // Waterway Islands - map
 2888145663 // game_day - map
 1576811737 // docks_day coop checkpoint - map
 1190497035 // market_open_coop - checkpoint - map

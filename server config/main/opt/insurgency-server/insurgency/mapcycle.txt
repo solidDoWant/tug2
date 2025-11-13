@@ -104,7 +104,6 @@ gioconda_eron_smalltown checkpoint
 drycanal_coop_old checkpoint
 fortress_coop_fixed checkpoint
 miransh_alpha checkpoint
-Waterway_Islands checkpoint
 game_day checkpoint
 docks_day checkpoint
 market_open_coop checkpoint
