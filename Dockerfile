@@ -256,7 +256,6 @@ RUN --mount=type=bind,source=./plugins/sourcemod/scripting,target=/plugin-source
     find /insurgency -type d -exec chmod 755 {} \; && \
     find /insurgency -type f -exec chmod 644 {} \;
 
-
 FROM sourcemod-plugins-base AS sourcemod-plugins-punitive-persistence
 
 # Build the punitive persistence plugin
@@ -265,6 +264,16 @@ RUN --mount=type=bind,source=./plugins/sourcemod,target=/plugin-source \
     /sourcemod/addons/sourcemod/scripting/spcomp --include=/plugin-source/scripting/include  /plugin-source/scripting/punitive_persistence.sp -o /insurgency/addons/sourcemod/plugins/punitive_persistence.smx && \
     mkdir -p /insurgency/addons/sourcemod/configs/sql-init-scripts/pgsql && \
     cp /plugin-source/configs/sql-init-scripts/pgsql/punitive_persistence.sql /insurgency/addons/sourcemod/configs/sql-init-scripts/pgsql/punitive_persistence.sql && \
+    # Fixup file permissions
+    find /insurgency -type d -exec chmod 755 {} \; && \
+    find /insurgency -type f -exec chmod 644 {} \;
+
+FROM sourcemod-plugins-base AS sourcemod-plugins-map-logger
+
+# Build the punitive persistence plugin
+COPY plugins/sourcemod/gamedata/ /insurgency/addons/sourcemod/gamedata/
+RUN --mount=type=bind,source=./plugins/sourcemod,target=/plugin-source \
+    /sourcemod/addons/sourcemod/scripting/spcomp --include=/plugin-source/scripting/include  /plugin-source/scripting/map_logger.sp -o /insurgency/addons/sourcemod/plugins/map_logger.smx && \
     # Fixup file permissions
     find /insurgency -type d -exec chmod 755 {} \; && \
     find /insurgency -type f -exec chmod 644 {} \;
@@ -397,6 +406,7 @@ COPY --from=sourcemod-plugins-bot-flashlights --chown=0:0 /insurgency /opt/insur
 COPY --from=sourcemod-plugins-bot-names --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
 COPY --from=sourcemod-plugins-teamflash --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
 COPY --from=sourcemod-plugins-punitive-persistence --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
+COPY --from=sourcemod-plugins-map-logger --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
 COPY --from=sourcemod-plugins-everythingelse --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
 
 # Copy in the remaining main config files
