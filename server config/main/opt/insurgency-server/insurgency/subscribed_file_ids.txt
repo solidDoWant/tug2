@@ -157,7 +157,7 @@
 1148522368 // healthcenter_coop2.0[fixed specularmap] - map
 3015824154 // Gold Rush - map
 3015821699 // Dustbowl - map
-3022473579 // GIOCONDA ERON KORDON - map
+// 3022473579 // GIOCONDA ERON KORDON - map REMOVED DUE TO CLIENT CRASHING
 1388118900 // bb_lighthouse_gold - map
 3041234121 // shop_invasion_coop_b2 - map
 2966432441 // dead_air - map

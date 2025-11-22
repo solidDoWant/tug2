@@ -151,7 +151,6 @@ marquis checkpoint
 healthcenter_coop_fixbysakey checkpoint
 ins_goldrush checkpoint
 ins_dustbowl checkpoint
-gioconda_eron_kordon checkpoint
 bb_lighthouse_gold checkpoint
 shop_invasion_coop_b2 checkpoint
 dead_air checkpoint
