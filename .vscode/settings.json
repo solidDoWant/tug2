@@ -1,6 +1,8 @@
 {
     "SourcePawnLanguageServer.includeDirectories": [
         "/opt/sourcemod/addons/sourcemod/scripting/include/",
+        "/workspaces/tug2/plugins/sourcemod/scripting/include/",
+        "/workspaces/tug2/plugins/sourcemod/scripting/include-nocommit/",
     ],
     "SourcePawnLanguageServer.compiler.path": "/opt/sourcemod/addons/sourcemod/scripting/spcomp64"
 }
