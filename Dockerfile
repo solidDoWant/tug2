@@ -316,8 +316,8 @@ FROM sourcemod-plugins-base AS sourcemod-plugins-everythingelse
 # Build the "everything else" plugins
 COPY plugins/sourcemod/gamedata/ /insurgency/addons/sourcemod/gamedata/
 RUN --mount=type=bind,source=./plugins/sourcemod,target=/plugin-source \
-    /sourcemod/addons/sourcemod/scripting/spcomp --include=/plugin-source/scripting/include  /plugin-source/scripting/insurgency.sp -o /insurgency/addons/sourcemod/plugins/insurgency.smx && \
-    /sourcemod/addons/sourcemod/scripting/spcomp --include=/plugin-source/scripting/include  /plugin-source/scripting/c_dy_respawn_naong_ai_director.sp -o /insurgency/addons/sourcemod/plugins/c_dy_respawn_naong_ai_director.smx && \
+    # /sourcemod/addons/sourcemod/scripting/spcomp --include=/plugin-source/scripting/include  /plugin-source/scripting/insurgency.sp -o /insurgency/addons/sourcemod/plugins/insurgency.smx && \
+    /sourcemod/addons/sourcemod/scripting/spcomp --include=/plugin-source/scripting/include  /plugin-source/scripting/bm2_respawn.sp -o /insurgency/addons/sourcemod/plugins/bm2_respawn.smx && \
     mkdir -p /insurgency/cfg && \
     touch /insurgency/cfg/plugin.respawn.cfg && \
     mkdir -p /insurgency/addons/sourcemod/translations && \
