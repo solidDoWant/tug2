@@ -13,6 +13,7 @@
 ARG SERVER_RUNNER_IMAGE_NAME=ghcr.io/soliddowant/server-runner:latest
 ARG METAMOD_VERSION=1.12.0-git1219
 ARG SOURCEMOD_VERSION=1.12.0-git7217
+ARG SOURCEMOD_COMMIT=1059132fe9b390728743faf26b3f8a2 # SourceMod 1.12.0-git7217
 
 FROM ghcr.io/gameservermanagers/steamcmd:ubuntu-24.04 AS gameserver-builder
 
@@ -70,16 +71,37 @@ RUN \
     find /insurgency/addons/metamod/bin -name 'metamod.2.*.dll' -not -name 'metamod.2.insurgency.dll' -delete && \
     find /insurgency -type d -exec chmod 755 {} \;
 
+# Build SourceMod extensions
+FROM ubuntu:24.04 AS sourcemod-extensions-ripext
+
+ARG RIPEXT_VERSION=1.3.2
+
+RUN \
+    apt update && \
+    DEBIAN_FRONTEND=noninteractive apt install --no-install-recommends -y \
+        curl ca-certificates unzip
+
+# Download and extract ripext extensions
+RUN \
+    mkdir /insurgency && \
+    curl -fsSL -o /tmp/ripext.zip https://github.com/ErikMinekus/sm-ripext/releases/download/1.3.2/sm-ripext-${RIPEXT_VERSION}-windows.zip && \
+    unzip -q /tmp/ripext.zip -d /insurgency && \
+    rm /tmp/ripext.zip
+
 FROM gameserver-mods-base AS gameserver-mods-sourcemod
 
 # SourceMod (Windows version)
 ARG SOURCEMOD_VERSION
-RUN --mount=type=bind,source=./plugins/sourcemod,target=/plugin-source \
+RUN \
+    --mount=type=bind,source=./plugins/sourcemod,target=/plugin-source \
+    --mount=from=sourcemod-extensions-ripext,target=/plugin-extensions/ripext \
     curl -fsSL -o /tmp/sourcemod.zip https://sm.alliedmods.net/smdrop/1.12/sourcemod-${SOURCEMOD_VERSION}-windows.zip && \
     unzip -q /tmp/sourcemod.zip -d /insurgency && \
     rm /tmp/sourcemod.zip && \
     # Disable auto updates
     sed -i 's/^\(.*"DisableAutoUpdate"[[:space:]]*\)"no"/\1"yes"/' /insurgency/addons/sourcemod/configs/core.cfg && \
+    # Copy in the sourcemod extensions
+    cp -r /plugin-extensions/ripext/insurgency / && \
     # Remove extra files
     rm -rf /insurgency/addons/sourcemod/*.txt && \
     rm -rf /insurgency/sourcemod/bin/x64 && \
