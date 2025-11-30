@@ -1,0 +1,37 @@
+"Phrases"
+{
+	"fire_support_called"
+	{
+		"en"		"Fire support called: {1} rounds, {2}s delay"
+	}
+
+	"fire_support_no_sky"
+	{
+		"en"		"Cannot call fire support - no visible sky"
+	}
+
+	"fire_support_cooldown"
+	{
+		"en"		"Fire support on cooldown for {1} seconds"
+	}
+
+	"fire_support_no_uses"
+	{
+		"en"		"No fire support uses remaining this round"
+	}
+
+	"fire_support_incoming"
+	{
+		"en"		"Incoming fire support!"
+	}
+
+	"fire_support_complete"
+	{
+		"en"		"Fire support complete - {1} kills"
+	}
+
+	"fire_support_stats"
+	{
+		"en"		"{1} called fire support ({2} {3}, {4} {5})"
+	}
+}

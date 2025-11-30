@@ -220,8 +220,10 @@ FROM sourcemod-plugins-base AS sourcemod-plugins-firesupport
 
 # Build the fire support plugin
 COPY plugins/sourcemod/gamedata/ /insurgency/addons/sourcemod/gamedata/
-RUN --mount=type=bind,source=./plugins/sourcemod/scripting,target=/plugin-source/scripting \
+RUN --mount=type=bind,source=./plugins/sourcemod,target=/plugin-source \
     /sourcemod/addons/sourcemod/scripting/spcomp --include=/plugin-source/scripting/include  /plugin-source/scripting/FireSupport.sp -o /insurgency/addons/sourcemod/plugins/FireSupport.smx && \
+    mkdir -p /insurgency/addons/sourcemod/translations && \
+    cp /plugin-source/translations/firesupport.phrases.txt /insurgency/addons/sourcemod/translations/ && \
     # Fixup file permissions
     find /insurgency -type d -exec chmod 755 {} \; && \
     find /insurgency -type f -exec chmod 644 {} \;

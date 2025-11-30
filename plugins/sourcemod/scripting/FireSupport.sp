@@ -8,8 +8,8 @@ public Plugin myinfo =
 {
     name        = "[INS] Fire support - Enhanced",
     author      = "rrrfffrrr, Assistant",
-    description = "Fire support with multiple weapons and team-specific settings",
-    version     = "1.2.0",
+    description = "Fire support with multiple weapons, database stats, Discord integration, and translations",
+    version     = "1.3.0",
     url         = "https://github.com/solidDoWant/tug2/tree/master/plugins/sourcemod"
 };
 
@@ -22,6 +22,7 @@ public Plugin myinfo =
 #include <sdkhooks>
 #include <timers>
 #include <morecolors>
+#include <discord>
 
 const int   TEAM_SPECTATE     = 1;
 const int   TEAM_SECURITY     = 2;
@@ -38,6 +39,13 @@ Handle      cGameConfig;
 Handle      fCreateRocket;
 
 int         gBeamSprite;
+
+// Database integration for stat tracking
+Database    g_Database = null;
+ConVar      g_server_id;
+
+// Global forward for other plugins to hook fire support calls
+GlobalForward FireSupportCalledForward;
 
 // Support type configuration
 enum struct SupportType
@@ -62,6 +70,7 @@ enum struct SupportType
     float insurgentDelay;            // Cooldown for Insurgent team
     bool  spawnSmoke;                // Whether to spawn smoke on impact
     char  smokeType[64];             // Type of smoke grenade to spawn (e.g., "smokegrenade_projectile")
+    char  discordMessage[256];       // Discord notification message (empty = no notification)
 }
 
 SupportType gSupportTypes[MAX_SUPPORT_TYPES];
@@ -149,6 +158,21 @@ public void OnPluginStart()
     HookEvent("player_pick_squad", Event_PlayerPickSquad);
     HookEvent("player_death", Event_PlayerDeath);
 
+    // Database connection for stat tracking
+    Database.Connect(T_Connect, "insurgency_stats");
+
+    // Create global forward for other plugins
+    FireSupportCalledForward = new GlobalForward(
+        "OnFireSupportCalled",
+        ET_Event,
+        Param_Cell,    // client
+        Param_Cell,    // team
+        Param_Cell     // supportType
+    );
+
+    // Load translations
+    LoadTranslations("firesupport.phrases");
+
     // Initialize tracking arrays
     gActiveRockets       = new ArrayList();
     gActiveSmokeGrenades = new ArrayList();
@@ -232,6 +256,16 @@ public void OnClientConnected(int client)
     IsEnabled[client] = false;
 }
 
+public void OnAllPluginsLoaded()
+{
+    // Get server ID from stats plugin for database tracking
+    g_server_id = FindConVar("gg_stats_server_id");
+    if (g_server_id == null)
+    {
+        LogMessage("[FireSupport] Warning: gg_stats_server_id convar not found - database stat tracking will be disabled");
+    }
+}
+
 void LoadSupportConfig()
 {
     char configPath[PLATFORM_MAX_PATH];
@@ -280,8 +314,9 @@ void LoadSupportConfig()
             gSupportTypes[gNumSupportTypes].insurgentDelay = kv.GetFloat("insurgent_delay", 0.0);
             gSupportTypes[gNumSupportTypes].spawnSmoke     = view_as<bool>(kv.GetNum("spawn_smoke", 0));
             kv.GetString("smoke_type", gSupportTypes[gNumSupportTypes].smokeType, 64, "grenade_m18");
+            kv.GetString("discord_message", gSupportTypes[gNumSupportTypes].discordMessage, 256, "");
 
-            LogMessage("Loaded support type %d: weapon=%s, spread=%.1f, shells=%d, delay=%.1f, duration=%.1f, jitter=%.2f, projectile=%s, sec_count=%d, sec_delay=%.1f, ins_count=%d, ins_delay=%.1f, spawn_smoke=%d, smoke_type=%s",
+            LogMessage("Loaded support type %d: weapon=%s, spread=%.1f, shells=%d, delay=%.1f, duration=%.1f, jitter=%.2f, projectile=%s, sec_count=%d, sec_delay=%.1f, ins_count=%d, ins_delay=%.1f, spawn_smoke=%d, smoke_type=%s, discord_msg=%s",
                        gNumSupportTypes,
                        gSupportTypes[gNumSupportTypes].weapon,
                        gSupportTypes[gNumSupportTypes].spread,
@@ -295,7 +330,8 @@ void LoadSupportConfig()
                        gSupportTypes[gNumSupportTypes].insurgentCount,
                        gSupportTypes[gNumSupportTypes].insurgentDelay,
                        gSupportTypes[gNumSupportTypes].spawnSmoke,
-                       gSupportTypes[gNumSupportTypes].smokeType);
+                       gSupportTypes[gNumSupportTypes].smokeType,
+                       gSupportTypes[gNumSupportTypes].discordMessage);
 
             gNumSupportTypes++;
         }
@@ -938,6 +974,11 @@ public bool CallFireSupport(int client, float ground[3], int supportType, int te
         gActiveFireSupport.Push(sessionPack);
         int      sessionIndex = gActiveFireSupport.Length - 1;
 
+        // Track stats and notify external systems
+        add_throw_to_db(client, supportType, team);
+        SendFireSupportForward(client, team, supportType);
+        SendDiscordNotification(client, supportType);
+
         DataPack pack         = new DataPack();
         pack.WriteCell(client);
         pack.WriteCell(shells);
@@ -1360,4 +1401,93 @@ public void OnRocketTouch(int rocket, int other)
 
     // Unhook to prevent multiple calls
     SDKUnhook(rocket, SDKHook_Touch, OnRocketTouch);
+}
+
+// ============================================================================
+// Database Integration Functions
+// ============================================================================
+
+public void T_Connect(Database db, const char[] error, any data)
+{
+    if (db == null)
+    {
+        LogError("[FireSupport] T_Connect returned invalid Database Handle: %s", error);
+        return;
+    }
+    g_Database = db;
+    LogMessage("[FireSupport] Connected to database for stat tracking");
+}
+
+public void do_nothing(Handle owner, Handle results, const char[] error, any client)
+{
+    if (strlen(error) != 0)
+    {
+        LogMessage("[FireSupport] Database query error: %s", error);
+    }
+}
+
+void add_throw_to_db(int client, int supportType, int team)
+{
+    if (g_Database == null || g_server_id == null)
+    {
+        return;    // Database not available
+    }
+
+    if (!IsValidClient(client) || IsFakeClient(client))
+    {
+        return;    // Don't track bots
+    }
+
+    char steamId[64];
+    GetClientAuthId(client, AuthId_SteamID64, steamId, sizeof(steamId));
+
+    char query[512];
+    Format(query, sizeof(query),
+           "UPDATE players SET arty_thrown = arty_thrown + 1 WHERE steamId = '%s' AND server_id = '%i'",
+           steamId, g_server_id.IntValue);
+
+    SQL_TQuery(g_Database, do_nothing, query);
+    LogMessage("[FireSupport] Incremented arty_thrown for %N (team=%d, type=%d)", client, team, supportType);
+}
+
+// ============================================================================
+// Global Forward Functions
+// ============================================================================
+
+void SendFireSupportForward(int client, int team, int supportType)
+{
+    Action result;
+    Call_StartForward(FireSupportCalledForward);
+    Call_PushCell(client);
+    Call_PushCell(team);
+    Call_PushCell(supportType);
+    Call_Finish(result);
+}
+
+// ============================================================================
+// Discord Integration Functions
+// ============================================================================
+
+void SendDiscordNotification(int client, int supportType)
+{
+    if (strlen(gSupportTypes[supportType].discordMessage) == 0)
+    {
+        return;    // No discord message configured
+    }
+
+    if (!IsValidClient(client))
+    {
+        return;
+    }
+
+    send_to_discord(client, gSupportTypes[supportType].discordMessage);
+}
+
+// ============================================================================
+// Utility Functions
+// ============================================================================
+
+bool IsValidClient(int client)
+{
+    return (client > 0 && client <= MaxClients && IsClientInGame(client));
 }
