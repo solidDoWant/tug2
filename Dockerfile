@@ -522,6 +522,46 @@ RUN --mount=type=bind,source=./plugins/sourcemod/scripting,target=/plugin-source
     find /insurgency -type d -exec chmod 755 {} \; && \
     find /insurgency -type f -exec chmod 644 {} \;
 
+FROM sourcemod-plugins-base AS sourcemod-plugins-gg2-save-loadouts
+
+# Build the gg2_save_loadouts plugin
+COPY plugins/sourcemod/gamedata/ /insurgency/addons/sourcemod/gamedata/
+RUN --mount=type=bind,source=./plugins/sourcemod/scripting,target=/plugin-source/scripting \
+    /sourcemod/addons/sourcemod/scripting/spcomp --include=/plugin-source/scripting/include  /plugin-source/scripting/gg2_save_loadouts.sp -o /insurgency/addons/sourcemod/plugins/gg2_save_loadouts.smx && \
+    # Fixup file permissions
+    find /insurgency -type d -exec chmod 755 {} \; && \
+    find /insurgency -type f -exec chmod 644 {} \;
+
+FROM sourcemod-plugins-base AS sourcemod-plugins-gg2-show-health-simp
+
+# Build the gg2_show_health_simp plugin
+COPY plugins/sourcemod/gamedata/ /insurgency/addons/sourcemod/gamedata/
+RUN --mount=type=bind,source=./plugins/sourcemod/scripting,target=/plugin-source/scripting \
+    /sourcemod/addons/sourcemod/scripting/spcomp --include=/plugin-source/scripting/include  /plugin-source/scripting/gg2_show_health_simp.sp -o /insurgency/addons/sourcemod/plugins/gg2_show_health_simp.smx && \
+    # Fixup file permissions
+    find /insurgency -type d -exec chmod 755 {} \; && \
+    find /insurgency -type f -exec chmod 644 {} \;
+
+FROM sourcemod-plugins-base AS sourcemod-plugins-gg2-spectator
+
+# Build the gg2_spectator plugin
+COPY plugins/sourcemod/gamedata/ /insurgency/addons/sourcemod/gamedata/
+RUN --mount=type=bind,source=./plugins/sourcemod/scripting,target=/plugin-source/scripting \
+    /sourcemod/addons/sourcemod/scripting/spcomp --include=/plugin-source/scripting/include  /plugin-source/scripting/gg2_spectator.sp -o /insurgency/addons/sourcemod/plugins/gg2_spectator.smx && \
+    # Fixup file permissions
+    find /insurgency -type d -exec chmod 755 {} \; && \
+    find /insurgency -type f -exec chmod 644 {} \;
+
+FROM sourcemod-plugins-base AS sourcemod-plugins-gg2-supply
+
+# Build the gg2_supply plugin
+COPY plugins/sourcemod/gamedata/ /insurgency/addons/sourcemod/gamedata/
+RUN --mount=type=bind,source=./plugins/sourcemod/scripting,target=/plugin-source/scripting \
+    /sourcemod/addons/sourcemod/scripting/spcomp --include=/plugin-source/scripting/include  /plugin-source/scripting/gg2_supply.sp -o /insurgency/addons/sourcemod/plugins/gg2_supply.smx && \
+    # Fixup file permissions
+    find /insurgency -type d -exec chmod 755 {} \; && \
+    find /insurgency -type f -exec chmod 644 {} \;
+
 # Medic, respawns, stat tracking, bot respawns, dynamic difficulty adjustment, name role prefixes, dependency on inslib
 FROM sourcemod-plugins-base AS sourcemod-plugins-everythingelse
 
