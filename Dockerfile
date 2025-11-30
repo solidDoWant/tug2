@@ -512,16 +512,6 @@ RUN --mount=type=bind,source=./plugins/sourcemod/scripting,target=/plugin-source
     find /insurgency -type d -exec chmod 755 {} \; && \
     find /insurgency -type f -exec chmod 644 {} \;
 
-FROM sourcemod-plugins-base AS sourcemod-plugins-gg2-save-loadouts
-
-# Build the gg2_save_loadouts plugin
-COPY plugins/sourcemod/gamedata/ /insurgency/addons/sourcemod/gamedata/
-RUN --mount=type=bind,source=./plugins/sourcemod/scripting,target=/plugin-source/scripting \
-    /sourcemod/addons/sourcemod/scripting/spcomp --include=/plugin-source/scripting/include  /plugin-source/scripting/gg2_save_loadouts.sp -o /insurgency/addons/sourcemod/plugins/gg2_save_loadouts.smx && \
-    # Fixup file permissions
-    find /insurgency -type d -exec chmod 755 {} \; && \
-    find /insurgency -type f -exec chmod 644 {} \;
-
 FROM sourcemod-plugins-base AS sourcemod-plugins-gg2-show-health-simp
 
 # Build the gg2_show_health_simp plugin
