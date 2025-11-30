@@ -250,16 +250,6 @@ RUN --mount=type=bind,source=./plugins/sourcemod,target=/plugin-source \
     find /insurgency -type d -exec chmod 755 {} \; && \
     find /insurgency -type f -exec chmod 644 {} \;
 
-FROM sourcemod-plugins-base AS sourcemod-plugins-restrictedarea
-
-# Build the restricted area removal plugin
-COPY plugins/sourcemod/gamedata/ /insurgency/addons/sourcemod/gamedata/
-RUN --mount=type=bind,source=./plugins/sourcemod/scripting,target=/plugin-source/scripting \
-    /sourcemod/addons/sourcemod/scripting/spcomp --include=/plugin-source/scripting/include  /plugin-source/scripting/restrictedarea.sp -o /insurgency/addons/sourcemod/plugins/restrictedarea.smx && \
-    # Fixup file permissions
-    find /insurgency -type d -exec chmod 755 {} \; && \
-    find /insurgency -type f -exec chmod 644 {} \;
-
 FROM sourcemod-plugins-base AS sourcemod-plugins-bot-flashlights
 
 # Build the bot flashlight plugin
@@ -715,7 +705,7 @@ COPY --from=sourcemod-plugins-firesupport --chown=0:0 /insurgency /opt/insurgenc
 COPY --from=sourcemod-plugins-databasemigrator --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
 COPY --from=sourcemod-plugins-loadoutsaver --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
 COPY --from=sourcemod-plugins-counterattack-countdown --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
-COPY --from=sourcemod-plugins-restrictedarea --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
+COPY --from=sourcemod-plugins-gg2-restrictedarea --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
 COPY --from=sourcemod-plugins-bot-flashlights --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
 COPY --from=sourcemod-plugins-bot-names --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
 COPY --from=sourcemod-plugins-teamflash --chown=0:0 /insurgency /opt/insurgency-server/insurgency/

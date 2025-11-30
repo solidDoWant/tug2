@@ -1,88 +1,74 @@
 //(C) 2014 Jared Ballou <sourcemod@jballou.com>
-//Released under GPLv3
-//Depends: insurgency
+// Released under GPLv3
 #pragma semicolon 1
-#pragma unused cvarVersion
+#pragma unused   cvarVersion
 #pragma newdecls required
 #include <sourcemod>
 #include <sdktools>
 
 #undef REQUIRE_PLUGIN
 
-
 #define AUTOLOAD_EXTENSIONS
 #define REQUIRE_EXTENSIONS
 
-#define PLUGIN_AUTHOR "Jared Ballou (jballou)"
+#define PLUGIN_AUTHOR      "Jared Ballou (jballou)"
 #define PLUGIN_DESCRIPTION "Plugin for removing Restricted Areas"
-#define PLUGIN_NAME "[GG2 RestrictedAreas] Restricted Area Removal"
-#define PLUGIN_URL "http://jballou.com/insurgency"
-#define PLUGIN_VERSION "1.0.0"
-#define PLUGIN_WORKING 1
+#define PLUGIN_NAME        "[GG2 RestrictedAreas] Restricted Area Removal"
+#define PLUGIN_URL         "http://jballou.com/insurgency"
+#define PLUGIN_VERSION     "1.0.0"
 
-public Plugin myinfo = {
-	name		= PLUGIN_NAME,
-	author		= PLUGIN_AUTHOR,
-	description	= PLUGIN_DESCRIPTION,
-	version		= PLUGIN_VERSION,
-	url		= PLUGIN_URL
+public Plugin myinfo =
+{
+    name        = PLUGIN_NAME,
+    author      = PLUGIN_AUTHOR,
+    description = PLUGIN_DESCRIPTION,
+    version     = PLUGIN_VERSION,
+    url         = PLUGIN_URL
 };
 
-
-Handle cvarVersion = INVALID_HANDLE; // version cvar!
-Handle cvarEnabled = INVALID_HANDLE; // are we enabled?
-
-
+ConVar cvarVersion;
+ConVar cvarEnabled;
 
 public void OnPluginStart()
 {
-	cvarVersion = CreateConVar("sm_restrictedarea_version", PLUGIN_VERSION, PLUGIN_DESCRIPTION, FCVAR_NOTIFY | FCVAR_DONTRECORD);
-	cvarEnabled = CreateConVar("sm_restrictedarea_enabled", "1", "sets whether bot naming is enabled", FCVAR_NOTIFY);
-	HookEvent("server_spawn", Event_GameStart, EventHookMode_Pre);
-	HookEvent("game_init", Event_GameStart, EventHookMode_Pre);
-	HookEvent("game_start", Event_GameStart, EventHookMode_Pre);
-	HookEvent("game_newmap", Event_GameStart, EventHookMode_Pre);
-	remove_restrictedarea();
-	//HookUpdater();
-	AutoExecConfig(true, "restrictedarea");
+    cvarVersion = CreateConVar("sm_restrictedarea_version", PLUGIN_VERSION, PLUGIN_DESCRIPTION, FCVAR_NOTIFY | FCVAR_DONTRECORD);
+    cvarEnabled = CreateConVar("sm_restrictedarea_enabled", "1", "Enable or disable restricted area removal", FCVAR_NOTIFY);
+    HookEvent("server_spawn", Event_GameStart, EventHookMode_Pre);
+    HookEvent("game_init", Event_GameStart, EventHookMode_Pre);
+    HookEvent("game_start", Event_GameStart, EventHookMode_Pre);
+    HookEvent("game_newmap", Event_GameStart, EventHookMode_Pre);
+    remove_restrictedarea();
+    AutoExecConfig(true, "restrictedarea");
 }
 
-
-
-/*
-public OnLibraryAdded(const String:name[]) {
-	HookUpdater();
-}
-*/
-
-
-
-//public Event_GameStart(Handle:event, const String:name[], bool:dontBroadcast)
 public Action Event_GameStart(Event event, const char[] name, bool dontBroadcast)
 {
-	remove_restrictedarea();
-	return Plugin_Continue;
-
+    remove_restrictedarea();
+    return Plugin_Continue;
 }
+
 public bool remove_restrictedarea()
 {
-	if (!GetConVarBool(cvarEnabled))
-	{
-		return true;
-	}
-	char name[32];
-	for(int i=0;i<= GetMaxEntities() ;i++){
-		if(!IsValidEntity(i))
-			continue;
-		if(GetEdictClassname(i, name, sizeof(name))){
-			if(StrEqual("ins_blockzone", name,false)){
-				char entity_name[128];
-				GetEntPropString(i, Prop_Data, "m_iName", entity_name, sizeof(entity_name));
-				PrintToServer("Found blockzone named %s",entity_name);
-				RemoveEdict(i);
-				PrintToServer("Deleted blockzone named %s",entity_name);
-			}
-		}
-	}
-	return true;
+    if (!cvarEnabled.BoolValue) return true;
+
+    char name[32];
+    for (int i = 0; i <= GetMaxEntities(); i++)
+    {
+        if (!IsValidEntity(i))
+            continue;
+
+        if (!GetEdictClassname(i, name, sizeof(name)))
+            continue;
+
+        if (StrEqual("ins_blockzone", name, false))
+        {
+            char entity_name[128];
+            GetEntPropString(i, Prop_Data, "m_iName", entity_name, sizeof(entity_name));
+            PrintToServer("Found blockzone named %s", entity_name);
+            RemoveEdict(i);
+            PrintToServer("Deleted blockzone named %s", entity_name);
+        }
+    }
+
+    return true;
 }
