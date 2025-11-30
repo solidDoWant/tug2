@@ -482,6 +482,46 @@ RUN --mount=type=bind,source=./plugins/sourcemod/scripting,target=/plugin-source
     find /insurgency -type d -exec chmod 755 {} \; && \
     find /insurgency -type f -exec chmod 644 {} \;
 
+FROM sourcemod-plugins-base AS sourcemod-plugins-gg2-mstats2
+
+# Build the gg2_mstats2 plugin
+COPY plugins/sourcemod/gamedata/ /insurgency/addons/sourcemod/gamedata/
+RUN --mount=type=bind,source=./plugins/sourcemod/scripting,target=/plugin-source/scripting \
+    /sourcemod/addons/sourcemod/scripting/spcomp --include=/plugin-source/scripting/include  /plugin-source/scripting/gg2_mstats2.sp -o /insurgency/addons/sourcemod/plugins/gg2_mstats2.smx && \
+    # Fixup file permissions
+    find /insurgency -type d -exec chmod 755 {} \; && \
+    find /insurgency -type f -exec chmod 644 {} \;
+
+FROM sourcemod-plugins-base AS sourcemod-plugins-gg2-playlist-hax
+
+# Build the gg2_playlist_hax plugin
+COPY plugins/sourcemod/gamedata/ /insurgency/addons/sourcemod/gamedata/
+RUN --mount=type=bind,source=./plugins/sourcemod/scripting,target=/plugin-source/scripting \
+    /sourcemod/addons/sourcemod/scripting/spcomp --include=/plugin-source/scripting/include  /plugin-source/scripting/gg2_playlist_hax.sp -o /insurgency/addons/sourcemod/plugins/gg2_playlist_hax.smx && \
+    # Fixup file permissions
+    find /insurgency -type d -exec chmod 755 {} \; && \
+    find /insurgency -type f -exec chmod 644 {} \;
+
+FROM sourcemod-plugins-base AS sourcemod-plugins-gg2-resetsmoke
+
+# Build the gg2_resetsmoke plugin
+COPY plugins/sourcemod/gamedata/ /insurgency/addons/sourcemod/gamedata/
+RUN --mount=type=bind,source=./plugins/sourcemod/scripting,target=/plugin-source/scripting \
+    /sourcemod/addons/sourcemod/scripting/spcomp --include=/plugin-source/scripting/include  /plugin-source/scripting/gg2_resetsmoke.sp -o /insurgency/addons/sourcemod/plugins/gg2_resetsmoke.smx && \
+    # Fixup file permissions
+    find /insurgency -type d -exec chmod 755 {} \; && \
+    find /insurgency -type f -exec chmod 644 {} \;
+
+FROM sourcemod-plugins-base AS sourcemod-plugins-gg2-restrictedarea
+
+# Build the gg2_restrictedarea plugin
+COPY plugins/sourcemod/gamedata/ /insurgency/addons/sourcemod/gamedata/
+RUN --mount=type=bind,source=./plugins/sourcemod/scripting,target=/plugin-source/scripting \
+    /sourcemod/addons/sourcemod/scripting/spcomp --include=/plugin-source/scripting/include  /plugin-source/scripting/gg2_restrictedarea.sp -o /insurgency/addons/sourcemod/plugins/gg2_restrictedarea.smx && \
+    # Fixup file permissions
+    find /insurgency -type d -exec chmod 755 {} \; && \
+    find /insurgency -type f -exec chmod 644 {} \;
+
 # Medic, respawns, stat tracking, bot respawns, dynamic difficulty adjustment, name role prefixes, dependency on inslib
 FROM sourcemod-plugins-base AS sourcemod-plugins-everythingelse
 
