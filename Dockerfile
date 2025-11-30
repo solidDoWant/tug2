@@ -352,6 +352,16 @@ RUN --mount=type=bind,source=./plugins/sourcemod/scripting,target=/plugin-source
     find /insurgency -type d -exec chmod 755 {} \; && \
     find /insurgency -type f -exec chmod 644 {} \;
 
+FROM sourcemod-plugins-base AS sourcemod-plugins-gg2-connection-tracker
+
+# Build the gg2_connection_tracker plugin
+COPY plugins/sourcemod/gamedata/ /insurgency/addons/sourcemod/gamedata/
+RUN --mount=type=bind,source=./plugins/sourcemod/scripting,target=/plugin-source/scripting \
+    /sourcemod/addons/sourcemod/scripting/spcomp --include=/plugin-source/scripting/include  /plugin-source/scripting/gg2_connection_tracker.sp -o /insurgency/addons/sourcemod/plugins/gg2_connection_tracker.smx && \
+    # Fixup file permissions
+    find /insurgency -type d -exec chmod 755 {} \; && \
+    find /insurgency -type f -exec chmod 644 {} \;
+
 # Medic, respawns, stat tracking, bot respawns, dynamic difficulty adjustment, name role prefixes, dependency on inslib
 FROM sourcemod-plugins-base AS sourcemod-plugins-everythingelse
 
