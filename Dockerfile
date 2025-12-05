@@ -284,7 +284,7 @@ RUN --mount=type=bind,source=./plugins/sourcemod,target=/plugin-source \
 
 FROM sourcemod-plugins-base AS sourcemod-plugins-map-logger
 
-# Build the punitive persistence plugin
+# Build the map logger plugin
 COPY plugins/sourcemod/gamedata/ /insurgency/addons/sourcemod/gamedata/
 RUN --mount=type=bind,source=./plugins/sourcemod,target=/plugin-source \
     /sourcemod/addons/sourcemod/scripting/spcomp --include=/plugin-source/scripting/include  /plugin-source/scripting/map_logger.sp -o /insurgency/addons/sourcemod/plugins/map_logger.smx && \
@@ -438,16 +438,6 @@ FROM sourcemod-plugins-base AS sourcemod-plugins-gg2-map-changeups
 COPY plugins/sourcemod/gamedata/ /insurgency/addons/sourcemod/gamedata/
 RUN --mount=type=bind,source=./plugins/sourcemod/scripting,target=/plugin-source/scripting \
     /sourcemod/addons/sourcemod/scripting/spcomp --include=/plugin-source/scripting/include  /plugin-source/scripting/gg2_map_changeups.sp -o /insurgency/addons/sourcemod/plugins/gg2_map_changeups.smx && \
-    # Fixup file permissions
-    find /insurgency -type d -exec chmod 755 {} \; && \
-    find /insurgency -type f -exec chmod 644 {} \;
-
-FROM sourcemod-plugins-base AS sourcemod-plugins-gg2-map-tracker
-
-# Build the gg2_map_tracker plugin
-COPY plugins/sourcemod/gamedata/ /insurgency/addons/sourcemod/gamedata/
-RUN --mount=type=bind,source=./plugins/sourcemod/scripting,target=/plugin-source/scripting \
-    /sourcemod/addons/sourcemod/scripting/spcomp --include=/plugin-source/scripting/include  /plugin-source/scripting/gg2_map_tracker.sp -o /insurgency/addons/sourcemod/plugins/gg2_map_tracker.smx && \
     # Fixup file permissions
     find /insurgency -type d -exec chmod 755 {} \; && \
     find /insurgency -type f -exec chmod 644 {} \;
