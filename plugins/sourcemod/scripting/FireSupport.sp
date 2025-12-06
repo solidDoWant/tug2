@@ -24,25 +24,25 @@ public Plugin myinfo =
 #include <morecolors>
 #include <discord>
 
-const int   TEAM_SPECTATE     = 1;
-const int   TEAM_SECURITY     = 2;
-const int   TEAM_INSURGENT    = 3;
+const int     TEAM_SPECTATE     = 1;
+const int     TEAM_SECURITY     = 2;
+const int     TEAM_INSURGENT    = 3;
 
-const float MATH_PI           = 3.14159265359;
+const float   MATH_PI           = 3.14159265359;
 
-const int   MAX_SUPPORT_TYPES = 10;
+const int     MAX_SUPPORT_TYPES = 10;
 
-float       UP_VECTOR[3]      = { -90.0, 0.0, 0.0 };
-float       DOWN_VECTOR[3]    = { 90.0, 0.0, 0.0 };
+float         UP_VECTOR[3]      = { -90.0, 0.0, 0.0 };
+float         DOWN_VECTOR[3]    = { 90.0, 0.0, 0.0 };
 
-Handle      cGameConfig;
-Handle      fCreateRocket;
+Handle        cGameConfig;
+Handle        fCreateRocket;
 
-int         gBeamSprite;
+int           gBeamSprite;
 
 // Database integration for stat tracking
-Database    g_Database = null;
-ConVar      g_server_id;
+Database      g_Database = null;
+ConVar        g_server_id;
 
 // Global forward for other plugins to hook fire support calls
 GlobalForward FireSupportCalledForward;
@@ -97,21 +97,13 @@ int         gCurrentRound;           // Current round number, incremented on eac
 
 // Pending fire support triggered by grenades
 // Stores DataPacks indexed by grenade entity index
-// Fire support triggers when grenade becomes stationary (velocity < threshold for sufficient time)
+// Fire support triggers when grenade detonates (grenade_detonate event)
 Handle      gPendingFireSupport[2048];    // Max entities = 2048
-
-// Grenade stationary tracking
-// Stores how many consecutive checks the grenade has been stationary
-// When this reaches STATIONARY_CHECKS_REQUIRED, fire support triggers
-int         gGrenadeStationaryChecks[2048];    // Consecutive stationary checks per grenade
-
-const float STATIONARY_VELOCITY_THRESHOLD = 10.0;    // Units per second - grenade considered stationary below this
-const int   STATIONARY_CHECKS_REQUIRED    = 10;      // Number of consecutive 0.1s checks (0.3s total) before triggering
 
 // Fire support target offset
 // Raises the target point above ground level to ensure proper sky tracing and avoid ground clipping
 // 20 units ≈ 15 inches (38cm) - roughly knee height, well above ground but below player center
-const float FIRE_SUPPORT_HEIGHT_OFFSET    = 20.0;
+const float FIRE_SUPPORT_HEIGHT_OFFSET = 20.0;
 
 // Fire support kill tracking
 // Maps rocket entity index to fire support info (client, supportType, sessionIndex)
@@ -157,6 +149,8 @@ public void OnPluginStart()
     HookEvent("round_start", Event_RoundStart);
     HookEvent("player_pick_squad", Event_PlayerPickSquad);
     HookEvent("player_death", Event_PlayerDeath);
+    HookEvent("grenade_thrown", Event_GrenadeThrown);
+    HookEvent("grenade_detonate", Event_GrenadeDetonate);
 
     // Database connection for stat tracking
     Database.Connect(T_Connect, "insurgency_stats");
@@ -179,12 +173,11 @@ public void OnPluginStart()
     gActiveFireSupport   = new ArrayList();
     gCurrentRound        = 0;
 
-    // Initialize pending fire support array and stationary tracking
+    // Initialize pending fire support and rocket tracking arrays
     for (int i = 0; i < sizeof(gPendingFireSupport); i++)
     {
-        gPendingFireSupport[i]      = null;
-        gGrenadeStationaryChecks[i] = 0;
-        gRocketFireSupportInfo[i]   = null;
+        gPendingFireSupport[i]    = null;
+        gRocketFireSupportInfo[i] = null;
     }
 
     InitSupportCount();
@@ -207,7 +200,7 @@ public void OnMapStart()
     }
     gCurrentRound = 0;
 
-    // Clear pending fire support and stationary tracking
+    // Clear pending fire support
     for (int i = 0; i < sizeof(gPendingFireSupport); i++)
     {
         if (gPendingFireSupport[i] != null)
@@ -215,7 +208,6 @@ public void OnMapStart()
             delete gPendingFireSupport[i];
             gPendingFireSupport[i] = null;
         }
-        gGrenadeStationaryChecks[i] = 0;
     }
 }
 
@@ -226,12 +218,11 @@ public void OnEntityDestroyed(int entity)
     {
         if (gPendingFireSupport[entity] != null)
         {
-            // Grenade destroyed before becoming stationary (e.g., hit by explosion, removed by game)
+            // Grenade destroyed before detonating (e.g., hit by explosion, removed by game)
             // Clean up without triggering fire support
             DataPack pack = view_as<DataPack>(gPendingFireSupport[entity]);
             delete pack;
-            gPendingFireSupport[entity]      = null;
-            gGrenadeStationaryChecks[entity] = 0;
+            gPendingFireSupport[entity] = null;
         }
     }
 
@@ -247,7 +238,7 @@ public void OnEntityDestroyed(int entity)
         }
     }
 
-    // Note: Fire support is triggered by Timer_TrackGrenadePosition when grenade becomes stationary,
+    // Note: Fire support is triggered by Event_GrenadeDetonate when grenade detonates,
     // not by entity destruction. This handler just cleans up if grenade is destroyed prematurely.
 }
 
@@ -495,6 +486,91 @@ public Action Event_WeaponFire(Event event, const char[] name, bool dontBroadcas
     return Plugin_Continue;
 }
 
+public Action Event_GrenadeThrown(Event event, const char[] name, bool dontBroadcast)
+{
+    // Grenade throw sound is already played in Event_WeaponFire (PlaySoundToTeam)
+    // This handler is here for future enhancements if needed
+    return Plugin_Continue;
+}
+
+public Action Event_GrenadeDetonate(Event event, const char[] name, bool dontBroadcast)
+{
+    int client = GetClientOfUserId(event.GetInt("userid"));
+    if (!ValidateClient(client))
+        return Plugin_Continue;
+
+    int grenadeEntity = event.GetInt("entityid");
+    if (grenadeEntity < 0 || grenadeEntity >= sizeof(gPendingFireSupport))
+        return Plugin_Continue;
+
+    // Check if this grenade has pending fire support
+    if (gPendingFireSupport[grenadeEntity] == null)
+        return Plugin_Continue;
+
+    // Retrieve fire support data
+    DataPack grenadeData = view_as<DataPack>(gPendingFireSupport[grenadeEntity]);
+    grenadeData.Reset();
+    int   storedClient = grenadeData.ReadCell();
+    int   team         = grenadeData.ReadCell();
+    int   supportType  = grenadeData.ReadCell();
+
+    // Get detonation position
+    float pos[3];
+    GetEntPropVector(grenadeEntity, Prop_Send, "m_vecOrigin", pos);
+    pos[2] += FIRE_SUPPORT_HEIGHT_OFFSET;
+
+    // Clean up stored data
+    delete grenadeData;
+    gPendingFireSupport[grenadeEntity] = null;
+
+    // Trigger fire support at detonation position
+    bool validLocation                 = CallFireSupport(storedClient, pos, supportType, team);
+
+    if (validLocation)
+    {
+        // Success
+        PlaySoundToTeam(team, gSupportTypes[supportType].successSound);
+        PrintMessageToTeam(team, gSupportTypes[supportType].successMessage);
+
+        // Decrease count if limited
+        int maxCount = (team == TEAM_SECURITY) ? gSupportTypes[supportType].securityCount
+                                               : gSupportTypes[supportType].insurgentCount;
+        if (maxCount > 0)
+        {
+            CountAvailableSupport[team][supportType]--;
+            int  remaining = CountAvailableSupport[team][supportType];
+            char remainingMsg[128];
+            Format(remainingMsg, sizeof(remainingMsg),
+                   "{olivedrab}[Fire Support]{default} %d use(s) remaining for this strike type.",
+                   remaining);
+            PrintMessageToTeam(team, remainingMsg);
+        }
+
+        // Apply cooldown for this specific support type
+        float cooldown = (team == TEAM_SECURITY) ? gSupportTypes[supportType].securityDelay
+                                                 : gSupportTypes[supportType].insurgentDelay;
+        if (cooldown > 0.0)
+        {
+            IsEnabledTeam[team][supportType] = false;
+
+            // Use DataPack to pass both team and supportType to timer
+            DataPack cooldownPack            = new DataPack();
+            cooldownPack.WriteCell(team);
+            cooldownPack.WriteCell(supportType);
+            CreateTimer(cooldown, Timer_EnableTeamSupport, cooldownPack,
+                        TIMER_FLAG_NO_MAPCHANGE | TIMER_DATA_HNDL_CLOSE);
+        }
+    }
+    else
+    {
+        // Failure
+        PlaySoundToTeam(team, gSupportTypes[supportType].failSound);
+        PrintMessageToTeam(team, gSupportTypes[supportType].failMessage);
+    }
+
+    return Plugin_Continue;
+}
+
 // Timer to find the grenade that was just thrown
 public Action Timer_FindThrownGrenade(Handle timer, DataPack pack)
 {
@@ -538,175 +614,18 @@ public Action Timer_FindThrownGrenade(Handle timer, DataPack pack)
         return Plugin_Handled;
     }
 
-    // Store the fire support data associated with this grenade
-    // When the grenade detonates (OnEntityDestroyed), we'll trigger fire support
+    // Store fire support data - will be used when grenade detonates (Event_GrenadeDetonate)
     DataPack grenadeData = new DataPack();
     grenadeData.WriteCell(client);
     grenadeData.WriteCell(team);
     grenadeData.WriteCell(supportType);
 
-    // Store current grenade position (will update in a repeating timer)
-    // NOTE: We add +20 units to Z coordinate for the following reasons:
-    // 1. Avoids tracing through the grenade entity itself when checking for sky
-    // 2. Prevents ground clipping issues when grenade is at exact ground level
-    // 3. Ensures the sky trace starts from a point clearly above ground
-    // The stored position will be used by GetSkyPos() to trace upward to find the skybox
-    float pos[3];
-    GetEntPropVector(grenadeEntity, Prop_Send, "m_vecOrigin", pos);
-    pos[2] += FIRE_SUPPORT_HEIGHT_OFFSET;    // Raise target point above grenade
-    grenadeData.WriteFloat(pos[0]);
-    grenadeData.WriteFloat(pos[1]);
-    grenadeData.WriteFloat(pos[2]);
-
     gPendingFireSupport[grenadeEntity] = view_as<Handle>(grenadeData);
-
-    // Start a repeating timer to track grenade position until it detonates
-    DataPack trackPack                 = new DataPack();
-    trackPack.WriteCell(grenadeEntity);
-    CreateTimer(0.1, Timer_TrackGrenadePosition, trackPack, TIMER_REPEAT | TIMER_FLAG_NO_MAPCHANGE);
 
     delete pack;
     return Plugin_Handled;
 }
 
-// Timer to continuously update the grenade's position and detect when it becomes stationary
-public Action Timer_TrackGrenadePosition(Handle timer, DataPack pack)
-{
-    pack.Reset();
-    int grenadeEntity = pack.ReadCell();
-
-    // Check if grenade still exists
-    if (!IsValidEntity(grenadeEntity))
-    {
-        delete pack;
-        return Plugin_Stop;
-    }
-
-    // Check if we still have fire support pending for this grenade
-    if (gPendingFireSupport[grenadeEntity] == null)
-    {
-        delete pack;
-        return Plugin_Stop;
-    }
-
-    // Update the stored position
-    DataPack grenadeData = view_as<DataPack>(gPendingFireSupport[grenadeEntity]);
-
-    // Read existing data
-    grenadeData.Reset();
-    int   client      = grenadeData.ReadCell();
-    int   team        = grenadeData.ReadCell();
-    int   supportType = grenadeData.ReadCell();
-    float lastPos[3];
-    lastPos[0] = grenadeData.ReadFloat();
-    lastPos[1] = grenadeData.ReadFloat();
-    lastPos[2] = grenadeData.ReadFloat();
-
-    // Get current position
-    float pos[3];
-    GetEntPropVector(grenadeEntity, Prop_Send, "m_vecOrigin", pos);
-
-    // Calculate distance moved since last check (0.1 seconds ago)
-    // Note: lastPos already has offset, but pos doesn't yet, so we calculate
-    // movement using raw positions before applying the offset
-    float dx       = pos[0] - lastPos[0];
-    float dy       = pos[1] - lastPos[1];
-    float dz       = (pos[2] + FIRE_SUPPORT_HEIGHT_OFFSET) - lastPos[2];    // Compare with offset applied
-    float distance = SquareRoot(dx * dx + dy * dy + dz * dz);
-
-    // Calculate effective velocity (distance / time)
-    // Timer runs every 0.1s, so multiply by 10 to get units/second
-    float speed    = distance * 10.0;
-
-    // Apply offset to fire support target position (see notes in Timer_FindThrownGrenade)
-    // This raises the target point above ground level for proper sky tracing
-    pos[2] += FIRE_SUPPORT_HEIGHT_OFFSET;
-
-    // Check if grenade is stationary
-    if (speed < STATIONARY_VELOCITY_THRESHOLD)
-    {
-        gGrenadeStationaryChecks[grenadeEntity]++;
-
-        // If grenade has been stationary for sufficient time, trigger fire support
-        if (gGrenadeStationaryChecks[grenadeEntity] >= STATIONARY_CHECKS_REQUIRED)
-        {
-            // Grenade is settled! Trigger fire support
-            delete grenadeData;
-            gPendingFireSupport[grenadeEntity]      = null;
-            gGrenadeStationaryChecks[grenadeEntity] = 0;
-
-            // Trigger fire support at the grenade's position
-            bool validLocation                      = CallFireSupport(client, pos, supportType, team);
-
-            if (validLocation)
-            {
-                // Success
-                PlaySoundToTeam(team, gSupportTypes[supportType].successSound);
-                PrintMessageToTeam(team, gSupportTypes[supportType].successMessage);
-
-                // Decrease count if limited
-                int maxCount = (team == TEAM_SECURITY) ? gSupportTypes[supportType].securityCount : gSupportTypes[supportType].insurgentCount;
-                if (maxCount > 0)
-                {
-                    CountAvailableSupport[team][supportType]--;
-
-                    // Print remaining usage to team
-                    int  remaining = CountAvailableSupport[team][supportType];
-                    char remainingMsg[128];
-                    Format(remainingMsg, sizeof(remainingMsg), "{olivedrab}[Fire Support]{default} %d use(s) remaining for this strike type.", remaining);
-                    PrintMessageToTeam(team, remainingMsg);
-                }
-
-                // Apply cooldown for this specific support type
-                float cooldown = (team == TEAM_SECURITY) ? gSupportTypes[supportType].securityDelay : gSupportTypes[supportType].insurgentDelay;
-                if (cooldown > 0.0)
-                {
-                    IsEnabledTeam[team][supportType] = false;
-
-                    // Use DataPack to pass both team and supportType to timer
-                    DataPack cooldownPack            = new DataPack();
-                    cooldownPack.WriteCell(team);
-                    cooldownPack.WriteCell(supportType);
-                    CreateTimer(cooldown, Timer_EnableTeamSupport, cooldownPack, TIMER_FLAG_NO_MAPCHANGE | TIMER_DATA_HNDL_CLOSE);
-                }
-            }
-            else
-            {
-                // Failure
-                PlaySoundToTeam(team, gSupportTypes[supportType].failSound);
-                PrintMessageToTeam(team, gSupportTypes[supportType].failMessage);
-            }
-
-            // Stop tracking this grenade
-            delete pack;
-            return Plugin_Stop;
-        }
-    }
-    else
-    {
-        // Grenade is still moving, reset the stationary counter
-        gGrenadeStationaryChecks[grenadeEntity] = 0;
-    }
-
-    // Recreate the pack with updated position
-    delete grenadeData;
-    grenadeData = new DataPack();
-    grenadeData.WriteCell(client);
-    grenadeData.WriteCell(team);
-    grenadeData.WriteCell(supportType);
-    grenadeData.WriteFloat(pos[0]);
-    grenadeData.WriteFloat(pos[1]);
-    grenadeData.WriteFloat(pos[2]);
-
-    gPendingFireSupport[grenadeEntity] = view_as<Handle>(grenadeData);
-
-    // Reset pack position for next iteration
-    pack.Reset();
-
-    return Plugin_Continue;
-}
-
-// Timer callback to process fire support after trigger delay (OLD - now handled by OnEntityDestroyed)
 public Action Event_RoundStart(Event event, const char[] name, bool dontBroadcast)
 {
     // Clean up all active fire support from previous round
@@ -972,14 +891,14 @@ public bool CallFireSupport(int client, float ground[3], int supportType, int te
         sessionPack.WriteCell(0);    // Initial friendly kill count
         sessionPack.WriteCell(gCurrentRound);
         gActiveFireSupport.Push(sessionPack);
-        int      sessionIndex = gActiveFireSupport.Length - 1;
+        int sessionIndex = gActiveFireSupport.Length - 1;
 
         // Track stats and notify external systems
         add_throw_to_db(client, supportType, team);
         SendFireSupportForward(client, team, supportType);
         SendDiscordNotification(client, supportType);
 
-        DataPack pack         = new DataPack();
+        DataPack pack = new DataPack();
         pack.WriteCell(client);
         pack.WriteCell(shells);
         pack.WriteCell(shells);    // Store original shell count for timing calculations
@@ -1299,7 +1218,7 @@ void CleanupActiveFireSupport()
     }
     gActiveSmokeGrenades.Clear();
 
-    // Clean up pending fire support (grenades that haven't become stationary yet)
+    // Clean up pending fire support (grenades that haven't detonated yet)
     for (int i = 0; i < sizeof(gPendingFireSupport); i++)
     {
         if (gPendingFireSupport[i] != null)
@@ -1307,7 +1226,6 @@ void CleanupActiveFireSupport()
             delete gPendingFireSupport[i];
             gPendingFireSupport[i] = null;
         }
-        gGrenadeStationaryChecks[i] = 0;
     }
 
     // Clean up rocket fire support info
@@ -1406,7 +1324,6 @@ public void OnRocketTouch(int rocket, int other)
 // ============================================================================
 // Database Integration Functions
 // ============================================================================
-
 public void T_Connect(Database db, const char[] error, any data)
 {
     if (db == null)
