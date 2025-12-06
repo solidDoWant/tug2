@@ -362,16 +362,6 @@ RUN --mount=type=bind,source=./plugins/sourcemod/scripting,target=/plugin-source
     find /insurgency -type d -exec chmod 755 {} \; && \
     find /insurgency -type f -exec chmod 644 {} \;
 
-FROM sourcemod-plugins-base AS sourcemod-plugins-gg2-disable-battleye
-
-# Build the gg2_disable_battleye plugin
-COPY plugins/sourcemod/gamedata/ /insurgency/addons/sourcemod/gamedata/
-RUN --mount=type=bind,source=./plugins/sourcemod/scripting,target=/plugin-source/scripting \
-    /sourcemod/addons/sourcemod/scripting/spcomp --include=/plugin-source/scripting/include  /plugin-source/scripting/gg2_disable_battleye.sp -o /insurgency/addons/sourcemod/plugins/gg2_disable_battleye.smx && \
-    # Fixup file permissions
-    find /insurgency -type d -exec chmod 755 {} \; && \
-    find /insurgency -type f -exec chmod 644 {} \;
-
 FROM sourcemod-plugins-base AS sourcemod-plugins-gg2-discord
 
 # Build the gg2_discord plugin
