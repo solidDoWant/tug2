@@ -1,5 +1,4 @@
 //(C) 2020 rrrfffrrr <rrrfffrrr@naver.com>
-// Enhanced by Assistant 2025
 
 #pragma semicolon 1
 #pragma newdecls required
@@ -7,9 +6,9 @@
 public Plugin myinfo =
 {
     name        = "[INS] Fire support - Enhanced",
-    author      = "rrrfffrrr, Assistant",
-    description = "Fire support with multiple weapons, database stats, Discord integration, and translations",
-    version     = "1.3.0",
+    author      = "rrrfffrrr, zachm",
+    description = "Fire support with multiple weapons, database stats, Discord integration, translations, and immersive artillery sound effects",
+    version     = "1.4.0",
     url         = "https://github.com/solidDoWant/tug2/tree/master/plugins/sourcemod"
 };
 
@@ -24,25 +23,37 @@ public Plugin myinfo =
 #include <morecolors>
 #include <discord>
 
-const int     TEAM_SPECTATE     = 1;
-const int     TEAM_SECURITY     = 2;
-const int     TEAM_INSURGENT    = 3;
+const int   TEAM_SPECTATE     = 1;
+const int   TEAM_SECURITY     = 2;
+const int   TEAM_INSURGENT    = 3;
 
-const float   MATH_PI           = 3.14159265359;
+const float MATH_PI           = 3.14159265359;
 
-const int     MAX_SUPPORT_TYPES = 10;
+const int   MAX_SUPPORT_TYPES = 10;
 
-float         UP_VECTOR[3]      = { -90.0, 0.0, 0.0 };
-float         DOWN_VECTOR[3]    = { 90.0, 0.0, 0.0 };
+float       UP_VECTOR[3]      = { -90.0, 0.0, 0.0 };
+float       DOWN_VECTOR[3]    = { 90.0, 0.0, 0.0 };
 
-Handle        cGameConfig;
-Handle        fCreateRocket;
+Handle      cGameConfig;
+Handle      fCreateRocket;
 
-int           gBeamSprite;
+int         gBeamSprite;
 
 // Database integration for stat tracking
-Database      g_Database = null;
-ConVar        g_server_id;
+Database    g_Database = null;
+ConVar      g_server_id;
+
+// Special sound names to refer to a random sound from one of the arrays
+// These require workshop item 2983737308 (TUG WW2 Sounds)
+#define SOUND_REQUEST_ARTILLERY "#request_artillery_sound"
+char requestArtillerySoundFmt[] = "m777/requestartillery/requestartillery%d.ogg";
+int  requestArtillerySoundCount = 12;
+
+#define SOUND_INVALID_ARTILLERY "#invalid_artillery_sound"
+char          invalidArtillerySoundFmt[] = "m777/invalid/invalidtarget%d.ogg";
+int           invalidArtillerySoundCount = 5;
+
+char          distantArtillerySound[]    = "tug/arty_distant_1.wav";
 
 // Global forward for other plugins to hook fire support calls
 GlobalForward FireSupportCalledForward;
@@ -351,9 +362,9 @@ void CreateDefaultConfig(const char[] path)
     kv.SetFloat("duration", 20.0);
     kv.SetFloat("jitter", 0.3);
     kv.SetString("projectile", "rocket_rpg7");
-    kv.SetString("throw_sound", "weapons/smokegrenade/smoke_emit.wav");
-    kv.SetString("success_sound", "weapons/m203/m203_reload_clipin.wav");
-    kv.SetString("fail_sound", "buttons/button11.wav");
+    kv.SetString("throw_sound", SOUND_REQUEST_ARTILLERY);
+    kv.SetString("success_sound", distantArtillerySound);
+    kv.SetString("fail_sound", SOUND_INVALID_ARTILLERY);
     kv.SetString("success_message", "[Fire Support] Artillery strike inbound on your position!");
     kv.SetString("fail_message", "[Fire Support] Unable to call artillery - invalid target location!");
     kv.SetString("projectile_message", "");                                                                                                   // No message by default
@@ -375,8 +386,8 @@ void CreateDefaultConfig(const char[] path)
     kv.SetFloat("duration", 25.0);
     kv.SetFloat("jitter", 0.3);
     kv.SetString("projectile", "rocket_rpg7");
-    kv.SetString("throw_sound", "weapons/smokegrenade/smoke_emit.wav");
-    kv.SetString("success_sound", "weapons/c4/c4_beep1.wav");
+    kv.SetString("throw_sound", "player/voice/radial/security/leader/suppressed/holdposition1.ogg");
+    kv.SetString("success_sound", distantArtillerySound);
     kv.SetString("fail_sound", "buttons/button11.wav");
     kv.SetString("success_message", "[Fire Support] Mortar strike authorized!");
     kv.SetString("fail_message", "[Fire Support] Cannot request mortar support - no line of sight!");
@@ -397,23 +408,41 @@ void CreateDefaultConfig(const char[] path)
     LogMessage("Created default config at: %s", path);
 }
 
+void PrecacheSoundNumbers(const char[] soundFmt, int count)
+{
+    char soundFile[512];
+    for (int i = 1; i <= count; i++)
+    {
+        Format(soundFile, sizeof(soundFile), soundFmt, i);
+        PrecacheSound(soundFile);
+    }
+}
+
 void PrecacheSounds()
 {
+    // Precache artillery sound effects
+    PrecacheSound(distantArtillerySound);
+    PrecacheSoundNumbers(requestArtillerySoundFmt, requestArtillerySoundCount);
+    PrecacheSoundNumbers(invalidArtillerySoundFmt, invalidArtillerySoundCount);
+
+    // Precache support type specific sounds
     for (int i = 0; i < gNumSupportTypes; i++)
     {
-        if (!StrEqual(gSupportTypes[i].throwSound, ""))
-        {
-            PrecacheSound(gSupportTypes[i].throwSound, true);
-        }
-        if (!StrEqual(gSupportTypes[i].successSound, ""))
-        {
-            PrecacheSound(gSupportTypes[i].successSound, true);
-        }
-        if (!StrEqual(gSupportTypes[i].failSound, ""))
-        {
-            PrecacheSound(gSupportTypes[i].failSound, true);
-        }
+        PrecacheConfigSound(gSupportTypes[i].throwSound);
+        PrecacheConfigSound(gSupportTypes[i].successSound);
+        PrecacheConfigSound(gSupportTypes[i].failSound);
     }
+}
+
+void PrecacheConfigSound(const char[] soundfile)
+{
+    if (StrEqual(soundfile, "")) return;
+
+    // Skip special sound names
+    if (StrEqual(soundfile, SOUND_REQUEST_ARTILLERY)) return;
+    if (StrEqual(soundfile, SOUND_INVALID_ARTILLERY)) return;
+
+    PrecacheSound(soundfile, true);
 }
 
 public Action Event_WeaponFire(Event event, const char[] name, bool dontBroadcast)
@@ -472,7 +501,7 @@ public Action Event_WeaponFire(Event event, const char[] name, bool dontBroadcas
     }
 
     // Play throw sound
-    PlaySoundToTeam(team, gSupportTypes[supportType].throwSound);
+    PlayConfigSound(client, team, gSupportTypes[supportType].throwSound);
 
     // Find the grenade entity that was just thrown by this client
     // We need to wait a frame for the entity to be created
@@ -529,7 +558,7 @@ public Action Event_GrenadeDetonate(Event event, const char[] name, bool dontBro
     if (validLocation)
     {
         // Success
-        PlaySoundToTeam(team, gSupportTypes[supportType].successSound);
+        PlayConfigSound(storedClient, team, gSupportTypes[supportType].successSound);
         PrintMessageToTeam(team, gSupportTypes[supportType].successMessage);
 
         // Decrease count if limited
@@ -564,7 +593,7 @@ public Action Event_GrenadeDetonate(Event event, const char[] name, bool dontBro
     else
     {
         // Failure
-        PlaySoundToTeam(team, gSupportTypes[supportType].failSound);
+        PlayConfigSound(storedClient, team, gSupportTypes[supportType].failSound);
         PrintMessageToTeam(team, gSupportTypes[supportType].failMessage);
     }
 
@@ -608,7 +637,7 @@ public Action Timer_FindThrownGrenade(Handle timer, DataPack pack)
     if (grenadeEntity == -1)
     {
         // Couldn't find the grenade, fire support fails
-        PlaySoundToTeam(team, gSupportTypes[supportType].failSound);
+        PlayConfigSound(client, team, gSupportTypes[supportType].failSound);
         PrintMessageToTeam(team, gSupportTypes[supportType].failMessage);
         delete pack;
         return Plugin_Handled;
@@ -842,10 +871,7 @@ void PlaySoundToTeam(int team, const char[] sound)
 
 void PrintMessageToTeam(int team, const char[] message)
 {
-    if (StrEqual(message, ""))
-    {
-        return;
-    }
+    if (StrEqual(message, "")) return;
 
     for (int i = 1; i <= MaxClients; i++)
     {
@@ -854,6 +880,46 @@ void PrintMessageToTeam(int team, const char[] message)
             CPrintToChat(i, message);
         }
     }
+}
+
+void PlayRequestArtillerySoundToAll(int client)
+{
+    char sSoundFile[128];
+    Format(sSoundFile, sizeof(sSoundFile), requestArtillerySoundFmt, GetRandomInt(1, requestArtillerySoundCount));
+    // Sound comes from the requesting client, so players hear it directionally
+    EmitSoundToAll(sSoundFile, client, SNDCHAN_STATIC, _, _, 0.65);
+}
+
+void PlayInvalidArtillerySoundToAll()
+{
+    char sSoundFile[128];
+    Format(sSoundFile, sizeof(sSoundFile), invalidArtillerySoundFmt, GetRandomInt(1, invalidArtillerySoundCount));
+    EmitSoundToAll(sSoundFile);
+}
+
+void PlayArtilleryDistantSound()
+{
+    EmitSoundToAll(distantArtillerySound, _, SNDCHAN_STATIC, _, _, 0.65);
+}
+
+void PlayConfigSound(int client, int team, const char[] sound)
+{
+    if (StrEqual(sound, "")) return;
+
+    // Special sound names
+    if (StrEqual(sound, SOUND_REQUEST_ARTILLERY))
+    {
+        PlayRequestArtillerySoundToAll(client);
+        return;
+    }
+
+    if (StrEqual(sound, SOUND_INVALID_ARTILLERY))
+    {
+        PlayInvalidArtillerySoundToAll();
+        return;
+    }
+
+    PlaySoundToTeam(team, sound);
 }
 
 /// FireSupport
