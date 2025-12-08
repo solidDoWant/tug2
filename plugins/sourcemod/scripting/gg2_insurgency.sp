@@ -1,8 +1,6 @@
 #pragma semicolon 1
 #pragma newdecls required
 
-#define PLUGIN_LOG_PREFIX "INSLIB"
-
 #include <sourcemod>
 #include <insurgencydy>
 
@@ -46,12 +44,14 @@ bool GetEntity_ObjectiveResource()
     if (g_iObjResEntity < 1 || !IsValidEntity(g_iObjResEntity))
     {
         g_iObjResEntity = FindEntityByClassname(0, "ins_objective_resource");
-        GetEntityNetClass(g_iObjResEntity, g_sObjResEntityNetClass, sizeof(g_sObjResEntityNetClass));
-        InsLog(DEBUG, "g_sObjResEntityNetClass %s", g_sObjResEntityNetClass);
+        if (g_iObjResEntity >= 0)
+        {
+            GetEntityNetClass(g_iObjResEntity, g_sObjResEntityNetClass, sizeof(g_sObjResEntityNetClass));
+            InsLog(DEBUG, "g_sObjResEntityNetClass %s", g_sObjResEntityNetClass);
+        }
     }
 
-    if (g_iObjResEntity)
-        return true;
+    if (g_iObjResEntity >= 0) return true;
 
     InsLog(WARN, "GetEntity_ObjectiveResource failed!");
     return false;
@@ -128,7 +128,7 @@ public int Native_ObjectiveResource_GetPropEnt(Handle plugin, int numParams)
     char[] prop = new char[len + 1];
     if (GetNativeString(1, prop, len + 1) != SP_ERROR_NONE) return -1;
 
-    if (GetEntity_ObjectiveResource()) return -1;
+    if (!GetEntity_ObjectiveResource()) return -1;
 
     int offset = FindSendPropInfo(g_sObjResEntityNetClass, prop);
     if (offset == -1) return -1;
