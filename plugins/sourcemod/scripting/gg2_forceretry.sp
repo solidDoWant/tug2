@@ -21,7 +21,7 @@ public Plugin myinfo =
 
 public void OnPluginStart()
 {
-    Database.Connect(T_Connect, "insurgency-stats");
+    Database.Connect(OnDatabaseConnected, "insurgency-stats");
 
     playerList = new StringMap();
 
@@ -230,7 +230,7 @@ public void OnPlayerSmokeCacheChecked(Database db, DBResultSet results, const ch
     playerList.SetValue(steamId, true, true);
 }
 
-public void T_Connect(Database db, const char[] error, any data)
+public void OnDatabaseConnected(Database db, const char[] error, any data)
 {
     if (db == null)
     {
