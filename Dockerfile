@@ -154,19 +154,6 @@ RUN \
     # Fixup file permissions
     find /insurgency -type d -exec chmod 755 {} \;
 
-FROM sourcemod-plugins-base AS sourcemod-plugins-annoucement
-
-# Build the annoucement plugin
-RUN \
-    mkdir /plugin-source && \
-    curl -fsSL -o /plugin-source/announcement.sp https://raw.githubusercontent.com/rrrfffrrr/Insurgency-server-plugins/refs/heads/master/scripting/announcement.sp && \
-    /sourcemod/addons/sourcemod/scripting/spcomp /plugin-source/announcement.sp -o /insurgency/addons/sourcemod/plugins/announcement.smx && \
-    rm -rf /plugin-source && \
-    # Create a default announcement file
-    echo "Welcome to TUG!" > /insurgency/addons/sourcemod/announcement.txt && \
-    # Fixup file permissions
-    find /insurgency -type d -exec chmod 755 {} \;
-
 FROM sourcemod-plugins-base AS sourcemod-plugins-marquis-fix
 
 # Build the marquis map fix plugin
@@ -595,7 +582,6 @@ COPY --from=gameserver-builder --chown=1000:1000 --chmod=755 /empty-directory /o
 
 # Copy in compiled plugins
 COPY --from=sourcemod-plugins-battleye-disabler --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
-COPY --from=sourcemod-plugins-annoucement --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
 
 # Copy the default config
 COPY ["server config/base/", "/"]
