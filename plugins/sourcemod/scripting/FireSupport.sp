@@ -41,7 +41,6 @@ int         gBeamSprite;
 
 // Database integration for stat tracking
 Database    g_Database = null;
-ConVar      g_server_id;
 
 // Special sound names to refer to a random sound from one of the arrays
 // These require workshop item 2983737308 (TUG WW2 Sounds)
@@ -164,7 +163,7 @@ public void OnPluginStart()
     HookEvent("grenade_detonate", Event_GrenadeDetonate);
 
     // Database connection for stat tracking
-    Database.Connect(T_Connect, "insurgency_stats");
+    Database.Connect(OnDatabaseConnected, "insurgency-stats");
 
     // Create global forward for other plugins
     FireSupportCalledForward = new GlobalForward(
@@ -220,6 +219,13 @@ public void OnMapStart()
             gPendingFireSupport[i] = null;
         }
     }
+
+    // Check if database connection is ready
+    if (g_Database == null)
+    {
+        LogMessage("[FireSupport] Database unavailable at map start, attempting reconnection...");
+        ReconnectDatabase();
+    }
 }
 
 public void OnEntityDestroyed(int entity)
@@ -256,16 +262,6 @@ public void OnEntityDestroyed(int entity)
 public void OnClientConnected(int client)
 {
     IsEnabled[client] = false;
-}
-
-public void OnAllPluginsLoaded()
-{
-    // Get server ID from stats plugin for database tracking
-    g_server_id = FindConVar("gg_stats_server_id");
-    if (g_server_id == null)
-    {
-        LogMessage("[FireSupport] Warning: gg_stats_server_id convar not found - database stat tracking will be disabled");
-    }
 }
 
 void LoadSupportConfig()
@@ -1390,46 +1386,93 @@ public void OnRocketTouch(int rocket, int other)
 // ============================================================================
 // Database Integration Functions
 // ============================================================================
-public void T_Connect(Database db, const char[] error, any data)
+public void OnDatabaseConnected(Database db, const char[] error, any data)
 {
     if (db == null)
     {
-        LogError("[FireSupport] T_Connect returned invalid Database Handle: %s", error);
+        LogError("[FireSupport] Failed to connect to database: %s", error);
+        SetFailState("Database connection failed");
         return;
     }
+
     g_Database = db;
-    LogMessage("[FireSupport] Connected to database for stat tracking");
+    LogMessage("[FireSupport] Successfully connected to database");
 }
 
-public void do_nothing(Handle owner, Handle results, const char[] error, any client)
+// Attempt to reconnect to the database
+void ReconnectDatabase()
 {
-    if (strlen(error) != 0)
+    LogMessage("[FireSupport] Attempting to reconnect to database...");
+    g_Database = null;
+    Database.Connect(OnDatabaseReconnected, "insurgency-stats");
+}
+
+public void OnDatabaseReconnected(Database db, const char[] error, any data)
+{
+    if (db == null)
     {
-        LogMessage("[FireSupport] Database query error: %s", error);
+        LogError("[FireSupport] Failed to reconnect to database: %s", error);
+        // Try again after a delay
+        CreateTimer(5.0, Timer_RetryReconnect);
+        return;
     }
+
+    g_Database = db;
+    LogMessage("[FireSupport] Successfully reconnected to database");
+}
+
+public Action Timer_RetryReconnect(Handle timer)
+{
+    if (g_Database == null)
+    {
+        ReconnectDatabase();
+    }
+
+    return Plugin_Stop;
+}
+
+// Helper function to handle database query errors
+// Returns true if query was successful, false if there was an error
+bool HandleQueryError(DBResultSet results, const char[] error, const char[] operationName)
+{
+    if (results != null) return true;
+
+    // Check if the error is due to lost connection
+    if (StrContains(error, "no connection to the server", false) != -1)
+    {
+        LogError("[FireSupport] Lost connection to database: %s - attempting to reconnect", error);
+        ReconnectDatabase();
+        return false;
+    }
+
+    LogError("[FireSupport] Failed to %s: %s", operationName, error);
+    return false;
+}
+
+public void OnFireSupportStatUpdated(Database db, DBResultSet results, const char[] error, any data)
+{
+    HandleQueryError(results, error, "update fire support stats");
 }
 
 void add_throw_to_db(int client, int supportType, int team)
 {
-    if (g_Database == null || g_server_id == null)
-    {
-        return;    // Database not available
-    }
+    if (g_Database == null) return;
 
-    if (!IsValidClient(client) || IsFakeClient(client))
-    {
-        return;    // Don't track bots
-    }
+    if (!IsValidClient(client) || IsFakeClient(client)) return;
 
     char steamId[64];
     GetClientAuthId(client, AuthId_SteamID64, steamId, sizeof(steamId));
 
+    if (StrEqual(steamId, "")) return;
+
+    int  currentTime = GetTime();
+
     char query[512];
     Format(query, sizeof(query),
-           "UPDATE players SET arty_thrown = arty_thrown + 1 WHERE steamId = '%s' AND server_id = '%i'",
-           steamId, g_server_id.IntValue);
+           "INSERT INTO fire_support (steamId, arty_thrown, last_used) " ... "VALUES ('%s', 1, %d) " ... "ON CONFLICT (steamId) DO UPDATE SET " ... "arty_thrown = fire_support.arty_thrown + 1, " ... "last_used = EXCLUDED.last_used",
+           steamId, currentTime);
 
-    SQL_TQuery(g_Database, do_nothing, query);
+    g_Database.Query(OnFireSupportStatUpdated, query);
     LogMessage("[FireSupport] Incremented arty_thrown for %N (team=%d, type=%d)", client, team, supportType);
 }
 
