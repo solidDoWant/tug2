@@ -2,7 +2,6 @@
 #include <sdktools>
 #include <sdkhooks>
 #include <morecolors>
-#include <stats>
 #include <discord>
 
 #pragma newdecls required
@@ -232,7 +231,6 @@ public void update_medic_time_in_db(int client)
     Format(query, sizeof(query), "INSERT INTO medics (steamId, banned, medic_time) VALUES ('%s', FALSE, %i) ON CONFLICT (steamId) DO UPDATE SET medic_time = medics.medic_time + EXCLUDED.medic_time", g_client_steam_ids[client], time_to_add);
 
     g_Database.Query(OnMedicTimeSaved, query, client);
-    update_medic_time(client, time_to_add);
 
     g_client_medic_class_time_tracker_seconds[client] = 0;
 }
