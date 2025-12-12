@@ -14,8 +14,8 @@ public Plugin myinfo =
 {
     name        = "[GG2 ForceRetry] Force Retry",
     author      = "Bot Chris // zachm",
-    description = "To precache smoke/etc for players not having the particles already",
-    version     = "1.0.0",
+    description = "To precache smoke/etc for players not having the particles already. Includes !resetsmoke command.",
+    version     = "1.1.0",
     url         = ""
 };
 
@@ -30,6 +30,22 @@ public void OnPluginStart()
     gg2_always_retry = CreateConVar("gg2_always_retry", "0", "should we always force reconnect");
 
     AutoExecConfig(true, "gg2_forceretry");
+}
+
+public Action OnClientSayCommand(int client, const char[] command, const char[] sArgs)
+{
+    if (!StrEqual(sArgs, "!resetsmoke", false)) return Plugin_Continue;
+
+    ResetSmokeStatus(client);
+    return Plugin_Handled;
+}
+
+void ResetSmokeStatus(int client)
+{
+    if (!IsValidPlayer(client)) return;
+    if (IsFakeClient(client)) return;
+
+    db_reset_player_has_smoke(client);
 }
 
 public void OnMapStart()
@@ -177,6 +193,12 @@ public void db_update_player_has_smoke(int client)
                        "INSERT INTO players_smoke_cache (steam_id, has_smoke) VALUES ('%s', 1) ON CONFLICT (steam_id) DO UPDATE SET has_smoke = 1");
 }
 
+public void db_reset_player_has_smoke(int client)
+{
+    ExecutePlayerQuery(OnPlayerSmokeCacheReset, "reset player smoke cache", client,
+                       "INSERT INTO players_smoke_cache (steam_id, has_smoke) VALUES ('%s', 0) ON CONFLICT (steam_id) DO UPDATE SET has_smoke = 0");
+}
+
 public void OnPlayerSmokeCacheUpdated(Database db, DBResultSet results, const char[] error, any client)
 {
     HandleQueryError(results, error, "update player smoke cache");
@@ -189,6 +211,22 @@ public void OnPlayerSmokeCacheUpdated(Database db, DBResultSet results, const ch
     if (!GetClientAuthId(client, AuthId_Steam2, steamId, sizeof(steamId))) return;
 
     playerList.SetValue(steamId, true, true);
+}
+
+public void OnPlayerSmokeCacheReset(Database db, DBResultSet results, const char[] error, any client)
+{
+    HandleQueryError(results, error, "reset player smoke cache");
+    if (results == null) return;
+
+    // Update the playerList map to reflect the change
+    if (!IsClientInGame(client)) return;
+
+    char steamId[32];
+    if (!GetClientAuthId(client, AuthId_Steam2, steamId, sizeof(steamId))) return;
+
+    playerList.SetValue(steamId, false, true);
+
+    PrintToChat(client, "Smoke status reset, reconnect to the server to force cache");
 }
 
 public void OnPlayerSmokeCacheChecked(Database db, DBResultSet results, const char[] error, any client)
