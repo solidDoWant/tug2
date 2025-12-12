@@ -4,55 +4,57 @@
 
 #pragma newdecls required
 
-int playerTokensCount = 100;
-int botTokensCount = 35;
+ConVar           g_cvPlayerTokensCount;
+ConVar           g_cvBotTokensCount;
 
 public Plugin myinfo =
 {
-  name = "[GG2 Supply] Supply Point Manager",
-  author = "zachm",
-  description = "Set player supply points",
-  version = "0.1",
-  url = "https://insurgency.lol"
+    name        = "[GG2 Supply] Supply Point Manager",
+    author      = "zachm",
+    description = "Set player supply points",
+    version     = "0.1",
+    url         = "https://insurgency.lol"
 };
 
-public void OnPluginStart() {
-  // Hook to start of round, for storing players Supply
-  HookEvent("round_start", Event_RoundStart);
+public void OnPluginStart()
+{
+    // Create ConVars
+    g_cvPlayerTokensCount = CreateConVar("sm_supply_player_tokens", "100", "Supply tokens for players", FCVAR_NOTIFY);
+    g_cvBotTokensCount    = CreateConVar("sm_supply_bot_tokens", "35", "Supply tokens for bots", FCVAR_NOTIFY);
 
-  // Hook (& Command) to explicitly set a player's supply points. Applies _before_ player spawns in world.
-  HookEvent("player_team", Event_PlayerTeam, EventHookMode_Post);
+    // Hook to start of round, for storing players Supply
+    HookEvent("round_start", Event_RoundStart);
+
+    // Hook (& Command) to explicitly set a player's supply points. Applies _before_ player spawns in world.
+    HookEvent("player_team", Event_PlayerTeam, EventHookMode_Post);
 }
 
- void gib(int client, int token_count) {
-     int currentTokens = GetEntProp(client, Prop_Send, "m_nRecievedTokens");
-     if (currentTokens < token_count) {
-         SetEntProp(client, Prop_Send, "m_nRecievedTokens",token_count);
-     }
- }
+void SetSupplyTokens(int client)
+{
+    if (client <= 0 || client > MaxClients) return;
+    if (!IsClientInGame(client)) return;
 
-public Action Event_RoundStart(Handle event, const char[] name, bool dontBroadcast) {
-    for (int client = 1; client <= MaxClients; client++) {
-        //int client = GetClientOfUserId(GetEventInt(event, "userid"));
-        if (!IsClientInGame(client)) {
-            continue;
-        }
-        if (IsFakeClient(client)) {
-            gib(client, botTokensCount);
-        } else {
-            gib(client, playerTokensCount);
-        }
+    int token_count   = IsFakeClient(client) ? g_cvBotTokensCount.IntValue : g_cvPlayerTokensCount.IntValue;
+
+    int currentTokens = GetEntProp(client, Prop_Send, "m_nRecievedTokens");
+    if (currentTokens >= token_count) return;
+
+    SetEntProp(client, Prop_Send, "m_nRecievedTokens", token_count);
+}
+
+public Action Event_RoundStart(Handle event, const char[] name, bool dontBroadcast)
+{
+    for (int client = 1; client <= MaxClients; client++)
+    {
+        SetSupplyTokens(client);
     }
     return Plugin_Continue;
 }
 
-
-public Action Event_PlayerTeam(Handle event, const char[] name, bool dontBroadcast) {
+public Action Event_PlayerTeam(Handle event, const char[] name, bool dontBroadcast)
+{
     int client = GetClientOfUserId(GetEventInt(event, "userid"));
-    if (IsFakeClient(client)) {
-        gib(client, botTokensCount);
-    } else {
-        gib(client, playerTokensCount);
-    }
+    SetSupplyTokens(client);
+
     return Plugin_Continue;
 }
