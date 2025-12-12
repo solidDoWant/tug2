@@ -16,9 +16,9 @@ public Plugin myinfo =
     description = "TeamKill System",
     version     = "0.0.2",
     url         = ""
+};
 
-
-}
+// TODO maybe this should track class/role as well - see original mstats2 plugin for reference
 
 Database      g_Database = null;
 // Ban duration in minutes when auto-ban is triggered (how long to ban the player)
@@ -28,9 +28,9 @@ GlobalForward g_TKAutoBanForward;
 // Stores the timestamps (Unix epoch seconds) of the last 3 teamkills for each player.
 // Array contents: [player index][0-2] = timestamp of each TK, with older entries shifting left when full
 int           g_PlayerTKTimestamps[MAXPLAYERS + 1][3];
-// Stores the client index of the victim of the most recent teamkill for each player.
-// Array contents: [player index] = victim client index (used for the forgive command)
-int           g_PlayerLastVictim[MAXPLAYERS + 1];
+// Stores the client index of the attacker who most recently teamkilled each player.
+// Array contents: [victim index] = attacker client index (used for the forgive command)
+int           g_PlayerLastAttacker[MAXPLAYERS + 1];
 int           EMPTY_TK_TIMESTAMPS[3] = { 0, 0, 0 };
 // Time window in seconds for counting teamkills (e.g., 3 TKs within this period triggers auto-ban)
 // This is different from g_cvarBanTime which controls how long the ban lasts
@@ -42,7 +42,6 @@ char          g_OffenderSteamIDs[1024][64];
 
 public void OnPluginStart()
 {
-    LogMessage("[INS GG] TeamKilling System started");
     g_cvarBanTime = CreateConVar("tk_ban_basetime", "5", "Base ban time (min)", FCVAR_PROTECTED);
     HookEvent("round_start", Event_RoundStart);
     HookEvent("player_death", Event_PlayerDeath);
@@ -194,25 +193,18 @@ public void UpdateTKForgivenInDB(int attacker, int victim)
     char victim_steamid64[64];
     if (!GetClientAuthId(victim, AuthId_SteamID64, victim_steamid64, sizeof(victim_steamid64))) return;
 
-    char escapedAttacker[129];
-    char escapedVictim[129];
-
-    if (!g_Database.Escape(attacker_steamid64, escapedAttacker, sizeof(escapedAttacker)))
-    {
-        LogError("[GG2 TEAMKILL] Failed to escape attacker steam ID: %s", attacker_steamid64);
-        return;
-    }
-
-    if (!g_Database.Escape(victim_steamid64, escapedVictim, sizeof(escapedVictim)))
-    {
-        LogError("[GG2 TEAMKILL] Failed to escape victim steam ID: %s", victim_steamid64);
-        return;
-    }
-
     char query[1024];
-    Format(query, sizeof(query),
-           "UPDATE redux_player_tks SET forgiven = TRUE WHERE victim_id = (SELECT id FROM redux_players WHERE steam_id = '%s' LIMIT 1) AND attacker_id = (SELECT id FROM redux_players WHERE steam_id = '%s' LIMIT 1) ORDER BY id DESC LIMIT 1",
-           escapedVictim, escapedAttacker);
+    g_Database.Format(query, sizeof(query),
+                      "UPDATE player_tk_logs SET forgiven = TRUE \
+                      WHERE id = ( \
+                          SELECT tk.id \
+                          FROM player_tk_logs tk \
+                          JOIN player_tks v ON tk.victim_id = v.id \
+                          JOIN player_tks a ON tk.attacker_id = a.id \
+                          WHERE v.steam_id = '%s' AND a.steam_id = '%s' \
+                          ORDER BY tk.id DESC LIMIT 1 \
+                      )",
+                      victim_steamid64, attacker_steamid64);
 
     g_Database.Query(OnTKForgivenUpdated, query);
 }
@@ -268,7 +260,7 @@ public void QueryAmnestyPlayers()
 
     char query[512];
     Format(query, sizeof(query),
-           "SELECT DISTINCT steam_id, player_name FROM redux_players WHERE tk_amnesty = TRUE ORDER BY steam_id ASC LIMIT %d",
+           "SELECT DISTINCT steam_id, player_name FROM player_tks WHERE tk_amnesty = TRUE ORDER BY steam_id ASC LIMIT %d",
            sizeof(g_AmnestyPlayerSteamIDs));
 
     g_Database.Query(OnAmnestyPlayersLoaded, query);
@@ -315,7 +307,7 @@ public void QueryOffenderPlayers()
     int  time_cutoff = (now - 7776000);    // 90 days
 
     Format(query, sizeof(query),
-           "SELECT DISTINCT steam_id FROM redux_players WHERE kills >= 500 AND tk_given > 0 AND (kills::NUMERIC / tk_given) < 100 AND last_seen > %i ORDER BY steam_id ASC LIMIT %d",
+           "SELECT DISTINCT steam_id FROM player_tks WHERE kills >= 500 AND tk_given > 0 AND (kills::NUMERIC / tk_given) < 100 AND last_seen > %i ORDER BY steam_id ASC LIMIT %d",
            time_cutoff, sizeof(g_OffenderSteamIDs));
 
     g_Database.Query(OnOffenderPlayersLoaded, query);
@@ -355,7 +347,7 @@ public void OnOffenderPlayersLoaded(Database db, DBResultSet results, const char
 
 public void OnMapStart()
 {
-    for (int i = 0; i <= MAXPLAYERS; i++)
+    for (int i = 1; i <= MaxClients; i++)
     {
         ResetPlayerTKData(i);
     }
@@ -378,38 +370,39 @@ public void OnMapStart()
 
 public void OnClientDisconnect(int client)
 {
-    if (!IsFakeClient(client))
-    {
-        ResetPlayerTKData(client);
-    }
+    if (IsFakeClient(client)) return;
+
+    ResetPlayerTKData(client);
 }
 
 public Action Cmd_Forgive(int client, int args)
 {
-    bool forgiven = false;
-    int  attacker;
-    for (int i = 0; i <= MAXPLAYERS; i++)
+    int attacker = g_PlayerLastAttacker[client];
+    if (attacker == 0)
     {
-        if (g_PlayerLastVictim[i] != client) continue;
+        CPrintToChat(client, "%T", "teamkill_noone_to_forgive", client);
+        LogMessage("[GG TK_AUTO_BAN] %N attempted to forgive but nobody was forgivable", client);
+        return Plugin_Handled;
+    }
 
-        attacker = i;
-        LogMessage("[GG TK_AUTO_BAN] %N forgave %N, popping last entry in tk timer", client, attacker);
-        g_PlayerLastVictim[i] = 0;
-        for (int j = 2; j >= 0; j--)
-        {
-            if (g_PlayerTKTimestamps[i][j] == 0) continue;
+    LogMessage("[GG TK_AUTO_BAN] %N forgave %N, popping last entry in tk timer", client, attacker);
+    g_PlayerLastAttacker[client] = 0;
 
-            g_PlayerTKTimestamps[i][j] = 0;
-            forgiven                   = true;
-            SendForwardTKForgiven(client);
-            UpdateTKForgivenInDB(attacker, client);
-            break;
-        }
+    // Find and clear the most recent TK timestamp
+    bool forgiven                = false;
+    for (int i = 2; i >= 0; i--)
+    {
+        if (g_PlayerTKTimestamps[attacker][i] == 0) continue;
+
+        g_PlayerTKTimestamps[attacker][i] = 0;
+        forgiven                          = true;
+        SendForwardTKForgiven(client);
+        UpdateTKForgivenInDB(attacker, client);
+        break;
     }
 
     if (!forgiven)
     {
-        // Format(chat_message, sizeof(chat_message), "\x07FF0000[TeamKill]\x07F8F8FF \x0700FA9A NO PLAYER TO FORGIVE!");
         CPrintToChat(client, "%T", "teamkill_noone_to_forgive", client);
         LogMessage("[GG TK_AUTO_BAN] %N attempted to forgive but nobody was forgivable", client);
         return Plugin_Handled;
@@ -419,7 +412,6 @@ public Action Cmd_Forgive(int client, int args)
     Format(forgiver_name, sizeof(forgiver_name), "%N", client);
     char forgiven_name[64];
     Format(forgiven_name, sizeof(forgiven_name), "%N", attacker);
-    // Format(chat_message, sizeof(chat_message), "\x07FF0000[TeamKill]\x07F8F8FF \x07FF0000%N\x0700FA9A FORGAVE\x07FFD700 %N for TKing", client, attacker);
     CPrintToChatAll("%t", "teamkill_player_forgiven", forgiver_name, forgiven_name);
 
     char discord_message[1024];
@@ -431,20 +423,20 @@ public Action Cmd_Forgive(int client, int args)
 
 public bool IsValidPlayer(int client)
 {
-    return (0 < client <= MaxClients) && IsClientInGame(client);
+    return client > 0 && client <= MaxClients && IsClientInGame(client);
 }
 
 void ResetPlayerTKData(int client)
 {
     g_PlayerTKTimestamps[client] = EMPTY_TK_TIMESTAMPS;
-    g_PlayerLastVictim[client]   = 0;
+    g_PlayerLastAttacker[client] = 0;
 }
 
 void RecordTeamKill(int client, int victim)
 {
-    int insertedAtIndex        = -1;
-    int now                    = GetTime();
-    g_PlayerLastVictim[client] = victim;
+    int insertedAtIndex          = -1;
+    int now                      = GetTime();
+    g_PlayerLastAttacker[victim] = client;
     for (int i = 0; i < 3; i++)
     {
         if (g_PlayerTKTimestamps[client][i] != 0) continue;
@@ -506,6 +498,68 @@ public bool ShouldLogWeapon(char[] weapon)
     */
 }
 
+// Record a teamkill to the database
+void RecordTKToDatabase(int attacker, int victim, const char[] weapon)
+{
+    if (g_Database == null) return;
+
+    // Get steam IDs for both players
+    char attacker_steamid[64];
+    if (!GetClientAuthId(attacker, AuthId_SteamID64, attacker_steamid, sizeof(attacker_steamid)))
+    {
+        LogError("[GG2 TEAMKILL] Cannot record TK: failed to get attacker steam_id for %N", attacker);
+        return;
+    }
+
+    char victim_steamid[64];
+    if (!GetClientAuthId(victim, AuthId_SteamID64, victim_steamid, sizeof(victim_steamid)))
+    {
+        LogError("[GG2 TEAMKILL] Cannot record TK: failed to get victim steam_id for %N", victim);
+        return;
+    }
+
+    // Execute both queries in a single transaction for atomicity
+    Transaction txn = new Transaction();
+
+    // Upsert both players in a single query, incrementing their respective counters
+    char        upsertBothPlayersQuery[1536];
+    g_Database.Format(upsertBothPlayersQuery, sizeof(upsertBothPlayersQuery),
+                      "INSERT INTO player_tks (steam_id, player_name, tk_given, tk_taken) VALUES ('%s', '%N', 1, 0), ('%s', '%N', 0, 1) \
+           ON CONFLICT (steam_id) DO UPDATE SET player_name = EXCLUDED.player_name, tk_given = player_tks.tk_given + EXCLUDED.tk_given, tk_taken = player_tks.tk_taken + EXCLUDED.tk_taken, updated_at = CURRENT_TIMESTAMP",
+                      attacker_steamid, attacker, victim_steamid, victim);
+    txn.AddQuery(upsertBothPlayersQuery);
+
+    // Insert TK record
+    char insertQuery[512];
+    g_Database.Format(insertQuery, sizeof(insertQuery),
+                      "INSERT INTO player_tk_logs (attacker_id, victim_id, weapon, forgiven) \
+                      SELECT a.id, v.id, '%s', FALSE \
+                      FROM player_tks a \
+                      CROSS JOIN player_tks v \
+                      WHERE a.steam_id = '%s' AND v.steam_id = '%s'",
+                      weapon, attacker_steamid, victim_steamid);
+    txn.AddQuery(insertQuery);
+
+    // Execute transaction
+    g_Database.Execute(txn, OnTKTransactionSuccess, OnTKTransactionFailure);
+}
+
+public void OnTKTransactionSuccess(Database db, any data, int numQueries, DBResultSet[] results, any[] queryData)
+{
+    // Do nothing
+}
+
+public void OnTKTransactionFailure(Database db, any data, int numQueries, const char[] error, int failIndex, any[] queryData)
+{
+    LogError("[GG2 TEAMKILL] Transaction failed at query %d/%d: %s", failIndex + 1, numQueries, error);
+
+    // Check if the error is due to lost connection
+    if (StrContains(error, "no connection to the server", false) == -1) return;
+
+    LogError("[GG2 TEAMKILL] Lost connection to database during TK recording - attempting to reconnect");
+    ReconnectDatabase();
+}
+
 bool ShouldTriggerAutoBan(int client)
 {
     int span = g_PlayerTKTimestamps[client][2] - g_PlayerTKTimestamps[client][0];
@@ -516,8 +570,7 @@ bool ShouldTriggerAutoBan(int client)
 
 public Action Event_RoundStart(Event event, const char[] name, bool dontBroadcast)
 {
-    LogMessage("[GG TK_AUTO_BAN] clearing TK entries");
-    for (int client = 0; client <= MaxClients; client++)
+    for (int client = 1; client <= MaxClients; client++)
     {
         ResetPlayerTKData(client);
     }
@@ -559,6 +612,9 @@ public Action Event_PlayerDeath(Event event, const char[] name, bool dontBroadca
     GetClientAuthId(attacker, AuthId_Steam2, attackerSteamID, sizeof(attackerSteamID));
 
     LogMessage("[GG TK_AUTO_BAN] %N killed a teammate (%N)", attacker, victim);
+
+    // Record the teamkill to database
+    RecordTKToDatabase(attacker, victim, weapon);
 
     if (PlayerHasAmnesty(attacker))
     {
