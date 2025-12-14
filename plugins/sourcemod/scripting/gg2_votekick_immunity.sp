@@ -5,57 +5,60 @@
 
 public Plugin myinfo =
 {
-	name = "[GG2 Votekick Immunity] Kickvote Immunity",
-	author = "Neko-",
-	description = "player kick votes to obey SM immunity levels",
-	version = "1.0.0"
+    name        = "[GG2 Votekick Immunity] Kickvote Immunity",
+    author      = "Neko-",
+    description = "player kick votes to obey SM immunity levels",
+    version     = "1.0.0"
 };
+
+static const char g_VoteReasons[][] = {
+    "kick",
+    "kickid",
+    "ban",
+    "banid"
+};
+
+bool IsProtectedVoteReason(const char[] reason)
+{
+    for (int i = 0; i < sizeof(g_VoteReasons); i++)
+    {
+        if (StrEqual(reason, g_VoteReasons[i], false)) return true;
+    }
+
+    return false;
+}
 
 public void OnPluginStart()
 {
-	AddCommandListener(callvoteListener, "callvote");
+    AddCommandListener(Event_CallVote, "callvote");
 }
 
-public Action callvoteListener(int client, char[] cmd, int argc)
+public Action Event_CallVote(int requesterClient, char[] cmd, int argc)
 {
-	if (argc < 2)
-		return Plugin_Continue;
-	
-	char votereason[16];
-	GetCmdArg(1, votereason, sizeof(votereason));
-	
-	if ((StrEqual(votereason, "kick", false)) ||
-	(StrEqual(votereason, "kickid", false)) ||
-	(StrEqual(votereason, "ban", false)) ||
-	(StrEqual(votereason, "banid", false)))
-	{
-		char strName[256];
-		GetCmdArg(2, strName, sizeof(strName));
-		
-		Format(strName, sizeof(strName), "#%s", strName);
-		int target = FindTarget(client, strName, true, false);
-		if (target < 1)
-		{
-			return Plugin_Continue;
-		}
-		
-		AdminId clientAdmin = GetUserAdmin(client);
-		AdminId targetAdmin = GetUserAdmin(target);
-		
-		if(clientAdmin == INVALID_ADMIN_ID && targetAdmin == INVALID_ADMIN_ID)
-		{
-			return Plugin_Continue;
-		}
-		
-		if(CanAdminTarget(clientAdmin, targetAdmin))
-		{
-			return Plugin_Continue;
-		}
-		
-		PrintToChat(client, "You are not allowed to vote this player!");
-		LogMessage("[GG2 VK IMMUNITY] %N attempted to votekick %N (and failed)", client, target);
-		return Plugin_Handled;
-	}
-	
-	return Plugin_Continue;
+    if (argc < 2) return Plugin_Continue;
+
+    char voteReason[16];
+    GetCmdArg(1, voteReason, sizeof(voteReason));
+
+    if (!IsProtectedVoteReason(voteReason)) return Plugin_Continue;
+
+    char targetName[256];
+    GetCmdArg(2, targetName, sizeof(targetName));
+
+    Format(targetName, sizeof(targetName), "#%s", targetName);
+
+    int targetClient = FindTarget(requesterClient, targetName, true, false);
+    if (targetClient < 1) return Plugin_Continue;
+
+    // Skip the check if a non-admin is being targeted
+    AdminId targetAdmin = GetUserAdmin(targetClient);
+    if (targetAdmin == INVALID_ADMIN_ID) return Plugin_Continue;
+
+    AdminId requesterAdmin = GetUserAdmin(requesterClient);
+    if (CanAdminTarget(requesterAdmin, targetAdmin)) return Plugin_Continue;
+
+    PrintToChat(requesterClient, "You are not allowed to vote this player!");
+    LogMessage("[GG2 VK IMMUNITY] %N attempted to votekick %N (and failed)", requesterClient, targetClient);
+
+    return Plugin_Handled;
 }
