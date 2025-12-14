@@ -143,17 +143,6 @@ RUN \
     # Create output dirs
     mkdir -p /insurgency/addons/sourcemod/plugins/disabled /insurgency/cfg
 
-FROM sourcemod-plugins-base AS sourcemod-plugins-battleye-disabler
-
-# Build the Battleye disabler plugin
-RUN \
-    mkdir /plugin-source && \
-    curl -fsSL -o /plugin-source/ins_battleye_disabler.sp https://raw.githubusercontent.com/Grey83/SourceMod-plugins/a9e0230f3ae554633b349a56eb6474208ae16c84/SM/scripting/ins_battleye_disabler%201.0.0.sp && \
-    /sourcemod/addons/sourcemod/scripting/spcomp /plugin-source/ins_battleye_disabler.sp -o /insurgency/addons/sourcemod/plugins/ins_battleye_disabler.smx && \
-    rm -rf /plugin-source && \
-    # Fixup file permissions
-    find /insurgency -type d -exec chmod 755 {} \;
-
 FROM sourcemod-plugins-base AS sourcemod-plugins-marquis-fix
 
 # Build the marquis map fix plugin
@@ -569,9 +558,6 @@ COPY --from=gameserver-mods-metamod --chown=0:0 /insurgency /opt/insurgency-serv
 COPY --from=gameserver-mods-sourcemod --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
 # TODO symlink this or configure source mod to write this elsewhere
 COPY --from=gameserver-builder --chown=1000:1000 --chmod=755 /empty-directory /opt/insurgency-server/insurgency/addons/sourcemod/logs
-
-# Copy in compiled plugins
-COPY --from=sourcemod-plugins-battleye-disabler --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
 
 # Copy the default config
 COPY ["server config/base/", "/"]
