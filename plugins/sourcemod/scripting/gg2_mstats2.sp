@@ -17,7 +17,6 @@ Database  g_Database = null;
 char      g_SteamID[MAXPLAYERS + 1][32];
 
 int       g_iStartScore[MAXPLAYERS + 1];
-char      g_escaped_map_name[257];
 char      bawt_steam_id[64] = "STEAM_ID_STOP_IGNORING_RETVALS";
 
 // In-memory stat cache - flushed to DB at round end and player disconnect
@@ -290,22 +289,10 @@ public Action Timer_RetryQuery(Handle timer, DataPack pack)
 public void OnMapStart()
 {
     // Check if database connection is ready
-    if (g_Database == null)
-    {
-        LogMessage("[GG2 MSTATS2] Database unavailable at map start, attempting reconnection...");
-        ReconnectDatabase();
-    }
+    if (g_Database != null) return;
 
-    char map_name[128];
-    GetCurrentMap(map_name, sizeof(map_name));
-
-    // Escape map name once for SQL queries throughout the map
-    if (g_Database != null && g_Database.Escape(map_name, g_escaped_map_name, sizeof(g_escaped_map_name))) return;
-
-    // Critical failure: cannot safely use map name in SQL queries
-    // Player stats will still be tracked, but map win/loss records will be disabled
-    g_escaped_map_name[0] = '\0';    // Set to empty string instead of using unsafe unescaped name
-    LogError("[GG2 MSTATS2] Failed to escape map name in OnMapStart: %s", map_name);
+    LogMessage("[GG2 MSTATS2] Database unavailable at map start, attempting reconnection...");
+    ReconnectDatabase();
 }
 
 public Action LoadPlayerIDs(Handle timer)
@@ -495,7 +482,9 @@ void FlushPlayerScore(int client, int wins = 0, int losses = 0)
     if (player_score_change <= 0 && wins <= 0 && losses <= 0) return;
 
     char score_query[512];
-    Format(score_query, sizeof(score_query), "INSERT INTO player_stats (steam_id, score, wins, losses) VALUES ('%s', %i, %i, %i) ON CONFLICT (steam_id) DO UPDATE SET score = player_stats.score + %i, wins = player_stats.wins + %i, losses = player_stats.losses + %i, updated_at = CURRENT_TIMESTAMP", g_SteamID[client], player_score_change, wins, losses, player_score_change, wins, losses);
+    g_Database.Format(score_query, sizeof(score_query),
+                      "INSERT INTO player_stats (steam_id, score, wins, losses) VALUES ('%s', %i, %i, %i) ON CONFLICT (steam_id) DO UPDATE SET score = player_stats.score + %i, wins = player_stats.wins + %i, losses = player_stats.losses + %i, updated_at = CURRENT_TIMESTAMP",
+                      g_SteamID[client], player_score_change, wins, losses, player_score_change, wins, losses);
 
     ExecuteQueryWithRetry(OnQueryComplete, score_query, client);
     g_iStartScore[client] = player_current_score;
@@ -507,9 +496,9 @@ public void RecordPlayer(int client)
     if (StrEqual(g_SteamID[client], bawt_steam_id)) return;
 
     char query[512];
-    Format(query, sizeof(query),
-           "INSERT INTO player_stats (steam_id) VALUES ('%s') ON CONFLICT (steam_id) DO UPDATE SET updated_at = CURRENT_TIMESTAMP",
-           g_SteamID[client]);
+    g_Database.Format(query, sizeof(query),
+                      "INSERT INTO player_stats (steam_id) VALUES ('%s') ON CONFLICT (steam_id) DO UPDATE SET updated_at = CURRENT_TIMESTAMP",
+                      g_SteamID[client]);
     ExecuteQueryWithRetry(OnPlayerUpserted, query, client);
 }
 
@@ -704,17 +693,14 @@ public Action Event_RoundEnd(Event event, const char[] name, bool dontBroadcast)
         FlushAllPlayerStats(client, sec_forces_won ? 1 : 0, sec_forces_won ? 0 : 1);
     }
 
-    if (g_escaped_map_name[0] == '\0')
-    {
-        LogError("[GG2 MSTATS2] Skipping map win/loss record - map name not available");
-        return Plugin_Continue;
-    }
-
     // Insert map if not exists, then log the match result
+    char map_name[128];
+    GetCurrentMap(map_name, sizeof(map_name));
+
     char map_win_loss_query[1024];
-    Format(map_win_loss_query, sizeof(map_win_loss_query),
-           "WITH upserted_map AS (INSERT INTO maps (map_name) VALUES ('%s') ON CONFLICT (map_name) DO UPDATE SET map_name = EXCLUDED.map_name RETURNING map_id) INSERT INTO win_loss_log (map_id, win) SELECT map_id, %s FROM upserted_map",
-           g_escaped_map_name, sec_forces_won ? "TRUE" : "FALSE");
+    g_Database.Format(map_win_loss_query, sizeof(map_win_loss_query),
+                      "WITH upserted_map AS (INSERT INTO maps (map_name) VALUES ('%s') ON CONFLICT (map_name) DO UPDATE SET map_name = EXCLUDED.map_name RETURNING map_id) INSERT INTO win_loss_log (map_id, win) SELECT map_id, %!s FROM upserted_map",
+                      map_name, sec_forces_won ? "TRUE" : "FALSE");
     ExecuteQueryWithRetry(OnQueryComplete, map_win_loss_query, 0);
 
     return Plugin_Continue;

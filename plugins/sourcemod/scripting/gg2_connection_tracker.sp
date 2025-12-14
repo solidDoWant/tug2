@@ -102,28 +102,13 @@ void HandleQueryError(DBResultSet results, const char[] error, const char[] oper
 
 public void LogConnection(const char[] steam_id, const char[] ip_addr)
 {
-    if (g_Database == null)
-        return;
-
-    char escapedSteamId[129];
-    if (!g_Database.Escape(steam_id, escapedSteamId, sizeof(escapedSteamId)))
-    {
-        LogError("Failed to escape steam ID: %s", steam_id);
-        return;
-    }
-
-    char escapedIpAddr[129];
-    if (!g_Database.Escape(ip_addr, escapedIpAddr, sizeof(escapedIpAddr)))
-    {
-        LogError("Failed to escape IP address: %s", ip_addr);
-        return;
-    }
+    if (g_Database == null) return;
 
     int  now = GetTime();
     char query[512];
-    Format(query, sizeof(query),
-           "INSERT INTO connection_log (steamId, ip_address, connect_date) VALUES ('%s', '%s', %d) ON CONFLICT (steamId, ip_address) DO UPDATE SET connect_date = EXCLUDED.connect_date",
-           escapedSteamId, escapedIpAddr, now);
+    g_Database.Format(query, sizeof(query),
+                      "INSERT INTO connection_log (steamId, ip_address, connect_date) VALUES ('%s', '%s', %d) ON CONFLICT (steamId, ip_address) DO UPDATE SET connect_date = EXCLUDED.connect_date",
+                      steam_id, ip_addr, now);
 
     g_Database.Query(OnConnectionLogged, query);
 }

@@ -136,14 +136,9 @@ public void OnClientAuthorized(int client, const char[] auth)
 void CheckActivePunishments(int client, const char[] steamid, const char[] ip)
 {
     char query[512];
-
-    // Escape the IP address for SQL safety
-    char escapedIP[129];
-    g_Database.Escape(ip, escapedIP, sizeof(escapedIP));
-
-    Format(query, sizeof(query),
-           "SELECT punishment_type, expires_at FROM punishments " ... "WHERE is_active = TRUE " ... "AND (target_steamid = '%s' OR target_ip = '%s') " ... "AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP)",
-           steamid, escapedIP);
+    g_Database.Format(query, sizeof(query),
+                      "SELECT punishment_type, expires_at FROM punishments WHERE is_active = TRUE AND (target_steamid = '%s' OR target_ip = '%s') AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP)",
+                      steamid, ip);
 
     DataPack pack = new DataPack();
     pack.WriteCell(GetClientUserId(client));
@@ -593,8 +588,7 @@ Action HandleCommRemoval(int client, int args, const char[] punishmentType, cons
 
 void AddBanToDatabase(int admin, const char[] steamid, const char[] ip, const char[] reason, int duration, const char[] punishmentType)
 {
-    if (g_Database == null)
-        return;
+    if (g_Database == null) return;
 
     char adminSteamID[32]           = "CONSOLE";
     char adminName[MAX_NAME_LENGTH] = "Console";
@@ -606,30 +600,20 @@ void AddBanToDatabase(int admin, const char[] steamid, const char[] ip, const ch
     }
 
     char query[1024];
-    char escapedReason[MAX_REASON_LENGTH * 2 + 1];
-    char escapedAdminName[MAX_NAME_LENGTH * 2 + 1];
-    char escapedSteamID[65];
-    char escapedIP[129];
-
-    g_Database.Escape(reason, escapedReason, sizeof(escapedReason));
-    g_Database.Escape(adminName, escapedAdminName, sizeof(escapedAdminName));
-    g_Database.Escape(steamid, escapedSteamID, sizeof(escapedSteamID));
-    g_Database.Escape(ip, escapedIP, sizeof(escapedIP));
-
     if (duration == 0)
     {
         // Permanent ban
         if (strlen(ip) > 0)
         {
-            Format(query, sizeof(query),
-                   "INSERT INTO punishments (punishment_type, target_steamid, target_ip, admin_steamid, admin_name, reason, expires_at) " ... "VALUES ('%s', '%s', '%s', '%s', '%s', '%s', NULL)",
-                   punishmentType, escapedSteamID, escapedIP, adminSteamID, escapedAdminName, escapedReason);
+            g_Database.Format(query, sizeof(query),
+                              "INSERT INTO punishments (punishment_type, target_steamid, target_ip, admin_steamid, admin_name, reason, expires_at) VALUES ('%s', '%s', '%s', '%s', '%s', '%s', NULL)",
+                              punishmentType, steamid, ip, adminSteamID, adminName, reason);
         }
         else
         {
-            Format(query, sizeof(query),
-                   "INSERT INTO punishments (punishment_type, target_steamid, admin_steamid, admin_name, reason, expires_at) " ... "VALUES ('%s', '%s', '%s', '%s', '%s', NULL)",
-                   punishmentType, escapedSteamID, adminSteamID, escapedAdminName, escapedReason);
+            g_Database.Format(query, sizeof(query),
+                              "INSERT INTO punishments (punishment_type, target_steamid, admin_steamid, admin_name, reason, expires_at) VALUES ('%s', '%s', '%s', '%s', '%s', NULL)",
+                              punishmentType, steamid, adminSteamID, adminName, reason);
         }
     }
     else
@@ -637,15 +621,15 @@ void AddBanToDatabase(int admin, const char[] steamid, const char[] ip, const ch
         // Timed ban
         if (strlen(ip) > 0)
         {
-            Format(query, sizeof(query),
-                   "INSERT INTO punishments (punishment_type, target_steamid, target_ip, admin_steamid, admin_name, reason, expires_at) " ... "VALUES ('%s', '%s', '%s', '%s', '%s', '%s', CURRENT_TIMESTAMP + INTERVAL '%d seconds')",
-                   punishmentType, escapedSteamID, escapedIP, adminSteamID, escapedAdminName, escapedReason, duration);
+            g_Database.Format(query, sizeof(query),
+                              "INSERT INTO punishments (punishment_type, target_steamid, target_ip, admin_steamid, admin_name, reason, expires_at) VALUES ('%s', '%s', '%s', '%s', '%s', '%s', CURRENT_TIMESTAMP + INTERVAL '%d seconds')",
+                              punishmentType, steamid, ip, adminSteamID, adminName, reason, duration);
         }
         else
         {
-            Format(query, sizeof(query),
-                   "INSERT INTO punishments (punishment_type, target_steamid, admin_steamid, admin_name, reason, expires_at) " ... "VALUES ('%s', '%s', '%s', '%s', '%s', CURRENT_TIMESTAMP + INTERVAL '%d seconds')",
-                   punishmentType, escapedSteamID, adminSteamID, escapedAdminName, escapedReason, duration);
+            g_Database.Format(query, sizeof(query),
+                              "INSERT INTO punishments (punishment_type, target_steamid, admin_steamid, admin_name, reason, expires_at) VALUES ('%s', '%s', '%s', '%s', '%s', CURRENT_TIMESTAMP + INTERVAL '%d seconds')",
+                              punishmentType, steamid, adminSteamID, adminName, reason, duration);
         }
     }
 
@@ -664,20 +648,17 @@ void RemoveBanFromDatabase(const char[] target, bool isIP)
         return;
 
     char query[512];
-    char escapedTarget[256];
-    g_Database.Escape(target, escapedTarget, sizeof(escapedTarget));
-
     if (isIP)
     {
-        Format(query, sizeof(query),
-               "UPDATE punishments SET is_active = FALSE " ... "WHERE target_ip = '%s' AND punishment_type = 'ban_ip'",
-               escapedTarget);
+        g_Database.Format(query, sizeof(query),
+                          "UPDATE punishments SET is_active = FALSE WHERE target_ip = '%s' AND punishment_type = 'ban_ip'",
+                          target);
     }
     else
     {
-        Format(query, sizeof(query),
-               "UPDATE punishments SET is_active = FALSE " ... "WHERE target_steamid = '%s' AND punishment_type = 'ban_steamid'",
-               escapedTarget);
+        g_Database.Format(query, sizeof(query),
+                          "UPDATE punishments SET is_active = FALSE WHERE target_steamid = '%s' AND punishment_type = 'ban_steamid'",
+                          target);
     }
 
     g_Database.Query(OnBanRemoved, query);
@@ -703,17 +684,11 @@ void AddCommPunishmentToDatabase(int admin, const char[] steamid, const char[] t
         GetClientName(admin, adminName, sizeof(adminName));
     }
 
-    char query[1024];
-    char escapedTargetName[MAX_NAME_LENGTH * 2 + 1];
-    char escapedAdminName[MAX_NAME_LENGTH * 2 + 1];
-
-    g_Database.Escape(targetName, escapedTargetName, sizeof(escapedTargetName));
-    g_Database.Escape(adminName, escapedAdminName, sizeof(escapedAdminName));
-
     // Permanent communication punishment (no expiration)
-    Format(query, sizeof(query),
-           "INSERT INTO punishments (punishment_type, target_steamid, target_name, admin_steamid, admin_name, expires_at) " ... "VALUES ('%s', '%s', '%s', '%s', '%s', NULL)",
-           punishmentType, steamid, escapedTargetName, adminSteamID, escapedAdminName);
+    char query[1024];
+    g_Database.Format(query, sizeof(query),
+                      "INSERT INTO punishments (punishment_type, target_steamid, target_name, admin_steamid, admin_name, expires_at) VALUES ('%s', '%s', '%s', '%s', '%s', NULL)",
+                      punishmentType, steamid, targetName, adminSteamID, adminName);
 
     g_Database.Query(OnCommPunishmentAdded, query);
 }
@@ -730,18 +705,17 @@ void RemoveCommPunishmentFromDatabase(const char[] steamid, const char[] punishm
         return;
 
     char query[512];
-
-    Format(query, sizeof(query),
-           "UPDATE punishments SET is_active = FALSE " ... "WHERE target_steamid = '%s' AND punishment_type = '%s'",
-           steamid, punishmentType);
+    g_Database.Format(query, sizeof(query),
+                      "UPDATE punishments SET is_active = FALSE WHERE target_steamid = '%s' AND punishment_type = '%s'",
+                      steamid, punishmentType);
 
     g_Database.Query(OnCommPunishmentRemoved, query);
 }
 
 public void OnCommPunishmentRemoved(Database db, DBResultSet results, const char[] error, any data)
 {
-    if (results == null)
-        LogError("Failed to remove communication punishment from database: %s", error);
+    if (results != null) return;
+    LogError("Failed to remove communication punishment from database: %s", error);
 }
 
 // ============================================================
