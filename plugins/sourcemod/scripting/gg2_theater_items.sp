@@ -1,5 +1,5 @@
 /*
- * @Description: 
+ * @Description:
  *               中文INS服务器使用此插件请注明和鸣谢作者。
  * @Author: Gandor
  * @Github: https://github.com/gandor233
@@ -8,44 +8,37 @@
  * @LastEditors: Gandor
  * @FilePath: \SourceMod_1.10.0\TheaterItemsAPI.sp
  */
-public Plugin myinfo = 
+public Plugin myinfo =
 {
-    name = "[GG2 TheaterItems] TheaterItemsAPI",
-    author = "Gandor | 游而不擊 轉進如風",
+    name        = "[GG2 TheaterItems] TheaterItemsAPI",
+    author      = "Gandor | 游而不擊 轉進如風",
     description = "Theater Items API For Insurgency(2014)",
-    version = "1.0",
-    url = "https://github.com/gandor233"
+    version     = "1.0",
+    url         = "https://github.com/gandor233"
 };
 
 #pragma semicolon 1
-// #include <sourcemod>
-// #include <sdktools>
-// #include <sdkhooks>
-// #undef REQUIRE_PLUGIN
-// #include <TheaterItemsAPI>
-// #define REQUIRE_PLUGIN
-
-#define DATA_SAVE_PATH           "cfg/theater_items"
 
 ConVar mp_theater_override;
-bool g_bNeedUpdateTheaterItems = true;
+bool   g_bNeedUpdateTheaterItems = true;
 
 enum THEATER_ITEM_TABLE_TYPE
 {
-    THEATER_ITEM_TABLE_WAEPONS = 0,
-    THEATER_ITEM_TABLE_WAEPON_UPGRADES,
+    THEATER_ITEM_TABLE_WEAPONS = 0,
+    THEATER_ITEM_TABLE_WEAPON_UPGRADES,
     THEATER_ITEM_TABLE_EXPLOSIVES,
     THEATER_ITEM_TABLE_PLAYER_GEAR,
-}
-char g_cTheaterItemsTableNameList[][] = 
-{
+};
+
+char g_cTheaterItemsTableNameList[][] = {
     "Weapons",
     "WeaponUpgrades",
     "Explosives",
     "PlayerGear",
 };
+
 char g_cTheaterItemsList[sizeof(g_cTheaterItemsTableNameList)][256][128];
-int g_iTheaterItemsStringsCount[sizeof(g_cTheaterItemsTableNameList)];
+int  g_iTheaterItemsStringsCount[sizeof(g_cTheaterItemsTableNameList)];
 
 public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max)
 {
@@ -57,16 +50,16 @@ public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max
     RegPluginLibrary("TheaterItemsAPI");
     return APLRes_Success;
 }
+
 public void OnPluginStart()
 {
-    char cPath[PLATFORM_MAX_PATH];
-    Format(cPath, sizeof(cPath), DATA_SAVE_PATH);
-    if (!DirExists(cPath))
-        CreateDirectory(cPath, FPERM_U_READ|FPERM_U_WRITE|FPERM_U_EXEC|FPERM_G_READ|FPERM_G_EXEC|FPERM_O_READ|FPERM_O_EXEC);
-    
     mp_theater_override = FindConVar("mp_theater_override");
+    if (mp_theater_override == null)
+    {
+        SetFailState("Failed to find ConVar 'mp_theater_override' - plugin requires Insurgency (2014)");
+    }
     mp_theater_override.AddChangeHook(OnTheaterChange);
-    
+
     RegAdminCmd("sm_update_theater_items", Command_UpdateTheaterItems, ADMFLAG_ROOT, "Force update the theater items name record list");
 
     RegAdminCmd("listweapons", Command_ListItemName, ADMFLAG_ROOT);
@@ -77,15 +70,17 @@ public void OnPluginStart()
     RegAdminCmd("listexp", Command_ListItemName, ADMFLAG_ROOT);
     RegAdminCmd("listplayergear", Command_ListItemName, ADMFLAG_ROOT);
     RegAdminCmd("listgear", Command_ListItemName, ADMFLAG_ROOT);
-    
+
     g_bNeedUpdateTheaterItems = true;
     return;
 }
+
 public void OnConfigsExecuted()
 {
     CreateTimer(5.0, CheckTheaterItemsDelay_Timer, _, TIMER_FLAG_NO_MAPCHANGE);
     return;
 }
+
 public void OnTheaterChange(ConVar convar, const char[] oldValue, const char[] newValue)
 {
     g_bNeedUpdateTheaterItems = true;
@@ -98,142 +93,146 @@ public Action Command_ListItemName(int client, int args)
     char cCommand[65];
     GetCmdArg(0, cCommand, sizeof(cCommand));
     ReplaceString(cCommand, sizeof(cCommand), "list", "", false);
+
+    // Require minimum 3 characters to prevent overly broad matches
+    if (strlen(cCommand) < 3) return Plugin_Handled;
+
     for (int i = 0; i < sizeof(g_cTheaterItemsTableNameList); i++)
     {
-        if (StrContains(g_cTheaterItemsTableNameList[i], cCommand, false) > -1)
+        if (StrContains(g_cTheaterItemsTableNameList[i], cCommand, false) == -1) continue;
+
+        PrintToConsole(client, "Listing %s [1~%d]", g_cTheaterItemsTableNameList[i], g_iTheaterItemsStringsCount[i]);
+        for (int j = 1; j <= g_iTheaterItemsStringsCount[i]; j++)
         {
-            PrintToServer("Listing %s [1~%d]", g_cTheaterItemsTableNameList[i], g_iTheaterItemsStringsCount[i]);
-            PrintToConsoleAll("Listing %s [1~%d]", g_cTheaterItemsTableNameList[i], g_iTheaterItemsStringsCount[i]);
-            for (int j = 1; j <= g_iTheaterItemsStringsCount[i]; j++)
-            {
-                PrintToServer("  %d - %s", j, g_cTheaterItemsList[i][j]);
-                PrintToConsoleAll("  %d - %s", j, g_cTheaterItemsList[i][j]);
-            }
-            PrintToServer(" ");
-            PrintToConsoleAll(" ");
-            break;
+            PrintToConsole(client, "  %d - %s", j, g_cTheaterItemsList[i][j]);
         }
+        PrintToConsole(client, " ");
+
+        return Plugin_Handled;
     }
+
     return Plugin_Handled;
 }
+
 public int GetTheaterItemIdByName(THEATER_ITEM_TABLE_TYPE iItemTableType, char[] cItemName)
 {
-    if (iItemTableType >= THEATER_ITEM_TABLE_WAEPONS && iItemTableType <= THEATER_ITEM_TABLE_PLAYER_GEAR)
+    if (iItemTableType < THEATER_ITEM_TABLE_WEAPONS) return -1;
+    if (iItemTableType > THEATER_ITEM_TABLE_PLAYER_GEAR) return -1;
+
+    for (int i = 1; i <= g_iTheaterItemsStringsCount[iItemTableType]; i++)
     {
-        for (int i = 1; i <= g_iTheaterItemsStringsCount[iItemTableType]; i++)
-        {
-            if (StrEqual(g_cTheaterItemsList[iItemTableType][i], cItemName, false))
-            {
-                PrintToServer("GetTheaterItemIdByName %s == %s - iUpgradeID: %d", cItemName, g_cTheaterItemsList[iItemTableType][i], i);
-                return i;
-            }
-        }
+        if (!StrEqual(g_cTheaterItemsList[iItemTableType][i], cItemName, false)) continue;
+
+        return i;
     }
 
     return -1;
 }
 
-// Update
 public Action Command_UpdateTheaterItems(int client, int args)
 {
     RequestFrame(UpdateTheaterItems);
     return Plugin_Handled;
 }
-public Action CheckTheaterItemsDelay_Timer(Handle timer, int client)
+
+public Action CheckTheaterItemsDelay_Timer(Handle timer, any data)
 {
     if (g_bNeedUpdateTheaterItems)
     {
         UpdateTheaterItems();
     }
+
     g_bNeedUpdateTheaterItems = false;
     return Plugin_Stop;
 }
+
 public void UpdateTheaterItems()
 {
-    char cTheaterName[256];
-    mp_theater_override.GetString(cTheaterName, sizeof(cTheaterName));
-    
-    char cFileName[PLATFORM_MAX_PATH];
-    Format(cFileName, sizeof(cFileName), "%s/%s.cfg", DATA_SAVE_PATH, cTheaterName);
-    
-    File hFile = OpenFile(cFileName, "w");
-    if (hFile == INVALID_HANDLE)
-        LogError("Failed to open file %s", cFileName);
-    
-    char cListTheaterItemsOutput[32000];
-    ServerCommandEx(cListTheaterItemsOutput, sizeof(cListTheaterItemsOutput), "listtheateritems");
-    
-    char cTheaterItems[500][64];
-    ExplodeString(cListTheaterItemsOutput, "\n", cTheaterItems, sizeof(cTheaterItems), sizeof(cTheaterItems[]));
-    
-    int iTempTableIndex = 0;
-    char cTempTableNameList[5][128];
-    for (int i = 0; i < sizeof(cTheaterItems); i++)
+    char buffer[32768];
+    ServerCommandEx(buffer, sizeof(buffer), "listtheateritems");
+
+    int  currentTableIndex     = -1;
+    int  currentTableItemIndex = 0;
+
+    int  pos                   = 0;
+    char line[64];
+    int  nextLineIndex;
+
+    // Parse buffer line by line using SplitString (same approach as ExplodeString)
+    while (true)
     {
-        if (strlen(cTheaterItems[i]) > 0)
+        nextLineIndex   = SplitString(buffer[pos], "\n", line, sizeof(line));
+
+        bool isLastLine = (nextLineIndex == -1);
+
+        if (isLastLine)
         {
-            if (StrContains(cTheaterItems[i], "Player Gear: ", false) > -1 || StrContains(cTheaterItems[i], "Explosives: ", false) > -1
-             || StrContains(cTheaterItems[i], "Weapon Upgrades: ", false) > -1 || StrContains(cTheaterItems[i], "Weapons: ", false) > -1)
+            // Last line without trailing newline
+            nextLineIndex = strcopy(line, sizeof(line), buffer[pos]);
+            if (strlen(line) == 0) break;
+
+            // For strcopy, check if there's more data after what was copied to detect truncation
+            if (nextLineIndex == sizeof(line) - 1 && buffer[pos + nextLineIndex] != '\0')
             {
-                char cTheaterItemsTableName[128];
-                cTheaterItemsTableName = cTheaterItems[i];
-                ReplaceString(cTheaterItemsTableName, sizeof(cTheaterItemsTableName), " ", "", false);
-                SplitString(cTheaterItemsTableName, ":", cTheaterItemsTableName, sizeof(cTheaterItemsTableName));
-                cTempTableNameList[iTempTableIndex] = cTheaterItemsTableName;
-                iTempTableIndex++;
-                continue;
+                nextLineIndex = sizeof(line);    // Normalize to trigger truncation warning
             }
         }
-    }
-    
-    iTempTableIndex = 0;
-    int iTableStringIndex = 0;
-    int iTableIndex = GetTheaterItemsTableIndexByTableName(cTempTableNameList[iTempTableIndex]);
-    if (hFile != INVALID_HANDLE)
-        hFile.WriteLine("\"%s\"\n{", cTempTableNameList[iTempTableIndex]);
-    for (int i = 0; i < sizeof(cTheaterItems); i++)
-    {
-        if (strlen(cTheaterItems[i]) > 0)
+        else
         {
-            if (StrContains(cTheaterItems[i], "Player Gear: ", false) > -1 || StrContains(cTheaterItems[i], "Explosives: ", false) > -1
-             || StrContains(cTheaterItems[i], "Weapon Upgrades: ", false) > -1 || StrContains(cTheaterItems[i], "Weapons: ", false) > -1)
+            pos += nextLineIndex;
+        }
+
+        // Skip empty lines
+        if (strlen(line) == 0) continue;
+
+        // Process the line
+        int colonPos = FindCharInString(line, ':');
+        if (colonPos > -1)
+        {
+            // This is a header - extract table name
+            line[colonPos] = '\0';    // Truncate at colon
+            ReplaceString(line, sizeof(line), " ", "", false);
+
+            currentTableIndex     = GetTheaterItemsTableIndexByTableName(line);
+            currentTableItemIndex = 0;
+        }
+        else if (currentTableIndex >= 0)
+        {
+            // Detect truncation by checking if source line was longer than buffer
+            if (nextLineIndex >= sizeof(line))
             {
-                iTempTableIndex++;
-                iTableStringIndex = 0;
-                if (strlen(cTempTableNameList[iTempTableIndex]) > 0)
-                {
-                    if (hFile != INVALID_HANDLE)
-                        hFile.WriteLine("}\n\"%s\"\n{", cTempTableNameList[iTempTableIndex]);
-                    iTableIndex = GetTheaterItemsTableIndexByTableName(cTempTableNameList[iTempTableIndex]);
-                }
-                continue;
+                LogMessage("[Theater Items] Warning: Line truncated - original %d chars, buffer holds %d: %.50s...",
+                           nextLineIndex - 1,    // Exclude newline from count
+                           sizeof(line) - 1,     // Exclude null terminator
+                           line);
             }
-            
-            if (iTableIndex >= 0)
+            else if (currentTableItemIndex == 255)
             {
-                iTableStringIndex++;
-                if (hFile != INVALID_HANDLE)
-                    hFile.WriteLine("\t\"%d\" \"%s\"", iTableStringIndex, cTheaterItems[i]);
-                g_iTheaterItemsStringsCount[iTableIndex] = iTableStringIndex;
-                g_cTheaterItemsList[iTableIndex][iTableStringIndex] = cTheaterItems[i];
+                LogMessage("[Theater Items] Warning: Table %s exceeded maximum capacity (255 items) - ignoring excess items",
+                           g_cTheaterItemsTableNameList[currentTableIndex]);
+            }
+            else
+            {
+                // Add item to current table
+                currentTableItemIndex++;
+                g_iTheaterItemsStringsCount[currentTableIndex]                = currentTableItemIndex;
+                g_cTheaterItemsList[currentTableIndex][currentTableItemIndex] = line;
             }
         }
+
+        if (isLastLine) break;
     }
-    if (hFile != INVALID_HANDLE)
-    {
-        hFile.WriteLine("}");
-        hFile.Flush();
-        hFile.Close();
-    }
-    return;
 }
+
 stock int GetTheaterItemsTableIndexByTableName(char[] cTableName)
 {
-    for (int i = 0; i <sizeof(g_cTheaterItemsTableNameList); i++)
+    for (int i = 0; i < sizeof(g_cTheaterItemsTableNameList); i++)
     {
-        if (StrEqual(g_cTheaterItemsTableNameList[i], cTableName, false))
-            return i;
+        if (!StrEqual(g_cTheaterItemsTableNameList[i], cTableName, false)) continue;
+
+        return i;
     }
+
     return -1;
 }
 
@@ -241,46 +240,36 @@ stock int GetTheaterItemsTableIndexByTableName(char[] cTableName)
 public int Native_GetTheaterItemIdByName(Handle plugin, args)
 {
     char cItemName[64];
-    GetNativeString(2, cItemName, sizeof(cItemName));
+    if (GetNativeString(2, cItemName, sizeof(cItemName)) != SP_ERROR_NONE) return -1;
+
     return GetTheaterItemIdByName(view_as<THEATER_ITEM_TABLE_TYPE>(GetNativeCell(1)), cItemName);
 }
+
+stock bool GetItemNameByTableType(THEATER_ITEM_TABLE_TYPE tableType, int iTableStringIndex, int maxlen)
+{
+    if (iTableStringIndex <= 0) return false;
+    if (iTableStringIndex > g_iTheaterItemsStringsCount[tableType]) return false;
+
+    SetNativeString(2, g_cTheaterItemsList[tableType][iTableStringIndex], maxlen);
+    return true;
+}
+
 public int Native_GetWeaponItemName(Handle plugin, args)
 {
-    int iTableStringIndex = GetNativeCell(1);
-    if (iTableStringIndex > 0 && iTableStringIndex <= g_iTheaterItemsStringsCount[THEATER_ITEM_TABLE_WAEPONS])
-    {
-        SetNativeString(2, g_cTheaterItemsList[THEATER_ITEM_TABLE_WAEPONS][iTableStringIndex], GetNativeCell(3));
-        return true;
-    }
-    return false;
+    return GetItemNameByTableType(THEATER_ITEM_TABLE_WEAPONS, GetNativeCell(1), GetNativeCell(3));
 }
+
 public int Native_GetWeaponUpgradeItemName(Handle plugin, args)
 {
-    int iTableStringIndex = GetNativeCell(1);
-    if (iTableStringIndex > 0 && iTableStringIndex <= g_iTheaterItemsStringsCount[THEATER_ITEM_TABLE_WAEPON_UPGRADES])
-    {
-        SetNativeString(2, g_cTheaterItemsList[THEATER_ITEM_TABLE_WAEPON_UPGRADES][iTableStringIndex], GetNativeCell(3));
-        return true;
-    }
-    return false;
+    return GetItemNameByTableType(THEATER_ITEM_TABLE_WEAPON_UPGRADES, GetNativeCell(1), GetNativeCell(3));
 }
+
 public int Native_GetExplosiveItemName(Handle plugin, args)
 {
-    int iTableStringIndex = GetNativeCell(1);
-    if (iTableStringIndex > 0 && iTableStringIndex <= g_iTheaterItemsStringsCount[THEATER_ITEM_TABLE_EXPLOSIVES])
-    {
-        SetNativeString(2, g_cTheaterItemsList[THEATER_ITEM_TABLE_EXPLOSIVES][iTableStringIndex], GetNativeCell(3));
-        return true;
-    }
-    return false;
+    return GetItemNameByTableType(THEATER_ITEM_TABLE_EXPLOSIVES, GetNativeCell(1), GetNativeCell(3));
 }
+
 public int Native_GetPlayerGearItemName(Handle plugin, args)
 {
-    int iTableStringIndex = GetNativeCell(1);
-    if (iTableStringIndex > 0 && iTableStringIndex <= g_iTheaterItemsStringsCount[THEATER_ITEM_TABLE_PLAYER_GEAR])
-    {
-        SetNativeString(2, g_cTheaterItemsList[THEATER_ITEM_TABLE_PLAYER_GEAR][iTableStringIndex], GetNativeCell(3));
-        return true;
-    }
-    return false;
+    return GetItemNameByTableType(THEATER_ITEM_TABLE_PLAYER_GEAR, GetNativeCell(1), GetNativeCell(3));
 }
