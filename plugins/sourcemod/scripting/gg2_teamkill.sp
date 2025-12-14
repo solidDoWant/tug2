@@ -197,12 +197,10 @@ public void UpdateTKForgivenInDB(int attacker, int victim)
     g_Database.Format(query, sizeof(query),
                       "UPDATE player_tk_logs SET forgiven = TRUE \
                       WHERE id = ( \
-                          SELECT tk.id \
-                          FROM player_tk_logs tk \
-                          JOIN player_tks v ON tk.victim_id = v.id \
-                          JOIN player_tks a ON tk.attacker_id = a.id \
-                          WHERE v.steam_id = '%s' AND a.steam_id = '%s' \
-                          ORDER BY tk.id DESC LIMIT 1 \
+                          SELECT id \
+                          FROM player_tk_logs \
+                          WHERE victim_steam_id = %s AND attacker_steam_id = %s \
+                          ORDER BY id DESC LIMIT 1 \
                       )",
                       victim_steamid64, attacker_steamid64);
 
@@ -260,7 +258,7 @@ public void QueryAmnestyPlayers()
 
     char query[512];
     Format(query, sizeof(query),
-           "SELECT DISTINCT steam_id, player_name FROM player_tks WHERE tk_amnesty = TRUE ORDER BY steam_id ASC LIMIT %d",
+           "SELECT steam_id FROM player_tks WHERE tk_amnesty = TRUE ORDER BY steam_id ASC LIMIT %d",
            sizeof(g_AmnestyPlayerSteamIDs));
 
     g_Database.Query(OnAmnestyPlayersLoaded, query);
@@ -307,7 +305,7 @@ public void QueryOffenderPlayers()
     int  time_cutoff = (now - 7776000);    // 90 days
 
     Format(query, sizeof(query),
-           "SELECT DISTINCT steam_id FROM player_tks WHERE kills >= 500 AND tk_given > 0 AND (kills::NUMERIC / tk_given) < 100 AND last_seen > %i ORDER BY steam_id ASC LIMIT %d",
+           "SELECT steam_id FROM player_tks WHERE kills >= 500 AND tk_given > 0 AND (kills::NUMERIC / tk_given) < 100 AND last_seen > %i ORDER BY steam_id ASC LIMIT %d",
            time_cutoff, sizeof(g_OffenderSteamIDs));
 
     g_Database.Query(OnOffenderPlayersLoaded, query);
@@ -524,20 +522,17 @@ void RecordTKToDatabase(int attacker, int victim, const char[] weapon)
     // Upsert both players in a single query, incrementing their respective counters
     char        upsertBothPlayersQuery[1536];
     g_Database.Format(upsertBothPlayersQuery, sizeof(upsertBothPlayersQuery),
-                      "INSERT INTO player_tks (steam_id, player_name, tk_given, tk_taken) VALUES ('%s', '%N', 1, 0), ('%s', '%N', 0, 1) \
-           ON CONFLICT (steam_id) DO UPDATE SET player_name = EXCLUDED.player_name, tk_given = player_tks.tk_given + EXCLUDED.tk_given, tk_taken = player_tks.tk_taken + EXCLUDED.tk_taken, updated_at = CURRENT_TIMESTAMP",
-                      attacker_steamid, attacker, victim_steamid, victim);
+                      "INSERT INTO player_tks (steam_id, tk_given, tk_taken) VALUES (%s, 1, 0), (%s, 0, 1) \
+           ON CONFLICT (steam_id) DO UPDATE SET tk_given = player_tks.tk_given + EXCLUDED.tk_given, tk_taken = player_tks.tk_taken + EXCLUDED.tk_taken, updated_at = CURRENT_TIMESTAMP",
+                      attacker_steamid, victim_steamid);
     txn.AddQuery(upsertBothPlayersQuery);
 
     // Insert TK record
     char insertQuery[512];
     g_Database.Format(insertQuery, sizeof(insertQuery),
-                      "INSERT INTO player_tk_logs (attacker_id, victim_id, weapon, forgiven) \
-                      SELECT a.id, v.id, '%s', FALSE \
-                      FROM player_tks a \
-                      CROSS JOIN player_tks v \
-                      WHERE a.steam_id = '%s' AND v.steam_id = '%s'",
-                      weapon, attacker_steamid, victim_steamid);
+                      "INSERT INTO player_tk_logs (attacker_steam_id, victim_steam_id, weapon, forgiven) \
+                      VALUES (%s, %s, '%s', FALSE)",
+                      attacker_steamid, victim_steamid, weapon);
     txn.AddQuery(insertQuery);
 
     // Execute transaction
@@ -608,8 +603,8 @@ public Action Event_PlayerDeath(Event event, const char[] name, bool dontBroadca
     // Ignore if not a teamkill
     if (victimTeam != attackerTeam) return Plugin_Continue;
 
-    char attackerSteamID[64];
-    GetClientAuthId(attacker, AuthId_Steam2, attackerSteamID, sizeof(attackerSteamID));
+    char attackerSteamID[32];
+    if (!GetClientAuthId(attacker, AuthId_SteamID64, attackerSteamID, sizeof(attackerSteamID))) return Plugin_Continue;
 
     LogMessage("[GG TK_AUTO_BAN] %N killed a teammate (%N)", attacker, victim);
 
