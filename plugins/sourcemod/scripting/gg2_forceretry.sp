@@ -61,9 +61,7 @@ public void OnClientPostAdminCheck(int client)
 
     g_bIsRetrying[client] = false;
     char steamId[32];
-    if (!GetClientAuthId(client, AuthId_Steam2, steamId, sizeof(steamId))) return;
-
-    if (StrContains(steamId, "STEAM_", false) != 0) return;
+    if (!GetClientAuthId(client, AuthId_SteamID64, steamId, sizeof(steamId))) return;
 
     bool hasSmoke;
     if (playerList.GetValue(steamId, hasSmoke))
@@ -104,12 +102,9 @@ public Action Event_PlayerDisconnect_Pre(Handle event, const char[] name, bool d
 
     // Normal disconnect - remove from tracking
     char steamId[32];
-    if (!GetClientAuthId(client, AuthId_Steam2, steamId, sizeof(steamId))) return Plugin_Continue;
+    if (!GetClientAuthId(client, AuthId_SteamID64, steamId, sizeof(steamId))) return Plugin_Continue;
 
-    if (StrContains(steamId, "STEAM_", false) == 0)
-    {
-        playerList.Remove(steamId);
-    }
+    playerList.Remove(steamId);
 
     return Plugin_Continue;
 }
@@ -140,8 +135,6 @@ void HandleQueryError(DBResultSet results, const char[] error, const char[] oper
     LogError("[INS GG ForceRetry] Failed to %s: %s", operationName, error);
 }
 
-// Helper function to execute a player query with automatic escaping
-// First format parameter (%s) will be the escaped SteamID64, additional params come from varargs
 void ExecutePlayerQuery(SQLQueryCallback callback, const char[] operationName, int client, const char[] queryFormat, any...)
 {
     if (g_Database == null)
@@ -150,32 +143,8 @@ void ExecutePlayerQuery(SQLQueryCallback callback, const char[] operationName, i
         return;
     }
 
-    if (!IsClientInGame(client) || IsFakeClient(client))
-        return;
-
-    char steamId[64];
-    if (!GetClientAuthId(client, AuthId_SteamID64, steamId, sizeof(steamId)))
-    {
-        LogError("[INS GG ForceRetry] Failed to get SteamID for %s", operationName);
-        return;
-    }
-
-    char escapedSteamId[128];
-    if (!g_Database.Escape(steamId, escapedSteamId, sizeof(escapedSteamId)))
-    {
-        LogError("[INS GG ForceRetry] Failed to escape SteamID for %s: %s", operationName, steamId);
-        return;
-    }
-
-    // Format the query: first %s is escaped SteamID, rest comes from varargs
     char query[512];
-    char formattedQuery[512];
-
-    // First, format any varargs into a temporary string
-    VFormat(formattedQuery, sizeof(formattedQuery), queryFormat, 5);
-
-    // Then format the escaped SteamID as the first parameter
-    Format(query, sizeof(query), formattedQuery, escapedSteamId);
+    VFormat(query, sizeof(query), queryFormat, 5);
 
     g_Database.Query(callback, query, client);
 }
@@ -183,20 +152,46 @@ void ExecutePlayerQuery(SQLQueryCallback callback, const char[] operationName, i
 // actions to track whether player has smoke particles downloaded, reconnect them if they don't //
 public void db_check_player_has_smoke(int client)
 {
+    if (!IsClientInGame(client) || IsFakeClient(client)) return;
+
+    char steamId[64];
+    if (!GetClientAuthId(client, AuthId_SteamID64, steamId, sizeof(steamId)))
+    {
+        LogError("[INS GG ForceRetry] Failed to get SteamID for %N", client);
+        return;
+    }
+
     ExecutePlayerQuery(OnPlayerSmokeCacheChecked, "check player smoke cache", client,
-                       "SELECT has_smoke FROM players_smoke_cache WHERE steam_id = '%s' LIMIT 1");
+                       "SELECT has_smoke FROM players_smoke_cache WHERE steam_id = %s LIMIT 1",
+                       steamId);
 }
 
 public void db_update_player_has_smoke(int client)
 {
-    ExecutePlayerQuery(OnPlayerSmokeCacheUpdated, "update player smoke cache", client,
-                       "INSERT INTO players_smoke_cache (steam_id, has_smoke) VALUES ('%s', 1) ON CONFLICT (steam_id) DO UPDATE SET has_smoke = 1");
+    ExecutePlayerSmokeQuery(OnPlayerSmokeCacheUpdated, "update player smoke cache", client, true);
 }
 
 public void db_reset_player_has_smoke(int client)
 {
-    ExecutePlayerQuery(OnPlayerSmokeCacheReset, "reset player smoke cache", client,
-                       "INSERT INTO players_smoke_cache (steam_id, has_smoke) VALUES ('%s', 0) ON CONFLICT (steam_id) DO UPDATE SET has_smoke = 0");
+    ExecutePlayerSmokeQuery(OnPlayerSmokeCacheReset, "reset player smoke cache", client, false);
+}
+
+public void ExecutePlayerSmokeQuery(SQLQueryCallback callback, const char[] operationName, int client, bool hasSmoke)
+{
+    if (!IsClientInGame(client) || IsFakeClient(client)) return;
+
+    char steamId[64];
+    if (!GetClientAuthId(client, AuthId_SteamID64, steamId, sizeof(steamId)))
+    {
+        LogError("[INS GG ForceRetry] Failed to get SteamID for %N", client);
+        return;
+    }
+
+    char hasSmokeQueryValue[6] = hasSmoke ? "TRUE" : "FALSE";
+
+    ExecutePlayerQuery(callback, operationName, client,
+                       "INSERT INTO players_smoke_cache (steam_id, has_smoke) VALUES (%s, %s) ON CONFLICT (steam_id) DO UPDATE SET has_smoke = %s, updated_at = CURRENT_TIMESTAMP",
+                       steamId, hasSmokeQueryValue, hasSmokeQueryValue);
 }
 
 public void OnPlayerSmokeCacheUpdated(Database db, DBResultSet results, const char[] error, any client)
@@ -208,7 +203,7 @@ public void OnPlayerSmokeCacheUpdated(Database db, DBResultSet results, const ch
     if (!IsClientInGame(client)) return;
 
     char steamId[32];
-    if (!GetClientAuthId(client, AuthId_Steam2, steamId, sizeof(steamId))) return;
+    if (!GetClientAuthId(client, AuthId_SteamID64, steamId, sizeof(steamId))) return;
 
     playerList.SetValue(steamId, true, true);
 }
@@ -222,7 +217,7 @@ public void OnPlayerSmokeCacheReset(Database db, DBResultSet results, const char
     if (!IsClientInGame(client)) return;
 
     char steamId[32];
-    if (!GetClientAuthId(client, AuthId_Steam2, steamId, sizeof(steamId))) return;
+    if (!GetClientAuthId(client, AuthId_SteamID64, steamId, sizeof(steamId))) return;
 
     playerList.SetValue(steamId, false, true);
 
@@ -254,8 +249,8 @@ public void OnPlayerSmokeCacheChecked(Database db, DBResultSet results, const ch
     // Check the has_smoke value
     if (!results.FetchRow()) return;
 
-    int has_smoke = results.FetchInt(0);
-    if (has_smoke == 0)
+    bool has_smoke = view_as<bool>(results.FetchInt(0));
+    if (!has_smoke)
     {
         CreateTimer(0.2, Timer_ForceRetry, client, TIMER_FLAG_NO_MAPCHANGE);
         return;
@@ -263,7 +258,7 @@ public void OnPlayerSmokeCacheChecked(Database db, DBResultSet results, const ch
 
     // Player has smoke cached - update the map
     char steamId[32];
-    if (!GetClientAuthId(client, AuthId_Steam2, steamId, sizeof(steamId))) return;
+    if (!GetClientAuthId(client, AuthId_SteamID64, steamId, sizeof(steamId))) return;
 
     playerList.SetValue(steamId, true, true);
 }
@@ -286,7 +281,7 @@ public void OnDatabaseConnected(Database db, const char[] error, any data)
 void ReconnectDatabase()
 {
     LogMessage("[INS GG ForceRetry] Attempting to reconnect to database...");
-    g_Database = null;
+    delete g_Database;
     Database.Connect(OnDatabaseReconnected, "insurgency-stats");
 }
 
