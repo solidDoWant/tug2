@@ -151,7 +151,7 @@ bool HandleQueryError(DBResultSet results, const char[] error, const char[] oper
 
 // Execute a database query with automatic retry on connection loss
 // Wraps the query in a DataPack to enable retry on connection failure
-void ExecuteQueryWithRetry(SQLTCallback originalCallback, const char[] query, any originalData = 0, int maxRetries = 2)
+void ExecuteQueryWithRetry(Function originalCallback, const char[] query, any originalData = 0, int maxRetries = 2)
 {
     if (g_Database == null) return;
 
@@ -177,10 +177,10 @@ public void OnQueryCompleteWithRetry(Database db, DBResultSet results, const cha
     pack.Reset();
     char query[16384];
     pack.ReadString(query, sizeof(query));
-    SQLTCallback originalCallback = view_as<SQLTCallback>(pack.ReadFunction());
-    any          originalData     = pack.ReadCell();
-    int          retryCount       = pack.ReadCell();
-    int          maxRetries       = pack.ReadCell();
+    Function originalCallback = pack.ReadFunction();
+    any      originalData     = pack.ReadCell();
+    int      retryCount       = pack.ReadCell();
+    int      maxRetries       = pack.ReadCell();
 
     // Success - forward to original callback
     if (results != null)
@@ -240,10 +240,10 @@ public Action Timer_RetryQuery(Handle timer, DataPack pack)
 
     char query[16384];
     pack.ReadString(query, sizeof(query));
-    SQLTCallback originalCallback = view_as<SQLTCallback>(pack.ReadFunction());
-    any          originalData     = pack.ReadCell();
-    int          retryCount       = pack.ReadCell();
-    int          maxRetries       = pack.ReadCell();
+    Function originalCallback = pack.ReadFunction();
+    any      originalData     = pack.ReadCell();
+    int      retryCount       = pack.ReadCell();
+    int      maxRetries       = pack.ReadCell();
 
     // Database still reconnecting - reschedule retry
     if (g_Database == null)
