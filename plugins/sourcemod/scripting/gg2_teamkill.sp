@@ -20,25 +20,29 @@ public Plugin myinfo =
 
 // TODO maybe this should track class/role as well - see original mstats2 plugin for reference
 
-Database      g_Database = null;
+Database g_Database = null;
 // Ban duration in minutes when auto-ban is triggered (how long to ban the player)
-ConVar        g_cvarBanTime;
-GlobalForward g_TKForgivenForward;
-GlobalForward g_TKAutoBanForward;
+ConVar   g_cvarBanTime;
 // Stores the timestamps (Unix epoch seconds) of the last 3 teamkills for each player.
 // Array contents: [player index][0-2] = timestamp of each TK, with older entries shifting left when full
-int           g_PlayerTKTimestamps[MAXPLAYERS + 1][3];
+int      g_PlayerTKTimestamps[MAXPLAYERS + 1][3];
 // Stores the client index of the attacker who most recently teamkilled each player.
 // Array contents: [victim index] = attacker client index (used for the forgive command)
-int           g_PlayerLastAttacker[MAXPLAYERS + 1];
-int           EMPTY_TK_TIMESTAMPS[3] = { 0, 0, 0 };
+int      g_PlayerLastAttacker[MAXPLAYERS + 1];
+int      EMPTY_TK_TIMESTAMPS[3] = { 0, 0, 0 };
 // Time window in seconds for counting teamkills (e.g., 3 TKs within this period triggers auto-ban)
 // This is different from g_cvarBanTime which controls how long the ban lasts
-int           g_TKTimeWindowSeconds  = 600;    // 600 seconds = 10 minutes
-char          INVALID_STEAM_ID[64]   = "STEAM_ID_STOP_IGNORING_RETVALS";
+int      g_TKTimeWindowSeconds  = 600;    // 600 seconds = 10 minutes
+char     INVALID_STEAM_ID[64]   = "STEAM_ID_STOP_IGNORING_RETVALS";
 
-char          g_AmnestyPlayerSteamIDs[1024][64];
-char          g_OffenderSteamIDs[1024][64];
+// Track connected players' Steam IDs (indexed by client ID)
+char     g_ConnectedSteamIDs[MAXPLAYERS + 1][64];
+// Amnesty status for connected players (indexed by client ID) - non-empty if player has amnesty
+char     g_AmnestyPlayerSteamIDs[MAXPLAYERS + 1][64];
+// Offender status for connected players (indexed by client ID) - non-empty if player is offender
+char     g_OffenderSteamIDs[MAXPLAYERS + 1][64];
+// Track whether we've already notified about an offender joining (to avoid duplicate messages)
+bool     g_OffenderNotified[MAXPLAYERS + 1];
 
 public void OnPluginStart()
 {
@@ -55,8 +59,6 @@ public void OnPluginStart()
     RegConsoleCmd("affetmek", Cmd_Forgive, "Forgive in turk");
 
     Database.Connect(OnDatabaseConnected, "insurgency-stats");
-    g_TKForgivenForward = new GlobalForward("TK_Forgiven", ET_Event, Param_Cell);
-    g_TKAutoBanForward  = new GlobalForward("TK_AutoBan", ET_Event, Param_Cell);
 
     LoadTranslations("tug.phrases");
     AutoExecConfig(true, "gg2_teamkill");
@@ -131,36 +133,53 @@ bool HandleQueryError(DBResultSet results, const char[] error, const char[] oper
     return false;
 }
 
+// Build a comma-separated list of connected player Steam IDs for SQL IN clause
+// Returns the number of connected players added to the buffer
+int BuildConnectedSteamIDList(char[] buffer, int maxlen)
+{
+    int count  = 0;
+    int offset = 0;
+
+    for (int i = 1; i <= MaxClients; i++)
+    {
+        if (g_ConnectedSteamIDs[i][0] == '\0') continue;
+
+        if (count > 0)
+        {
+            offset += FormatEx(buffer[offset], maxlen - offset, ",");
+        }
+
+        offset += FormatEx(buffer[offset], maxlen - offset, "%s", g_ConnectedSteamIDs[i]);
+        count++;
+    }
+
+    return count;
+}
+
 public void OnClientAuthorized(int client)
 {
+    if (IsFakeClient(client)) return;
+
     char steam_id[64];
     if (!GetClientAuthId(client, AuthId_SteamID64, steam_id, sizeof(steam_id))) return;
 
-    if (StrEqual(steam_id, "\0") || (StrEqual(steam_id, INVALID_STEAM_ID))) return;
+    if (StrEqual(steam_id, "\0") || StrEqual(steam_id, INVALID_STEAM_ID)) return;
 
-    if (IsFakeClient(client) || g_Database == null) return;
+    // Track this player's Steam ID if it is valid
+    strcopy(g_ConnectedSteamIDs[client], sizeof(g_ConnectedSteamIDs[]), steam_id);
 
-    if (!IsKnownTKOffender(steam_id)) return;
+    // Reset notification flag for this client slot
+    g_OffenderNotified[client]         = false;
 
-    CPrintToChatAll("{fullred}[KNOWN TK OFFENDER]{common} %N joined, watch out for this dickhead", client);
-}
+    // Clear any stale amnesty/offender data for this slot
+    g_AmnestyPlayerSteamIDs[client][0] = '\0';
+    g_OffenderSteamIDs[client][0]      = '\0';
 
-public Action SendForwardTKForgiven(int client)
-{    // tug stats forward
-    Action result;
-    Call_StartForward(g_TKForgivenForward);
-    Call_PushCell(client);
-    Call_Finish(result);
-    return result;
-}
+    if (g_Database == null) return;
 
-public Action SendForwardTKAutoBanFired(int client)
-{    // tug stats forward
-    Action result;
-    Call_StartForward(g_TKAutoBanForward);
-    Call_PushCell(client);
-    Call_Finish(result);
-    return result;
+    // Query for amnesty and offender status for all connected players (including this new one)
+    QueryAmnestyPlayers();
+    QueryOffenderPlayers();
 }
 
 public Action Timer_RefreshAmnestyList(Handle timer)
@@ -187,11 +206,8 @@ public void UpdateTKForgivenInDB(int attacker, int victim)
 {
     if (g_Database == null) return;
 
-    char attacker_steamid64[64];
-    if (!GetClientAuthId(attacker, AuthId_SteamID64, attacker_steamid64, sizeof(attacker_steamid64))) return;
-
-    char victim_steamid64[64];
-    if (!GetClientAuthId(victim, AuthId_SteamID64, victim_steamid64, sizeof(victim_steamid64))) return;
+    // Use cached Steam IDs - if not available, the player disconnected
+    if (g_ConnectedSteamIDs[attacker][0] == '\0' || g_ConnectedSteamIDs[victim][0] == '\0') return;
 
     char query[1024];
     g_Database.Format(query, sizeof(query),
@@ -202,7 +218,7 @@ public void UpdateTKForgivenInDB(int attacker, int victim)
                           WHERE victim_steam_id = %s AND attacker_steam_id = %s \
                           ORDER BY id DESC LIMIT 1 \
                       )",
-                      victim_steamid64, attacker_steamid64);
+                      g_ConnectedSteamIDs[victim], g_ConnectedSteamIDs[attacker]);
 
     g_Database.Query(OnTKForgivenUpdated, query);
 }
@@ -220,15 +236,9 @@ public bool PlayerHasAmnesty(int attacker_client)
         return true;
     }
 
-    char attacker_steamid64[64];
-    if (!GetClientAuthId(attacker_client, AuthId_SteamID64, attacker_steamid64, sizeof(attacker_steamid64))) return false;
-
-    for (int i = 0; i < sizeof(g_AmnestyPlayerSteamIDs); i++)
+    // Check if this client has amnesty status cached (directly by client index)
+    if (g_AmnestyPlayerSteamIDs[attacker_client][0] != '\0')
     {
-        if (StrEqual("", g_AmnestyPlayerSteamIDs[i])) break;
-
-        if (!StrEqual(g_AmnestyPlayerSteamIDs[i], attacker_steamid64)) continue;
-
         LogMessage("[GG2 TEAMKILL] AMNESTY granted to %N", attacker_client);
         return true;
     }
@@ -237,29 +247,21 @@ public bool PlayerHasAmnesty(int attacker_client)
     return false;
 }
 
-public bool IsKnownTKOffender(char[] steam_id)
-{
-    for (int i = 0; i < sizeof(g_OffenderSteamIDs); i++)
-    {
-        if (StrEqual("", g_OffenderSteamIDs[i])) break;
-
-        if (!StrEqual(g_OffenderSteamIDs[i], steam_id)) continue;
-        LogMessage("[GG2 TEAMKILL] KNOWN OFFENDER JOINED NOTICE %s", steam_id);
-        return true;
-    }
-
-    LogMessage("[GG2 TEAMKILL] Player not a KNOWN TK OFFENDER");
-    return false;
-}
-
 public void QueryAmnestyPlayers()
 {
     if (g_Database == null) return;
 
-    char query[512];
+    // Build list of connected player Steam IDs
+    char steamIdList[2048];
+    int  count = BuildConnectedSteamIDList(steamIdList, sizeof(steamIdList));
+
+    // No players connected, nothing to query
+    if (count == 0) return;
+
+    char query[2560];
     Format(query, sizeof(query),
-           "SELECT steam_id FROM player_tks WHERE tk_amnesty = TRUE ORDER BY steam_id ASC LIMIT %d",
-           sizeof(g_AmnestyPlayerSteamIDs));
+           "SELECT steam_id FROM player_tks WHERE tk_amnesty = TRUE AND steam_id IN (%s)",
+           steamIdList);
 
     g_Database.Query(OnAmnestyPlayersLoaded, query);
 }
@@ -268,31 +270,33 @@ public void OnAmnestyPlayersLoaded(Database db, DBResultSet results, const char[
 {
     if (!HandleQueryError(results, error, "query amnesty players")) return;
 
-    // Clear the array before repopulating to prevent stale entries
-    for (int i = 0; i < sizeof(g_AmnestyPlayerSteamIDs); i++)
+    // Clear all amnesty data before repopulating
+    for (int i = 1; i <= MaxClients; i++)
     {
         g_AmnestyPlayerSteamIDs[i][0] = '\0';
     }
 
     int rows = results.RowCount;
-    LogMessage("[GG2 TEAMKILL] Retrieved %i TK Amnesty players", rows);
+    LogMessage("[GG2 TEAMKILL] Retrieved %i TK Amnesty players for connected clients", rows);
 
     if (rows == 0) return;
 
-    int  offset = 0;
     char steamid_64[64];
     while (results.FetchRow())
     {
-        // Bounds check to prevent buffer overflow
-        if (offset >= sizeof(g_AmnestyPlayerSteamIDs))
+        results.FetchString(0, steamid_64, sizeof(steamid_64));
+
+        // Find which connected client this Steam ID belongs to
+        for (int client = 1; client <= MaxClients; client++)
         {
-            LogError("[GG2 TEAMKILL] WARNING: Amnesty list exceeded maximum capacity of %d entries. Increase array size!", sizeof(g_AmnestyPlayerSteamIDs));
+            if (g_ConnectedSteamIDs[client][0] == '\0') continue;
+
+            if (!StrEqual(g_ConnectedSteamIDs[client], steamid_64)) continue;
+
+            // Store amnesty status for this client
+            strcopy(g_AmnestyPlayerSteamIDs[client], sizeof(g_AmnestyPlayerSteamIDs[]), steamid_64);
             break;
         }
-
-        results.FetchString(0, steamid_64, sizeof(steamid_64));
-        g_AmnestyPlayerSteamIDs[offset] = steamid_64;
-        offset++;
     }
 }
 
@@ -300,13 +304,20 @@ public void QueryOffenderPlayers()
 {
     if (g_Database == null) return;
 
-    char query[512];
+    // Build list of connected player Steam IDs
+    char steamIdList[2048];
+    int  count = BuildConnectedSteamIDList(steamIdList, sizeof(steamIdList));
+
+    // No players connected, nothing to query
+    if (count == 0) return;
+
     int  now         = GetTime();
     int  time_cutoff = (now - 7776000);    // 90 days
 
+    char query[2560];
     Format(query, sizeof(query),
-           "SELECT steam_id FROM player_tks WHERE kills >= 500 AND tk_given > 0 AND (kills::NUMERIC / tk_given) < 100 AND last_seen > %i ORDER BY steam_id ASC LIMIT %d",
-           time_cutoff, sizeof(g_OffenderSteamIDs));
+           "SELECT steam_id FROM player_tks WHERE kills >= 500 AND tk_given > 0 AND (kills::NUMERIC / tk_given) < 100 AND last_seen > %i AND steam_id IN (%s)",
+           time_cutoff, steamIdList);
 
     g_Database.Query(OnOffenderPlayersLoaded, query);
 }
@@ -315,31 +326,40 @@ public void OnOffenderPlayersLoaded(Database db, DBResultSet results, const char
 {
     if (!HandleQueryError(results, error, "query offender players")) return;
 
-    // Clear the array before repopulating to prevent stale entries
-    for (int i = 0; i < sizeof(g_OffenderSteamIDs); i++)
+    // Clear all offender data before repopulating
+    for (int i = 1; i <= MaxClients; i++)
     {
         g_OffenderSteamIDs[i][0] = '\0';
     }
 
     int rows = results.RowCount;
-    LogMessage("[GG2 TEAMKILL] Retrieved %i TK Offenders", rows);
+    LogMessage("[GG2 TEAMKILL] Retrieved %i TK Offenders for connected clients", rows);
 
     if (rows == 0) return;
 
-    int  offset = 0;
     char steamid_64[64];
     while (results.FetchRow())
     {
-        // Bounds check to prevent buffer overflow
-        if (offset >= sizeof(g_OffenderSteamIDs))
+        results.FetchString(0, steamid_64, sizeof(steamid_64));
+
+        // Find which connected client this Steam ID belongs to
+        for (int client = 1; client <= MaxClients; client++)
         {
-            LogError("[GG2 TEAMKILL] WARNING: Offender list exceeded maximum capacity of %d entries. Increase array size!", sizeof(g_OffenderSteamIDs));
+            if (g_ConnectedSteamIDs[client][0] == '\0') continue;
+
+            if (!StrEqual(g_ConnectedSteamIDs[client], steamid_64)) continue;
+
+            // Store offender status for this client
+            strcopy(g_OffenderSteamIDs[client], sizeof(g_OffenderSteamIDs[]), steamid_64);
+
+            // Only notify once per client session
+            if (!g_OffenderNotified[client] && IsClientInGame(client))
+            {
+                g_OffenderNotified[client] = true;
+                CPrintToChatAll("{fullred}[KNOWN TK OFFENDER]{common} %N joined, watch out for this dickhead", client);
+            }
             break;
         }
-
-        results.FetchString(0, steamid_64, sizeof(steamid_64));
-        g_OffenderSteamIDs[offset] = steamid_64;
-        offset++;
     }
 }
 
@@ -362,8 +382,8 @@ public void OnMapStart()
     QueryOffenderPlayers();
 
     // Set timers to refresh lists every 60 seconds
-    CreateTimer(60.0, Timer_RefreshAmnestyList, _, TIMER_REPEAT);
-    CreateTimer(60.0, Timer_RefreshOffenderList, _, TIMER_REPEAT);
+    CreateTimer(60.0, Timer_RefreshAmnestyList, _, TIMER_REPEAT | TIMER_FLAG_NO_MAPCHANGE);
+    CreateTimer(60.0, Timer_RefreshOffenderList, _, TIMER_REPEAT | TIMER_FLAG_NO_MAPCHANGE);
 }
 
 public void OnClientDisconnect(int client)
@@ -371,6 +391,12 @@ public void OnClientDisconnect(int client)
     if (IsFakeClient(client)) return;
 
     ResetPlayerTKData(client);
+
+    // Clear tracking data for this client slot
+    g_ConnectedSteamIDs[client][0]     = '\0';
+    g_AmnestyPlayerSteamIDs[client][0] = '\0';
+    g_OffenderSteamIDs[client][0]      = '\0';
+    g_OffenderNotified[client]         = false;
 }
 
 public Action Cmd_Forgive(int client, int args)
@@ -394,7 +420,6 @@ public Action Cmd_Forgive(int client, int args)
 
         g_PlayerTKTimestamps[attacker][i] = 0;
         forgiven                          = true;
-        SendForwardTKForgiven(client);
         UpdateTKForgivenInDB(attacker, client);
         break;
     }
@@ -501,18 +526,16 @@ void RecordTKToDatabase(int attacker, int victim, const char[] weapon)
 {
     if (g_Database == null) return;
 
-    // Get steam IDs for both players
-    char attacker_steamid[64];
-    if (!GetClientAuthId(attacker, AuthId_SteamID64, attacker_steamid, sizeof(attacker_steamid)))
+    // Use cached Steam IDs - if not available, the player disconnected
+    if (g_ConnectedSteamIDs[attacker][0] == '\0')
     {
-        LogError("[GG2 TEAMKILL] Cannot record TK: failed to get attacker steam_id for %N", attacker);
+        LogError("[GG2 TEAMKILL] Cannot record TK: no cached steam_id for attacker %N", attacker);
         return;
     }
 
-    char victim_steamid[64];
-    if (!GetClientAuthId(victim, AuthId_SteamID64, victim_steamid, sizeof(victim_steamid)))
+    if (g_ConnectedSteamIDs[victim][0] == '\0')
     {
-        LogError("[GG2 TEAMKILL] Cannot record TK: failed to get victim steam_id for %N", victim);
+        LogError("[GG2 TEAMKILL] Cannot record TK: no cached steam_id for victim %N", victim);
         return;
     }
 
@@ -524,7 +547,7 @@ void RecordTKToDatabase(int attacker, int victim, const char[] weapon)
     g_Database.Format(upsertBothPlayersQuery, sizeof(upsertBothPlayersQuery),
                       "INSERT INTO player_tks (steam_id, tk_given, tk_taken) VALUES (%s, 1, 0), (%s, 0, 1) \
            ON CONFLICT (steam_id) DO UPDATE SET tk_given = player_tks.tk_given + EXCLUDED.tk_given, tk_taken = player_tks.tk_taken + EXCLUDED.tk_taken, updated_at = CURRENT_TIMESTAMP",
-                      attacker_steamid, victim_steamid);
+                      g_ConnectedSteamIDs[attacker], g_ConnectedSteamIDs[victim]);
     txn.AddQuery(upsertBothPlayersQuery);
 
     // Insert TK record
@@ -532,7 +555,7 @@ void RecordTKToDatabase(int attacker, int victim, const char[] weapon)
     g_Database.Format(insertQuery, sizeof(insertQuery),
                       "INSERT INTO player_tk_logs (attacker_steam_id, victim_steam_id, weapon, forgiven) \
                       VALUES (%s, %s, '%s', FALSE)",
-                      attacker_steamid, victim_steamid, weapon);
+                      g_ConnectedSteamIDs[attacker], g_ConnectedSteamIDs[victim], weapon);
     txn.AddQuery(insertQuery);
 
     // Execute transaction
@@ -603,9 +626,6 @@ public Action Event_PlayerDeath(Event event, const char[] name, bool dontBroadca
     // Ignore if not a teamkill
     if (victimTeam != attackerTeam) return Plugin_Continue;
 
-    char attackerSteamID[32];
-    if (!GetClientAuthId(attacker, AuthId_SteamID64, attackerSteamID, sizeof(attackerSteamID))) return Plugin_Continue;
-
     LogMessage("[GG TK_AUTO_BAN] %N killed a teammate (%N)", attacker, victim);
 
     // Record the teamkill to database
@@ -634,19 +654,16 @@ public Action Event_PlayerDeath(Event event, const char[] name, bool dontBroadca
     if (!ShouldTriggerAutoBan(attacker))
     {
         int tk_count = CountRecentTKs(attacker);
-        if (tk_count == 1)
-        {
-            ForcePlayerSuicide(attacker);
-        }
+        // Disabled for now
+        // if (tk_count == 1)
+        // {
+        //     ForcePlayerSuicide(attacker);
+        // }
 
-        // Format(chatMessage, sizeof(chatMessage),"\x07FF0000[TeamKill]\x0700FA9A BE MORE CAREFUL, TK COUNT: %i/3", tk_count);
         CPrintToChat(attacker, "%T", "teamkill_be_careful", attacker, tk_count + 1);
-        // PrintToChat(victim, "\x07FF0000[TeamKill]\x07F8F8FF Type\x0700FA9A /forgive\x07F8F8FF in your chat to forgive your TKer. Otherwise, they may be banned.");
         CPrintToChat(victim, "%T", "teamkill_how_to_forgive", victim);
         return Plugin_Continue;
     }
-
-    SendForwardTKAutoBanFired(attacker);
 
     LogMessage("[GG TK_AUTO_BAN] auto banning %N // %i / %i / %i // %d ", attacker, g_PlayerTKTimestamps[attacker][0], g_PlayerTKTimestamps[attacker][1], g_PlayerTKTimestamps[attacker][2], g_cvarBanTime.IntValue);
 
@@ -659,7 +676,6 @@ public Action Event_PlayerDeath(Event event, const char[] name, bool dontBroadca
 
     char attacker_name[64];
     Format(attacker_name, sizeof(attacker_name), "%N", attacker);
-    // Format(chatMessage, sizeof(chatMessage), "\x07FF0000[TeamKill]\x0700FA9A %N WAS BANNED 5min FOR TKs", attacker);
     CPrintToChatAll("%t", "teamkill_player_banned", attacker_name);
 
     ResetPlayerTKData(attacker);
