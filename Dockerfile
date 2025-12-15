@@ -514,7 +514,6 @@ FROM sourcemod-plugins-base AS sourcemod-plugins-everythingelse
 # Build the "everything else" plugins
 COPY plugins/sourcemod/gamedata/ /insurgency/addons/sourcemod/gamedata/
 RUN --mount=type=bind,source=./plugins/sourcemod,target=/plugin-source \
-    /sourcemod/addons/sourcemod/scripting/spcomp --include=/plugin-source/scripting/include  /plugin-source/scripting/gg2_insurgency.sp -o /insurgency/addons/sourcemod/plugins/gg2_insurgency.smx && \
     /sourcemod/addons/sourcemod/scripting/spcomp --include=/plugin-source/scripting/include  /plugin-source/scripting/bm2_respawn.sp -o /insurgency/addons/sourcemod/plugins/bm2_respawn.smx && \
     mkdir -p /insurgency/cfg && \
     touch /insurgency/cfg/plugin.respawn.cfg && \
@@ -627,7 +626,7 @@ COPY --from=sourcemod-plugins-firesupport --chown=0:0 /insurgency /opt/insurgenc
 COPY --from=sourcemod-plugins-databasemigrator --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
 COPY --from=sourcemod-plugins-loadoutsaver --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
 COPY --from=sourcemod-plugins-counterattack-countdown --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
-COPY --from=sourcemod-plugins-gg2-restrictedarea --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
+COPY --from=sourcemod-plugins-restrictedarea --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
 COPY --from=sourcemod-plugins-bot-flashlights --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
 COPY --from=sourcemod-plugins-bot-names --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
 COPY --from=sourcemod-plugins-teamflash --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
