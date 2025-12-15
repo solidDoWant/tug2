@@ -137,7 +137,7 @@ void CheckActivePunishments(int client, const char[] steamid, const char[] ip)
 {
     char query[512];
     g_Database.Format(query, sizeof(query),
-                      "SELECT punishment_type, expires_at FROM punishments WHERE is_active = TRUE AND (target_steamid = '%s' OR target_ip = '%s') AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP)",
+                      "SELECT punishment_type, expires_at FROM punishments WHERE is_active = TRUE AND (target_steam_id = %s OR target_ip = '%s') AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP)",
                       steamid, ip);
 
     DataPack pack = new DataPack();
@@ -225,15 +225,12 @@ public void OnActivePunishmentsChecked(Database db, DBResultSet results, const c
     // Log reapplied punishments
     if (gagged || muted)
     {
-        char name[MAX_NAME_LENGTH];
-        GetClientName(client, name, sizeof(name));
-
         if (gagged && muted)
-            LogMessage("Reapplied silence to %s (%s)", name, steamid);
+            LogMessage("Reapplied silence to %N (%s)", client, steamid);
         else if (gagged)
-            LogMessage("Reapplied gag to %s (%s)", name, steamid);
+            LogMessage("Reapplied gag to %N (%s)", client, steamid);
         else if (muted)
-            LogMessage("Reapplied mute to %s (%s)", name, steamid);
+            LogMessage("Reapplied mute to %N (%s)", client, steamid);
     }
 
     delete pack;
@@ -374,8 +371,17 @@ public Action Command_BanIP(int client, int args)
             return Plugin_Handled;
         }
 
-        GetClientIP(target, ip, sizeof(ip));
-        GetClientAuthId(target, AuthId_Steam2, steamid, sizeof(steamid));
+        if (!GetClientIP(target, ip, sizeof(ip)))
+        {
+            ReplyToCommand(client, "[SM] Could not retrieve IP address of target");
+            return Plugin_Handled;
+        }
+
+        if (!GetClientAuthId(target, AuthId_SteamID64, steamid, sizeof(steamid)))
+        {
+            ReplyToCommand(client, "[SM] Could not retrieve SteamID of target");
+            return Plugin_Handled;
+        }
 
         // Kick the player
         KickClient(target, "You have been IP banned from this server");
@@ -442,35 +448,35 @@ public Action Command_Silence(int client, int args)
     return HandleCommPunishment(client, args, "silence", "silenced");
 }
 
-Action HandleCommPunishment(int client, int args, const char[] punishmentType, const char[] actionName)
+Action HandleCommPunishment(int requesterClient, int args, const char[] punishmentType, const char[] actionName)
 {
     if (args < 1)
     {
-        ReplyToCommand(client, "[SM] Usage: sm_%s <target>", punishmentType);
+        ReplyToCommand(requesterClient, "[SM] Usage: sm_%s <target>", punishmentType);
         return Plugin_Handled;
     }
 
     char targetArg[128];
     GetCmdArg(1, targetArg, sizeof(targetArg));
 
-    int target = FindTargetByString(targetArg);
+    int targetClient = FindTargetByString(targetArg);
 
-    if (target == -1)
+    if (targetClient == -1)
     {
-        ReplyToCommand(client, "[SM] Target not found");
+        ReplyToCommand(requesterClient, "[SM] Target not found");
         return Plugin_Handled;
     }
 
-    if (IsFakeClient(target))
+    if (IsFakeClient(targetClient))
     {
-        ReplyToCommand(client, "[SM] Cannot target bots");
+        ReplyToCommand(requesterClient, "[SM] Cannot target bots");
         return Plugin_Handled;
     }
 
     // Check immunity
-    if (client != 0 && !CanUserTarget(client, target))
+    if (requesterClient != 0 && !CanUserTarget(requesterClient, targetClient))
     {
-        ReplyToCommand(client, "[SM] You cannot target this player");
+        ReplyToCommand(requesterClient, "[SM] You cannot target this player");
         return Plugin_Handled;
     }
 
@@ -479,34 +485,37 @@ Action HandleCommPunishment(int client, int args, const char[] punishmentType, c
 
     if (StrEqual(punishmentType, "gag"))
     {
-        success = BaseComm_SetClientGag(target, true);
+        success = BaseComm_SetClientGag(targetClient, true);
     }
     else if (StrEqual(punishmentType, "mute"))
     {
-        success = BaseComm_SetClientMute(target, true);
+        success = BaseComm_SetClientMute(targetClient, true);
     }
     else if (StrEqual(punishmentType, "silence"))
     {
-        BaseComm_SetClientGag(target, true);
-        BaseComm_SetClientMute(target, true);
+        BaseComm_SetClientGag(targetClient, true);
+        BaseComm_SetClientMute(targetClient, true);
         success = true;
     }
 
     if (!success)
     {
-        ReplyToCommand(client, "[SM] Failed to apply punishment");
+        ReplyToCommand(requesterClient, "[SM] Failed to apply punishment");
         return Plugin_Handled;
     }
 
-    // Get player info
-    char targetName[MAX_NAME_LENGTH], targetSteamID[32];
-    GetClientName(target, targetName, sizeof(targetName));
-    GetClientAuthId(target, AuthId_Steam2, targetSteamID, sizeof(targetSteamID));
-
     // Add to database (permanent communication restrictions)
-    AddCommPunishmentToDatabase(client, targetSteamID, targetName, punishmentType);
+    char targetSteamID[32];
+    if (!GetClientAuthId(targetClient, AuthId_SteamID64, targetSteamID, sizeof(targetSteamID)))
+    {
+        ReplyToCommand(requesterClient, "[SM] Could not retrieve SteamID of target");
+        return Plugin_Handled;
+    }
 
-    ReplyToCommand(client, "[SM] %s has been %s", targetName, actionName);
+    AddCommPunishmentToDatabase(requesterClient, targetSteamID, punishmentType);
+
+    // Log action
+    ReplyToCommand(requesterClient, "[SM] %N has been %s", targetClient, actionName);
 
     return Plugin_Handled;
 }
@@ -529,55 +538,53 @@ public Action Command_Unsilence(int client, int args)
     return HandleCommRemoval(client, args, "silence", "unsilenced");
 }
 
-Action HandleCommRemoval(int client, int args, const char[] punishmentType, const char[] actionName)
+Action HandleCommRemoval(int requesterClient, int args, const char[] punishmentType, const char[] actionName)
 {
     if (args < 1)
     {
-        ReplyToCommand(client, "[SM] Usage: sm_un%s <target>", punishmentType);
+        ReplyToCommand(requesterClient, "[SM] Usage: sm_un%s <target>", punishmentType);
         return Plugin_Handled;
     }
 
     char targetArg[128];
     GetCmdArg(1, targetArg, sizeof(targetArg));
 
-    int target = FindTargetByString(targetArg);
+    int targetClient = FindTargetByString(targetArg);
 
-    if (target == -1)
+    if (targetClient == -1)
     {
-        ReplyToCommand(client, "[SM] Target not found");
+        ReplyToCommand(requesterClient, "[SM] Target not found");
         return Plugin_Handled;
     }
 
-    if (IsFakeClient(target))
+    if (IsFakeClient(targetClient))
     {
-        ReplyToCommand(client, "[SM] Cannot target bots");
+        ReplyToCommand(requesterClient, "[SM] Cannot target bots");
         return Plugin_Handled;
     }
 
     // Remove the punishment
     if (StrEqual(punishmentType, "gag"))
     {
-        BaseComm_SetClientGag(target, false);
+        BaseComm_SetClientGag(targetClient, false);
     }
     else if (StrEqual(punishmentType, "mute"))
     {
-        BaseComm_SetClientMute(target, false);
+        BaseComm_SetClientMute(targetClient, false);
     }
     else if (StrEqual(punishmentType, "silence"))
     {
-        BaseComm_SetClientGag(target, false);
-        BaseComm_SetClientMute(target, false);
+        BaseComm_SetClientGag(targetClient, false);
+        BaseComm_SetClientMute(targetClient, false);
     }
 
-    // Get player info
-    char targetName[MAX_NAME_LENGTH], targetSteamID[32];
-    GetClientName(target, targetName, sizeof(targetName));
-    GetClientAuthId(target, AuthId_Steam2, targetSteamID, sizeof(targetSteamID));
-
     // Remove from database
+    char targetSteamID[32];
+    GetClientAuthId(targetClient, AuthId_SteamID64, targetSteamID, sizeof(targetSteamID));
+
     RemoveCommPunishmentFromDatabase(targetSteamID, punishmentType);
 
-    ReplyToCommand(client, "[SM] %s has been %s", targetName, actionName);
+    ReplyToCommand(requesterClient, "[SM] %N has been %s", targetClient, actionName);
 
     return Plugin_Handled;
 }
@@ -586,52 +593,43 @@ Action HandleCommRemoval(int client, int args, const char[] punishmentType, cons
 // DATABASE OPERATIONS
 // ============================================================
 
-void AddBanToDatabase(int admin, const char[] steamid, const char[] ip, const char[] reason, int duration, const char[] punishmentType)
+void AddBanToDatabase(int requesterClient, const char[] targetSteamID, const char[] targetIP, const char[] reason, int duration, const char[] punishmentType)
 {
     if (g_Database == null) return;
 
-    char adminSteamID[32]           = "CONSOLE";
-    char adminName[MAX_NAME_LENGTH] = "Console";
+    char adminSteamID[32];
+    bool hasAdmin = (requesterClient != 0);
+    bool hasIP    = (strlen(targetIP) > 0);
 
-    if (admin != 0)
+    if (hasAdmin)
     {
-        GetClientAuthId(admin, AuthId_Steam2, adminSteamID, sizeof(adminSteamID));
-        GetClientName(admin, adminName, sizeof(adminName));
+        GetClientAuthId(requesterClient, AuthId_SteamID64, adminSteamID, sizeof(adminSteamID));
     }
 
-    char query[1024];
-    if (duration == 0)
-    {
-        // Permanent ban
-        if (strlen(ip) > 0)
-        {
-            g_Database.Format(query, sizeof(query),
-                              "INSERT INTO punishments (punishment_type, target_steamid, target_ip, admin_steamid, admin_name, reason, expires_at) VALUES ('%s', '%s', '%s', '%s', '%s', '%s', NULL)",
-                              punishmentType, steamid, ip, adminSteamID, adminName, reason);
-        }
-        else
-        {
-            g_Database.Format(query, sizeof(query),
-                              "INSERT INTO punishments (punishment_type, target_steamid, admin_steamid, admin_name, reason, expires_at) VALUES ('%s', '%s', '%s', '%s', '%s', NULL)",
-                              punishmentType, steamid, adminSteamID, adminName, reason);
-        }
-    }
+    // Build dynamic parts of the query
+    char adminValue[32];
+    if (hasAdmin)
+        g_Database.Format(adminValue, sizeof(adminValue), "'%s'", adminSteamID);
     else
-    {
-        // Timed ban
-        if (strlen(ip) > 0)
-        {
-            g_Database.Format(query, sizeof(query),
-                              "INSERT INTO punishments (punishment_type, target_steamid, target_ip, admin_steamid, admin_name, reason, expires_at) VALUES ('%s', '%s', '%s', '%s', '%s', '%s', CURRENT_TIMESTAMP + INTERVAL '%d seconds')",
-                              punishmentType, steamid, ip, adminSteamID, adminName, reason, duration);
-        }
-        else
-        {
-            g_Database.Format(query, sizeof(query),
-                              "INSERT INTO punishments (punishment_type, target_steamid, admin_steamid, admin_name, reason, expires_at) VALUES ('%s', '%s', '%s', '%s', '%s', CURRENT_TIMESTAMP + INTERVAL '%d seconds')",
-                              punishmentType, steamid, adminSteamID, adminName, reason, duration);
-        }
-    }
+        strcopy(adminValue, sizeof(adminValue), "NULL");
+
+    char ipValue[128];
+    if (hasIP)
+        g_Database.Format(ipValue, sizeof(ipValue), "'%s'", targetIP);
+    else
+        strcopy(ipValue, sizeof(ipValue), "NULL");
+
+    char expiresValue[128];
+    if (duration == 0)
+        strcopy(expiresValue, sizeof(expiresValue), "NULL");
+    else
+        Format(expiresValue, sizeof(expiresValue), "CURRENT_TIMESTAMP + INTERVAL '%d seconds'", duration);
+
+    // Build query
+    char query[1024];
+    g_Database.Format(query, sizeof(query),
+                      "INSERT INTO punishments (punishment_type, target_steam_id, target_ip, admin_steam_id, reason, expires_at) VALUES ('%s', %s, %!s, %!s, '%s', %!s)",
+                      punishmentType, targetSteamID, ipValue, adminValue, reason, expiresValue);
 
     g_Database.Query(OnBanAdded, query);
 }
@@ -642,24 +640,23 @@ public void OnBanAdded(Database db, DBResultSet results, const char[] error, any
         LogError("Failed to add ban to database: %s", error);
 }
 
-void RemoveBanFromDatabase(const char[] target, bool isIP)
+void RemoveBanFromDatabase(const char[] target, bool isTargetIP)
 {
     if (g_Database == null)
         return;
 
-    char query[512];
-    if (isIP)
-    {
-        g_Database.Format(query, sizeof(query),
-                          "UPDATE punishments SET is_active = FALSE WHERE target_ip = '%s' AND punishment_type = 'ban_ip'",
-                          target);
-    }
+    // Build WHERE clause with proper escaping
+    char whereClause[256];
+    if (isTargetIP)
+        g_Database.Format(whereClause, sizeof(whereClause), "target_ip = '%s'", target);
     else
-    {
-        g_Database.Format(query, sizeof(query),
-                          "UPDATE punishments SET is_active = FALSE WHERE target_steamid = '%s' AND punishment_type = 'ban_steamid'",
-                          target);
-    }
+        g_Database.Format(whereClause, sizeof(whereClause), "target_steam_id = %s", target);
+
+    // Build query
+    char query[512];
+    g_Database.Format(query, sizeof(query),
+                      "UPDATE punishments SET is_active = FALSE WHERE %!s AND punishment_type = '%s'",
+                      whereClause, isTargetIP ? "ban_ip" : "ban_steamid");
 
     g_Database.Query(OnBanRemoved, query);
 }
@@ -670,25 +667,31 @@ public void OnBanRemoved(Database db, DBResultSet results, const char[] error, a
         LogError("Failed to remove ban from database: %s", error);
 }
 
-void AddCommPunishmentToDatabase(int admin, const char[] steamid, const char[] targetName, const char[] punishmentType)
+void AddCommPunishmentToDatabase(int admin, const char[] targetSteamID, const char[] punishmentType)
 {
     if (g_Database == null)
         return;
 
-    char adminSteamID[32]           = "CONSOLE";
-    char adminName[MAX_NAME_LENGTH] = "Console";
+    char adminSteamID[32];
+    bool hasAdmin = (admin != 0);
 
-    if (admin != 0)
+    if (hasAdmin)
     {
-        GetClientAuthId(admin, AuthId_Steam2, adminSteamID, sizeof(adminSteamID));
-        GetClientName(admin, adminName, sizeof(adminName));
+        GetClientAuthId(admin, AuthId_SteamID64, adminSteamID, sizeof(adminSteamID));
     }
+
+    // Build dynamic parts of the query
+    char adminValue[32];
+    if (hasAdmin)
+        g_Database.Format(adminValue, sizeof(adminValue), "'%s'", adminSteamID);
+    else
+        strcopy(adminValue, sizeof(adminValue), "NULL");
 
     // Permanent communication punishment (no expiration)
     char query[1024];
     g_Database.Format(query, sizeof(query),
-                      "INSERT INTO punishments (punishment_type, target_steamid, target_name, admin_steamid, admin_name, expires_at) VALUES ('%s', '%s', '%s', '%s', '%s', NULL)",
-                      punishmentType, steamid, targetName, adminSteamID, adminName);
+                      "INSERT INTO punishments (punishment_type, target_steam_id, admin_steam_id, expires_at) VALUES ('%s', %s, %!s, NULL)",
+                      punishmentType, targetSteamID, adminValue);
 
     g_Database.Query(OnCommPunishmentAdded, query);
 }
@@ -699,15 +702,15 @@ public void OnCommPunishmentAdded(Database db, DBResultSet results, const char[]
         LogError("Failed to add communication punishment to database: %s", error);
 }
 
-void RemoveCommPunishmentFromDatabase(const char[] steamid, const char[] punishmentType)
+void RemoveCommPunishmentFromDatabase(const char[] targetSteamID, const char[] punishmentType)
 {
     if (g_Database == null)
         return;
 
     char query[512];
     g_Database.Format(query, sizeof(query),
-                      "UPDATE punishments SET is_active = FALSE WHERE target_steamid = '%s' AND punishment_type = '%s'",
-                      steamid, punishmentType);
+                      "UPDATE punishments SET is_active = FALSE WHERE target_steam_id = %s AND punishment_type = '%s'",
+                      targetSteamID, punishmentType);
 
     g_Database.Query(OnCommPunishmentRemoved, query);
 }
@@ -754,12 +757,17 @@ int ParseTimeString(const char[] timeStr)
 
 bool IsValidSteamID(const char[] steamid)
 {
-    // Basic validation for STEAM_X:Y:Z format
-    if (strlen(steamid) < 11)
+    // Validate SteamID64 format (numeric string, typically 17 digits)
+    int len = strlen(steamid);
+    if (len < 10 || len > 20)
         return false;
 
-    if (StrContains(steamid, "STEAM_", false) != 0)
-        return false;
+    // Check that all characters are digits
+    for (int i = 0; i < len; i++)
+    {
+        if (!IsCharNumeric(steamid[i]))
+            return false;
+    }
 
     return true;
 }
@@ -784,7 +792,7 @@ int FindClientBySteamID(const char[] steamid)
         if (!IsClientInGame(i) || IsFakeClient(i))
             continue;
 
-        GetClientAuthId(i, AuthId_Steam2, clientSteamID, sizeof(clientSteamID));
+        if (!GetClientAuthId(i, AuthId_SteamID64, clientSteamID, sizeof(clientSteamID))) continue;
 
         if (StrEqual(steamid, clientSteamID))
             return i;
