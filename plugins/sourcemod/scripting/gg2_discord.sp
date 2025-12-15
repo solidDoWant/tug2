@@ -224,11 +224,8 @@ void gen_steam_link(int client, char[] url_safe, int max_size)
     char authID[64];
     GetClientAuthId(client, AuthId_SteamID64, authID, sizeof(authID));
 
-    char playerName[128];
-    GetClientName(client, playerName, sizeof(playerName));
-
     char url[1024];
-    Format(url, 1024, "[%s](<https://steamcommunity.com/profiles/%s>)", playerName, authID);
+    Format(url, sizeof(url), "[%N](<https://steamcommunity.com/profiles/%s>)", client, authID);
 
     FormatEx(url_safe, max_size, "%s", url);
 }
