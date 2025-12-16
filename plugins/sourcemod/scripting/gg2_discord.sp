@@ -64,19 +64,8 @@ bool LoadConfig()
         return false;
     }
 
-    if (!hConfig.GotoFirstSubKey())
-    {
-        delete hConfig;
-        LogError("[DISCORD] Configuration file has no subkeys: %s", sPath);
-        return false;
-    }
-
-    do
-    {
-        hConfig.GetString("WebhookURL", WebhookURL, sizeof(WebhookURL));
-        hConfig.GetString("AdminRoleID", AdminRoleID, sizeof(AdminRoleID));
-    }
-    while (hConfig.GotoNextKey());
+    hConfig.GetString("WebhookURL", WebhookURL, sizeof(WebhookURL));
+    hConfig.GetString("AdminRoleID", AdminRoleID, sizeof(AdminRoleID));
 
     delete hConfig;
 
