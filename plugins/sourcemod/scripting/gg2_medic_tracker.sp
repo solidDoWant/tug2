@@ -158,27 +158,24 @@ public bool is_medic(int client)
     return g_client_is_medic[client];
 }
 
-public Action Dead_Count(int revivable, int fatal)
+public void Dead_Count(int revivable, int fatal)
 {
     g_current_revivable = revivable;
     g_current_fatal     = fatal;
-    return Plugin_Continue;
 }
 
-public Action Medic_Revived(int reviver_client, int saved_client)
+public void Medic_Revived(int reviver_client, int saved_client)
 {
-    if (!IsValidPlayer(reviver_client)) return Plugin_Continue;
+    if (!IsValidPlayer(reviver_client)) return;
 
     g_round_medic_revives[reviver_client]++;
-    return Plugin_Continue;
 }
 
-public Action Medic_Healed(int healer_client, int saved_client)
+public void Medic_Healed(int healer_client, int saved_client)
 {
-    if (!IsValidPlayer(healer_client)) return Plugin_Continue;
+    if (!IsValidPlayer(healer_client)) return;
 
     g_round_medic_heals[healer_client]++;
-    return Plugin_Continue;
 }
 
 public void OnMapEnd()
