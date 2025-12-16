@@ -20,6 +20,9 @@ FROM ghcr.io/gameservermanagers/steamcmd:ubuntu-24.04 AS gameserver-builder
 RUN \
     # Install the game files (Windows x64 version)
     mkdir -p /opt/insurgency-server && \
+    # For some reason, all of a sudden steamcmd needs to initialize prior to installing the game files, rather than doing it all in one shot.
+    # Without this, it fails with "ERROR! Failed to install app '237410' (Missing configuration)".
+    steamcmd +login anonymous +quit && \
     # Note: error message "Error! App '237410' state is 0x202 after update job." means not enough disk space.
     steamcmd +force_install_dir /opt/insurgency-server +login anonymous +@sSteamCmdForcePlatformType windows +app_update 237410 validate +quit && \
     # Link console.log to /opt/insurgency-server/run/console.log to allow it to be stored on another filesystem (like a memory-backed filesystem)
