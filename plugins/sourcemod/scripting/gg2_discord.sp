@@ -95,17 +95,6 @@ bool LoadConfig()
     return true;
 }
 
-void EscapeString(char[] value, int size)
-{
-    ReplaceString(value, size, "\\", "\\\\");
-    ReplaceString(value, size, "\"", "\\\"");
-    ReplaceString(value, size, "\b", "\\b");
-    ReplaceString(value, size, "\t", "\\t");
-    ReplaceString(value, size, "\n", "\\n");
-    ReplaceString(value, size, "\f", "\\f");
-    ReplaceString(value, size, "\r", "\\r");
-}
-
 void no_ats(char[] value, int size)
 {
     ReplaceString(value, size, "@", "©");
@@ -162,17 +151,8 @@ public Action Event_PlayerChangeName(Event event, const char[] name, bool dontBr
     char oldname[128];
     GetEventString(event, "oldname", oldname, sizeof(oldname));
 
-    char newname[128];
-    GetEventString(event, "newname", newname, sizeof(newname));
-    char newnamelink[256] = newname;
-
-    char authID[64];
-    if (!GetClientAuthId(client, AuthId_SteamID64, authID, sizeof(authID))) return Plugin_Continue;
-
-    if (!StrEqual(BAWT_AUTH_ID, authID))
-    {
-        gen_tug_link(client, newnamelink, sizeof(newnamelink));
-    }
+    char newnamelink[256];
+    gen_tug_link(client, newnamelink, sizeof(newnamelink));
 
     char message[1024];
     Format(message, sizeof(message), "%s Changed Name to %s", oldname, newnamelink);
@@ -221,13 +201,14 @@ public Action Event_ObjectDestroyed(Event event, const char[] name, bool dontBro
 
 void gen_steam_link(int client, char[] url_safe, int max_size)
 {
-    char authID[64];
-    GetClientAuthId(client, AuthId_SteamID64, authID, sizeof(authID));
+    char authID[32];
+    if (!GetClientAuthId(client, AuthId_SteamID64, authID, sizeof(authID)) || StrEqual(BAWT_AUTH_ID, authID))
+    {
+        Format(url_safe, max_size, "%N", client);
+        return;
+    }
 
-    char url[1024];
-    Format(url, sizeof(url), "[%N](<https://steamcommunity.com/profiles/%s>)", client, authID);
-
-    FormatEx(url_safe, max_size, "%s", url);
+    Format(url_safe, max_size, "[%N](<https://steamcommunity.com/profiles/%s>)", client, authID);
 }
 
 void gen_tug_link(int client, char[] url_safe, int max_size)
@@ -238,10 +219,7 @@ void gen_tug_link(int client, char[] url_safe, int max_size)
     // char playerName[128];
     // GetClientName(client, playerName, sizeof(playerName));
 
-    // char url[1024];
-    // Format(url, 1024, "[%s](<https://www.tug.gg/player/%s>)", playerName, authID);
-    // FormatEx(url_safe, sizeof(url_safe), "%s", url);
-    // return url_safe;
+    // Format(url_safe, max_size, "[%s](<https://www.tug.gg/player/%s>)", playerName, authID);
 
     // Use the steam profile link until site is back online
     gen_steam_link(client, url_safe, max_size);
@@ -452,7 +430,7 @@ Action HandleChatMessage(int client, const char[] prefix)
 
     if (StrContains(message, "!calladmin", false) == 0)
     {
-        Call_Admin(client, message_entire);
+        Call_Admin(client, message_entire, sizeof(message_entire));
         return Plugin_Continue;
     }
 
@@ -470,10 +448,10 @@ public Action Event_Say(int client, const char[] command, int argc)
     return HandleChatMessage(client, ":");
 }
 
-public void Call_Admin(int client, char[] message)
+public void Call_Admin(int client, char[] message, int max_size)
 {
     char admin_message[4096];
-    no_ats(message, sizeof(message));
+    no_ats(message, max_size);
     // This will @ the admin role in Discord
     Format(admin_message, sizeof(admin_message), "<@&%s> ```%s```", AdminRoleID, message);
     send_discord_calladmin(admin_message, sizeof(admin_message));
@@ -532,15 +510,15 @@ public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max
 
 public void send_discord_calladmin(char[] content, int maxSize)
 {
-    send_discord_raw(content, maxSize, true, true);    // allowDiscordAts=true, isPriority=true
+    send_discord_raw(content, maxSize, true, true);
 }
 
 public void send_discord(char[] content, int maxSize)
 {
-    send_discord_raw(content, maxSize, false, false);    // allowDiscordAts=false, isPriority=false
+    send_discord_raw(content, maxSize, false, false);
 }
 
-public void send_discord_raw(char[] content, int maxSize, bool allowDiscordAts = true, bool isPriority = false)
+public void send_discord_raw(char[] content, int maxSize, bool allowDiscordAts, bool isPriority)
 {
     if (!allowDiscordAts)
     {

@@ -11,7 +11,6 @@
 #define defib_theater_item     "weapon_defib"
 
 #define MAX_MESSAGES           64
-#define MAX_MESSAGE_LENGTH     256
 
 Database   g_Database                        = null;
 

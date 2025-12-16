@@ -612,7 +612,7 @@ public void OnPluginStart()
     }
     // Load localization file
     LoadTranslations("common.phrases");
-    LoadTranslations("respawn.phrases");
+    LoadTranslations("respawn.phrases.txt");
     LoadTranslations("nearest_player.phrases.txt");
     LoadTranslations("tug.phrases.txt");
     AutoExecConfig(true, "respawn");
@@ -2732,7 +2732,6 @@ Action Timer_ReviveMonitor(Handle timer)
                 EmitSoundToAll("weapons/defibrillator/defibrillator_revive.wav", alivePlayer, SNDCHAN_AUTO, _, _, 0.3);
 
                 g_iStatRevives[alivePlayer]++;
-                addRevive(alivePlayer);
                 g_iBonusPoint[alivePlayer] += revive_point_bonus.IntValue;
                 medic_bonus_life_check(alivePlayer);
 
@@ -2768,7 +2767,6 @@ Action Timer_ReviveMonitor(Handle timer)
 
                 PlayVictimReviveSound(deadPlayer);
                 g_iStatRevives[alivePlayer]++;
-                // addRevive(alivePlayer);
                 g_iBonusPoint[alivePlayer] += revive_point_bonus.IntValue;
                 medic_bonus_life_check(alivePlayer);
 
@@ -2971,7 +2969,6 @@ Action Timer_MedicMonitor(Handle timer)
                         g_iStatHeals[originatingPlayer]++;
 
                         iHealth = 100;
-                        addHeal(originatingPlayer, iHealth);
                         g_iBonusPoint[originatingPlayer] += full_heal_point_bonus.IntValue;
                         PrintHintText(targetPlayer, "You were healed by %N (HP: %i)", originatingPlayer, iHealth);
                         Format(sBuf, sizeof(sBuf), "You fully healed %N", targetPlayer);
@@ -3057,7 +3054,6 @@ Action Timer_MedicMonitor(Handle timer)
                         g_iStatHeals[originatingPlayer]++;
 
                         iHealth = g_iNonMedicMaxHealOther;
-                        addHeal(originatingPlayer, iHealth);
                         SendForwardMedicHealed(originatingPlayer, targetPlayer);
                         g_iBonusPoint[originatingPlayer] += full_heal_point_bonus.IntValue;
                         PrintHintText(targetPlayer, "Non-Medic %N can only heal you for %i HP!)", originatingPlayer, iHealth);
@@ -3387,7 +3383,7 @@ Action Timer_NearestBody(Handle timer)
                 beamPosition[2] += 0.3;
                 if (fTempDistance >= 140)
                 {
-                    TE_SetupBeamRingPoint(beamPosition, 1.0, Revive_Indicator_Radius, g_iBeaconBeam, g_iBeaconHalo, 0, 15, 5.0, 3.0, 5.0, { 255, 0, 0, 255 }, 1, (FBEAM_FADEIN, FBEAM_FADEOUT));
+                    TE_SetupBeamRingPoint(beamPosition, 1.0, Revive_Indicator_Radius, g_iBeaconBeam, g_iBeaconHalo, 0, 15, 5.0, 3.0, 5.0, { 255, 0, 0, 255 }, 1, FBEAM_FADEIN | FBEAM_FADEOUT);
                     TE_SendToClient(alivePlayer);
                 }
             }

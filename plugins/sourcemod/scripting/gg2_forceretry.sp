@@ -187,7 +187,15 @@ public void ExecutePlayerSmokeQuery(SQLQueryCallback callback, const char[] oper
         return;
     }
 
-    char hasSmokeQueryValue[6] = hasSmoke ? "TRUE" : "FALSE";
+    char hasSmokeQueryValue[6];
+    if (hasSmoke)
+    {
+        strcopy(hasSmokeQueryValue, sizeof(hasSmokeQueryValue), "TRUE");
+    }
+    else
+    {
+        strcopy(hasSmokeQueryValue, sizeof(hasSmokeQueryValue), "FALSE");
+    }
 
     ExecutePlayerQuery(callback, operationName, client,
                        "INSERT INTO players_smoke_cache (steam_id, has_smoke) VALUES (%s, %s) ON CONFLICT (steam_id) DO UPDATE SET has_smoke = %s, updated_at = CURRENT_TIMESTAMP",

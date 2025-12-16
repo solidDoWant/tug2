@@ -9,36 +9,14 @@
 #define PLUGIN_VERSION     "0.0.1"
 #define PLUGIN_DESCRIPTION "Plugin for Pulling prop_ragdoll bodies"
 
-#define IN_ATTACK          (1 << 0)
-#define IN_JUMP            (1 << 1)
-#define IN_BACK            (1 << 3)
-#define IN_LEFT            (1 << 7)
-#define IN_RIGHT           (1 << 8)
-#define IN_MOVELEFT        (1 << 9)
-#define IN_MOVERIGHT       (1 << 10)
+#define IN_SPRINT          IN_ALT2    // sprint key in insurgency
+#define MAX_BUTTONS        25
 
-#define IN_DUCK            (1 << 2)    // crouch
-#define IN_FORWARD         (1 << 4)
-#define IN_USE             (1 << 5)
-#define IN_CANCEL          (1 << 6)
-#define IN_RUN             (1 << 12)
-#define IN_SPEED           (1 << 17)    /**< Player is holding the speed key */
-#define IN_SPRINT          (1 << 15)    // sprint key in insurgency
-#define IN_ATTACK2         (1 << 18)
-#define IN_RELOAD          (1 << 13)
-#define IN_ALT1            (1 << 14)
-#define IN_SCORE           (1 << 16) /**< Used by client.dll for when scoreboard is held down */
-#define IN_ZOOM            (1 << 19) /**< Zoom key for HUD zoom */
-#define IN_WEAPON1         (1 << 20) /**< weapon defines these bits */
-#define IN_WEAPON2         (1 << 21) /**< weapon defines these bits */
-#define IN_BULLRUSH        (1 << 22)
-#define IN_GRENADE1        (1 << 23) /**< grenade 1 */
-#define IN_GRENADE2        (1 << 24) /**< grenade 2 */
 //(button == IN_MOVELEFT || button == IN_MOVERIGHT || button == IN_JUMP) Ones jump
 //(button == IN_BACK || button == IN_LEFT || button == IN_RIGHT) one is Z
 // if(button == IN_SPEED || button == IN_USE || button == IN_RUN) v, s and x or reverse s and x
 // if(button == IN_DUCK || button == IN_CANCEL || button == IN_BACK) // ctrl, w and f
-#define MAX_BUTTONS        25
+
 int g_LastButtons[MAXPLAYERS + 1];
 int g_playerCurrentRag[MAXPLAYERS + 1];
 

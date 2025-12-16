@@ -197,9 +197,11 @@ FROM sourcemod-plugins-base AS sourcemod-plugins-firesupport
 # Build the fire support plugin
 COPY plugins/sourcemod/gamedata/ /insurgency/addons/sourcemod/gamedata/
 RUN --mount=type=bind,source=./plugins/sourcemod,target=/plugin-source \
-    /sourcemod/addons/sourcemod/scripting/spcomp --include=/plugin-source/scripting/include  /plugin-source/scripting/FireSupport.sp -o /insurgency/addons/sourcemod/plugins/FireSupport.smx && \
+    /sourcemod/addons/sourcemod/scripting/spcomp --include=/plugin-source/scripting/include --warning=203 /plugin-source/scripting/FireSupport.sp -o /insurgency/addons/sourcemod/plugins/FireSupport.smx && \
     mkdir -p /insurgency/addons/sourcemod/translations && \
     cp /plugin-source/translations/firesupport.phrases.txt /insurgency/addons/sourcemod/translations/ && \
+    mkdir -p /insurgency/addons/sourcemod/configs && \
+    cp /plugin-source/configs/firesupport.cfg /insurgency/addons/sourcemod/configs/ && \
     # Fixup file permissions
     find /insurgency -type d -exec chmod 755 {} \; && \
     find /insurgency -type f -exec chmod 644 {} \;
@@ -208,8 +210,10 @@ FROM sourcemod-plugins-base AS sourcemod-plugins-databasemigrator
 
 # Build the database migration plugin
 COPY plugins/sourcemod/gamedata/ /insurgency/addons/sourcemod/gamedata/
-RUN --mount=type=bind,source=./plugins/sourcemod/scripting,target=/plugin-source/scripting \
+RUN --mount=type=bind,source=./plugins/sourcemod,target=/plugin-source \
     /sourcemod/addons/sourcemod/scripting/spcomp --include=/plugin-source/scripting/include  /plugin-source/scripting/DatabaseMigrator.sp -o /insurgency/addons/sourcemod/plugins/DatabaseMigrator.smx && \
+    mkdir -p /insurgency/addons/sourcemod/configs && \
+    cp /plugin-source/configs/database-migrations.cfg /insurgency/addons/sourcemod/configs/ && \
     # Fixup file permissions
     find /insurgency -type d -exec chmod 755 {} \; && \
     find /insurgency -type f -exec chmod 644 {} \;
@@ -222,6 +226,8 @@ RUN --mount=type=bind,source=./plugins/sourcemod,target=/plugin-source \
     /sourcemod/addons/sourcemod/scripting/spcomp --include=/plugin-source/scripting/include  /plugin-source/scripting/LoadoutSaver.sp -o /insurgency/addons/sourcemod/plugins/LoadoutSaver.smx && \
     mkdir -p /insurgency/addons/sourcemod/configs/sql-init-scripts/pgsql && \
     cp /plugin-source/configs/sql-init-scripts/pgsql/loadout_saver.sql /insurgency/addons/sourcemod/configs/sql-init-scripts/pgsql/loadout_saver.sql && \
+    mkdir -p /insurgency/cfg/sourcemod && \
+    touch /insurgency/cfg/sourcemod/plugin.loadoutsaver.cfg && \
     # Fixup file permissions
     find /insurgency -type d -exec chmod 755 {} \; && \
     find /insurgency -type f -exec chmod 644 {} \;
@@ -231,7 +237,7 @@ FROM sourcemod-plugins-base AS sourcemod-plugins-restrictedarea
 # Build the restricted area removal plugin
 COPY plugins/sourcemod/gamedata/ /insurgency/addons/sourcemod/gamedata/
 RUN --mount=type=bind,source=./plugins/sourcemod/scripting,target=/plugin-source/scripting \
-    /sourcemod/addons/sourcemod/scripting/spcomp --include=/plugin-source/scripting/include  /plugin-source/scripting/restrictedarea.sp -o /insurgency/addons/sourcemod/plugins/restrictedarea.smx && \
+    /sourcemod/addons/sourcemod/scripting/spcomp --include=/plugin-source/scripting/include /plugin-source/scripting/restrictedarea.sp -o /insurgency/addons/sourcemod/plugins/restrictedarea.smx && \
     # Fixup file permissions
     find /insurgency -type d -exec chmod 755 {} \; && \
     find /insurgency -type f -exec chmod 644 {} \;
@@ -242,6 +248,8 @@ FROM sourcemod-plugins-base AS sourcemod-plugins-bot-flashlights
 COPY plugins/sourcemod/gamedata/ /insurgency/addons/sourcemod/gamedata/
 RUN --mount=type=bind,source=./plugins/sourcemod/scripting,target=/plugin-source/scripting \
     /sourcemod/addons/sourcemod/scripting/spcomp --include=/plugin-source/scripting/include  /plugin-source/scripting/bot_flashlights.sp -o /insurgency/addons/sourcemod/plugins/bot_flashlights.smx && \
+    mkdir -p /insurgency/cfg && \
+    touch /insurgency/cfg/plugin.bot_flashlights.cfg && \
     # Fixup file permissions
     find /insurgency -type d -exec chmod 755 {} \; && \
     find /insurgency -type f -exec chmod 644 {} \;
@@ -274,6 +282,8 @@ FROM sourcemod-plugins-base AS sourcemod-plugins-map-logger
 COPY plugins/sourcemod/gamedata/ /insurgency/addons/sourcemod/gamedata/
 RUN --mount=type=bind,source=./plugins/sourcemod,target=/plugin-source \
     /sourcemod/addons/sourcemod/scripting/spcomp --include=/plugin-source/scripting/include  /plugin-source/scripting/map_logger.sp -o /insurgency/addons/sourcemod/plugins/map_logger.smx && \
+    mkdir -p /insurgency/addons/sourcemod/configs/sql-init-scripts/pgsql && \
+    cp /plugin-source/configs/sql-init-scripts/pgsql/map_logger.sql /insurgency/addons/sourcemod/configs/sql-init-scripts/pgsql/map_logger.sql && \
     # Fixup file permissions
     find /insurgency -type d -exec chmod 755 {} \; && \
     find /insurgency -type f -exec chmod 644 {} \;
@@ -282,8 +292,10 @@ FROM sourcemod-plugins-base AS sourcemod-plugins-gg2-weapon-spam
 
 # Build the gg2_weapon_spam plugin
 COPY plugins/sourcemod/gamedata/ /insurgency/addons/sourcemod/gamedata/
-RUN --mount=type=bind,source=./plugins/sourcemod/scripting,target=/plugin-source/scripting \
+RUN --mount=type=bind,source=./plugins/sourcemod,target=/plugin-source \
     /sourcemod/addons/sourcemod/scripting/spcomp --include=/plugin-source/scripting/include  /plugin-source/scripting/gg2_weapon_spam.sp -o /insurgency/addons/sourcemod/plugins/gg2_weapon_spam.smx && \
+    mkdir -p /insurgency/addons/sourcemod/translations && \
+    cp /plugin-source/translations/tug.phrases.txt /insurgency/addons/sourcemod/translations/ && \
     # Fixup file permissions
     find /insurgency -type d -exec chmod 755 {} \; && \
     find /insurgency -type f -exec chmod 644 {} \;
@@ -332,8 +344,12 @@ FROM sourcemod-plugins-base AS sourcemod-plugins-gg2-damage
 
 # Build the gg2_damage plugin
 COPY plugins/sourcemod/gamedata/ /insurgency/addons/sourcemod/gamedata/
-RUN --mount=type=bind,source=./plugins/sourcemod/scripting,target=/plugin-source/scripting \
+RUN --mount=type=bind,source=./plugins/sourcemod,target=/plugin-source \
     /sourcemod/addons/sourcemod/scripting/spcomp --include=/plugin-source/scripting/include  /plugin-source/scripting/gg2_damage.sp -o /insurgency/addons/sourcemod/plugins/gg2_damage.smx && \
+    mkdir -p /insurgency/addons/sourcemod/translations && \
+    cp /plugin-source/translations/tug.phrases.txt /insurgency/addons/sourcemod/translations/ && \
+    mkdir -p /insurgency/cfg/sourcemod && \
+    touch /insurgency/cfg/sourcemod/gg2_damage.cfg && \
     # Fixup file permissions
     find /insurgency -type d -exec chmod 755 {} \; && \
     find /insurgency -type f -exec chmod 644 {} \;
@@ -342,8 +358,11 @@ FROM sourcemod-plugins-base AS sourcemod-plugins-gg2-discord
 
 # Build the gg2_discord plugin
 COPY plugins/sourcemod/gamedata/ /insurgency/addons/sourcemod/gamedata/
-RUN --mount=type=bind,source=./plugins/sourcemod/scripting,target=/plugin-source/scripting \
-    /sourcemod/addons/sourcemod/scripting/spcomp --include=/plugin-source/scripting/include  /plugin-source/scripting/gg2_discord.sp -o /insurgency/addons/sourcemod/plugins/gg2_discord.smx && \
+RUN --mount=type=bind,source=./plugins/sourcemod,target=/plugin-source \
+    --mount=from=sourcemod-extensions-ripext,source=/insurgency/addons/sourcemod/scripting/include,target=/ripext-include \
+    /sourcemod/addons/sourcemod/scripting/spcomp --include=/plugin-source/scripting/include --include=/ripext-include /plugin-source/scripting/gg2_discord.sp -o /insurgency/addons/sourcemod/plugins/gg2_discord.smx && \
+    mkdir -p /insurgency/addons/sourcemod/configs && \
+    cp /plugin-source/configs/discord.cfg /insurgency/addons/sourcemod/configs/ && \
     # Fixup file permissions
     find /insurgency -type d -exec chmod 755 {} \; && \
     find /insurgency -type f -exec chmod 644 {} \;
@@ -364,6 +383,8 @@ FROM sourcemod-plugins-base AS sourcemod-plugins-gg2-forceretry
 COPY plugins/sourcemod/gamedata/ /insurgency/addons/sourcemod/gamedata/
 RUN --mount=type=bind,source=./plugins/sourcemod/scripting,target=/plugin-source/scripting \
     /sourcemod/addons/sourcemod/scripting/spcomp --include=/plugin-source/scripting/include  /plugin-source/scripting/gg2_forceretry.sp -o /insurgency/addons/sourcemod/plugins/gg2_forceretry.smx && \
+    mkdir -p /insurgency/cfg/sourcemod && \
+    touch /insurgency/cfg/sourcemod/gg2_forceretry.cfg && \
     # Fixup file permissions
     find /insurgency -type d -exec chmod 755 {} \; && \
     find /insurgency -type f -exec chmod 644 {} \;
@@ -374,6 +395,8 @@ FROM sourcemod-plugins-base AS sourcemod-plugins-gg2-fuckyeah
 COPY plugins/sourcemod/gamedata/ /insurgency/addons/sourcemod/gamedata/
 RUN --mount=type=bind,source=./plugins/sourcemod/scripting,target=/plugin-source/scripting \
     /sourcemod/addons/sourcemod/scripting/spcomp --include=/plugin-source/scripting/include  /plugin-source/scripting/gg2_fuckyeah.sp -o /insurgency/addons/sourcemod/plugins/gg2_fuckyeah.smx && \
+    mkdir -p /insurgency/cfg/sourcemod && \
+    touch /insurgency/cfg/sourcemod/fuckyeah.cfg && \
     # Fixup file permissions
     find /insurgency -type d -exec chmod 755 {} \; && \
     find /insurgency -type f -exec chmod 644 {} \;
@@ -404,6 +427,9 @@ FROM sourcemod-plugins-base AS sourcemod-plugins-gg2-map-changeups
 COPY plugins/sourcemod/gamedata/ /insurgency/addons/sourcemod/gamedata/
 RUN --mount=type=bind,source=./plugins/sourcemod/scripting,target=/plugin-source/scripting \
     /sourcemod/addons/sourcemod/scripting/spcomp --include=/plugin-source/scripting/include  /plugin-source/scripting/gg2_map_changeups.sp -o /insurgency/addons/sourcemod/plugins/gg2_map_changeups.smx && \
+    # Create required config file
+    mkdir -p /insurgency/cfg/sourcemod && \
+    touch /insurgency/cfg/sourcemod/map_changeups.cfg && \
     # Fixup file permissions
     find /insurgency -type d -exec chmod 755 {} \; && \
     find /insurgency -type f -exec chmod 644 {} \;
@@ -413,7 +439,9 @@ FROM sourcemod-plugins-base AS sourcemod-plugins-gg2-medic-tracker
 # Build the gg2_medic_tracker plugin
 COPY plugins/sourcemod/gamedata/ /insurgency/addons/sourcemod/gamedata/
 RUN --mount=type=bind,source=./plugins/sourcemod/scripting,target=/plugin-source/scripting \
-    /sourcemod/addons/sourcemod/scripting/spcomp --include=/plugin-source/scripting/include  /plugin-source/scripting/gg2_medic_tracker.sp -o /insurgency/addons/sourcemod/plugins/gg2_medic_tracker.smx && \
+    /sourcemod/addons/sourcemod/scripting/spcomp --include=/plugin-source/scripting/include /plugin-source/scripting/gg2_medic_tracker.sp -o /insurgency/addons/sourcemod/plugins/gg2_medic_tracker.smx && \
+    mkdir -p /insurgency/cfg/sourcemod && \
+    touch /insurgency/cfg/sourcemod/gg2_medic_tracker.cfg && \
     # Fixup file permissions
     find /insurgency -type d -exec chmod 755 {} \; && \
     find /insurgency -type f -exec chmod 644 {} \;
@@ -422,8 +450,10 @@ FROM sourcemod-plugins-base AS sourcemod-plugins-gg2-messages
 
 # Build the gg2_messages plugin
 COPY plugins/sourcemod/gamedata/ /insurgency/addons/sourcemod/gamedata/
-RUN --mount=type=bind,source=./plugins/sourcemod/scripting,target=/plugin-source/scripting \
-    /sourcemod/addons/sourcemod/scripting/spcomp --include=/plugin-source/scripting/include  /plugin-source/scripting/gg2_messages.sp -o /insurgency/addons/sourcemod/plugins/gg2_messages.smx && \
+RUN --mount=type=bind,source=./plugins/sourcemod,target=/plugin-source \
+    /sourcemod/addons/sourcemod/scripting/spcomp --include=/plugin-source/scripting/include /plugin-source/scripting/gg2_messages.sp -o /insurgency/addons/sourcemod/plugins/gg2_messages.smx && \
+    mkdir -p /insurgency/addons/sourcemod/translations && \
+    cp /plugin-source/translations/tug.phrases.txt /insurgency/addons/sourcemod/translations/ && \
     # Fixup file permissions
     find /insurgency -type d -exec chmod 755 {} \; && \
     find /insurgency -type f -exec chmod 644 {} \;
@@ -434,6 +464,8 @@ FROM sourcemod-plugins-base AS sourcemod-plugins-gg2-mstats2
 COPY plugins/sourcemod/gamedata/ /insurgency/addons/sourcemod/gamedata/
 RUN --mount=type=bind,source=./plugins/sourcemod/scripting,target=/plugin-source/scripting \
     /sourcemod/addons/sourcemod/scripting/spcomp --include=/plugin-source/scripting/include  /plugin-source/scripting/gg2_mstats2.sp -o /insurgency/addons/sourcemod/plugins/gg2_mstats2.smx && \
+    mkdir -p /insurgency/cfg/sourcemod && \
+    touch /insurgency/cfg/sourcemod/gg2_mstats2.cfg && \
     # Fixup file permissions
     find /insurgency -type d -exec chmod 755 {} \; && \
     find /insurgency -type f -exec chmod 644 {} \;
@@ -452,8 +484,12 @@ FROM sourcemod-plugins-base AS sourcemod-plugins-gg2-show-health-simp
 
 # Build the gg2_show_health_simp plugin
 COPY plugins/sourcemod/gamedata/ /insurgency/addons/sourcemod/gamedata/
-RUN --mount=type=bind,source=./plugins/sourcemod/scripting,target=/plugin-source/scripting \
+RUN --mount=type=bind,source=./plugins/sourcemod,target=/plugin-source \
     /sourcemod/addons/sourcemod/scripting/spcomp --include=/plugin-source/scripting/include  /plugin-source/scripting/gg2_show_health_simp.sp -o /insurgency/addons/sourcemod/plugins/gg2_show_health_simp.smx && \
+    mkdir -p /insurgency/cfg && \
+    touch /insurgency/cfg/gg2_show_health.cfg && \
+    mkdir -p /insurgency/addons/sourcemod/translations && \
+    cp /plugin-source/translations/showhealth.phrases.txt /insurgency/addons/sourcemod/translations && \
     # Fixup file permissions
     find /insurgency -type d -exec chmod 755 {} \; && \
     find /insurgency -type f -exec chmod 644 {} \;
@@ -482,8 +518,12 @@ FROM sourcemod-plugins-base AS sourcemod-plugins-gg2-teamkill
 
 # Build the gg2_teamkill plugin
 COPY plugins/sourcemod/gamedata/ /insurgency/addons/sourcemod/gamedata/
-RUN --mount=type=bind,source=./plugins/sourcemod/scripting,target=/plugin-source/scripting \
+RUN --mount=type=bind,source=./plugins/sourcemod,target=/plugin-source \
     /sourcemod/addons/sourcemod/scripting/spcomp --include=/plugin-source/scripting/include  /plugin-source/scripting/gg2_teamkill.sp -o /insurgency/addons/sourcemod/plugins/gg2_teamkill.smx && \
+    mkdir -p /insurgency/cfg/sourcemod && \
+    touch /insurgency/cfg/sourcemod/gg2_teamkill.cfg && \
+    mkdir -p /insurgency/addons/sourcemod/translations && \
+    cp /plugin-source/translations/tug.phrases.txt /insurgency/addons/sourcemod/translations/ && \
     # Fixup file permissions
     find /insurgency -type d -exec chmod 755 {} \; && \
     find /insurgency -type f -exec chmod 644 {} \;
@@ -509,16 +549,16 @@ RUN --mount=type=bind,source=./plugins/sourcemod/scripting,target=/plugin-source
     find /insurgency -type f -exec chmod 644 {} \;
 
 # Medic, respawns, stat tracking, bot respawns, dynamic difficulty adjustment, name role prefixes, dependency on inslib
-FROM sourcemod-plugins-base AS sourcemod-plugins-everythingelse
+FROM sourcemod-plugins-base AS sourcemod-plugins-bm2-respawn
 
 # Build the "everything else" plugins
 COPY plugins/sourcemod/gamedata/ /insurgency/addons/sourcemod/gamedata/
 RUN --mount=type=bind,source=./plugins/sourcemod,target=/plugin-source \
     /sourcemod/addons/sourcemod/scripting/spcomp --include=/plugin-source/scripting/include  /plugin-source/scripting/bm2_respawn.sp -o /insurgency/addons/sourcemod/plugins/bm2_respawn.smx && \
     mkdir -p /insurgency/cfg && \
-    touch /insurgency/cfg/plugin.respawn.cfg && \
+    touch /insurgency/cfg/respawn.cfg && \
     mkdir -p /insurgency/addons/sourcemod/translations && \
-    cp /plugin-source/translations/nearest_player.phrases.txt /plugin-source/translations/respawn.phrases.txt /insurgency/addons/sourcemod/translations && \
+    cp /plugin-source/translations/nearest_player.phrases.txt /plugin-source/translations/respawn.phrases.txt /plugin-source/translations/tug.phrases.txt /insurgency/addons/sourcemod/translations && \
     /sourcemod/addons/sourcemod/scripting/spcomp --include=/plugin-source/scripting/include  /plugin-source/scripting/d_dy_pull_rag.sp -o /insurgency/addons/sourcemod/plugins/d_dy_pull_rag.smx && \
     # Fixup file permissions
     find /insurgency -type d -exec chmod 755 {} \; && \
@@ -632,7 +672,30 @@ COPY --from=sourcemod-plugins-bot-names --chown=0:0 /insurgency /opt/insurgency-
 COPY --from=sourcemod-plugins-teamflash --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
 COPY --from=sourcemod-plugins-punitive-persistence --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
 COPY --from=sourcemod-plugins-map-logger --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
-COPY --from=sourcemod-plugins-everythingelse --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
+COPY --from=sourcemod-plugins-gg2-weapon-spam --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
+COPY --from=sourcemod-plugins-gg2-admin-logger --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
+COPY --from=sourcemod-plugins-gg2-burn --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
+COPY --from=sourcemod-plugins-gg2-cache-protect --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
+COPY --from=sourcemod-plugins-gg2-connection-tracker --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
+COPY --from=sourcemod-plugins-gg2-damage --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
+COPY --from=sourcemod-plugins-gg2-discord --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
+COPY --from=sourcemod-plugins-gg2-forceauthorize --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
+COPY --from=sourcemod-plugins-gg2-forceretry --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
+COPY --from=sourcemod-plugins-gg2-fuckyeah --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
+COPY --from=sourcemod-plugins-gg2-insurgency --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
+COPY --from=sourcemod-plugins-gg2-kill-entities --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
+COPY --from=sourcemod-plugins-gg2-map-changeups --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
+COPY --from=sourcemod-plugins-gg2-medic-tracker --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
+COPY --from=sourcemod-plugins-gg2-messages --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
+COPY --from=sourcemod-plugins-gg2-mstats2 --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
+COPY --from=sourcemod-plugins-gg2-playlist-hax --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
+COPY --from=sourcemod-plugins-gg2-show-health-simp --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
+COPY --from=sourcemod-plugins-gg2-spectator --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
+COPY --from=sourcemod-plugins-gg2-supply --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
+COPY --from=sourcemod-plugins-gg2-teamkill --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
+COPY --from=sourcemod-plugins-gg2-theater-items --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
+COPY --from=sourcemod-plugins-gg2-votekick-immunity --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
+COPY --from=sourcemod-plugins-bm2-respawn --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
 
 # Copy in the remaining main config files
 COPY ["server config/main/", "/"]

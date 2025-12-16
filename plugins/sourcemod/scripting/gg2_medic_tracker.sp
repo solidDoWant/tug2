@@ -405,7 +405,6 @@ public Action Timer_WarnBannedMedics(Handle timer)
         }
 
         // Show warning
-        int warnings_left = threshold - g_medic_ban_warning_count[client] + 1;
         CPrintToChat(client, "{red}[WARNING %i/%i] You are banned from playing medic! Change your class or be kicked.", g_medic_ban_warning_count[client], threshold);
         PrintCenterText(client, "MEDIC BAN WARNING %i/%i - CHANGE CLASS OR BE KICKED", g_medic_ban_warning_count[client], threshold);
         LogMessage("[GG2 Medic Tracker] Warned banned medic %N (%i/%i)", client, g_medic_ban_warning_count[client], threshold);

@@ -649,47 +649,6 @@ stock void SetWeaponAmmo(int client, int weapon, int ammo, int type)
     }
 }
 
-// Get / Set primary ammo count as it was when died
-stock int GetPrimaryAmmo(int client, int weap, int type)
-{
-    // new myweapons = FindSendPropInfo("CCSPlayer", "m_hMyWeapons");
-    // new weap = GetEntDataEnt2(client, myweapons+ (slot*4));
-    if (IsValidEntity(weap))
-    {
-        if (type == 0)
-        {
-            return GetEntData(weap, FindSendPropInfo("CBaseCombatWeapon", "m_iClip1"));
-        }
-        else if (type == 1) {
-            return GetEntData(weap, FindSendPropInfo("CBaseCombatWeapon", "m_iClip2"));
-        }
-    }
-    return 0;
-}
-
-stock int SetPrimaryAmmo(int client, int weap, int ammo, int type)
-{
-    // int PropType proptype = Prop_Data;
-    // PropType proptype = Prop_Data;
-    // new myweapons = FindSendPropInfo("CCSPlayer", "m_hMyWeapons");
-    // new weap = GetEntDataEnt2(client, myweapons+ (slot*4));
-    if (IsValidEntity(weap))
-    {
-        if (type == 0)
-        {
-            // return SetEntData(weap, FindSendPropInfo("CBaseCombatWeapon", "m_iClip1"), ammo, _, true);
-            SetEntData(weap, FindSendPropInfo("CBaseCombatWeapon", "m_iClip1"), ammo, _, true);
-            return 1;
-        }
-        else if (type == 1) {
-            // return SetEntData(weap, FindSendPropInfo("CBaseCombatWeapon", "m_iClip2"), ammo, _, true);
-            SetEntData(weap, FindSendPropInfo("CBaseCombatWeapon", "m_iClip2"), ammo, _, true);
-            return 1;
-        }
-    }
-    return 0;
-}
-
 stock int GetGrenadeAmmo(int client, int grenadeType)
 {
     // int PropType proptype = Prop_Data;
