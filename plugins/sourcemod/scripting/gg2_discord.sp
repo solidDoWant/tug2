@@ -112,24 +112,11 @@ public void OnPluginStart()
     AddCommandListener(Event_Slay, "slay");
     AddCommandListener(Event_Burn, "burn");
     AddCommandListener(Event_TeamSay, "say_team");
-    HookEvent("Medic_Revived", Event_medic_revived);
     RegAdminCmd("discordmsg", Cmd_discordmsg, ADMFLAG_ROOT, "Discord message");
 
     // Start message batching timer (runs every 2 seconds)
     CreateTimer(2.0, Timer_ProcessMessageQueue, _, TIMER_REPEAT);
     LogMessage("[DISCORD] Message batching enabled (2s intervals, max queue: %d)", MAX_QUEUE_SIZE);
-}
-
-public Action Event_medic_revived(Event event, const char[] name, bool dontBroadcast)
-{
-    int medic_id = GetEventInt(event, "iMedic");
-    if (!IsValidPlayer(medic_id)) return Plugin_Continue;
-
-    int injured_id = GetEventInt(event, "iInjured");
-    if (!IsValidPlayer(injured_id)) return Plugin_Continue;
-
-    LogMessage("[GG2 Discord] got forward medic_revived // medic: %N // healed: %N", medic_id, injured_id);
-    return Plugin_Continue;
 }
 
 public Action Event_PlayerChangeName(Event event, const char[] name, bool dontBroadcast)
