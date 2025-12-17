@@ -450,19 +450,8 @@ public any Native_send_to_discord(Handle plugin, int numParams)
 {
     int  client = GetNativeCell(1);
 
-    char authID[64];
-    GetClientAuthId(client, AuthId_SteamID64, authID, sizeof(authID));
-
     char link[256];
-    if (StrEqual(BAWT_AUTH_ID, authID))
-    {
-        char playerName[128];
-        GetClientName(client, playerName, sizeof(playerName));
-        strcopy(link, sizeof(link), playerName);
-    }
-    else {
-        gen_tug_link(client, link, sizeof(link));
-    }
+    gen_tug_link(client, link, sizeof(link));
 
     int stringLength;
     GetNativeStringLength(2, stringLength);
