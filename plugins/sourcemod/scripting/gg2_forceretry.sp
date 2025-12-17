@@ -135,24 +135,16 @@ void HandleQueryError(DBResultSet results, const char[] error, const char[] oper
     LogError("[INS GG ForceRetry] Failed to %s: %s", operationName, error);
 }
 
-void ExecutePlayerQuery(SQLQueryCallback callback, const char[] operationName, int client, const char[] queryFormat, any...)
-{
-    if (g_Database == null)
-    {
-        LogError("[INS GG ForceRetry] Database unavailable for %s", operationName);
-        return;
-    }
-
-    char query[512];
-    VFormat(query, sizeof(query), queryFormat, 5);
-
-    g_Database.Query(callback, query, client);
-}
-
 // actions to track whether player has smoke particles downloaded, reconnect them if they don't //
 public void db_check_player_has_smoke(int client)
 {
     if (!IsClientInGame(client) || IsFakeClient(client)) return;
+
+    if (g_Database == null)
+    {
+        LogError("[INS GG ForceRetry] Database unavailable for checking player smoke cache");
+        return;
+    }
 
     char steamId[64];
     if (!GetClientAuthId(client, AuthId_SteamID64, steamId, sizeof(steamId)))
@@ -161,9 +153,9 @@ public void db_check_player_has_smoke(int client)
         return;
     }
 
-    ExecutePlayerQuery(OnPlayerSmokeCacheChecked, "check player smoke cache", client,
-                       "SELECT has_smoke FROM players_smoke_cache WHERE steam_id = %s LIMIT 1",
-                       steamId);
+    char query[512];
+    g_Database.Format(query, sizeof(query), "SELECT has_smoke FROM players_smoke_cache WHERE steam_id = %s LIMIT 1", steamId);
+    g_Database.Query(OnPlayerSmokeCacheChecked, query, client);
 }
 
 public void db_update_player_has_smoke(int client)
@@ -179,6 +171,12 @@ public void db_reset_player_has_smoke(int client)
 public void ExecutePlayerSmokeQuery(SQLQueryCallback callback, const char[] operationName, int client, bool hasSmoke)
 {
     if (!IsClientInGame(client) || IsFakeClient(client)) return;
+
+    if (g_Database == null)
+    {
+        LogError("[INS GG ForceRetry] Database unavailable for %s", operationName);
+        return;
+    }
 
     char steamId[64];
     if (!GetClientAuthId(client, AuthId_SteamID64, steamId, sizeof(steamId)))
@@ -197,9 +195,11 @@ public void ExecutePlayerSmokeQuery(SQLQueryCallback callback, const char[] oper
         strcopy(hasSmokeQueryValue, sizeof(hasSmokeQueryValue), "FALSE");
     }
 
-    ExecutePlayerQuery(callback, operationName, client,
-                       "INSERT INTO players_smoke_cache (steam_id, has_smoke) VALUES (%s, %s) ON CONFLICT (steam_id) DO UPDATE SET has_smoke = %s, updated_at = CURRENT_TIMESTAMP",
-                       steamId, hasSmokeQueryValue, hasSmokeQueryValue);
+    char query[512];
+    g_Database.Format(query, sizeof(query),
+                      "INSERT INTO players_smoke_cache (steam_id, has_smoke) VALUES (%s, %s) ON CONFLICT (steam_id) DO UPDATE SET has_smoke = %s, updated_at = CURRENT_TIMESTAMP",
+                      steamId, hasSmokeQueryValue, hasSmokeQueryValue);
+    g_Database.Query(callback, query, client);
 }
 
 public void OnPlayerSmokeCacheUpdated(Database db, DBResultSet results, const char[] error, any client)
