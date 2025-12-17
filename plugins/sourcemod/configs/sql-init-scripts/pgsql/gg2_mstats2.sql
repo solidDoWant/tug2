@@ -20,7 +20,7 @@ CREATE TABLE IF NOT EXISTS player_stats (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE IF NOT EXISTS weapons (
+CREATE TABLE IF NOT EXISTS weapon_stats (
     weapon_id SERIAL PRIMARY KEY,
     weapon_name VARCHAR(64) UNIQUE NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -34,7 +34,7 @@ CREATE TABLE IF NOT EXISTS player_kills (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (steam_id, weapon_id),
     FOREIGN KEY (steam_id) REFERENCES player_stats(steam_id) ON DELETE CASCADE,
-    FOREIGN KEY (weapon_id) REFERENCES weapons(weapon_id) ON DELETE CASCADE
+    FOREIGN KEY (weapon_id) REFERENCES weapon_stats(weapon_id) ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS bot_kills (
@@ -44,10 +44,10 @@ CREATE TABLE IF NOT EXISTS bot_kills (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (bot_name, weapon_id),
-    FOREIGN KEY (weapon_id) REFERENCES weapons(weapon_id) ON DELETE CASCADE
+    FOREIGN KEY (weapon_id) REFERENCES weapon_stats(weapon_id) ON DELETE CASCADE
 );
 
-CREATE TABLE IF NOT EXISTS maps (
+CREATE TABLE IF NOT EXISTS map_stats (
     map_id SERIAL PRIMARY KEY,
     map_name VARCHAR(257) UNIQUE NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -58,7 +58,7 @@ CREATE TABLE IF NOT EXISTS win_loss_log (
     map_id INTEGER NOT NULL,
     win BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (map_id) REFERENCES maps(map_id) ON DELETE CASCADE
+    FOREIGN KEY (map_id) REFERENCES map_stats(map_id) ON DELETE CASCADE
 );
 
 -- =====================================================
@@ -74,8 +74,8 @@ CREATE INDEX IF NOT EXISTS idx_player_stats_score ON player_stats(score DESC);
 CREATE INDEX IF NOT EXISTS idx_player_stats_killstreak ON player_stats(killstreak DESC);
 CREATE INDEX IF NOT EXISTS idx_player_stats_wins ON player_stats(wins DESC);
 
--- Indexes on weapons
-CREATE INDEX IF NOT EXISTS idx_weapons_weapon_name ON weapons(weapon_name);
+-- Indexes on weapon_stats
+CREATE INDEX IF NOT EXISTS idx_weapon_stats_weapon_name ON weapon_stats(weapon_name);
 
 -- Indexes on player_kills
 CREATE INDEX IF NOT EXISTS idx_player_kills_weapon_id ON player_kills(weapon_id);
@@ -85,8 +85,8 @@ CREATE INDEX IF NOT EXISTS idx_player_kills_kill_count ON player_kills(kill_coun
 CREATE INDEX IF NOT EXISTS idx_bot_kills_weapon_id ON bot_kills(weapon_id);
 CREATE INDEX IF NOT EXISTS idx_bot_kills_kill_count ON bot_kills(kill_count DESC);
 
--- Indexes on maps
-CREATE INDEX IF NOT EXISTS idx_maps_map_name ON maps(map_name);
+-- Indexes on map_stats
+CREATE INDEX IF NOT EXISTS idx_map_stats_map_name ON map_stats(map_name);
 
 -- Indexes on win_loss_log
 CREATE INDEX IF NOT EXISTS idx_win_loss_log_map_id ON win_loss_log(map_id);
@@ -109,23 +109,23 @@ CREATE INDEX IF NOT EXISTS idx_win_loss_log_win ON win_loss_log(win);
 -- Note: created_at and updated_at are automatically set by the database
 
 -- Example weapon:
--- INSERT INTO weapons (weapon_name) VALUES ('weapon_m4a1') ON CONFLICT (weapon_name) DO NOTHING;
+-- INSERT INTO weapon_stats (weapon_name) VALUES ('weapon_m4a1') ON CONFLICT (weapon_name) DO NOTHING;
 
--- Example player weapon kills (using weapon_id from weapons table):
+-- Example player weapon kills (using weapon_id from weapon_stats table):
 -- INSERT INTO player_kills (steam_id, weapon_id, kill_count)
 -- SELECT '76561198012345678', weapon_id, 450
--- FROM weapons WHERE weapon_name = 'weapon_m4a1'
+-- FROM weapon_stats WHERE weapon_name = 'weapon_m4a1'
 -- ON CONFLICT (steam_id, weapon_id) DO UPDATE SET kill_count = player_kills.kill_count + 450;
 
--- Example bot weapon kills (using weapon_id from weapons table):
+-- Example bot weapon kills (using weapon_id from weapon_stats table):
 -- INSERT INTO bot_kills (bot_name, weapon_id, kill_count)
 -- SELECT 'BotJohn', weapon_id, 120
--- FROM weapons WHERE weapon_name = 'weapon_ak47'
+-- FROM weapon_stats WHERE weapon_name = 'weapon_ak47'
 -- ON CONFLICT (bot_name, weapon_id) DO UPDATE SET kill_count = bot_kills.kill_count + 120;
 
 -- Example map:
--- INSERT INTO maps (map_name) VALUES ('ministry') ON CONFLICT (map_name) DO NOTHING;
--- Note: Map wins/losses are derived from win_loss_log, not stored in maps table
+-- INSERT INTO map_stats (map_name) VALUES ('ministry') ON CONFLICT (map_name) DO NOTHING;
+-- Note: Map wins/losses are derived from win_loss_log, not stored in map_stats table
 
 -- =====================================================
 -- Maintenance Queries
@@ -178,7 +178,7 @@ CREATE INDEX IF NOT EXISTS idx_win_loss_log_win ON win_loss_log(win);
 --     SUM(pk.kill_count) as total_kills,
 --     COUNT(DISTINCT pk.steam_id) as unique_players
 -- FROM player_kills pk
--- JOIN weapons w ON pk.weapon_id = w.weapon_id
+-- JOIN weapon_stats w ON pk.weapon_id = w.weapon_id
 -- GROUP BY w.weapon_name
 -- ORDER BY total_kills DESC
 -- LIMIT 20;
@@ -191,7 +191,7 @@ CREATE INDEX IF NOT EXISTS idx_win_loss_log_win ON win_loss_log(win);
 --     ROUND(100.0 * pk.kill_count / NULLIF(p.kills, 0), 2) as kill_percentage
 -- FROM player_kills pk
 -- JOIN player_stats p ON pk.steam_id = p.steam_id
--- JOIN weapons w ON pk.weapon_id = w.weapon_id
+-- JOIN weapon_stats w ON pk.weapon_id = w.weapon_id
 -- WHERE p.steam_id = '76561198012345678'  -- Replace with actual steam_id
 -- ORDER BY pk.kill_count DESC;
 
@@ -203,7 +203,7 @@ CREATE INDEX IF NOT EXISTS idx_win_loss_log_win ON win_loss_log(win);
 --     COUNT(*) as total_rounds,
 --     ROUND(100.0 * COUNT(*) FILTER (WHERE wll.win = TRUE) / NULLIF(COUNT(*), 0), 2) as win_percentage
 -- FROM win_loss_log wll
--- JOIN maps m ON wll.map_id = m.map_id
+-- JOIN map_stats m ON wll.map_id = m.map_id
 -- GROUP BY m.map_name
 -- ORDER BY total_rounds DESC;
 
@@ -213,7 +213,7 @@ CREATE INDEX IF NOT EXISTS idx_win_loss_log_win ON win_loss_log(win);
 --     wll.created_at as match_time,
 --     CASE WHEN wll.win THEN 'WIN' ELSE 'LOSS' END as result
 -- FROM win_loss_log wll
--- JOIN maps m ON wll.map_id = m.map_id
+-- JOIN map_stats m ON wll.map_id = m.map_id
 -- ORDER BY wll.created_at DESC
 -- LIMIT 50;
 
@@ -225,7 +225,7 @@ CREATE INDEX IF NOT EXISTS idx_win_loss_log_win ON win_loss_log(win);
 --     COUNT(*) FILTER (WHERE wll.win = FALSE) as losses,
 --     ROUND(100.0 * COUNT(*) FILTER (WHERE wll.win = TRUE) / NULLIF(COUNT(*), 0), 2) as win_rate
 -- FROM win_loss_log wll
--- JOIN maps m ON wll.map_id = m.map_id
+-- JOIN map_stats m ON wll.map_id = m.map_id
 -- WHERE wll.created_at > NOW() - INTERVAL '30 days'
 -- GROUP BY m.map_name
 -- ORDER BY total_matches DESC;

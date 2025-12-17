@@ -427,7 +427,7 @@ void BuildWeaponKillsQuery(char[] query, int maxlen, const char[] table_name, co
 
     // Build final query: upsert weapons with RETURNING, then JOIN against the CTE
     Format(query, maxlen,
-           "WITH upserted_weapons AS (INSERT INTO weapons (weapon_name) VALUES %s ON CONFLICT (weapon_name) DO UPDATE SET weapon_name = EXCLUDED.weapon_name RETURNING weapon_id, weapon_name), weapon_kills AS (SELECT * FROM (VALUES %s) AS t(weapon_name, kill_count)) INSERT INTO %s (%s, weapon_id, kill_count) SELECT '%s', uw.weapon_id, wk.kill_count FROM weapon_kills wk JOIN upserted_weapons uw ON uw.weapon_name = wk.weapon_name ON CONFLICT (%s, weapon_id) DO UPDATE SET kill_count = %s.kill_count + EXCLUDED.kill_count, updated_at = CURRENT_TIMESTAMP",
+           "WITH upserted_weapons AS (INSERT INTO weapon_stats (weapon_name) VALUES %s ON CONFLICT (weapon_name) DO UPDATE SET weapon_name = EXCLUDED.weapon_name RETURNING weapon_id, weapon_name), weapon_kills AS (SELECT * FROM (VALUES %s) AS t(weapon_name, kill_count)) INSERT INTO %s (%s, weapon_id, kill_count) SELECT '%s', uw.weapon_id, wk.kill_count FROM weapon_kills wk JOIN upserted_weapons uw ON uw.weapon_name = wk.weapon_name ON CONFLICT (%s, weapon_id) DO UPDATE SET kill_count = %s.kill_count + EXCLUDED.kill_count, updated_at = CURRENT_TIMESTAMP",
            weapons_values, kills_values, table_name, id_column, id_value, id_column, table_name);
 }
 
@@ -699,7 +699,7 @@ public Action Event_RoundEnd(Event event, const char[] name, bool dontBroadcast)
 
     char map_win_loss_query[1024];
     g_Database.Format(map_win_loss_query, sizeof(map_win_loss_query),
-                      "WITH upserted_map AS (INSERT INTO maps (map_name) VALUES ('%s') ON CONFLICT (map_name) DO UPDATE SET map_name = EXCLUDED.map_name RETURNING map_id) INSERT INTO win_loss_log (map_id, win) SELECT map_id, %!s FROM upserted_map",
+                      "WITH upserted_map AS (INSERT INTO map_stats (map_name) VALUES ('%s') ON CONFLICT (map_name) DO UPDATE SET map_name = EXCLUDED.map_name RETURNING map_id) INSERT INTO win_loss_log (map_id, win) SELECT map_id, %!s FROM upserted_map",
                       map_name, sec_forces_won ? "TRUE" : "FALSE");
     ExecuteQueryWithRetry(OnQueryComplete, map_win_loss_query, 0);
 
