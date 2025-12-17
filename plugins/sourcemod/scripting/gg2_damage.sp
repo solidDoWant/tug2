@@ -54,7 +54,7 @@ public void OnPluginStart()
     HookEvent("player_disconnect", Event_PlayerDisconnect);
     HookEvent("player_pick_squad", Event_PlayerPickSquad);
     gg_bomber_headshot_multiplier = CreateConVar("gg_bomber_headshot_multiplier", "500.0", "Multiply headshot on bombers by this much");
-    gg_bomber_nonheadshot_value   = CreateConVar("gg_bomber_nonheadshot_value", "10.0", "Non-Headshots on bombers give this much damage");
+    gg_bomber_nonheadshot_value   = CreateConVar("gg_bomber_nonheadshot_value", "35.0", "Non-Headshots on bombers give this much damage");
     gg_notification_cooldown      = CreateConVar("gg_bomber_notification_cooldown", "3.0", "Cooldown time in seconds for bomber hit notifications");
     AutoExecConfig(true, "gg2_damage");
 

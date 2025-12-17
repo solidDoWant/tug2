@@ -1,4 +1,11 @@
-TUG 2
+TUG 2 TUG 2 TUG 2 TUG 2 TUG 2 TUG 2
+
+If you're a medic, BE A MEDIC! Use smoke, revive folks.
+Crouch + Sprint + Direction (WASD) to drag bodies.
+
+Machine Guns available to the Machine Gunner Role
+
+!calladmin "Your Message Here"
 
 Server is under new management and in testing beta.
 See Discord for details: https://discord.gg/RAQgnjeQuE

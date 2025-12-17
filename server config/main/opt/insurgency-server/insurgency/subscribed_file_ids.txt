@@ -1,238 +1,250 @@
-859127166 // The Armory Expanded 35AB Version Weapons Expansion
-// 1952184042 // The Armory - Sandstorm Source
-// 2544601599 // The Armory - Sandstorm Source Expansion
-// 927374621 // The Armory Expanded 35AB Version Weapons Expansion Assets and Resources 
-// 2750162587 // The Armory Expanded 35AB Version Conquer Support
-890084623 // Map vote images
-1432912836 // Vote Screen for Cooperation mode Map Collection - more map vote images
-878171320 // AE_miscaddons - sound fix see https://steamcommunity.com/workshop/filedetails/discussion/859127166/1697175413680978909/#c1697175413685307801
-1380424575 // ins_abdallah_coop_fix - map
-// 880051898 // Veteran Insurgents (Fixed) - randomized ins skins - Disabled to test fix weird ragdoll "stretching" issue
-1595712656 // Hesco Bastions (HD) - reskin mesh barriers
-2510398645 // crash_course - map
-346843105 // the_burbs_coop - map
-1988310157 // Iron Express - map
-1093292666 // baghdad_coop_b5 - map
-2035514246 // Pripyat - map
-2347162033 // bridge_coop_2021 - map
-2508715344 // cementplant - map
-498255733 // clean_sweep_coop_ws - map
-393352418 // karkand_coop - map
-2886399835 // GIOCONDA ERON MARKET - map
-2296749488 // kunar - map
-1989120573 // aof_mapdata.vpk - voting images, custom sounds for AoF maps
-1989124779 // arcate_aof (checkpoint) - map
-1989125473 // dedust1p2_aof (checkpoint) - map
-1998338008 // gizab_aof (checkpoint) - map
-2010242125 // kandagal_aof (checkpoint) - map
-2461902631 // limansk_aof (checkpoint) - map
-1989129424 // station_aof (checkpoint) - map
-1083630976 // winter_rescue_ws (2020 fix) - map
-2599050685 // hideout_aof (checkpoint) - map
-2110527993 // peak_coop - map
-1388556079 // ps7_co_b91 - map
-2015565348 // Szepezd Redux Co-op - map
-2678703408 // Dust - No Clips - map
-2240929834 // Badel 2020 - map
-1568832749 // cs_downtown_coop - map
-1963814261 // Haditha - map
-2575290829 // as_tundra_v3_ins - map
-1269418802 // BB Desertpass Coop - map
-1769796161 // desert_hell_coop_remix - map
-2818856572 // Almaden [almaden_coop] - map
-2778393463 // Hideout Open [hideout_coop] - map
-498257082 // fortress_coop_ws - map
-1617934454 // Glycencity Coop - map
-2373005014 // CSGO Workout - map
-2575302067 // pl_minecraft_redstone_f15_ins_b - map
-2010282416 // ins_tosca_v1 - map
-1734873741 // de_mirage_csco_pb4 - map
-939870068 // trenches6_coop_v1_2 - map
-939859861 // cs_motel_coop_nd_v1_3 - map
-2696258019 // Congress [congress_open_coop] - map
-2680458180 // Dunkirk [dunkirk_pve] - map
-2361038040 // citadel_coop - map
-1787552582 // karkand_redux_p2 - map
-2705735526 // Haditha Dam 2022 - map
-2265996024 // Italy Redux - map
-2071869506 // Left 4 Dead 2 Bridge - map
-2766356125 // SOTU Keep v1 - map
-335578709 // Hijacked Final Workshop Version - (hijacked_ws) - map
-2886400751 // GIOCONDA ERON SANDHILL - map
-2574250983 // prophet_coop2021 - map
-2980224364 // block_party_fixed - map
-292081732 // launch_control_coop_ws - map
-1479939653 // pipeline_coop - map
-1562834364 // ins_chinatown - map
-2635219866 // Depot Open [depot_checkpoint] - map
-1597536823 // ins_mountain_escape_v1_3 - map
-1161583627 // market_night_coop - checkpoint - map
-1163373032 // district_night_coop - checkpoint - map
-1188029105 // uprising_open_coop - checkpoint - map
-1193834259 // buhriz_open_coop - checkpoint - map
-2168116352 // de_centered assets - assets for de_centered_v1
-2168078889 // de_centered_v1 - map
-1172671775 // warehouse_coopv3b4 - map
-1501650494 // Docks_coopb2_day - map
-1641814825 // ins_roadrage - map
-1642037631 // is_battlebag - map
-939871975 // shrine_coop - map
-1388543513 // hurtlocker_coop_legacy - map
-523594320 // osama_b3_checkpoint - map
-1574936010 // cutoff4-9 - map
-2886400318 // GIOCONDA ERON PANJ - map
-1482148634 // facilityb2_coop_v1_1 - map
-2886398797 // GIOCONDA ERON FOREST - map
-2169943977 // Fairgrounds - map
-2522001554 // Saint Lo (Assets) - assets for ins_saint_lo_v1 TODO need to add `"sounds"			"scripts/audio/doi_sounds_world.txt"` to theaters
-2521980943 // Saint Lo - map
-1194875426 // oms_corridor_coopb3 - map
-939856603 // convoy_day_apc_coop_v1_1 - map
-2412285987 // SoTu_M_is_for_Madness - map
-599730897 // dust2_checkpoint - map
-// 2736585272 // Chilly Assets - assets for ins_chilly_p1
-// 2736577284 // Chilly - map REMOVED DUE TO CLIENT CRASHING
-2688056722 // Gizab BM - map
-1905422214 // insz_favela - map
-2148192104 // Inferno New [inferno_new_v1] - map
-292080383 // jail_break_coop_ws - map
-2835956934 // laboratory - map
-2832406643 // The Sacrifice [the_sacrifice] - map
-2840759249 // Downtown [downtown_coop] - map
-2850176903 // Oilfield [Beta] - map
-2851587444 // Oilfield (Assets) - assets for oilfield_pve TODO need to add `"sounds"			"scripts/game_sounds_oilfield_pve.txt"` to theaters
-2886399534 // GIOCONDA ERON KANDAGAL - map
-2933351645 // GIOCONDA ERON INSCROSSING - map
-1304334030 // block26_b1 - map
-2886401508 // GIOCONDA ERON WHITE STREETS - map
-2886401419 // GIOCONDA ERON VILLAGE - map
-2886400867 // GIOCONDA ERON SMALLTOWN - map
-2538211718 // Drycanal_coop_old
-2876174607 // fortress_coop_fixed - map
-1189448765 // miransh_alpha - map
-2888145663 // game_day - map
-1576811737 // docks_day coop checkpoint - map
-1190497035 // market_open_coop - checkpoint - map
-2890756233 // jail_break_fix - map
-2888146733 // tunnel_rats - map
-424224898 // warehouse_coopv2u1 - map
-2208434069 // Cobblestone - map
-2168884875 // de_centered_nv1 - map
-1202839339 // de_vertigo_coop - checkpoint - map
-2899910052 // SoTu Pyramid v2 - map
-2802314613 // Hard Rain [hard_rain] - map
-862973282 // BB Gauntlet - map
-2034193905 // Gauntlet - map
-1571676579 // de_prodigy_coop - map
-2907513227 // 2022_BB_Arena_1 - map
-2836590374 // 72街仓库 cs_assault - map
-1586281347 // dusty_anguish_coopvfix - map
-672667761 // Chateau Tunnels 2.0 - map
-500913221 // caves_coop3 - map
-2910284180 // baghdad_remastered - map
-498252536 // invasion_coop_ws - map
-2112742937 // Aqueduct - map
-2267598925 // Prison 2020 - map
-1642088392 // ins_leveled - map
-607285980 // bb river coop - map
-2886397883 // GIOCONDA ERON BUNKERS - map
-1457936959 // bastion_coop - map
-1388547184 // ikazuchi_jungle_coop_b3 - map
-1642064080 // ins_kabul - map
-1264090927 // l4d_airport_terminal_b3 - map
-2927739938 // liberty_mall - map
-2933360838 // GIOCONDA ERON CHERNOMAYSK - map
-2940882082 // GIOCONDA ERON SPIRITS - map
-2940872461 // GIOCONDA ERON SEAPORT - map
-1586281667 // jack_hammer_coopvfix - map
-2959755350 // bombshelter - map
-1180002850 // nomercy_coopv1 - map
-2962802373 // cityhall - map
-2967215012 // l4d_garage_alley_day - map
-2138928341 // Coldwater - map
-1912410260 // SoTu Spiral - map
-352148389 // angle_iron_coop_ws - map
-1388127544 // bb_subyard_beta5 - map
-2603024361 // Marquis - map
-1148522368 // healthcenter_coop2.0[fixed specularmap] - map
-3015824154 // Gold Rush - map
-3015821699 // Dustbowl - map
-// 3022473579 // GIOCONDA ERON KORDON - map REMOVED DUE TO CLIENT CRASHING
-1388118900 // bb_lighthouse_gold - map
-3041234121 // shop_invasion_coop_b2 - map
-2966432441 // dead_air - map
-1469832785 // cs_office_coop_b2 - map
-1584514038 // Christmas House - map
-2107007637 // Breach - map
-3104109873 // GIOCONDA ERON MOUNTAINS - map
-1130993973 // downtown_coopv1a - map
-1908980534 // ins_arcate_npb1 - map
-2010901052 // ins_tosca_nv1 - map
-2670949874 // ministry_coop_oldv1 - map
-3268502951 // fairgrounds_open_b4 - map
-3260723441 // Coldwater (Tugged 2024) - map
-3337875920 // kunar_fixed_a3 - map
-2816092186 // Taboo Coop - map
-939888961 // de_safehouse_coop_v1_4_nde2 - map
-2567903738 // Breville [breville_pve] - map
-922982416 // ins_panzer_tag (insurgency version) - map
-400214755 // Abdallah - map
-2670960489 // Dusty Nights - Checkpoint + Hunt - by Chief C - map
-492051918 // the_raid_coop_ws - map
-2419142919 // Dog Red (ins_dog_red) from DOI mod - map
-1100976090 // Operation Intrude 2.0 - map
-605055192 // crossbow - map
-890747795 // Showdown (Cod 4 Remake) - map
-2784911431 // Tet [tet_x64] - map
-1722833808 // tet_b1 - map
-2769526047 // Salerno [salerno_pve] - map
-822609478 // ins_bridgeatremagen_coop - map
-501104499 // Prospect COOP - map
-815189600 // cs_workout_v1 - map
-2573340176 // Rhineland [rhineland_pve] - map
-795846849 // mountain_lake_coopv1_1 - map
-650616844 // Estates_b4 - map
-1393527442 // point_blank_fix - map
-3008318690 // Payback [payback_x64] - map
-2575293565 // ar_dizzy_ins - map
-532461305 // badlands_b1 - map
-573278223 // Panama Canal - map
-1125220551 // caves_coop - map
-2352663377 // Convoy [convoy_pve] - map
-2483881948 // Frequency Open [frequency_open_coop] - map
-432649454 // ps7 insurgency-2 - map
-2787485611 // Cu Chi Tunnels [cu_chi_tunnels_x64] - map
-283120201 // bunker_busting_coop_ws - map
-2876168227 // bunker_busting - map
-2606328136 // Pow Raid [pow_raid_x64] - map
-1832309723 // SoTu City - map
-2627393585 // Crete [crete] - map
-2674972433 // DOI Resistance Fix - map
-426712960 // Almaden - map
-2717691676 // Flakturm - map
-426742049 // Karkar - map
-517972533 // zagros_convoy_b5 - map
-2588320140 // Bastogne [ins_bastogne] - map
-1715300726 // takbar_b6 - map
-2597084197 // car_parking_ins_b - map
-2575300560 // operation_metro_b_ins - map
-440046323 // SHELLSHOCK - map
-2191010494 // Dust New - map
-1893781116 // badlands_b2 - map
-2168901741 // de_centered assets(night) - assets for de_centered_nv1
-2010310686 // Tosca assets - assets for ins_tosca_nv1
-1379716589 // Maps CPSetup.txt Fix - fixes for badlands_b1, the_raid_coop_ws, point_blank, ikazuchi_jungle_coop_b2_night, desert_island_v11
-2327421432 // Fixed Navmesh for custom maps - bot navmesh fixes for cs_workout_v1, jack_hammer_coopv1_2, dusty_anguish_coopv1_1, amber_spirits_coop
-2908499942 // TUG Voting - add missing votemap images
-586951234 // bilibili server tactical maps(minimap)战术地图 - add missing minimaps for some custom maps
-2544674426 // DOI soundscapes - sounds for DOI maps
-2169963412 // L4D2 soundscapes - sounds for L4D2 maps
-2767466217 // Tug Sounds3 - missing sounds (e.g. medic "let me heal you")
-2744179612 // Tug Arty Smoke (INS) - pink smoke (insurgents) TODO needs plugin based off of https://github.com/rrrfffrrr/Insurgency-server-plugins?tab=readme-ov-file#FireSupport
-2744181131 // Tug Green smoke (US) - green smoke (sec) TODO needs plugin based off of https://github.com/rrrfffrrr/Insurgency-server-plugins?tab=readme-ov-file#FireSupport
-2744435243 // Tug M1897 - M1897 shotgun
-2834243418 // SEC icon (spade) - icon on class selection screen
-2393118985 // Masterchief Assets-Two - contains gas grenande particles (TODO re-upload particles only to reduce download size)
-2749105820 // Tug SIG MCX - MCX weapon files for theater
-2749114575 // Tug M110 (SASS) - M110 weapon files for theater
-3551935737 // TUG Scripts 3.9 (10,12,14p) - theater with old server config
+// INSURGENCY_1
+2393118985 // Masterchief (for smoke particles)
+//2796043393 // tug scripts 3.1 (less bombers // 203 arty)
+//2880546896 // tug scripts 3.2 (14p)
+//3038183728 // tug scripts 3.3 (14p)
+//3039388961 // tug scripts 3.4 (14p)
+//3039907582 // tug scripts 3.5 (14p)
+//3048326419 // tug scripts 3.6 (14p)
+//3548813711 // tug scripts 3.8 (10p)
+3551935737 // tug scripts 3.9 (10,12,14p)
+2767466217 // tug sounds3
+2744179612 // tug pink smoke
+2744181131 // tug green smoke
+859127166 // 35ab vanilla
+2744435243 // tug m1897
+2767467973 // tug upgrades3
+2749105820 // tug sig_mcx
+2749114575 // tug m110 (sass)
+2908499942 // tug voting images
+//utils
+//880051898 // Veteran Insurgents again maybe.....
+2905676416 // PFLP Insurgents
+//2598253212 // MARSOC - Critical Skills Operators
+2834243418 // spade icon MARSOC
+2300512394 // Sandstorm weapon cache
+936432939 // intense bullet crack
+878171320 // AE_miscaddons
+2544674426 // doi soundscapes
+//2594365894 // othermaps votepack
+//1867199309 //MASTERCHIEF VOTE SCREEN
+1876212727 //MASTERCHIEF TACTICAL MAPS
+//890084623 // map vote ui
+1353915069 // bm_tacticalmaps
+586951234 // bilibili server tactical maps
+2568914411 //parachutes
+1595712656 //hesco barriers
+2651481089 //ins_soundscapes (needed for tet_x64)
+1989120573 //AOF Mapdata
+2168116352 //de_centered assets (needed for de_centered_v1)
+2522001554 //saint lo assets (needed for ins_saint_lo_v1)
+//3562969635 // environ terrorists
+//3469147622 // Middle East Insurgents from Squad
+//355701236 // christmas present IEDs
+//3071910412 // christmas present ied (vpk)
+
+1379716589 //CPSetup.txt
+
+890084623 // nullifidian map vote ui
+2327421432 // fixed navmesh for custom maps
+2169963412 // l4d2 soundscapes
+2825248282 // panama canal sound fix
+
+//maps
+2787485611 // cu_chi_tunnels_x64 checkpoint 144.37 MB
+2208434069 // cobblestone checkpoint 320.35 MB
+1642088392 //ins_leveled checkpoint 33.17 MB
+//2886399835 //gioconda_eron_market checkpoint 79.846 MB
+//2886400867 //gioconda_eron_smalltown checkpoint 17.460 MB
+//2886401419 //gioconda_eron_village checkpoint 57.696 MB
+//2886400318 //gioconda_eron_panj checkpoint 106.960 MB
+2910284180 //baghdad_remastered checkpoint 84.763 MB
+1586281347 //dusty_anguish_coopvfix checkpoint 63.097 MB
+795846849 //mountain_lake_coopv1_1 checkpoint 63.100 MB
+2907513227 //2022_BB_Arena_1 checkpoint 36.834 MB
+2347162033 // bridge_coop_2021 checkpoint 176.724 MB
+2034193905 //gauntlet checkpoint 65.831 MB
+2888146733 //tunnel_rats checkpoint 48.107 MB
+2890756233 //jail_break_fix checkpoint 48.230 MB
+2888145663 //game_day checkpoint 36.698 MB
+1189448765 //miransh_alpha checkpoint 165.125 MB
+2876174607 //fortress_coop_fixed checkpoint 49.163 MB
+2538211718 //drycanal_coop_old checkpoint 52MB
+939870068 //trenches6_coop_v1_2 checkpoint 85.56 MB
+2508715344 //cementplant checkpoint 280.132 MB
+2840759249 //downtown_coop checkpoint 57.740 MB
+2670960489 //dusty_nights_coop checkpoint 24.896 MB
+2832406643 //the_sacrifice checkpoint 265.734 MB
+2835956934 //laboratory checkpoint 28.113 MB
+283120201 //bunker_busting_coop_ws checkpoint 25.909 MB
+2588320140 //ins_bastogne checkpoint 729.778 MB
+939856603 //convoy_day_apc_coop_v1_1 checkpoint 63.294 MB
+
+517972533 //zagros_convoy_b5 checkpoint 94.961 MB
+2575300560 //operation_metro_b_ins checkpoint 44.444 MB
+2521980943 //ins_saint_lo_v1 checkpoint 782.088 MB
+2606328136 //pow_raid_x64 checkpoint 162.285 MB
+2169943977 //fairgrounds checkpoint 207.056 MB
+1482148634 //facilityb2_coop_v1_1 checkpoint 94.965 MB
+523594320 //osama_b3_checkpoint checkpoint 100.108 MB
+1574936010 //cutoff4-9 checkpoint 171.804 MB
+939871975 //shrine_coop_v1 checkpoint 133.469 MB
+1100976090 //operation_intrude_v2 checkpoint 34.088 MB
+2352663377 //convoy_pve checkpoint 105.816 MB
+1501650494 //Docks_coopb2_day checkpoint 229.537 MB
+1172671775 //warehouse_coopv3b4 checkpoint 146.095 MB
+2168078889 //de_centered_v1 checkpoint 261.285 MB
+1125220551 //caves_coop checkpoint 30.069 MB
+
+1163373032 //district_night_coop checkpoint 84.006 MB
+1161583627 //market_night_coop  checkpoint 73.727 MB
+2635219866 //depot_checkpoint checkpoint 67.774 MB
+501104499 //prospect_coop_b6 checkpoint 491.456 MB
+2510398645 //crash_course checkpoint 195.210 MB
+292081732 //launch_control_coop_ws checkpoint 48.905 MB
+2567903738 //breville_pve checkpoint 775.090 MB
+440046323 //shellshock checkpoint 38.009 MB
+890747795 //showdown checkpoint 117.628 MB
+426742049 //karkar_b11 checkpoint 231.609 MB
+2574250983 //prophet_coop2021 checkpoint 54.862 MB
+2627393585 //crete checkpoint 664.680 MB
+346843105 //the_burbs_coop checkpoint 160.871 MB
+2784911431 //tet_x64 checkpoint 201.726 MB
+2766356125 //sotu_keep_v1 checkpoint 99.834 MB
+1393527442 //point_blank_fix 184.478 MB
+1787552582 //karkand_redux_p2 checkpoint 122.408 MB
+2705735526 //haditha_dam_2022 checkpoint 122.855 MB
+2361038040 //citadel_coop checkpoint 65MB
+2696258019 //congress_open_coop checkpoint 132MB
+939859861 //cs_motel_coop_nd_v1_3 checkpoint 193MB
+573278223 //panama_canal_b2 checkpoint 441MB
+2717691676 //flakturm checkpoint 546MB
+822609478 //ins_bridgeatremagen_coop checkpoint 163MB
+2419142919 //ins_dog_red checkpoint 251MB
+2373005014 //ins_workout checkpoint 306MB
+1617934454 //glycencity checkpoint 33MB
+1893781116 //badlands_b2 checkpoint 211MB
+1269418802 //bb_desertpass_coop_ws checkpoint 102MB
+1963814261 //haditha_coop checkpoint 118MB
+2818856572 // almaden_coop checkpoint 113.033 MB
+2769526047 //salerno_pve checkpoint 652.608 MB
+2240929834 //badel_coop_2020 checkpoint 223.363 MB
+2678703408 //dust_open checkpoint 163.448 MB
+1988310157 //iron_express checkpoint 114.643 MB
+2674972433 //doi_resistance_2021 checkpoint 260MB
+2015565348 //szepezd_redux_coop checkpoint 199MB
+2035514246 //pripyat checkpoint 182.345 MB
+2110527993 //peak_coop checkpoint 146MB //VERY HARD
+605055192  //crossbow checkpoint 53MB
+2296749488 //kunar checkpoint 103MB
+1989124779 //arcate_aof checkpoint 61MB
+1989125473 //dedust1p2_aof checkpoint 163MB
+//1998338008 //gizab_aof checkpoint 120MB
+2010242125 //kandagal_aof checkpoint 103MB
+2461902631 //limansk_aof checkpoint 274MB
+1989129424 //station_aof checkpoint 52MB
+1083630976 //winter_rescue_ws checkpoint 85MB
+2599050685 //hideout_aof checkpoint 139MB
+
+// TESTING //
+3510794344 // de_nuke checkpoint 203.458 MB
+3511353649 // coastdawn_gf checkpoint 417.801 MB
+3468251942 // ins_desert_atrocity_a1
+1586281667 // jack_hammer_coopvfix checkpoint 62.901 MB
+2107007637 // de_breach_d checkpoint 454.830 MB
+1180002850 // nomercy_coopv1 checkpoint 139.001 MB
+//335578709 //hijacked_ws checkpoint 200.115 MB
+//1584514038 //christmas_house_coop checkpoint 79.487 MB
+//1202835280 // christmas house sound
+//576166552 // pain and death 47.053 MB
+//2793724329 // Definitive Arabic Voices 96.703 MB
+//3337875920 // kunar_fixed_a3 checkpoint 124.135 MB
+2257195565 // hesitation_coop_ins 56.102 MB
+1905422214 // insz_favela 23.997 MB
+2688056722 // gizab_bm checkpoint 134MB
+650616844 // estates_b4 checkpoint 293.672 MB
+1202839339 // de_vertigo_coop checkpoint 216.113 MB
+//3268502951 // fairgrounds_open_b4 checkpoint 197.195 MB
+//3267774904 // fairgrounds_open_b4 assets 330.904 MB
+//3269099770 // fairgrounds_open_b4 map overview 525.296 KB
+//3268501596 // fairgrounds_open_b4 328.672 KB
+1469832785 // cs_office_coop_b2 checkpoint 192.217 MB
+3260723441 // de_coldwater_tug24 checkpoint 297.924 MB
+1734873741 // de_mirage_csco_pb4 checkpoint 88.908 MB
+492051918 // the_raid_coop_ws checkpoint 64.282 MB
+2966432441 // dead_air checkpoint 290.625 MB
+2670949874 // ministry_coop_oldv1 checkpoint 60MB
+1908980534 // ins_arcate_npb1 checkpoint 61MB
+2010901052 // ins_tosca_nv1 checkpoint 201.712MB
+//3104109873 //gioconda_eron_mountains checkpoint 107.914 MB
+3041234121 //shop_invasion_coop_b2 29.549 MB
+//3022473579 //gioconda_eron_kordon checkpoint 367.987 MB
+3015821699 //ins_dustbowl checkpoint 306.791 MB
+3015826569 //dustbowl assets 3.456 MB
+3015824154 //ins_goldrush checkpoint 324.191 MB
+3015826914 //goldrush assets 4.482 MB
+3008318690 //payback_x64 checkpoint 194.477 MB
+2603024361 //marquis checkpoint 303.399 MB
+2071869506 //l4d2_bridge checkpoint 184.939 MB
+2191010494 //dust_new checkpoint 459.156 MB
+2980224364 //block_party_fixed checkpoint 81.171 MB
+2967215012 //l4d_garage_alley_day checkpoint 209.963 MB
+2962802373 //cityhall checkpoint 283.406 MB
+2148192104 //inferno_new_v1 checkpoint 277.502 MB
+2959755350 //bombshelter checkpoint 472.533 MB
+498255733 //clean_sweep_coop_ws checkpoint 55.228 MB
+1388556079 //ps7_co_b91 checkpoint 75.165 MB
+//2886397883 //gioconda_eron_bunkers checkpoint 69.384 MB
+1457936959 //bastion_coop checkpoint 82.391 MB
+1388547184 //ikazuchi_jungle_coop_b3 checkpoint 328.784 MB
+1380424575 //ins_abdallah_coop_fix checkpoint 64.761 MB
+2802314613 //hard_rain checkpoint 366.95 MB
+2927739938 //liberty_mall checkpoint 254.297 MB
+//2933360838 //gioconda_eron_chernomaysk checkpoint 262.121 MB
+
+//1188029105 //uprising_open_coop checkpoint 45.417 MB
+//1194875426 //oms_corridor_coopb3 checkpoint 359.985 MB
+//1193834259 //buhriz_open_coop checkpoint 51.521 MB
+//2816092186 //taboo_coop checkpoint 13.466 MB
+//2940882082 //gioconda_eron_spirits checkpoint 68.843 MB
+//2886401508 //gioconda_eron_white_streets checkpoint 22.704 MB
+//2940872461 //gioconda_eron_seaport checkpoint 106.407 MB
+//2651481089 // custom map sndscapes (frequency open)
+//2851587444 // oilfield_pve assets
+//874219657 //takbar soundscapes
+//2899910052 //sotu_pyramid checkpoint 275.507 MB
+//2850176903 //oilfield_pve checkpoint 377.108 MB
+//1388127544 //bb_subyard_beta5 checkpoint 40.053 MB
+//1832309723 //sotu_city checkpoint 142MB
+//607285980 //bb_river_coop_ws checkpoint 34.689 MB
+//318205420 //block_party_coop_ws checkpoint 80.067 MB
+//922982416 //ins_panzer_tag checkpoint 29.091 MB
+//2886399362 //gioconda_eron_inscrossing checkpoint 45.255 MB
+//400214755 //abdallah_b1 checkpoint 148.112 MB
+//1093292666 //baghdad_coop_b5 checkpoint 210MB
+//2021861986 // kandahar_alpha_koth 79.743MB
+//939888961 //de_safehouse_coop_v1_4_nde2 checkpoint 113.282 MB
+//2573340176 //rhineland_pve checkpoint 808.534 MB
+//862973282 // bb_gauntlet_b9_ws_d checkpoint 38.929 MB
+//283122727 //dusty_anguish_coopv1_1 checkpoint 52.940 MB
+//1190497035 //market_open_coop checkpoint 73.698 MB
+//2483881948 //frequency_open_coop checkpoint 86.737 MB
+//1304334030 //block26_b1 checkpoint 58.289 MB
+//2836894765 //gioconda_eron_kandagal checkpoint 72.797 MB
+//2858191290 //gioconda_eron_phantomfury checkpoint 19.226 MB
+//292080383 //jail_break_coop_ws checkpoint 48.259 MB
+//2412285987//SoTu_M_is_for_Madness checkpoint 161.388 MB
+//2782623021 //gioconda_eron_forest checkpoint 120.195 MB
+//1388543513 //hurtlocker_coopv_legacy checkpoint 39.268 MB
+//814433362 //takbar checkpoint 109.166 MB
+//1641814825 //ins_roadrage checkpoint 71.129 MB
+//1597536823 //ins_mountain_escape_v1_3 checkpoint 18.946 MB
+//1479939653 //pipeline_coop checkpoint 35.602 MB
+//1562834364 //ins_chinatown checkpoint 271.830 MB
+//2680458180 //dunkirk_pve checkpoint 753MB
+//1769796161 //desert_hell_coop_remix checkpoint 68MB
+//426712960  //almaden_b5 checkpoint 169.150 MB
+//1083704311 //almaden_coop_v1_1 checkpoint 159.790 MB
+//498257082 //fortress_coop_ws checkpoint 44MB
+//2777062809 //gioconda_eron_market checkpoint 79MB
+//2886400751 //gioconda_eron_sandhill checkpoint 90.482 MB
