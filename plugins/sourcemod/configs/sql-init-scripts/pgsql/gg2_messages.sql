@@ -93,7 +93,7 @@ INSERT INTO gg2_messages_rotating_admin (id, message, enabled) VALUES
   (2, '{gold}Admins:{default} use {green}sm_spec{default} {red}playerName{default} in console to send a player to Spectator (great for shit ass medics)', TRUE),
   (3, '{gold}Admins:{common} Remember: your job is to keep others from being {red}dicks{common}, not to be one yourself.', TRUE),
   (4, '{gold}Admins:{common} Don''t fuck with the gravity. If you do, let ATT know so they can fix it.', TRUE)
-  (4, '{gold}Admins:{common} Players can be banned from the medic slots with {green}sm_ban_medic{default} {red}playerName{default}.', TRUE)
+  (5, '{gold}Admins:{common} Players can be banned from the medic slots with {green}sm_ban_medic{default} {red}playerName{default}.', TRUE)
 ON CONFLICT (id) DO UPDATE SET
   message = EXCLUDED.message,
   enabled = EXCLUDED.enabled,
