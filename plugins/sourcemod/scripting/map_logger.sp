@@ -154,8 +154,8 @@ void ExecuteMapQuery(SQLQueryCallback callback, const char[] operationName, cons
     char query[512];
     char formattedQuery[512];
 
-    // First, format any varargs into a temporary string
-    VFormat(formattedQuery, sizeof(formattedQuery), queryFormat, 5);
+    // First, format any varargs into a temporary string (varargs start at parameter 4)
+    VFormat(formattedQuery, sizeof(formattedQuery), queryFormat, 4);
 
     // Then format the escaped map name as the first parameter
     Format(query, sizeof(query), formattedQuery, escapedMapName);
