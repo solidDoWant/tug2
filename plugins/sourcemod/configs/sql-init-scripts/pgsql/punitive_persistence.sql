@@ -6,11 +6,9 @@
 CREATE TABLE IF NOT EXISTS punishments (
     punishment_id SERIAL PRIMARY KEY,
     punishment_type VARCHAR(32) NOT NULL,
-    target_steamid VARCHAR(32),
+    target_steam_id BIGINT,
     target_ip VARCHAR(64),
-    target_name VARCHAR(64),
-    admin_steamid VARCHAR(32),
-    admin_name VARCHAR(64),
+    admin_steam_id BIGINT,
     reason VARCHAR(255),
     issued_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     expires_at TIMESTAMP,
@@ -22,8 +20,8 @@ CREATE TABLE IF NOT EXISTS punishments (
 -- =====================================================
 
 -- Index for checking active punishments by SteamID
-CREATE INDEX IF NOT EXISTS idx_punishments_steamid 
-ON punishments(target_steamid, is_active);
+CREATE INDEX IF NOT EXISTS idx_punishments_steamid
+ON punishments(target_steam_id, is_active);
 
 -- Index for checking active punishments by IP
 CREATE INDEX IF NOT EXISTS idx_punishments_ip 
@@ -42,15 +40,15 @@ ON punishments(is_active, expires_at);
 -- =====================================================
 
 -- Ensure at least one target identifier exists
-DO $$ 
+DO $$
 BEGIN
     IF NOT EXISTS (
-        SELECT 1 FROM pg_constraint 
+        SELECT 1 FROM pg_constraint
         WHERE conname = 'chk_target_identifier'
     ) THEN
-        ALTER TABLE punishments 
-        ADD CONSTRAINT chk_target_identifier 
-        CHECK (target_steamid IS NOT NULL OR target_ip IS NOT NULL);
+        ALTER TABLE punishments
+        ADD CONSTRAINT chk_target_identifier
+        CHECK (target_steam_id IS NOT NULL OR target_ip IS NOT NULL);
     END IF;
 END $$;
 
@@ -72,16 +70,16 @@ END $$;
 -- =====================================================
 
 -- Example permanent ban by SteamID:
--- INSERT INTO punishments (punishment_type, target_steamid, target_name, admin_steamid, admin_name, reason, expires_at) 
--- VALUES ('ban_steamid', 'STEAM_0:1:12345678', 'BadPlayer', 'STEAM_0:1:87654321', 'AdminName', 'Cheating', NULL);
+-- INSERT INTO punishments (punishment_type, target_steam_id, admin_steam_id, reason, expires_at)
+-- VALUES ('ban_steamid', 76561197960287930, 76561197960265729, 'Cheating', NULL);
 
 -- Example timed IP ban (expires in 24 hours):
--- INSERT INTO punishments (punishment_type, target_ip, admin_steamid, admin_name, reason, expires_at) 
--- VALUES ('ban_ip', '192.168.1.100', 'STEAM_0:1:87654321', 'AdminName', 'Griefing', CURRENT_TIMESTAMP + INTERVAL '24 hours');
+-- INSERT INTO punishments (punishment_type, target_ip, admin_steam_id, reason, expires_at)
+-- VALUES ('ban_ip', '192.168.1.100', 76561197960265729, 'Griefing', CURRENT_TIMESTAMP + INTERVAL '24 hours');
 
 -- Example permanent gag:
--- INSERT INTO punishments (punishment_type, target_steamid, target_name, admin_steamid, admin_name, expires_at) 
--- VALUES ('gag', 'STEAM_0:1:12345678', 'SpammyPlayer', 'STEAM_0:1:87654321', 'AdminName', NULL);
+-- INSERT INTO punishments (punishment_type, target_steam_id, admin_steam_id, expires_at)
+-- VALUES ('gag', 76561197960287930, 76561197960265729, NULL);
 
 -- =====================================================
 -- Maintenance Queries
@@ -104,22 +102,22 @@ END $$;
 -- AND expires_at < CURRENT_TIMESTAMP;
 
 -- Find all punishments by a specific admin
--- SELECT * FROM punishments WHERE admin_steamid = 'STEAM_0:1:87654321';
+-- SELECT * FROM punishments WHERE admin_steam_id = 76561197960265729;
 
 -- Find all punishments for a specific player
--- SELECT * FROM punishments WHERE target_steamid = 'STEAM_0:1:12345678';
+-- SELECT * FROM punishments WHERE target_steam_id = 76561197960287930;
 
 -- Count punishments by type
--- SELECT punishment_type, COUNT(*) as count 
--- FROM punishments 
--- WHERE is_active = TRUE 
+-- SELECT punishment_type, COUNT(*) as count
+-- FROM punishments
+-- WHERE is_active = TRUE
 -- GROUP BY punishment_type;
 
 -- Find players with multiple active punishments
--- SELECT target_steamid, target_name, COUNT(*) as punishment_count 
--- FROM punishments 
--- WHERE is_active = TRUE 
--- GROUP BY target_steamid, target_name 
+-- SELECT target_steam_id, COUNT(*) as punishment_count
+-- FROM punishments
+-- WHERE is_active = TRUE
+-- GROUP BY target_steam_id
 -- HAVING COUNT(*) > 1
 -- ORDER BY punishment_count DESC;
 

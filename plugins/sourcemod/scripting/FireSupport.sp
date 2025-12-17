@@ -1,5 +1,4 @@
 //(C) 2020 rrrfffrrr <rrrfffrrr@naver.com>
-// Enhanced by Assistant 2025
 
 #pragma semicolon 1
 #pragma newdecls required
@@ -7,9 +6,9 @@
 public Plugin myinfo =
 {
     name        = "[INS] Fire support - Enhanced",
-    author      = "rrrfffrrr, Assistant",
-    description = "Fire support with multiple weapons and team-specific settings",
-    version     = "1.2.0",
+    author      = "rrrfffrrr, zachm",
+    description = "Fire support with multiple weapons, database stats, Discord integration, translations, and immersive artillery sound effects",
+    version     = "1.4.0",
     url         = "https://github.com/solidDoWant/tug2/tree/master/plugins/sourcemod"
 };
 
@@ -22,6 +21,7 @@ public Plugin myinfo =
 #include <sdkhooks>
 #include <timers>
 #include <morecolors>
+#include <discord>
 
 const int   TEAM_SPECTATE     = 1;
 const int   TEAM_SECURITY     = 2;
@@ -38,6 +38,24 @@ Handle      cGameConfig;
 Handle      fCreateRocket;
 
 int         gBeamSprite;
+
+// Database integration for stat tracking
+Database    g_Database = null;
+
+// Special sound names to refer to a random sound from one of the arrays
+// These require workshop item 2983737308 (TUG WW2 Sounds)
+#define SOUND_REQUEST_ARTILLERY "#request_artillery_sound"
+char requestArtillerySoundFmt[] = "m777/requestartillery/requestartillery%d.ogg";
+int  requestArtillerySoundCount = 12;
+
+#define SOUND_INVALID_ARTILLERY "#invalid_artillery_sound"
+char          invalidArtillerySoundFmt[] = "m777/invalid/invalidtarget%d.ogg";
+int           invalidArtillerySoundCount = 5;
+
+char          distantArtillerySound[]    = "tug/arty_distant_1.wav";
+
+// Global forward for other plugins to hook fire support calls
+GlobalForward FireSupportCalledForward;
 
 // Support type configuration
 enum struct SupportType
@@ -62,6 +80,7 @@ enum struct SupportType
     float insurgentDelay;            // Cooldown for Insurgent team
     bool  spawnSmoke;                // Whether to spawn smoke on impact
     char  smokeType[64];             // Type of smoke grenade to spawn (e.g., "smokegrenade_projectile")
+    char  discordMessage[256];       // Discord notification message (empty = no notification)
 }
 
 SupportType gSupportTypes[MAX_SUPPORT_TYPES];
@@ -88,21 +107,13 @@ int         gCurrentRound;           // Current round number, incremented on eac
 
 // Pending fire support triggered by grenades
 // Stores DataPacks indexed by grenade entity index
-// Fire support triggers when grenade becomes stationary (velocity < threshold for sufficient time)
+// Fire support triggers when grenade detonates (grenade_detonate event)
 Handle      gPendingFireSupport[2048];    // Max entities = 2048
-
-// Grenade stationary tracking
-// Stores how many consecutive checks the grenade has been stationary
-// When this reaches STATIONARY_CHECKS_REQUIRED, fire support triggers
-int         gGrenadeStationaryChecks[2048];    // Consecutive stationary checks per grenade
-
-const float STATIONARY_VELOCITY_THRESHOLD = 10.0;    // Units per second - grenade considered stationary below this
-const int   STATIONARY_CHECKS_REQUIRED    = 10;      // Number of consecutive 0.1s checks (0.3s total) before triggering
 
 // Fire support target offset
 // Raises the target point above ground level to ensure proper sky tracing and avoid ground clipping
 // 20 units ≈ 15 inches (38cm) - roughly knee height, well above ground but below player center
-const float FIRE_SUPPORT_HEIGHT_OFFSET    = 20.0;
+const float FIRE_SUPPORT_HEIGHT_OFFSET = 20.0;
 
 // Fire support kill tracking
 // Maps rocket entity index to fire support info (client, supportType, sessionIndex)
@@ -148,6 +159,23 @@ public void OnPluginStart()
     HookEvent("round_start", Event_RoundStart);
     HookEvent("player_pick_squad", Event_PlayerPickSquad);
     HookEvent("player_death", Event_PlayerDeath);
+    HookEvent("grenade_thrown", Event_GrenadeThrown);
+    HookEvent("grenade_detonate", Event_GrenadeDetonate);
+
+    // Database connection for stat tracking
+    Database.Connect(OnDatabaseConnected, "insurgency-stats");
+
+    // Create global forward for other plugins
+    FireSupportCalledForward = new GlobalForward(
+        "OnFireSupportCalled",
+        ET_Event,
+        Param_Cell,    // client
+        Param_Cell,    // team
+        Param_Cell     // supportType
+    );
+
+    // Load translations
+    LoadTranslations("firesupport.phrases");
 
     // Initialize tracking arrays
     gActiveRockets       = new ArrayList();
@@ -155,12 +183,11 @@ public void OnPluginStart()
     gActiveFireSupport   = new ArrayList();
     gCurrentRound        = 0;
 
-    // Initialize pending fire support array and stationary tracking
+    // Initialize pending fire support and rocket tracking arrays
     for (int i = 0; i < sizeof(gPendingFireSupport); i++)
     {
-        gPendingFireSupport[i]      = null;
-        gGrenadeStationaryChecks[i] = 0;
-        gRocketFireSupportInfo[i]   = null;
+        gPendingFireSupport[i]    = null;
+        gRocketFireSupportInfo[i] = null;
     }
 
     InitSupportCount();
@@ -183,7 +210,7 @@ public void OnMapStart()
     }
     gCurrentRound = 0;
 
-    // Clear pending fire support and stationary tracking
+    // Clear pending fire support
     for (int i = 0; i < sizeof(gPendingFireSupport); i++)
     {
         if (gPendingFireSupport[i] != null)
@@ -191,7 +218,13 @@ public void OnMapStart()
             delete gPendingFireSupport[i];
             gPendingFireSupport[i] = null;
         }
-        gGrenadeStationaryChecks[i] = 0;
+    }
+
+    // Check if database connection is ready
+    if (g_Database == null)
+    {
+        LogMessage("[FireSupport] Database unavailable at map start, attempting reconnection...");
+        ReconnectDatabase();
     }
 }
 
@@ -202,12 +235,11 @@ public void OnEntityDestroyed(int entity)
     {
         if (gPendingFireSupport[entity] != null)
         {
-            // Grenade destroyed before becoming stationary (e.g., hit by explosion, removed by game)
+            // Grenade destroyed before detonating (e.g., hit by explosion, removed by game)
             // Clean up without triggering fire support
             DataPack pack = view_as<DataPack>(gPendingFireSupport[entity]);
             delete pack;
-            gPendingFireSupport[entity]      = null;
-            gGrenadeStationaryChecks[entity] = 0;
+            gPendingFireSupport[entity] = null;
         }
     }
 
@@ -223,7 +255,7 @@ public void OnEntityDestroyed(int entity)
         }
     }
 
-    // Note: Fire support is triggered by Timer_TrackGrenadePosition when grenade becomes stationary,
+    // Note: Fire support is triggered by Event_GrenadeDetonate when grenade detonates,
     // not by entity destruction. This handler just cleans up if grenade is destroyed prematurely.
 }
 
@@ -280,8 +312,9 @@ void LoadSupportConfig()
             gSupportTypes[gNumSupportTypes].insurgentDelay = kv.GetFloat("insurgent_delay", 0.0);
             gSupportTypes[gNumSupportTypes].spawnSmoke     = view_as<bool>(kv.GetNum("spawn_smoke", 0));
             kv.GetString("smoke_type", gSupportTypes[gNumSupportTypes].smokeType, 64, "grenade_m18");
+            kv.GetString("discord_message", gSupportTypes[gNumSupportTypes].discordMessage, 256, "");
 
-            LogMessage("Loaded support type %d: weapon=%s, spread=%.1f, shells=%d, delay=%.1f, duration=%.1f, jitter=%.2f, projectile=%s, sec_count=%d, sec_delay=%.1f, ins_count=%d, ins_delay=%.1f, spawn_smoke=%d, smoke_type=%s",
+            LogMessage("Loaded support type %d: weapon=%s, spread=%.1f, shells=%d, delay=%.1f, duration=%.1f, jitter=%.2f, projectile=%s, sec_count=%d, sec_delay=%.1f, ins_count=%d, ins_delay=%.1f, spawn_smoke=%d, smoke_type=%s, discord_msg=%s",
                        gNumSupportTypes,
                        gSupportTypes[gNumSupportTypes].weapon,
                        gSupportTypes[gNumSupportTypes].spread,
@@ -295,7 +328,8 @@ void LoadSupportConfig()
                        gSupportTypes[gNumSupportTypes].insurgentCount,
                        gSupportTypes[gNumSupportTypes].insurgentDelay,
                        gSupportTypes[gNumSupportTypes].spawnSmoke,
-                       gSupportTypes[gNumSupportTypes].smokeType);
+                       gSupportTypes[gNumSupportTypes].smokeType,
+                       gSupportTypes[gNumSupportTypes].discordMessage);
 
             gNumSupportTypes++;
         }
@@ -324,9 +358,9 @@ void CreateDefaultConfig(const char[] path)
     kv.SetFloat("duration", 20.0);
     kv.SetFloat("jitter", 0.3);
     kv.SetString("projectile", "rocket_rpg7");
-    kv.SetString("throw_sound", "weapons/smokegrenade/smoke_emit.wav");
-    kv.SetString("success_sound", "weapons/m203/m203_reload_clipin.wav");
-    kv.SetString("fail_sound", "buttons/button11.wav");
+    kv.SetString("throw_sound", SOUND_REQUEST_ARTILLERY);
+    kv.SetString("success_sound", distantArtillerySound);
+    kv.SetString("fail_sound", SOUND_INVALID_ARTILLERY);
     kv.SetString("success_message", "[Fire Support] Artillery strike inbound on your position!");
     kv.SetString("fail_message", "[Fire Support] Unable to call artillery - invalid target location!");
     kv.SetString("projectile_message", "");                                                                                                   // No message by default
@@ -348,8 +382,8 @@ void CreateDefaultConfig(const char[] path)
     kv.SetFloat("duration", 25.0);
     kv.SetFloat("jitter", 0.3);
     kv.SetString("projectile", "rocket_rpg7");
-    kv.SetString("throw_sound", "weapons/smokegrenade/smoke_emit.wav");
-    kv.SetString("success_sound", "weapons/c4/c4_beep1.wav");
+    kv.SetString("throw_sound", "player/voice/radial/security/leader/suppressed/holdposition1.ogg");
+    kv.SetString("success_sound", distantArtillerySound);
     kv.SetString("fail_sound", "buttons/button11.wav");
     kv.SetString("success_message", "[Fire Support] Mortar strike authorized!");
     kv.SetString("fail_message", "[Fire Support] Cannot request mortar support - no line of sight!");
@@ -370,23 +404,41 @@ void CreateDefaultConfig(const char[] path)
     LogMessage("Created default config at: %s", path);
 }
 
+void PrecacheSoundNumbers(const char[] soundFmt, int count)
+{
+    char soundFile[512];
+    for (int i = 1; i <= count; i++)
+    {
+        Format(soundFile, sizeof(soundFile), soundFmt, i);
+        PrecacheSound(soundFile);
+    }
+}
+
 void PrecacheSounds()
 {
+    // Precache artillery sound effects
+    PrecacheSound(distantArtillerySound);
+    PrecacheSoundNumbers(requestArtillerySoundFmt, requestArtillerySoundCount);
+    PrecacheSoundNumbers(invalidArtillerySoundFmt, invalidArtillerySoundCount);
+
+    // Precache support type specific sounds
     for (int i = 0; i < gNumSupportTypes; i++)
     {
-        if (!StrEqual(gSupportTypes[i].throwSound, ""))
-        {
-            PrecacheSound(gSupportTypes[i].throwSound, true);
-        }
-        if (!StrEqual(gSupportTypes[i].successSound, ""))
-        {
-            PrecacheSound(gSupportTypes[i].successSound, true);
-        }
-        if (!StrEqual(gSupportTypes[i].failSound, ""))
-        {
-            PrecacheSound(gSupportTypes[i].failSound, true);
-        }
+        PrecacheConfigSound(gSupportTypes[i].throwSound);
+        PrecacheConfigSound(gSupportTypes[i].successSound);
+        PrecacheConfigSound(gSupportTypes[i].failSound);
     }
+}
+
+void PrecacheConfigSound(const char[] soundfile)
+{
+    if (StrEqual(soundfile, "")) return;
+
+    // Skip special sound names
+    if (StrEqual(soundfile, SOUND_REQUEST_ARTILLERY)) return;
+    if (StrEqual(soundfile, SOUND_INVALID_ARTILLERY)) return;
+
+    PrecacheSound(soundfile, true);
 }
 
 public Action Event_WeaponFire(Event event, const char[] name, bool dontBroadcast)
@@ -445,7 +497,7 @@ public Action Event_WeaponFire(Event event, const char[] name, bool dontBroadcas
     }
 
     // Play throw sound
-    PlaySoundToTeam(team, gSupportTypes[supportType].throwSound);
+    PlayConfigSound(client, team, gSupportTypes[supportType].throwSound);
 
     // Find the grenade entity that was just thrown by this client
     // We need to wait a frame for the entity to be created
@@ -455,6 +507,91 @@ public Action Event_WeaponFire(Event event, const char[] name, bool dontBroadcas
     pack.WriteCell(supportType);
 
     CreateTimer(0.1, Timer_FindThrownGrenade, pack, TIMER_FLAG_NO_MAPCHANGE);
+
+    return Plugin_Continue;
+}
+
+public Action Event_GrenadeThrown(Event event, const char[] name, bool dontBroadcast)
+{
+    // Grenade throw sound is already played in Event_WeaponFire (PlaySoundToTeam)
+    // This handler is here for future enhancements if needed
+    return Plugin_Continue;
+}
+
+public Action Event_GrenadeDetonate(Event event, const char[] name, bool dontBroadcast)
+{
+    int client = GetClientOfUserId(event.GetInt("userid"));
+    if (!ValidateClient(client))
+        return Plugin_Continue;
+
+    int grenadeEntity = event.GetInt("entityid");
+    if (grenadeEntity < 0 || grenadeEntity >= sizeof(gPendingFireSupport))
+        return Plugin_Continue;
+
+    // Check if this grenade has pending fire support
+    if (gPendingFireSupport[grenadeEntity] == null)
+        return Plugin_Continue;
+
+    // Retrieve fire support data
+    DataPack grenadeData = view_as<DataPack>(gPendingFireSupport[grenadeEntity]);
+    grenadeData.Reset();
+    int   storedClient = grenadeData.ReadCell();
+    int   team         = grenadeData.ReadCell();
+    int   supportType  = grenadeData.ReadCell();
+
+    // Get detonation position
+    float pos[3];
+    GetEntPropVector(grenadeEntity, Prop_Send, "m_vecOrigin", pos);
+    pos[2] += FIRE_SUPPORT_HEIGHT_OFFSET;
+
+    // Clean up stored data
+    delete grenadeData;
+    gPendingFireSupport[grenadeEntity] = null;
+
+    // Trigger fire support at detonation position
+    bool validLocation                 = CallFireSupport(storedClient, pos, supportType, team);
+
+    if (validLocation)
+    {
+        // Success
+        PlayConfigSound(storedClient, team, gSupportTypes[supportType].successSound);
+        PrintMessageToTeam(team, gSupportTypes[supportType].successMessage);
+
+        // Decrease count if limited
+        int maxCount = (team == TEAM_SECURITY) ? gSupportTypes[supportType].securityCount
+                                               : gSupportTypes[supportType].insurgentCount;
+        if (maxCount > 0)
+        {
+            CountAvailableSupport[team][supportType]--;
+            int  remaining = CountAvailableSupport[team][supportType];
+            char remainingMsg[128];
+            Format(remainingMsg, sizeof(remainingMsg),
+                   "{olivedrab}[Fire Support]{default} %d use(s) remaining for this strike type.",
+                   remaining);
+            PrintMessageToTeam(team, remainingMsg);
+        }
+
+        // Apply cooldown for this specific support type
+        float cooldown = (team == TEAM_SECURITY) ? gSupportTypes[supportType].securityDelay
+                                                 : gSupportTypes[supportType].insurgentDelay;
+        if (cooldown > 0.0)
+        {
+            IsEnabledTeam[team][supportType] = false;
+
+            // Use DataPack to pass both team and supportType to timer
+            DataPack cooldownPack            = new DataPack();
+            cooldownPack.WriteCell(team);
+            cooldownPack.WriteCell(supportType);
+            CreateTimer(cooldown, Timer_EnableTeamSupport, cooldownPack,
+                        TIMER_FLAG_NO_MAPCHANGE | TIMER_DATA_HNDL_CLOSE);
+        }
+    }
+    else
+    {
+        // Failure
+        PlayConfigSound(storedClient, team, gSupportTypes[supportType].failSound);
+        PrintMessageToTeam(team, gSupportTypes[supportType].failMessage);
+    }
 
     return Plugin_Continue;
 }
@@ -496,181 +633,24 @@ public Action Timer_FindThrownGrenade(Handle timer, DataPack pack)
     if (grenadeEntity == -1)
     {
         // Couldn't find the grenade, fire support fails
-        PlaySoundToTeam(team, gSupportTypes[supportType].failSound);
+        PlayConfigSound(client, team, gSupportTypes[supportType].failSound);
         PrintMessageToTeam(team, gSupportTypes[supportType].failMessage);
         delete pack;
         return Plugin_Handled;
     }
 
-    // Store the fire support data associated with this grenade
-    // When the grenade detonates (OnEntityDestroyed), we'll trigger fire support
+    // Store fire support data - will be used when grenade detonates (Event_GrenadeDetonate)
     DataPack grenadeData = new DataPack();
     grenadeData.WriteCell(client);
     grenadeData.WriteCell(team);
     grenadeData.WriteCell(supportType);
 
-    // Store current grenade position (will update in a repeating timer)
-    // NOTE: We add +20 units to Z coordinate for the following reasons:
-    // 1. Avoids tracing through the grenade entity itself when checking for sky
-    // 2. Prevents ground clipping issues when grenade is at exact ground level
-    // 3. Ensures the sky trace starts from a point clearly above ground
-    // The stored position will be used by GetSkyPos() to trace upward to find the skybox
-    float pos[3];
-    GetEntPropVector(grenadeEntity, Prop_Send, "m_vecOrigin", pos);
-    pos[2] += FIRE_SUPPORT_HEIGHT_OFFSET;    // Raise target point above grenade
-    grenadeData.WriteFloat(pos[0]);
-    grenadeData.WriteFloat(pos[1]);
-    grenadeData.WriteFloat(pos[2]);
-
     gPendingFireSupport[grenadeEntity] = view_as<Handle>(grenadeData);
-
-    // Start a repeating timer to track grenade position until it detonates
-    DataPack trackPack                 = new DataPack();
-    trackPack.WriteCell(grenadeEntity);
-    CreateTimer(0.1, Timer_TrackGrenadePosition, trackPack, TIMER_REPEAT | TIMER_FLAG_NO_MAPCHANGE);
 
     delete pack;
     return Plugin_Handled;
 }
 
-// Timer to continuously update the grenade's position and detect when it becomes stationary
-public Action Timer_TrackGrenadePosition(Handle timer, DataPack pack)
-{
-    pack.Reset();
-    int grenadeEntity = pack.ReadCell();
-
-    // Check if grenade still exists
-    if (!IsValidEntity(grenadeEntity))
-    {
-        delete pack;
-        return Plugin_Stop;
-    }
-
-    // Check if we still have fire support pending for this grenade
-    if (gPendingFireSupport[grenadeEntity] == null)
-    {
-        delete pack;
-        return Plugin_Stop;
-    }
-
-    // Update the stored position
-    DataPack grenadeData = view_as<DataPack>(gPendingFireSupport[grenadeEntity]);
-
-    // Read existing data
-    grenadeData.Reset();
-    int   client      = grenadeData.ReadCell();
-    int   team        = grenadeData.ReadCell();
-    int   supportType = grenadeData.ReadCell();
-    float lastPos[3];
-    lastPos[0] = grenadeData.ReadFloat();
-    lastPos[1] = grenadeData.ReadFloat();
-    lastPos[2] = grenadeData.ReadFloat();
-
-    // Get current position
-    float pos[3];
-    GetEntPropVector(grenadeEntity, Prop_Send, "m_vecOrigin", pos);
-
-    // Calculate distance moved since last check (0.1 seconds ago)
-    // Note: lastPos already has offset, but pos doesn't yet, so we calculate
-    // movement using raw positions before applying the offset
-    float dx       = pos[0] - lastPos[0];
-    float dy       = pos[1] - lastPos[1];
-    float dz       = (pos[2] + FIRE_SUPPORT_HEIGHT_OFFSET) - lastPos[2];    // Compare with offset applied
-    float distance = SquareRoot(dx * dx + dy * dy + dz * dz);
-
-    // Calculate effective velocity (distance / time)
-    // Timer runs every 0.1s, so multiply by 10 to get units/second
-    float speed    = distance * 10.0;
-
-    // Apply offset to fire support target position (see notes in Timer_FindThrownGrenade)
-    // This raises the target point above ground level for proper sky tracing
-    pos[2] += FIRE_SUPPORT_HEIGHT_OFFSET;
-
-    // Check if grenade is stationary
-    if (speed < STATIONARY_VELOCITY_THRESHOLD)
-    {
-        gGrenadeStationaryChecks[grenadeEntity]++;
-
-        // If grenade has been stationary for sufficient time, trigger fire support
-        if (gGrenadeStationaryChecks[grenadeEntity] >= STATIONARY_CHECKS_REQUIRED)
-        {
-            // Grenade is settled! Trigger fire support
-            delete grenadeData;
-            gPendingFireSupport[grenadeEntity]      = null;
-            gGrenadeStationaryChecks[grenadeEntity] = 0;
-
-            // Trigger fire support at the grenade's position
-            bool validLocation                      = CallFireSupport(client, pos, supportType, team);
-
-            if (validLocation)
-            {
-                // Success
-                PlaySoundToTeam(team, gSupportTypes[supportType].successSound);
-                PrintMessageToTeam(team, gSupportTypes[supportType].successMessage);
-
-                // Decrease count if limited
-                int maxCount = (team == TEAM_SECURITY) ? gSupportTypes[supportType].securityCount : gSupportTypes[supportType].insurgentCount;
-                if (maxCount > 0)
-                {
-                    CountAvailableSupport[team][supportType]--;
-
-                    // Print remaining usage to team
-                    int  remaining = CountAvailableSupport[team][supportType];
-                    char remainingMsg[128];
-                    Format(remainingMsg, sizeof(remainingMsg), "{olivedrab}[Fire Support]{default} %d use(s) remaining for this strike type.", remaining);
-                    PrintMessageToTeam(team, remainingMsg);
-                }
-
-                // Apply cooldown for this specific support type
-                float cooldown = (team == TEAM_SECURITY) ? gSupportTypes[supportType].securityDelay : gSupportTypes[supportType].insurgentDelay;
-                if (cooldown > 0.0)
-                {
-                    IsEnabledTeam[team][supportType] = false;
-
-                    // Use DataPack to pass both team and supportType to timer
-                    DataPack cooldownPack            = new DataPack();
-                    cooldownPack.WriteCell(team);
-                    cooldownPack.WriteCell(supportType);
-                    CreateTimer(cooldown, Timer_EnableTeamSupport, cooldownPack, TIMER_FLAG_NO_MAPCHANGE | TIMER_DATA_HNDL_CLOSE);
-                }
-            }
-            else
-            {
-                // Failure
-                PlaySoundToTeam(team, gSupportTypes[supportType].failSound);
-                PrintMessageToTeam(team, gSupportTypes[supportType].failMessage);
-            }
-
-            // Stop tracking this grenade
-            delete pack;
-            return Plugin_Stop;
-        }
-    }
-    else
-    {
-        // Grenade is still moving, reset the stationary counter
-        gGrenadeStationaryChecks[grenadeEntity] = 0;
-    }
-
-    // Recreate the pack with updated position
-    delete grenadeData;
-    grenadeData = new DataPack();
-    grenadeData.WriteCell(client);
-    grenadeData.WriteCell(team);
-    grenadeData.WriteCell(supportType);
-    grenadeData.WriteFloat(pos[0]);
-    grenadeData.WriteFloat(pos[1]);
-    grenadeData.WriteFloat(pos[2]);
-
-    gPendingFireSupport[grenadeEntity] = view_as<Handle>(grenadeData);
-
-    // Reset pack position for next iteration
-    pack.Reset();
-
-    return Plugin_Continue;
-}
-
-// Timer callback to process fire support after trigger delay (OLD - now handled by OnEntityDestroyed)
 public Action Event_RoundStart(Event event, const char[] name, bool dontBroadcast)
 {
     // Clean up all active fire support from previous round
@@ -887,10 +867,7 @@ void PlaySoundToTeam(int team, const char[] sound)
 
 void PrintMessageToTeam(int team, const char[] message)
 {
-    if (StrEqual(message, ""))
-    {
-        return;
-    }
+    if (StrEqual(message, "")) return;
 
     for (int i = 1; i <= MaxClients; i++)
     {
@@ -899,6 +876,46 @@ void PrintMessageToTeam(int team, const char[] message)
             CPrintToChat(i, message);
         }
     }
+}
+
+void PlayRequestArtillerySoundToAll(int client)
+{
+    char sSoundFile[128];
+    Format(sSoundFile, sizeof(sSoundFile), requestArtillerySoundFmt, GetRandomInt(1, requestArtillerySoundCount));
+    // Sound comes from the requesting client, so players hear it directionally
+    EmitSoundToAll(sSoundFile, client, SNDCHAN_STATIC, _, _, 0.65);
+}
+
+void PlayInvalidArtillerySoundToAll()
+{
+    char sSoundFile[128];
+    Format(sSoundFile, sizeof(sSoundFile), invalidArtillerySoundFmt, GetRandomInt(1, invalidArtillerySoundCount));
+    EmitSoundToAll(sSoundFile);
+}
+
+void PlayArtilleryDistantSound()
+{
+    EmitSoundToAll(distantArtillerySound, _, SNDCHAN_STATIC, _, _, 0.65);
+}
+
+void PlayConfigSound(int client, int team, const char[] sound)
+{
+    if (StrEqual(sound, "")) return;
+
+    // Special sound names
+    if (StrEqual(sound, SOUND_REQUEST_ARTILLERY))
+    {
+        PlayRequestArtillerySoundToAll(client);
+        return;
+    }
+
+    if (StrEqual(sound, SOUND_INVALID_ARTILLERY))
+    {
+        PlayInvalidArtillerySoundToAll();
+        return;
+    }
+
+    PlaySoundToTeam(team, sound);
 }
 
 /// FireSupport
@@ -936,9 +953,14 @@ public bool CallFireSupport(int client, float ground[3], int supportType, int te
         sessionPack.WriteCell(0);    // Initial friendly kill count
         sessionPack.WriteCell(gCurrentRound);
         gActiveFireSupport.Push(sessionPack);
-        int      sessionIndex = gActiveFireSupport.Length - 1;
+        int sessionIndex = gActiveFireSupport.Length - 1;
 
-        DataPack pack         = new DataPack();
+        // Track stats and notify external systems
+        add_throw_to_db(client, supportType, team);
+        SendFireSupportForward(client, team, supportType);
+        SendDiscordNotification(client, supportType);
+
+        DataPack pack = new DataPack();
         pack.WriteCell(client);
         pack.WriteCell(shells);
         pack.WriteCell(shells);    // Store original shell count for timing calculations
@@ -1258,7 +1280,7 @@ void CleanupActiveFireSupport()
     }
     gActiveSmokeGrenades.Clear();
 
-    // Clean up pending fire support (grenades that haven't become stationary yet)
+    // Clean up pending fire support (grenades that haven't detonated yet)
     for (int i = 0; i < sizeof(gPendingFireSupport); i++)
     {
         if (gPendingFireSupport[i] != null)
@@ -1266,7 +1288,6 @@ void CleanupActiveFireSupport()
             delete gPendingFireSupport[i];
             gPendingFireSupport[i] = null;
         }
-        gGrenadeStationaryChecks[i] = 0;
     }
 
     // Clean up rocket fire support info
@@ -1360,4 +1381,139 @@ public void OnRocketTouch(int rocket, int other)
 
     // Unhook to prevent multiple calls
     SDKUnhook(rocket, SDKHook_Touch, OnRocketTouch);
+}
+
+// ============================================================================
+// Database Integration Functions
+// ============================================================================
+public void OnDatabaseConnected(Database db, const char[] error, any data)
+{
+    if (db == null)
+    {
+        LogError("[FireSupport] Failed to connect to database: %s", error);
+        SetFailState("Database connection failed");
+        return;
+    }
+
+    g_Database = db;
+    LogMessage("[FireSupport] Successfully connected to database");
+}
+
+// Attempt to reconnect to the database
+void ReconnectDatabase()
+{
+    LogMessage("[FireSupport] Attempting to reconnect to database...");
+    g_Database = null;
+    Database.Connect(OnDatabaseReconnected, "insurgency-stats");
+}
+
+public void OnDatabaseReconnected(Database db, const char[] error, any data)
+{
+    if (db == null)
+    {
+        LogError("[FireSupport] Failed to reconnect to database: %s", error);
+        // Try again after a delay
+        CreateTimer(5.0, Timer_RetryReconnect);
+        return;
+    }
+
+    g_Database = db;
+    LogMessage("[FireSupport] Successfully reconnected to database");
+}
+
+public Action Timer_RetryReconnect(Handle timer)
+{
+    if (g_Database == null)
+    {
+        ReconnectDatabase();
+    }
+
+    return Plugin_Stop;
+}
+
+// Helper function to handle database query errors
+// Returns true if query was successful, false if there was an error
+bool HandleQueryError(DBResultSet results, const char[] error, const char[] operationName)
+{
+    if (results != null) return true;
+
+    // Check if the error is due to lost connection
+    if (StrContains(error, "no connection to the server", false) != -1)
+    {
+        LogError("[FireSupport] Lost connection to database: %s - attempting to reconnect", error);
+        ReconnectDatabase();
+        return false;
+    }
+
+    LogError("[FireSupport] Failed to %s: %s", operationName, error);
+    return false;
+}
+
+public void OnFireSupportStatUpdated(Database db, DBResultSet results, const char[] error, any data)
+{
+    HandleQueryError(results, error, "update fire support stats");
+}
+
+void add_throw_to_db(int client, int supportType, int team)
+{
+    if (g_Database == null) return;
+
+    if (!IsValidClient(client) || IsFakeClient(client)) return;
+
+    char steamId[64];
+    GetClientAuthId(client, AuthId_SteamID64, steamId, sizeof(steamId));
+
+    if (StrEqual(steamId, "")) return;
+
+    int  currentTime = GetTime();
+
+    char query[512];
+    Format(query, sizeof(query),
+           "INSERT INTO fire_support (steamId, arty_thrown, last_used) " ... "VALUES ('%s', 1, %d) " ... "ON CONFLICT (steamId) DO UPDATE SET " ... "arty_thrown = fire_support.arty_thrown + 1, " ... "last_used = EXCLUDED.last_used",
+           steamId, currentTime);
+
+    g_Database.Query(OnFireSupportStatUpdated, query);
+    LogMessage("[FireSupport] Incremented arty_thrown for %N (team=%d, type=%d)", client, team, supportType);
+}
+
+// ============================================================================
+// Global Forward Functions
+// ============================================================================
+
+void SendFireSupportForward(int client, int team, int supportType)
+{
+    Action result;
+    Call_StartForward(FireSupportCalledForward);
+    Call_PushCell(client);
+    Call_PushCell(team);
+    Call_PushCell(supportType);
+    Call_Finish(result);
+}
+
+// ============================================================================
+// Discord Integration Functions
+// ============================================================================
+
+void SendDiscordNotification(int client, int supportType)
+{
+    if (strlen(gSupportTypes[supportType].discordMessage) == 0)
+    {
+        return;    // No discord message configured
+    }
+
+    if (!IsValidClient(client))
+    {
+        return;
+    }
+
+    send_to_discord(client, gSupportTypes[supportType].discordMessage);
+}
+
+// ============================================================================
+// Utility Functions
+// ============================================================================
+
+bool IsValidClient(int client)
+{
+    return (client > 0 && client <= MaxClients && IsClientInGame(client));
 }

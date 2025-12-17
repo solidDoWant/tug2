@@ -445,8 +445,8 @@ void ExecuteMigrationFile(int dbIndex, int migrationIndex, DatabaseMigration dbM
     }
 
     // Wrap in transaction
-    char transactionSQL[SQL_BUFFER_SIZE + 256];
-    Format(transactionSQL, sizeof(transactionSQL), "BEGIN; %s COMMIT;", sqlBuffer);
+    Transaction txn = new Transaction();
+    txn.AddQuery(sqlBuffer);
 
     // Create datapack for callback
     DataPack pack = new DataPack();
@@ -455,11 +455,15 @@ void ExecuteMigrationFile(int dbIndex, int migrationIndex, DatabaseMigration dbM
     pack.WriteString(migration.filePath);
     pack.Reset();
 
-    // Execute the migration
-    dbMigration.dbHandle.Query(OnMigrationExecuted, transactionSQL, pack);
+    // Execute the transaction with separate success and error callbacks
+    dbMigration.dbHandle.Execute(txn, OnMigrationSuccess, OnMigrationError, pack);
 }
 
-void OnMigrationExecuted(Database db, DBResultSet results, const char[] error, DataPack pack)
+/**
+ * Transaction success callback
+ * Called when all queries in the transaction complete successfully
+ */
+void OnMigrationSuccess(Database db, DataPack pack, int numQueries, DBResultSet[] results, any[] queryData)
 {
     int  dbIndex        = pack.ReadCell();
     int  migrationIndex = pack.ReadCell();
@@ -473,29 +477,53 @@ void OnMigrationExecuted(Database db, DBResultSet results, const char[] error, D
     MigrationFile migration;
     dbMigration.migrations.GetArray(migrationIndex, migration);
 
-    migration.executed = true;
+    migration.executed  = true;
+    migration.succeeded = true;
 
-    if (error[0] != '\0')
-    {
-        LogError("  FAILED: %s", filePath);
-        LogError("  Error: %s", error);
-        migration.succeeded = false;
-        strcopy(migration.errorMessage, sizeof(migration.errorMessage), error);
-        g_MigrationFailed = true;
-    }
-    else
-    {
-        LogMessage("  SUCCESS: %s", filePath);
-        migration.succeeded = true;
-    }
+    LogMessage("  SUCCESS: %s", filePath);
 
     dbMigration.migrations.SetArray(migrationIndex, migration);
     g_Databases.SetArray(dbIndex, dbMigration);
 
     g_PendingExecutions--;
 
-    if (g_PendingExecutions <= 0)
-        FinalizeMigration();
+    if (g_PendingExecutions > 0) return;
+    FinalizeMigration();
+}
+
+/**
+ * Transaction error callback
+ * Called when any query in the transaction fails
+ */
+void OnMigrationError(Database db, DataPack pack, int numQueries, const char[] error, int failIndex, any[] queryData)
+{
+    int  dbIndex        = pack.ReadCell();
+    int  migrationIndex = pack.ReadCell();
+    char filePath[MAX_PATH_LENGTH];
+    pack.ReadString(filePath, sizeof(filePath));
+    delete pack;
+
+    DatabaseMigration dbMigration;
+    g_Databases.GetArray(dbIndex, dbMigration);
+
+    MigrationFile migration;
+    dbMigration.migrations.GetArray(migrationIndex, migration);
+
+    migration.executed  = true;
+    migration.succeeded = false;
+    strcopy(migration.errorMessage, sizeof(migration.errorMessage), error);
+
+    LogError("  FAILED: %s", filePath);
+    LogError("  Error: %s (query %d of %d)", error, failIndex + 1, numQueries);
+
+    dbMigration.migrations.SetArray(migrationIndex, migration);
+    g_Databases.SetArray(dbIndex, dbMigration);
+
+    g_MigrationFailed = true;
+    g_PendingExecutions--;
+
+    if (g_PendingExecutions > 0) return;
+    FinalizeMigration();
 }
 
 void FinalizeMigration()
