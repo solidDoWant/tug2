@@ -129,8 +129,16 @@ public void OnClientAuthorized(int client, const char[] auth)
     char ip[64];
     GetClientIP(client, ip, sizeof(ip));
 
+    // Get Steam ID 64 format
+    char steamid64[32];
+    if (!GetClientAuthId(client, AuthId_SteamID64, steamid64, sizeof(steamid64)))
+    {
+        LogError("Failed to get SteamID64 for client %d", client);
+        return;
+    }
+
     // Check for active punishments
-    CheckActivePunishments(client, auth, ip);
+    CheckActivePunishments(client, steamid64, ip);
 }
 
 void CheckActivePunishments(int client, const char[] steamid, const char[] ip)
