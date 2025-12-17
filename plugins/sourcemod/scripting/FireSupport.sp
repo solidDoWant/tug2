@@ -831,6 +831,13 @@ Action CmdCallFS(int client, int args)
 
 Action CmdCallAFS(int client, int args)
 {
+    // Admin command requires a valid client (can't be called from server console)
+    if (!ValidateClient(client) || !IsPlayerAlive(client))
+    {
+        ReplyToCommand(client, "[Fire Support] This command must be used by a player in-game.");
+        return Plugin_Handled;
+    }
+
     float ground[3];
     if (GetAimGround(client, ground))
     {
