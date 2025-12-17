@@ -31,9 +31,9 @@
 		"mp_tkpunish"				"1"	// How to punish team killing ( 0 = none, 1 = warning, 2 = kill )
 		"sv_hud_deathmessages"			"1"	// death messages
 		"sv_hud_targetindicator"		"1"	// show friendly player names when looking at them
-		"mp_timer_preround"			"15"	// timer for the pre-round (before the round starts, usually after a previous round ends or on mp_restartround 1)
-		"mp_timer_postround"			"15"	// timer for the post-round (after the round starts)
-		"mp_timer_postgame"			"10"	// timer for the post-game (at the end of a game / map rotation)
+		"mp_timer_preround"			"7"	// timer for the pre-round (before the round starts, usually after a previous round ends or on mp_restartround 1)
+		"mp_timer_postround"			"5"	// timer for the post-round (after the round starts)
+		"mp_timer_postgame"			"15"	// timer for the post-game (at the end of a game / map rotation)
 		"mp_timer_pregame"			"10"	// timer for the pre-game (before the game starts, usually after map change or on mp_restartgame 1)
 		"sv_deadvoice"				"1"	// enabling this will allow the dead and living to VOIP each other
 		"sv_deadtalk"				"1"	// enabling this will allow the dead and living to chat text each other
@@ -43,7 +43,7 @@
 		"mp_coop_max_bots"			"224"	// number of bots when there are 14 players on the server
 		"ins_bot_count_checkpoint_max" "224"	// maximum number of bots for checkpoint
 		"bot_damage"				"1"	// the amount of damage bots give off compared to normal players
-		"mp_voice_use_3d_voip"			"0"	// disabling this will turn off the 3d voip system and allow all players to hear one another
+		"mp_voice_use_3d_voip"			"1"	// disabling this will turn off the 3d voip system and allow all players to hear one another
 		"sv_vote_issue_changegamemode_allowed"	"0"	// no changegamemode
 	}
 	

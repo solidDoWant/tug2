@@ -50,7 +50,7 @@ bool     g_OffenderNotified[MAXPLAYERS + 1];
 
 public void OnPluginStart()
 {
-    g_cvarBanTime             = CreateConVar("tk_ban_basetime", "5", "Base ban time (min)", FCVAR_PROTECTED);
+    g_cvarBanTime             = CreateConVar("tk_ban_basetime", "60", "Base ban time (min)", FCVAR_PROTECTED);
     g_cvarAmnestyMinKPTK      = CreateConVar("tk_amnesty_min_kptk", "250", "Minimum kills-per-TK ratio for amnesty", FCVAR_PROTECTED);
     g_cvarAmnestyMinKillCount = CreateConVar("tk_amnesty_min_kills", "1000", "Minimum total kills required for amnesty", FCVAR_PROTECTED);
     g_cvarAmnestyTimeCutoff   = CreateConVar("tk_amnesty_time_cutoff", "7776000", "Amnesty time cutoff in seconds (default: 90 days)", FCVAR_PROTECTED);
