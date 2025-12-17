@@ -3,14 +3,13 @@
 #include <smlib>
 #include <morecolors>
 #include <dbi>
-#include <TheaterItemsAPI>
 
 #pragma newdecls required
 
-#define healthkit_theater_item "weapon_healthkit"
-#define defib_theater_item     "weapon_defib"
+#define healthkit_weapon_name "weapon_healthkit"
+#define defib_weapon_name     "weapon_defib"
 
-#define MAX_MESSAGES           64
+#define MAX_MESSAGES          64
 
 Database   g_Database                        = null;
 
@@ -20,9 +19,6 @@ char       rotating_player_messages[MAX_MESSAGES][MAX_MESSAGE_LENGTH];
 char       rotating_admin_messages[MAX_MESSAGES][MAX_MESSAGE_LENGTH];
 char       player_join_messages[MAX_MESSAGES][MAX_MESSAGE_LENGTH];
 bool       g_has_player_seen_first_connect_message[MAXPLAYERS + 1];
-
-int        healthkit_theater_id = 0;
-int        defib_theater_id     = 0;
 
 bool       g_is_last_cap_cache;
 
@@ -48,9 +44,6 @@ public void OnMapStart()
 {
     CreateTimer(30.0, Timer_RotatingPlayerMessages, _, TIMER_REPEAT | TIMER_FLAG_NO_MAPCHANGE);
     CreateTimer(120.0, Timer_RotatingAdminMessages, _, TIMER_REPEAT | TIMER_FLAG_NO_MAPCHANGE);
-
-    healthkit_theater_id = GetTheaterItemIdByWeaponName(healthkit_theater_item);
-    defib_theater_id     = GetTheaterItemIdByWeaponName(defib_theater_item);
 
     // Check if database connection is ready
     if (g_Database == null)
@@ -96,14 +89,16 @@ public Action Event_WeaponDeploy(Event event, const char[] name, bool dontBroadc
     int client = GetClientOfUserId(GetEventInt(event, "userid"));
     if (!IsValidPlayer(client)) return Plugin_Continue;
 
-    int weapon_id = GetEventInt(event, "weaponid");
-    if (weapon_id == healthkit_theater_id)
+    char weapon_name[64];
+    GetClientWeapon(client, weapon_name, sizeof(weapon_name));
+
+    if (StrEqual(weapon_name, healthkit_weapon_name, false))
     {
         PrintHintText(client, "%T", "justholdit", client);
         return Plugin_Continue;
     }
 
-    if (weapon_id == defib_theater_id)
+    if (StrEqual(weapon_name, defib_weapon_name, false))
     {
         PrintHintText(client, "%T", "justholditdefib", client);
     }

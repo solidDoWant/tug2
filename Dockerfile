@@ -531,16 +531,6 @@ RUN --mount=type=bind,source=./plugins/sourcemod,target=/plugin-source \
     find /insurgency -type d -exec chmod 755 {} \; && \
     find /insurgency -type f -exec chmod 644 {} \;
 
-FROM sourcemod-plugins-base AS sourcemod-plugins-gg2-theater-items
-
-# Build the gg2_theater_items plugin
-COPY plugins/sourcemod/gamedata/ /insurgency/addons/sourcemod/gamedata/
-RUN --mount=type=bind,source=./plugins/sourcemod/scripting,target=/plugin-source/scripting \
-    /sourcemod/addons/sourcemod/scripting/spcomp --include=/plugin-source/scripting/include --warning=206 /plugin-source/scripting/gg2_theater_items.sp -o /insurgency/addons/sourcemod/plugins/gg2_theater_items.smx && \
-    # Fixup file permissions
-    find /insurgency -type d -exec chmod 755 {} \; && \
-    find /insurgency -type f -exec chmod 644 {} \;
-
 FROM sourcemod-plugins-base AS sourcemod-plugins-gg2-votekick-immunity
 
 # Build the gg2_votekick_immunity plugin
@@ -696,7 +686,6 @@ COPY --from=sourcemod-plugins-gg2-show-health-simp --chown=0:0 /insurgency /opt/
 COPY --from=sourcemod-plugins-gg2-spectator --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
 COPY --from=sourcemod-plugins-gg2-supply --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
 COPY --from=sourcemod-plugins-gg2-teamkill --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
-COPY --from=sourcemod-plugins-gg2-theater-items --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
 COPY --from=sourcemod-plugins-gg2-votekick-immunity --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
 COPY --from=sourcemod-plugins-bm2-respawn --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
 

@@ -4,7 +4,6 @@
 #include <sdktools>
 #include <morecolors>
 #include <discord>
-#include <TheaterItemsAPI>
 
 public Plugin myinfo =
 {
@@ -45,8 +44,6 @@ char g_spammable_weapons[][]                    = {
     "weapon_doi2ins_vickers"
 };
 
-int g_spammable_weapon_ids[16] = { -1, ... };
-
 #define SPAM_TIME_WARN   50
 #define SPAM_TIME_PUNISH 100
 
@@ -85,13 +82,6 @@ public void OnMapStart()
     {
         PrecacheSound(ouch_sounds[i]);
     }
-
-    for (int i = 0; i < sizeof(g_spammable_weapons); i++)
-    {
-        g_spammable_weapon_ids[i] = GetTheaterItemIdByWeaponName(g_spammable_weapons[i]);
-        if (g_spammable_weapon_ids[i] != -1) continue;
-        LogError("[GG2 Weapon Spam] could not find weapon ID for spammable weapon name: %s", g_spammable_weapons[i]);
-    }
 }
 
 public void PlayOuchSound(int client)
@@ -125,21 +115,23 @@ public Action Event_RoundEnd(Event event, const char[] name, bool dontBroadcast)
 
 public Action Event_WeaponDeploy(Event event, const char[] name, bool dontBroadcast)
 {
-    int weapon_id = GetEventInt(event, "weaponid");
-    int client    = GetClientOfUserId(GetEventInt(event, "userid"));
-    // Don't check this when the player is a bot
+    int client = GetClientOfUserId(GetEventInt(event, "userid"));
     if (IsFakeClient(client)) return Plugin_Continue;
+    if (!IsValidPlayer(client)) return Plugin_Continue;
 
-    g_playerHasSpammableWeapon[client] = IsWeaponSpammable(weapon_id);
+    char weapon_classname[64];
+    GetClientWeapon(client, weapon_classname, sizeof(weapon_classname));
+
+    g_playerHasSpammableWeapon[client] = IsWeaponSpammable(weapon_classname);
 
     return Plugin_Continue;
 }
 
-public bool IsWeaponSpammable(int weapon_id)
+public bool IsWeaponSpammable(const char[] weapon_classname)
 {
-    for (int i = 0; i < sizeof(g_spammable_weapon_ids); i++)
+    for (int i = 0; i < sizeof(g_spammable_weapons); i++)
     {
-        if (weapon_id == g_spammable_weapon_ids[i]) return true;
+        if (StrEqual(weapon_classname, g_spammable_weapons[i], false)) return true;
     }
 
     return false;
@@ -170,10 +162,6 @@ public Action Timer_WeaponDurationCounter(Handle timer)
         {
             char current_weapon[64];
             GetClientWeapon(client, current_weapon, sizeof(current_weapon));
-
-            // Is this actually needed? Why not use `g_playerHasSpammableWeapon` here?
-            int current_weapon_id = GetTheaterItemIdByWeaponName(current_weapon);
-            if (!IsWeaponSpammable(current_weapon_id)) continue;
 
             int active_weapon_entity = GetEntPropEnt(client, Prop_Data, "m_hActiveWeapon");
             if (!IsValidEntity(active_weapon_entity))
