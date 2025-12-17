@@ -4,7 +4,7 @@
 -- =====================================================
 
 CREATE TABLE IF NOT EXISTS loadouts (
-    steam_id VARCHAR(32) NOT NULL,
+    steam_id BIGINT NOT NULL,
     class_template VARCHAR(128) NOT NULL,
     gear TEXT,
     primary_weapon TEXT,
@@ -30,7 +30,7 @@ CREATE INDEX IF NOT EXISTS idx_loadouts_last_seen ON loadouts(last_seen_at);
 
 -- Example loadout entry:
 -- INSERT INTO loadouts (steam_id, class_template, gear, primary_weapon, secondary_weapon, explosive) VALUES (
---   'STEAM_0:1:12345678',
+--   76561197960287930,
 --   'template_rifleman_security_coop',
 --   '39;47',              -- gear IDs
 --   '5;12;13;14',         -- primary weapon ID + upgrade IDs
@@ -43,7 +43,7 @@ CREATE INDEX IF NOT EXISTS idx_loadouts_last_seen ON loadouts(last_seen_at);
 -- =====================================================
 
 -- View all loadouts for a player
--- SELECT * FROM loadouts WHERE steam_id = 'STEAM_0:1:12345678';
+-- SELECT * FROM loadouts WHERE steam_id = 76561197960287930;
 
 -- Delete old loadouts (not seen in 30 days)
 -- DELETE FROM loadouts WHERE last_seen_at < NOW() - INTERVAL '30 days';

@@ -107,21 +107,19 @@ public void OnClientAuthorized(int client, const char[] auth)
 {
     if (IsFakeClient(client)) return;
 
-    // Validate Steam ID
-    if (auth[0] == '\0' || StrContains(auth, "STEAM_") != 0)
+    // Get Steam64 ID
+    if (!GetClientAuthId(client, AuthId_SteamID64, g_PlayerSteamId[client], sizeof(g_PlayerSteamId[])))
     {
-        LogError("Invalid Steam ID for client %d: %s", client, auth);
+        LogError("Failed to get Steam64 ID for client %d", client);
         return;
     }
-
-    strcopy(g_PlayerSteamId[client], sizeof(g_PlayerSteamId[]), auth);
     g_PlayerCurrentClass[client][0] = '\0';
     g_LastSaveTime[client]          = 0.0;
     g_LastLoadTime[client]          = 0.0;
 
     // Update last_seen_at
     if (g_Database != null)
-        UpdatePlayerLastSeen(auth);
+        UpdatePlayerLastSeen(g_PlayerSteamId[client]);
 }
 
 public void OnClientDisconnect(int client)
@@ -177,12 +175,9 @@ void UpdatePlayerLastSeen(const char[] steamId)
     if (g_Database == null) return;
 
     char query[256];
-    char escapedSteamId[64];
-    g_Database.Escape(steamId, escapedSteamId, sizeof(escapedSteamId));
-
     Format(query, sizeof(query),
-           "UPDATE loadouts SET last_seen_at = CURRENT_TIMESTAMP WHERE steam_id = '%s'",
-           escapedSteamId);
+           "UPDATE loadouts SET last_seen_at = CURRENT_TIMESTAMP WHERE steam_id = %s",
+           steamId);
 
     g_Database.Query(SQL_CheckError, query);
 }
@@ -431,14 +426,12 @@ void SaveLoadoutToDatabase(int client, const char[] gearBuffer, const char[] pri
     if (g_Database == null) return;
 
     // Escape strings for SQL
-    char escapedSteamId[64];
     char escapedClass[256];
     char escapedGear[512];
     char escapedPrimary[512];
     char escapedSecondary[512];
     char escapedExplosive[512];
 
-    g_Database.Escape(g_PlayerSteamId[client], escapedSteamId, sizeof(escapedSteamId));
     g_Database.Escape(g_PlayerCurrentClass[client], escapedClass, sizeof(escapedClass));
     g_Database.Escape(gearBuffer, escapedGear, sizeof(escapedGear));
     g_Database.Escape(primaryBuffer, escapedPrimary, sizeof(escapedPrimary));
@@ -456,8 +449,8 @@ void SaveLoadoutToDatabase(int client, const char[] gearBuffer, const char[] pri
     char query[2048];
     Format(
         query, sizeof(query),
-        "INSERT INTO loadouts (steam_id, class_template, gear, primary_weapon, secondary_weapon, explosive, updated_at, update_count) " ... "VALUES ('%s', '%s', %s, %s, %s, %s, CURRENT_TIMESTAMP, 1) " ... "ON CONFLICT (steam_id, class_template) DO UPDATE SET " ... "gear = EXCLUDED.gear, " ... "primary_weapon = EXCLUDED.primary_weapon, " ... "secondary_weapon = EXCLUDED.secondary_weapon, " ... "explosive = EXCLUDED.explosive, " ... "updated_at = CURRENT_TIMESTAMP, " ... "update_count = loadouts.update_count + 1",
-        escapedSteamId, escapedClass, gearValue, primaryValue, secondaryValue, explosiveValue);
+        "INSERT INTO loadouts (steam_id, class_template, gear, primary_weapon, secondary_weapon, explosive, updated_at, update_count) VALUES (%s, '%s', %s, %s, %s, %s, CURRENT_TIMESTAMP, 1) ON CONFLICT (steam_id, class_template) DO UPDATE SET gear = EXCLUDED.gear, primary_weapon = EXCLUDED.primary_weapon, secondary_weapon = EXCLUDED.secondary_weapon, explosive = EXCLUDED.explosive, updated_at = CURRENT_TIMESTAMP, update_count = loadouts.update_count + 1",
+        g_PlayerSteamId[client], escapedClass, gearValue, primaryValue, secondaryValue, explosiveValue);
 
     DataPack pack = new DataPack();
     pack.WriteCell(GetClientUserId(client));
@@ -502,12 +495,7 @@ void LoadPlayerLoadout(int client, bool showMessages)
     }
 
     char query[512];
-    char escapedSteamId[64];
-    char escapedClass[256];
-    g_Database.Escape(g_PlayerSteamId[client], escapedSteamId, sizeof(escapedSteamId));
-    g_Database.Escape(g_PlayerCurrentClass[client], escapedClass, sizeof(escapedClass));
-
-    Format(query, sizeof(query), "SELECT gear, primary_weapon, secondary_weapon, explosive FROM loadouts WHERE steam_id = '%s' AND class_template = '%s'", escapedSteamId, escapedClass);
+    g_Database.Format(query, sizeof(query), "SELECT gear, primary_weapon, secondary_weapon, explosive FROM loadouts WHERE steam_id = %s AND class_template = '%s'", g_PlayerSteamId[client], g_PlayerCurrentClass[client]);
 
     DataPack pack = new DataPack();
     pack.WriteCell(GetClientUserId(client));
@@ -661,12 +649,7 @@ void ClearLoadout(int client)
     }
 
     char query[512];
-    char escapedSteamId[64];
-    char escapedClass[256];
-    g_Database.Escape(g_PlayerSteamId[client], escapedSteamId, sizeof(escapedSteamId));
-    g_Database.Escape(g_PlayerCurrentClass[client], escapedClass, sizeof(escapedClass));
-
-    Format(query, sizeof(query), "DELETE FROM loadouts WHERE steam_id = '%s' AND class_template = '%s'", escapedSteamId, escapedClass);
+    Format(query, sizeof(query), "DELETE FROM loadouts WHERE steam_id = %s AND class_template = '%s'", g_PlayerSteamId[client], g_PlayerCurrentClass[client]);
 
     DataPack pack = new DataPack();
     pack.WriteCell(GetClientUserId(client));
@@ -705,10 +688,7 @@ void ClearAllLoadouts(int client)
     }
 
     char query[512];
-    char escapedSteamId[64];
-    g_Database.Escape(g_PlayerSteamId[client], escapedSteamId, sizeof(escapedSteamId));
-
-    Format(query, sizeof(query), "DELETE FROM loadouts WHERE steam_id = '%s'", escapedSteamId);
+    Format(query, sizeof(query), "DELETE FROM loadouts WHERE steam_id = %s", g_PlayerSteamId[client]);
 
     DataPack pack = new DataPack();
     pack.WriteCell(GetClientUserId(client));
