@@ -3292,141 +3292,91 @@ Action Timer_NearestBody(Handle timer)
             continue;
         }
 
-        if (IsPlayerAlive(alivePlayer))
+        is_medic                      = (StrContains(g_client_last_classstring[alivePlayer], "medic") != -1);
+
+        flLastPlayerDistance          = 0.0;
+        flShortestDistanceToPlayer    = 0.0;
+        closestDeadPlayer             = 0;
+        closestDeadPlayerWithoutMedic = 0;
+        amountOfHurtPlayers           = 0;
+        GetClientAbsOrigin(alivePlayer, flAlivePlayerPosition);
+
+        for (int deadPlayer = 1; deadPlayer <= MaxClients; deadPlayer++)
         {
-            if (StrContains(g_client_last_classstring[alivePlayer], "medic") != -1)
+            if (!IsClientInGame(deadPlayer)
+                || IsPlayerAlive(deadPlayer)
+                || g_iHurtFatal[deadPlayer]
+                || deadPlayer == alivePlayer
+                || GetClientTeam(alivePlayer) != GetClientTeam(deadPlayer))
             {
-                is_medic = true;
+                continue;
             }
-            else {
-                is_medic = false;
-            }
-            /* I'm a medic */
 
-            flLastPlayerDistance          = 0.0;
-            flShortestDistanceToPlayer    = 0.0;
-            closestDeadPlayer             = 0;
-            closestDeadPlayerWithoutMedic = 0;
-            amountOfHurtPlayers           = 0;
-            GetClientAbsOrigin(alivePlayer, flAlivePlayerPosition);
-
-            for (int deadPlayer = 1; deadPlayer <= MaxClients; deadPlayer++)
+            if (g_beingRevivedByMedic[deadPlayer])
             {
-                if (!IsClientInGame(deadPlayer)
-                    || IsPlayerAlive(deadPlayer)
-                    || g_iHurtFatal[deadPlayer]
-                    || deadPlayer == alivePlayer
-                    || GetClientTeam(alivePlayer) != GetClientTeam(deadPlayer))
+                CurrentTime = GetTime();
+                if ((CurrentTime - g_timeReviveCheck[deadPlayer]) >= 2)
                 {
-                    continue;
+                    g_beingRevivedByMedic[deadPlayer] = false;
                 }
-
-                if (g_beingRevivedByMedic[deadPlayer])
-                {
-                    CurrentTime = GetTime();
-                    if ((CurrentTime - g_timeReviveCheck[deadPlayer]) >= 2)
-                    {
-                        g_beingRevivedByMedic[deadPlayer] = false;
-                    }
-                }
-
-                clientRagdoll = INVALID_ENT_REFERENCE;
-                clientRagdoll = EntRefToEntIndex(g_iClientRagdolls[deadPlayer]);
-
-                if (clientRagdoll == INVALID_ENT_REFERENCE
-                    || !IsValidEdict(clientRagdoll)
-                    || !IsValidEntity(clientRagdoll))
-                {
-                    continue;
-                }
-
-                fTempDistance = GetVectorDistance(flAlivePlayerPosition, g_fRagdollPosition[deadPlayer]);
-
-                if (flLastPlayerDistance == 0.0
-                    || fTempDistance < flLastPlayerDistance)
-                {
-                    flLastPlayerDistance = fTempDistance;
-                    closestDeadPlayer    = deadPlayer;
-                }
-
-                if (!g_beingRevivedByMedic[deadPlayer]
-                    && (flShortestDistanceToPlayer == 0.0
-                        || fTempDistance < flShortestDistanceToPlayer))
-                {
-                    flShortestDistanceToPlayer    = fTempDistance;
-                    closestDeadPlayerWithoutMedic = deadPlayer;
-                }
-
-                amountOfHurtPlayers++;
             }
 
-            // set the closest body for this client
-            g_iNearestBody[alivePlayer] = closestDeadPlayer != 0 ? closestDeadPlayer : -1;
+            clientRagdoll = INVALID_ENT_REFERENCE;
+            clientRagdoll = EntRefToEntIndex(g_iClientRagdolls[deadPlayer]);
 
-            if (closestDeadPlayerWithoutMedic != 0)
+            if (clientRagdoll == INVALID_ENT_REFERENCE
+                || !IsValidEdict(clientRagdoll)
+                || !IsValidEntity(clientRagdoll))
             {
-                GetClientAbsAngles(alivePlayer, flAlivePlayerAngle);
-
-                // show dead nav if player is medic
-                if (is_medic)
-                {
-                    char name[64];
-                    GetClientName(closestDeadPlayerWithoutMedic, name, sizeof(name));
-                    // Get direction string (if it cause server lag, remove this)
-                    sDirection = GetDirectionString(flAlivePlayerAngle, flAlivePlayerPosition, g_fRagdollPosition[closestDeadPlayerWithoutMedic]);
-                    sDistance  = GetDistanceString(flShortestDistanceToPlayer);
-                    sHeight    = GetHeightString(flAlivePlayerPosition, g_fRagdollPosition[closestDeadPlayerWithoutMedic]);
-                    // PrintCenterText(alivePlayer, "Nearest dead[%d]: %N ( %s | %s | %s )", amountOfHurtPlayers, closestDeadPlayerWithoutMedic, sDistance, sDirection, sHeight);
-                    PrintCenterText(alivePlayer, "%T", "medic_nearest_dead", alivePlayer, amountOfHurtPlayers, name, sDistance, sDirection, sHeight);
-                }
-                beamPosition = g_fRagdollPosition[closestDeadPlayerWithoutMedic];
-                beamPosition[2] += 0.3;
-                if (fTempDistance >= 140)
-                {
-                    TE_SetupBeamRingPoint(beamPosition, 1.0, Revive_Indicator_Radius, g_iBeaconBeam, g_iBeaconHalo, 0, 15, 5.0, 3.0, 5.0, { 255, 0, 0, 255 }, 1, FBEAM_FADEIN | FBEAM_FADEOUT);
-                    TE_SendToClient(alivePlayer);
-                }
+                continue;
             }
+
+            fTempDistance = GetVectorDistance(flAlivePlayerPosition, g_fRagdollPosition[deadPlayer]);
+
+            if (flLastPlayerDistance == 0.0
+                || fTempDistance < flLastPlayerDistance)
+            {
+                flLastPlayerDistance = fTempDistance;
+                closestDeadPlayer    = deadPlayer;
+            }
+
+            if (!g_beingRevivedByMedic[deadPlayer]
+                && (flShortestDistanceToPlayer == 0.0
+                    || fTempDistance < flShortestDistanceToPlayer))
+            {
+                flShortestDistanceToPlayer    = fTempDistance;
+                closestDeadPlayerWithoutMedic = deadPlayer;
+            }
+
+            amountOfHurtPlayers++;
         }
-        else {
-            /* I'm not a medic */
 
-            closestDeadPlayer    = 0;
-            flLastPlayerDistance = 0.0;
-            GetClientAbsOrigin(alivePlayer, flAlivePlayerPosition);
+        // set the closest body for this client
+        g_iNearestBody[alivePlayer] = closestDeadPlayer != 0 ? closestDeadPlayer : -1;
 
-            for (int deadPlayer = 1; deadPlayer <= MaxClients; deadPlayer++)
+        if (closestDeadPlayerWithoutMedic != 0)
+        {
+            GetClientAbsAngles(alivePlayer, flAlivePlayerAngle);
+
+            // show dead nav if player is medic
+            if (is_medic)
             {
-                if (!IsClientInGame(deadPlayer)
-                    || IsPlayerAlive(deadPlayer)
-                    || g_iHurtFatal[deadPlayer]
-                    || deadPlayer == alivePlayer
-                    || GetClientTeam(alivePlayer) != GetClientTeam(deadPlayer))
-                {
-                    continue;
-                }
-
-                clientRagdoll = INVALID_ENT_REFERENCE;
-                clientRagdoll = EntRefToEntIndex(g_iClientRagdolls[deadPlayer]);
-
-                if (clientRagdoll == INVALID_ENT_REFERENCE
-                    || !IsValidEdict(clientRagdoll)
-                    || !IsValidEntity(clientRagdoll))
-                {
-                    continue;
-                }
-
-                fTempDistance = GetVectorDistance(flAlivePlayerPosition, g_fRagdollPosition[deadPlayer]);
-
-                if (flLastPlayerDistance == 0.0
-                    || fTempDistance < flLastPlayerDistance)
-                {
-                    flLastPlayerDistance = fTempDistance;
-                    closestDeadPlayer    = deadPlayer;
-                }
+                char name[64];
+                GetClientName(closestDeadPlayerWithoutMedic, name, sizeof(name));
+                // Get direction string (if it cause server lag, remove this)
+                sDirection = GetDirectionString(flAlivePlayerAngle, flAlivePlayerPosition, g_fRagdollPosition[closestDeadPlayerWithoutMedic]);
+                sDistance  = GetDistanceString(flShortestDistanceToPlayer);
+                sHeight    = GetHeightString(flAlivePlayerPosition, g_fRagdollPosition[closestDeadPlayerWithoutMedic]);
+                // PrintCenterText(alivePlayer, "Nearest dead[%d]: %N ( %s | %s | %s )", amountOfHurtPlayers, closestDeadPlayerWithoutMedic, sDistance, sDirection, sHeight);
+                PrintCenterText(alivePlayer, "%T", "medic_nearest_dead", alivePlayer, amountOfHurtPlayers, name, sDistance, sDirection, sHeight);
             }
-
-            g_iNearestBody[alivePlayer] = closestDeadPlayer != 0 ? closestDeadPlayer : -1;
+            beamPosition = g_fRagdollPosition[closestDeadPlayerWithoutMedic];
+            beamPosition[2] += 0.3;
+            if (fTempDistance >= 140)
+            {
+                TE_SetupBeamRingPoint(beamPosition, 1.0, Revive_Indicator_Radius, g_iBeaconBeam, g_iBeaconHalo, 0, 15, 5.0, 3.0, 5.0, { 255, 0, 0, 255 }, 1, FBEAM_FADEIN | FBEAM_FADEOUT);
+                TE_SendToClient(alivePlayer);
+            }
         }
     }
     return Plugin_Continue;
