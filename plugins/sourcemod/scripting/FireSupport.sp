@@ -151,6 +151,8 @@ public void OnPluginStart()
     gCvarEnableCmd    = CreateConVar("sm_firesupport_enable_cmd", "0", "Player can call fire support using sm_firesupport_call.", FCVAR_PROTECTED);
     gCvarEnableWeapon = CreateConVar("sm_firesupport_enable_weapon", "1", "Player can call fire support using weapon.", FCVAR_PROTECTED);
 
+    AutoExecConfig(true, "firesupport");
+
     RegConsoleCmd("sm_firesupport_call", CmdCallFS, "Call fire support where you looking at.", 0);
     RegAdminCmd("sm_firesupport_ad_call", CmdCallAFS, 0);
     RegAdminCmd("sm_firesupport_reload", CmdReloadConfig, ADMFLAG_CONFIG, "Reload fire support configuration");
