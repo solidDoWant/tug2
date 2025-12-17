@@ -425,32 +425,37 @@ void SaveLoadoutToDatabase(int client, const char[] gearBuffer, const char[] pri
 {
     if (g_Database == null) return;
 
-    // Escape strings for SQL
-    char escapedClass[256];
-    char escapedGear[512];
-    char escapedPrimary[512];
-    char escapedSecondary[512];
-    char escapedExplosive[512];
+    // Build NULL-safe value strings for empty buffers
+    char gearValue[550];
+    if (gearBuffer[0] == '\0')
+        Format(gearValue, sizeof(gearValue), "NULL");
+    else
+        g_Database.Format(gearValue, sizeof(gearValue), "'%s'", gearBuffer);
 
-    g_Database.Escape(g_PlayerCurrentClass[client], escapedClass, sizeof(escapedClass));
-    g_Database.Escape(gearBuffer, escapedGear, sizeof(escapedGear));
-    g_Database.Escape(primaryBuffer, escapedPrimary, sizeof(escapedPrimary));
-    g_Database.Escape(secondaryBuffer, escapedSecondary, sizeof(escapedSecondary));
-    g_Database.Escape(explosiveBuffer, escapedExplosive, sizeof(escapedExplosive));
+    char primaryValue[550];
+    if (primaryBuffer[0] == '\0')
+        Format(primaryValue, sizeof(primaryValue), "NULL");
+    else
+        g_Database.Format(primaryValue, sizeof(primaryValue), "'%s'", primaryBuffer);
 
-    // Prepare NULL or quoted values
-    char gearValue[550], primaryValue[550], secondaryValue[550], explosiveValue[550];
-    Format(gearValue, sizeof(gearValue), gearBuffer[0] != '\0' ? "'%s'" : "NULL", escapedGear);
-    Format(primaryValue, sizeof(primaryValue), primaryBuffer[0] != '\0' ? "'%s'" : "NULL", escapedPrimary);
-    Format(secondaryValue, sizeof(secondaryValue), secondaryBuffer[0] != '\0' ? "'%s'" : "NULL", escapedSecondary);
-    Format(explosiveValue, sizeof(explosiveValue), explosiveBuffer[0] != '\0' ? "'%s'" : "NULL", escapedExplosive);
+    char secondaryValue[550];
+    if (secondaryBuffer[0] == '\0')
+        Format(secondaryValue, sizeof(secondaryValue), "NULL");
+    else
+        g_Database.Format(secondaryValue, sizeof(secondaryValue), "'%s'", secondaryBuffer);
 
-    // Single UPSERT query
+    char explosiveValue[550];
+    if (explosiveBuffer[0] == '\0')
+        Format(explosiveValue, sizeof(explosiveValue), "NULL");
+    else
+        g_Database.Format(explosiveValue, sizeof(explosiveValue), "'%s'", explosiveBuffer);
+
+    // Single UPSERT query - use Format for final assembly since values are already escaped
     char query[2048];
-    g_Database.Format(
+    Format(
         query, sizeof(query),
         "INSERT INTO loadouts (steam_id, class_template, gear, primary_weapon, secondary_weapon, explosive, updated_at, update_count) VALUES (%s, '%s', %s, %s, %s, %s, CURRENT_TIMESTAMP, 1) ON CONFLICT (steam_id, class_template) DO UPDATE SET gear = EXCLUDED.gear, primary_weapon = EXCLUDED.primary_weapon, secondary_weapon = EXCLUDED.secondary_weapon, explosive = EXCLUDED.explosive, updated_at = CURRENT_TIMESTAMP, update_count = loadouts.update_count + 1",
-        g_PlayerSteamId[client], escapedClass, gearValue, primaryValue, secondaryValue, explosiveValue);
+        g_PlayerSteamId[client], g_PlayerCurrentClass[client], gearValue, primaryValue, secondaryValue, explosiveValue);
 
     DataPack pack = new DataPack();
     pack.WriteCell(GetClientUserId(client));
