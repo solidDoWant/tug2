@@ -205,6 +205,8 @@ RUN --mount=type=bind,source=./plugins/sourcemod,target=/plugin-source \
     cp /plugin-source/translations/firesupport.phrases.txt /insurgency/addons/sourcemod/translations/ && \
     mkdir -p /insurgency/addons/sourcemod/configs && \
     cp /plugin-source/configs/firesupport.cfg /insurgency/addons/sourcemod/configs/ && \
+    mkdir -p /insurgency/addons/sourcemod/configs/sql-init-scripts/pgsql && \
+    cp /plugin-source/configs/sql-init-scripts/pgsql/firesupport.sql /insurgency/addons/sourcemod/configs/sql-init-scripts/pgsql/firesupport.sql && \
     # Fixup file permissions
     find /insurgency -type d -exec chmod 755 {} \; && \
     find /insurgency -type f -exec chmod 644 {} \;
@@ -337,8 +339,10 @@ FROM sourcemod-plugins-base AS sourcemod-plugins-gg2-connection-tracker
 
 # Build the gg2_connection_tracker plugin
 COPY plugins/sourcemod/gamedata/ /insurgency/addons/sourcemod/gamedata/
-RUN --mount=type=bind,source=./plugins/sourcemod/scripting,target=/plugin-source/scripting \
+RUN --mount=type=bind,source=./plugins/sourcemod,target=/plugin-source \
     /sourcemod/addons/sourcemod/scripting/spcomp --include=/plugin-source/scripting/include  /plugin-source/scripting/gg2_connection_tracker.sp -o /insurgency/addons/sourcemod/plugins/gg2_connection_tracker.smx && \
+    mkdir -p /insurgency/addons/sourcemod/configs/sql-init-scripts/pgsql && \
+    cp /plugin-source/configs/sql-init-scripts/pgsql/gg2_connection_tracker.sql /insurgency/addons/sourcemod/configs/sql-init-scripts/pgsql/gg2_connection_tracker.sql && \
     # Fixup file permissions
     find /insurgency -type d -exec chmod 755 {} \; && \
     find /insurgency -type f -exec chmod 644 {} \;
@@ -384,10 +388,12 @@ FROM sourcemod-plugins-base AS sourcemod-plugins-gg2-forceretry
 
 # Build the gg2_forceretry plugin
 COPY plugins/sourcemod/gamedata/ /insurgency/addons/sourcemod/gamedata/
-RUN --mount=type=bind,source=./plugins/sourcemod/scripting,target=/plugin-source/scripting \
+RUN --mount=type=bind,source=./plugins/sourcemod,target=/plugin-source \
     /sourcemod/addons/sourcemod/scripting/spcomp --include=/plugin-source/scripting/include  /plugin-source/scripting/gg2_forceretry.sp -o /insurgency/addons/sourcemod/plugins/gg2_forceretry.smx && \
     mkdir -p /insurgency/cfg/sourcemod && \
     touch /insurgency/cfg/sourcemod/gg2_forceretry.cfg && \
+    mkdir -p /insurgency/addons/sourcemod/configs/sql-init-scripts/pgsql && \
+    cp /plugin-source/configs/sql-init-scripts/pgsql/gg2_forceretry.sql /insurgency/addons/sourcemod/configs/sql-init-scripts/pgsql/gg2_forceretry.sql && \
     # Fixup file permissions
     find /insurgency -type d -exec chmod 755 {} \; && \
     find /insurgency -type f -exec chmod 644 {} \;
@@ -441,10 +447,12 @@ FROM sourcemod-plugins-base AS sourcemod-plugins-gg2-medic-tracker
 
 # Build the gg2_medic_tracker plugin
 COPY plugins/sourcemod/gamedata/ /insurgency/addons/sourcemod/gamedata/
-RUN --mount=type=bind,source=./plugins/sourcemod/scripting,target=/plugin-source/scripting \
+RUN --mount=type=bind,source=./plugins/sourcemod,target=/plugin-source \
     /sourcemod/addons/sourcemod/scripting/spcomp --include=/plugin-source/scripting/include /plugin-source/scripting/gg2_medic_tracker.sp -o /insurgency/addons/sourcemod/plugins/gg2_medic_tracker.smx && \
     mkdir -p /insurgency/cfg/sourcemod && \
     touch /insurgency/cfg/sourcemod/gg2_medic_tracker.cfg && \
+    mkdir -p /insurgency/addons/sourcemod/configs/sql-init-scripts/pgsql && \
+    cp /plugin-source/configs/sql-init-scripts/pgsql/gg2_medic_tracker.sql /insurgency/addons/sourcemod/configs/sql-init-scripts/pgsql/gg2_medic_tracker.sql && \
     # Fixup file permissions
     find /insurgency -type d -exec chmod 755 {} \; && \
     find /insurgency -type f -exec chmod 644 {} \;
@@ -457,6 +465,8 @@ RUN --mount=type=bind,source=./plugins/sourcemod,target=/plugin-source \
     /sourcemod/addons/sourcemod/scripting/spcomp --include=/plugin-source/scripting/include /plugin-source/scripting/gg2_messages.sp -o /insurgency/addons/sourcemod/plugins/gg2_messages.smx && \
     mkdir -p /insurgency/addons/sourcemod/translations && \
     cp /plugin-source/translations/tug.phrases.txt /insurgency/addons/sourcemod/translations/ && \
+    mkdir -p /insurgency/addons/sourcemod/configs/sql-init-scripts/pgsql && \
+    cp /plugin-source/configs/sql-init-scripts/pgsql/gg2_messages.sql /insurgency/addons/sourcemod/configs/sql-init-scripts/pgsql/gg2_messages.sql && \
     # Fixup file permissions
     find /insurgency -type d -exec chmod 755 {} \; && \
     find /insurgency -type f -exec chmod 644 {} \;
@@ -465,10 +475,12 @@ FROM sourcemod-plugins-base AS sourcemod-plugins-gg2-mstats2
 
 # Build the gg2_mstats2 plugin
 COPY plugins/sourcemod/gamedata/ /insurgency/addons/sourcemod/gamedata/
-RUN --mount=type=bind,source=./plugins/sourcemod/scripting,target=/plugin-source/scripting \
+RUN --mount=type=bind,source=./plugins/sourcemod,target=/plugin-source \
     /sourcemod/addons/sourcemod/scripting/spcomp --include=/plugin-source/scripting/include  /plugin-source/scripting/gg2_mstats2.sp -o /insurgency/addons/sourcemod/plugins/gg2_mstats2.smx && \
     mkdir -p /insurgency/cfg/sourcemod && \
     touch /insurgency/cfg/sourcemod/gg2_mstats2.cfg && \
+    mkdir -p /insurgency/addons/sourcemod/configs/sql-init-scripts/pgsql && \
+    cp /plugin-source/configs/sql-init-scripts/pgsql/gg2_mstats2.sql /insurgency/addons/sourcemod/configs/sql-init-scripts/pgsql/gg2_mstats2.sql && \
     # Fixup file permissions
     find /insurgency -type d -exec chmod 755 {} \; && \
     find /insurgency -type f -exec chmod 644 {} \;
@@ -527,6 +539,8 @@ RUN --mount=type=bind,source=./plugins/sourcemod,target=/plugin-source \
     touch /insurgency/cfg/sourcemod/gg2_teamkill.cfg && \
     mkdir -p /insurgency/addons/sourcemod/translations && \
     cp /plugin-source/translations/tug.phrases.txt /insurgency/addons/sourcemod/translations/ && \
+    mkdir -p /insurgency/addons/sourcemod/configs/sql-init-scripts/pgsql && \
+    cp /plugin-source/configs/sql-init-scripts/pgsql/gg2_teamkill.sql /insurgency/addons/sourcemod/configs/sql-init-scripts/pgsql/gg2_teamkill.sql && \
     # Fixup file permissions
     find /insurgency -type d -exec chmod 755 {} \; && \
     find /insurgency -type f -exec chmod 644 {} \;
