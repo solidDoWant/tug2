@@ -515,7 +515,7 @@ public void onRequestFinished(HTTPResponse response, any value, const char[] err
     // Clear in-flight flag first (always, regardless of success/failure)
     g_RequestInFlight = false;
 
-    if (response.Status == HTTPStatus_OK)
+    if (response.Status >= 200 && response.Status < 300)
     {
         // Success - clear pending batch and reset retry counter
         g_HasPendingBatch     = false;
