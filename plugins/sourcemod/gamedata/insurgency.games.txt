@@ -5,6 +5,62 @@
 	{
 		"Offsets"
 		{
+			"CINSWeapon::GiveDefaultAmmo"
+			{
+				"linux"		"393"
+				"windows"	"392"
+			}
+			"CINSWeapon::HasChamberedRound"
+			{
+				"linux"		"441"
+				"windows"	"440"
+			}
+			"CINSWeapon::ChamberRound"
+			{
+				"linux"		"442"
+				"windows"	"441"
+			}
+			"CINSWeapon::IsEmpty"
+			{
+				"linux"		"443"
+				"windows"	"442"
+			}
+			"CINSWeapon::UseChamberRound"
+			{
+				"linux"		"444"
+				"windows"	"443"
+			}
+			"CINSWeapon::DecrementAmmo"
+			{
+				"linux"		"445"
+				"windows"	"444"
+			}
+			"CINSWeapon::CreateRecoil"
+			{
+				"linux"		"446"
+				"windows"	"445"
+			}
+			"CINSWeapon::HasFireMode"
+			{
+				"linux"		"447"
+				"windows"	"446"
+			}
+			"CINSWeapon::IsFireMode"
+			{
+				"linux"		"448"
+				"windows"	"447"
+			}
+			"CINSWeapon::GetFireMode"
+			{
+				"linux"		"449"
+				"windows"	"448"
+			}
+			"CINSWeapon::UsesFireModes"
+			{
+				"linux"		"450"
+				"windows"	"449"
+			}
+			//new
 			"CINSPlayer::ForceRespawn"
 			{
 				"linux"		"351"
@@ -24,6 +80,63 @@
 			{
 				"linux"		"200"
 				"windows"	"199"
+			}
+			"GiveNamedItem"
+			{
+				"windows"	"397"
+				"linux"		"401"
+				"mac"		"401"
+			}
+			"CheckReload"
+			{
+				"windows"	"282"
+				"linux"		"283"
+			}
+			"GetDefaultClip1"
+			{
+				"windows"	"326"
+				"linux"		"327"
+			}
+			"GetFireRate"
+			{
+				"windows"	"297"
+				"linux"		"298"
+			}
+			"GetMaxClip1"
+			{
+				"windows"	"324"
+				"linux"		"325"
+			}
+			"GetName"
+			{
+				"windows"	"334"
+				"linux"		"335"
+			}
+			"GetPrintName"
+			{
+				"windows"	"335"
+				"linux"		"336"
+			}
+			"GetSlot"
+			{
+				"windows"	"332"
+				"linux"		"333"
+			}
+			"GetWeight"
+			{
+				"windows"	"328"
+				"linux"		"329"
+			}
+			"RemovePlayerItem"
+			{
+				"windows"	"270"
+				"linux"		"271"
+				"mac"		"271"
+			}
+			"ShouldBlockPrimaryFire"
+			{
+				"windows"	"280"
+				"linux"		"281"
 			}
 		}
 		"Signatures"
