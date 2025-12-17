@@ -175,9 +175,9 @@ void UpdatePlayerLastSeen(const char[] steamId)
     if (g_Database == null) return;
 
     char query[256];
-    Format(query, sizeof(query),
-           "UPDATE loadouts SET last_seen_at = CURRENT_TIMESTAMP WHERE steam_id = %s",
-           steamId);
+    g_Database.Format(query, sizeof(query),
+                      "UPDATE loadouts SET last_seen_at = CURRENT_TIMESTAMP WHERE steam_id = %s",
+                      steamId);
 
     g_Database.Query(SQL_CheckError, query);
 }
@@ -447,7 +447,7 @@ void SaveLoadoutToDatabase(int client, const char[] gearBuffer, const char[] pri
 
     // Single UPSERT query
     char query[2048];
-    Format(
+    g_Database.Format(
         query, sizeof(query),
         "INSERT INTO loadouts (steam_id, class_template, gear, primary_weapon, secondary_weapon, explosive, updated_at, update_count) VALUES (%s, '%s', %s, %s, %s, %s, CURRENT_TIMESTAMP, 1) ON CONFLICT (steam_id, class_template) DO UPDATE SET gear = EXCLUDED.gear, primary_weapon = EXCLUDED.primary_weapon, secondary_weapon = EXCLUDED.secondary_weapon, explosive = EXCLUDED.explosive, updated_at = CURRENT_TIMESTAMP, update_count = loadouts.update_count + 1",
         g_PlayerSteamId[client], escapedClass, gearValue, primaryValue, secondaryValue, explosiveValue);
@@ -649,7 +649,7 @@ void ClearLoadout(int client)
     }
 
     char query[512];
-    Format(query, sizeof(query), "DELETE FROM loadouts WHERE steam_id = %s AND class_template = '%s'", g_PlayerSteamId[client], g_PlayerCurrentClass[client]);
+    g_Database.Format(query, sizeof(query), "DELETE FROM loadouts WHERE steam_id = %s AND class_template = '%s'", g_PlayerSteamId[client], g_PlayerCurrentClass[client]);
 
     DataPack pack = new DataPack();
     pack.WriteCell(GetClientUserId(client));
@@ -688,7 +688,7 @@ void ClearAllLoadouts(int client)
     }
 
     char query[512];
-    Format(query, sizeof(query), "DELETE FROM loadouts WHERE steam_id = %s", g_PlayerSteamId[client]);
+    g_Database.Format(query, sizeof(query), "DELETE FROM loadouts WHERE steam_id = %s", g_PlayerSteamId[client]);
 
     DataPack pack = new DataPack();
     pack.WriteCell(GetClientUserId(client));
