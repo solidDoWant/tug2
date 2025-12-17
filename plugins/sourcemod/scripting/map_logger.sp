@@ -6,7 +6,7 @@
 
 Database g_Database = null;
 char     g_sMapName[128];
-int      g_MapTime;
+bool     g_bMapStartRecorded = false;
 
 public Plugin myinfo =
 {
@@ -20,7 +20,6 @@ public Plugin myinfo =
 public void OnPluginStart()
 {
     Database.Connect(OnDatabaseConnected, "insurgency-stats");
-    HookEvent("round_start", Event_RoundStart, EventHookMode_PostNoCopy);
     HookEvent("round_end", Event_RoundEnd, EventHookMode_PostNoCopy);
 }
 
@@ -35,12 +34,6 @@ public void OnDatabaseConnected(Database db, const char[] error, any data)
 
     g_Database = db;
     LogMessage("Successfully connected to database");
-
-    // Ensure the map exists in the database
-    if (g_sMapName[0] == '\0') return;
-
-    EnsureMapExists(g_sMapName);
-    UpdateMapLastStart(g_sMapName, g_MapTime);
 }
 
 // Attempt to reconnect to the database
@@ -63,12 +56,6 @@ public void OnDatabaseReconnected(Database db, const char[] error, any data)
 
     g_Database = db;
     LogMessage("Successfully reconnected to database");
-
-    // Re-initialize current map tracking
-    if (g_sMapName[0] == '\0') return;
-
-    EnsureMapExists(g_sMapName);
-    UpdateMapLastStart(g_sMapName, g_MapTime);
 }
 
 public Action Timer_RetryReconnect(Handle timer)
@@ -81,8 +68,8 @@ public Action Timer_RetryReconnect(Handle timer)
 
 public void OnMapStart()
 {
-    g_MapTime = GetTime();
     GetCurrentMap(g_sMapName, sizeof(g_sMapName));
+    g_bMapStartRecorded = false;
 
     if (g_Database == null)
     {
@@ -91,8 +78,7 @@ public void OnMapStart()
         return;    // Functions will be called after reconnection succeeds
     }
 
-    EnsureMapExists(g_sMapName);
-    UpdateMapLastStart(g_sMapName, g_MapTime);
+    UpdateMapLastStart(g_sMapName);
 }
 
 public void OnMapEnd()
@@ -103,20 +89,11 @@ public void OnMapEnd()
     PrintToServer("Map changing from %s to %s", currentMap, nextMap);
 }
 
-public Action Event_RoundStart(Event event, const char[] name, bool dontBroadcast)
-{
-    g_MapTime = GetTime();
-    return Plugin_Continue;
-}
-
 public Action Event_RoundEnd(Event event, const char[] name, bool dontBroadcast)
 {
-    int iTimer = GetTime() - g_MapTime;
-    if (iTimer <= 0 || g_Database == null) return Plugin_Continue;
+    if (g_Database == null || !g_bMapStartRecorded) return Plugin_Continue;
 
-    UpdateMapTimePlayed(g_sMapName, iTimer);
-    LogMessage("[Map Logger] Added %d seconds to %s", iTimer, g_sMapName);
-    g_MapTime = GetTime();
+    UpdateMapTimePlayed(g_sMapName);
     return Plugin_Continue;
 }
 
@@ -136,72 +113,34 @@ void HandleQueryError(DBResultSet results, const char[] error, const char[] oper
     LogError("Failed to %s: %s", operationName, error);
 }
 
-// Helper function to execute a map query with automatic escaping
-// First format parameter (%s) will be the escaped map name, additional params come from varargs
-void ExecuteMapQuery(SQLQueryCallback callback, const char[] operationName, const char[] mapName, const char[] queryFormat, any...)
+public void UpdateMapLastStart(const char[] map_name)
 {
     if (g_Database == null)
         return;
 
-    char escapedMapName[257];
-    if (!g_Database.Escape(mapName, escapedMapName, sizeof(escapedMapName)))
-    {
-        LogError("Failed to escape map name for %s: %s", operationName, mapName);
-        return;
-    }
-
-    // Format the query: first %s is escaped map name, rest comes from varargs
     char query[512];
-    char formattedQuery[512];
-
-    // First, format any varargs into a temporary string (varargs start at parameter 4)
-    VFormat(formattedQuery, sizeof(formattedQuery), queryFormat, 4);
-
-    // Then format the escaped map name as the first parameter
-    Format(query, sizeof(query), formattedQuery, escapedMapName);
-
-    g_Database.Query(callback, query);
-}
-
-public void EnsureMapExists(const char[] map_name)
-{
-    ExecuteMapQuery(OnMapEnsured, "ensure map exists", map_name,
-                    "INSERT INTO maps (map_name, play_time, last_start) VALUES ('%s', 0, 0) ON CONFLICT (map_name) DO NOTHING");
-}
-
-public void OnMapEnsured(Database db, DBResultSet results, const char[] error, any data)
-{
-    HandleQueryError(results, error, "ensure map exists");
-}
-
-public void UpdateMapLastStart(const char[] map_name, int timestamp)
-{
-    ExecuteMapQuery(OnMapLastStartUpdated, "update map last start", map_name,
-                    "UPDATE maps SET last_start = %d, updated_at = CURRENT_TIMESTAMP WHERE map_name = '%s'",
-                    timestamp);
+    g_Database.Format(query, sizeof(query),
+                      "INSERT INTO maps (map_name, play_time, last_start) VALUES ('%s', '0 seconds'::INTERVAL, CURRENT_TIMESTAMP) ON CONFLICT (map_name) DO UPDATE SET last_start = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP",
+                      map_name);
+    g_Database.Query(OnMapLastStartUpdated, query);
 }
 
 public void OnMapLastStartUpdated(Database db, DBResultSet results, const char[] error, any data)
 {
     HandleQueryError(results, error, "update map last start");
+
+    g_bMapStartRecorded = (results != null);
 }
 
-public void UpdateMapTimePlayed(const char[] map_name, int timer)
+public void UpdateMapTimePlayed(const char[] map_name)
 {
     if (g_Database == null)
         return;
 
     char query[512];
-    char escapedMapName[257];
-    if (!g_Database.Escape(map_name, escapedMapName, sizeof(escapedMapName)))
-    {
-        LogError("Failed to escape map name: %s", map_name);
-        return;
-    }
-
-    Format(query, sizeof(query),
-           "UPDATE maps SET play_time = play_time + %d, updated_at = CURRENT_TIMESTAMP WHERE map_name = '%s'",
-           timer, escapedMapName);
+    g_Database.Format(query, sizeof(query),
+                      "INSERT INTO maps (map_name, play_time, last_start) VALUES ('%s', '0 seconds'::INTERVAL, CURRENT_TIMESTAMP) ON CONFLICT (map_name) DO UPDATE SET play_time = maps.play_time + (CURRENT_TIMESTAMP - maps.last_start), last_start = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP",
+                      map_name);
     g_Database.Query(OnMapTimeUpdated, query);
 }
 
