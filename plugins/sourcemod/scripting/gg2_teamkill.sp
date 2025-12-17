@@ -23,6 +23,10 @@ public Plugin myinfo =
 Database g_Database = null;
 // Ban duration in minutes when auto-ban is triggered (how long to ban the player)
 ConVar   g_cvarBanTime;
+// Amnesty criteria CVars
+ConVar   g_cvarAmnestyMinKPTK;         // Minimum kills-per-TK ratio for amnesty
+ConVar   g_cvarAmnestyMinKillCount;    // Minimum total kills required for amnesty
+ConVar   g_cvarAmnestyTimeCutoff;      // Time cutoff in seconds (players must have been seen within this period)
 // Stores the timestamps (Unix epoch seconds) of the last 3 teamkills for each player.
 // Array contents: [player index][0-2] = timestamp of each TK, with older entries shifting left when full
 int      g_PlayerTKTimestamps[MAXPLAYERS + 1][3];
@@ -46,7 +50,10 @@ bool     g_OffenderNotified[MAXPLAYERS + 1];
 
 public void OnPluginStart()
 {
-    g_cvarBanTime = CreateConVar("tk_ban_basetime", "5", "Base ban time (min)", FCVAR_PROTECTED);
+    g_cvarBanTime             = CreateConVar("tk_ban_basetime", "5", "Base ban time (min)", FCVAR_PROTECTED);
+    g_cvarAmnestyMinKPTK      = CreateConVar("tk_amnesty_min_kptk", "250", "Minimum kills-per-TK ratio for amnesty", FCVAR_PROTECTED);
+    g_cvarAmnestyMinKillCount = CreateConVar("tk_amnesty_min_kills", "1000", "Minimum total kills required for amnesty", FCVAR_PROTECTED);
+    g_cvarAmnestyTimeCutoff   = CreateConVar("tk_amnesty_time_cutoff", "7776000", "Amnesty time cutoff in seconds (default: 90 days)", FCVAR_PROTECTED);
     HookEvent("round_start", Event_RoundStart);
     HookEvent("player_death", Event_PlayerDeath);
     RegConsoleCmd("forgive", Cmd_Forgive, "Forgive your attacker TK");
@@ -228,6 +235,26 @@ public void OnTKForgivenUpdated(Database db, DBResultSet results, const char[] e
     HandleQueryError(results, error, "update TK forgiven status");
 }
 
+public void UpdatePlayerLastSeen(int client)
+{
+    if (g_Database == null) return;
+
+    // Use cached Steam ID - if not available, player already disconnected or never connected properly
+    if (g_ConnectedSteamIDs[client][0] == '\0') return;
+
+    char query[256];
+    g_Database.Format(query, sizeof(query),
+                      "UPDATE player_tks SET last_seen = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE steam_id = %s",
+                      g_ConnectedSteamIDs[client]);
+
+    g_Database.Query(OnLastSeenUpdated, query);
+}
+
+public void OnLastSeenUpdated(Database db, DBResultSet results, const char[] error, any data)
+{
+    HandleQueryError(results, error, "update last_seen");
+}
+
 public bool PlayerHasAmnesty(int attacker_client)
 {
     if (GetUserAdmin(attacker_client) != INVALID_ADMIN_ID)
@@ -258,10 +285,14 @@ public void QueryAmnestyPlayers()
     // No players connected, nothing to query
     if (count == 0) return;
 
+    int  time_cutoff_seconds = g_cvarAmnestyTimeCutoff.IntValue;
+    int  min_kills           = g_cvarAmnestyMinKillCount.IntValue;
+    int  min_kptk            = g_cvarAmnestyMinKPTK.IntValue;
+
     char query[2560];
     Format(query, sizeof(query),
-           "SELECT steam_id FROM player_tks WHERE tk_amnesty = TRUE AND steam_id IN (%s)",
-           steamIdList);
+           "SELECT steam_id FROM player_tks WHERE kills >= %i AND tk_given > 0 AND (kills::NUMERIC / tk_given) > %i AND last_seen > NOW() - INTERVAL '%i seconds' AND steam_id IN (%s)",
+           min_kills, min_kptk, time_cutoff_seconds, steamIdList);
 
     g_Database.Query(OnAmnestyPlayersLoaded, query);
 }
@@ -311,13 +342,10 @@ public void QueryOffenderPlayers()
     // No players connected, nothing to query
     if (count == 0) return;
 
-    int  now         = GetTime();
-    int  time_cutoff = (now - 7776000);    // 90 days
-
     char query[2560];
     Format(query, sizeof(query),
-           "SELECT steam_id FROM player_tks WHERE kills >= 500 AND tk_given > 0 AND (kills::NUMERIC / tk_given) < 100 AND last_seen > %i AND steam_id IN (%s)",
-           time_cutoff, steamIdList);
+           "SELECT steam_id FROM player_tks WHERE kills >= 500 AND tk_given > 0 AND (kills::NUMERIC / tk_given) < 100 AND last_seen > NOW() - INTERVAL '90 days' AND steam_id IN (%s)",
+           steamIdList);
 
     g_Database.Query(OnOffenderPlayersLoaded, query);
 }
@@ -389,6 +417,9 @@ public void OnMapStart()
 public void OnClientDisconnect(int client)
 {
     if (IsFakeClient(client)) return;
+
+    // Update last_seen before clearing Steam ID
+    UpdatePlayerLastSeen(client);
 
     ResetPlayerTKData(client);
 
@@ -542,11 +573,11 @@ void RecordTKToDatabase(int attacker, int victim, const char[] weapon)
     // Execute both queries in a single transaction for atomicity
     Transaction txn = new Transaction();
 
-    // Upsert both players in a single query, incrementing their respective counters
+    // Upsert both players in a single query, incrementing their respective counters and updating last_seen
     char        upsertBothPlayersQuery[1536];
     g_Database.Format(upsertBothPlayersQuery, sizeof(upsertBothPlayersQuery),
-                      "INSERT INTO player_tks (steam_id, tk_given, tk_taken) VALUES (%s, 1, 0), (%s, 0, 1) \
-           ON CONFLICT (steam_id) DO UPDATE SET tk_given = player_tks.tk_given + EXCLUDED.tk_given, tk_taken = player_tks.tk_taken + EXCLUDED.tk_taken, updated_at = CURRENT_TIMESTAMP",
+                      "INSERT INTO player_tks (steam_id, tk_given, tk_taken, last_seen) VALUES (%s, 1, 0, CURRENT_TIMESTAMP), (%s, 0, 1, CURRENT_TIMESTAMP) \
+           ON CONFLICT (steam_id) DO UPDATE SET tk_given = player_tks.tk_given + EXCLUDED.tk_given, tk_taken = player_tks.tk_taken + EXCLUDED.tk_taken, last_seen = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP",
                       g_ConnectedSteamIDs[attacker], g_ConnectedSteamIDs[victim]);
     txn.AddQuery(upsertBothPlayersQuery);
 
