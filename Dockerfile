@@ -565,8 +565,6 @@ FROM sourcemod-plugins-base AS sourcemod-plugins-bm2-respawn
 COPY plugins/sourcemod/gamedata/ /insurgency/addons/sourcemod/gamedata/
 RUN --mount=type=bind,source=./plugins/sourcemod,target=/plugin-source \
     /sourcemod/addons/sourcemod/scripting/spcomp --include=/plugin-source/scripting/include  /plugin-source/scripting/bm2_respawn.sp -o /insurgency/addons/sourcemod/plugins/bm2_respawn.smx && \
-    mkdir -p /insurgency/cfg && \
-    touch /insurgency/cfg/respawn.cfg && \
     mkdir -p /insurgency/addons/sourcemod/translations && \
     cp /plugin-source/translations/nearest_player.phrases.txt /plugin-source/translations/respawn.phrases.txt /plugin-source/translations/tug.phrases.txt /insurgency/addons/sourcemod/translations && \
     /sourcemod/addons/sourcemod/scripting/spcomp --include=/plugin-source/scripting/include  /plugin-source/scripting/d_dy_pull_rag.sp -o /insurgency/addons/sourcemod/plugins/d_dy_pull_rag.smx && \

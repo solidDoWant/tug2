@@ -615,7 +615,7 @@ public void OnPluginStart()
     LoadTranslations("respawn.phrases.txt");
     LoadTranslations("nearest_player.phrases.txt");
     LoadTranslations("tug.phrases.txt");
-    AutoExecConfig(true, "respawn");
+    AutoExecConfig(true, "plugin.respawn");
 }
 
 void UpdateRespawnCvars()
