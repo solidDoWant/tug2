@@ -1,17 +1,13 @@
 package main
 
 import (
-	"bufio"
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
 	"os/signal"
-	"strconv"
-	"strings"
-	"sync/atomic"
 	"syscall"
-	"time"
 
 	"github.com/drone/envsubst"
 )
@@ -31,71 +27,122 @@ func main() {
 		os.Exit(1)
 	}
 
-	if len(config.ServerArgs) < 1 {
-		fmt.Fprintf(logWriter, "Error: no command specified to execute\n")
-		os.Exit(1)
-	}
-
-	// Run the server process
-	cmd := exec.Command(config.ServerArgs[0], config.ServerArgs[1:]...)
-	cmd.Stdin = os.Stdin
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	cmd.Env = os.Environ()
-
-	if err := cmd.Start(); err != nil {
-		fmt.Fprintf(logWriter, "Failed to start server: %v\n", err)
-		os.Exit(1)
-	}
-
-	// Start monitoring memory usage
-	monitorCtx, cancelMonitor := context.WithCancel(context.Background())
-	var peakVmSizeMB atomic.Uint64
-	go monitorMemory(monitorCtx, cmd.Process.Pid, &peakVmSizeMB)
-
-	// Set up signal handling for graceful shutdown
-	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
+	ctx := context.Background()
+	ctx, stop := signal.NotifyContext(ctx, syscall.SIGTERM, syscall.SIGINT)
 	defer stop()
 
-	// Wait for either process to exit or signal
-	done := make(chan error, 1)
-	go func() {
-		done <- cmd.Wait()
+	if err := run(ctx, config); err != nil {
+		fmt.Fprintf(logWriter, "Error: %v\n", err)
+		os.Exit(1)
+	}
+}
+
+func run(ctx context.Context, config *Config) (err error) {
+	pm := &ProcessManager{}
+
+	// Ensure cleanup on exit
+	defer func() {
+		if shutdownErr := pm.Shutdown(); shutdownErr != nil {
+			err = errors.Join(err, fmt.Errorf("shutdown failed: %w", shutdownErr))
+		}
 	}()
 
-	var exitErr error
-	gracefulStop := false
+	// Start Xvfb and get the display ID
+	xvfbDone := make(chan error, 1)
+	displayID, err := StartXvfb(pm, xvfbDone)
+	if err != nil {
+		return fmt.Errorf("failed to start Xvfb: %w", err)
+	}
+
+	// Start tailing console.log
+	if err := StartConsoleTail(pm, config.ConsoleLogPath); err != nil {
+		return fmt.Errorf("failed to start console tail: %w", err)
+	}
+
+	// Start the main server process with the display ID
+	serverDone := make(chan error, 1)
+	if err := StartServer(pm, config, displayID, serverDone); err != nil {
+		return fmt.Errorf("failed to start server: %w", err)
+	}
+
+	// Wait for either the server to exit, Xvfb to crash, or a signal
 	select {
-	case exitErr = <-done:
-		// Process exited normally
-	case <-ctx.Done():
-		// Signal received - attempt graceful shutdown
-		fmt.Fprintf(logWriter, "Received signal, attempting graceful shutdown...\n")
-		if err := gracefulShutdownServer(config.RconHost, config.RconPort, config.RconPassword, config.ShutdownTimeout, cmd.Process); err != nil {
-			fmt.Fprintf(logWriter, "Graceful shutdown failed: %v, force killing process...\n", err)
-			cmd.Process.Kill()
-		} else {
-			// We deliberately stopped a running server via RCON. The native Linux
-			// srcds returns a non-zero exit code on `quit`, so ignore it and report
-			// success for this operator-initiated shutdown.
-			gracefulStop = true
+	case err := <-serverDone:
+		if err != nil {
+			return fmt.Errorf("server exited with error: %w", err)
 		}
-		exitErr = <-done
+
+		return nil
+	case err := <-xvfbDone:
+		if err != nil {
+			return fmt.Errorf("xvfb crashed: %w", err)
+		}
+
+		return fmt.Errorf("xvfb exited unexpectedly")
+	case <-ctx.Done():
+		fmt.Fprintln(NewPrefixedWriter("server-runner", os.Stderr), "Received signal, shutting down...")
+		return nil
+	}
+}
+
+func StartServer(pm *ProcessManager, config *Config, displayID int, done chan<- error) error {
+	if len(config.ServerArgs) < 1 {
+		return errors.New("no command specified to execute")
 	}
 
-	cancelMonitor()
+	serverCmd := exec.Command(config.ServerArgs[0], config.ServerArgs[1:]...)
+	// Don't forward signals to child processes, so that shutdown can be done in order and gracefully
+	serverCmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true, Pgid: 0}
+	SetupPrefixedStreams(serverCmd, "server")
+	serverCmd.Stdin = nil // Redirect from /dev/null equivalent
+	serverCmd.Env = append(os.Environ(), fmt.Sprintf("DISPLAY=:%d", displayID))
 
-	exitCode := getExitCode(exitErr)
-	if cmd.Process != nil {
-		printResourceUsage(logWriter, cmd.Process.Pid, &peakVmSizeMB)
+	pm.Add(&Process{
+		Name: "server",
+		Stop: func() error {
+			if serverCmd.Process == nil {
+				return nil
+			}
+
+			if serverCmd.ProcessState != nil && serverCmd.ProcessState.Exited() {
+				return nil
+			}
+
+			// Attempt graceful shutdown via RCON
+			err := gracefulShutdownServer(
+				config.RconHost,
+				config.RconPort,
+				config.RconPassword,
+				config.ShutdownTimeout,
+				serverCmd.Process,
+			)
+
+			if err == nil {
+				return nil
+			}
+
+			err = fmt.Errorf("graceful shutdown via RCON failed: %w", err)
+
+			// Graceful shutdown failed, force kill
+			killErr := serverCmd.Process.Kill()
+			if killErr != nil && !errors.Is(killErr, os.ErrProcessDone) {
+				return errors.Join(err, fmt.Errorf("force kill also failed: %w", killErr))
+			}
+
+			return err
+		},
+	})
+
+	if err := serverCmd.Start(); err != nil {
+		return fmt.Errorf("failed to start server command: %w", err)
 	}
 
-	// Treat exit code 139 (SIGSEGV) as success due to a Linux build-specific bug,
-	// and treat a successful graceful shutdown as success regardless of srcds's exit code.
-	if exitCode == 139 || gracefulStop {
-		exitCode = 0
-	}
-	os.Exit(exitCode)
+	// Monitor server process
+	go func() {
+		done <- serverCmd.Wait()
+	}()
+
+	return nil
 }
 
 func evalArgs(args []string) error {
@@ -109,94 +156,4 @@ func evalArgs(args []string) error {
 	}
 
 	return nil
-}
-
-func getExitCode(err error) int {
-	if err == nil {
-		return 0
-	}
-
-	exitErr, ok := err.(*exec.ExitError)
-	if !ok {
-		return 1
-	}
-
-	status, ok := exitErr.Sys().(syscall.WaitStatus)
-	if !ok {
-		return 1
-	}
-
-	if status.Signaled() {
-		// Process was killed by signal - return 128 + signal number
-		return 128 + int(status.Signal())
-	}
-
-	return status.ExitStatus()
-}
-
-func monitorMemory(ctx context.Context, pid int, peakVmSize *atomic.Uint64) {
-	ticker := time.NewTicker(2 * time.Second)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-			vmSizeMB := getVmSize(pid)
-			if vmSizeMB <= 0 {
-				continue
-			}
-
-			// Store as uint64 MB value
-			currentPeak := peakVmSize.Load()
-			vmSizeUint := uint64(vmSizeMB)
-			if vmSizeUint > currentPeak {
-				peakVmSize.Store(vmSizeUint)
-			}
-		}
-	}
-}
-
-func getVmSize(pid int) float64 {
-	statusPath := fmt.Sprintf("/proc/%d/status", pid)
-	file, err := os.Open(statusPath)
-	if err != nil {
-		return 0
-	}
-	defer file.Close()
-
-	scanner := bufio.NewScanner(file)
-	for scanner.Scan() {
-		line := scanner.Text()
-		if strings.HasPrefix(line, "VmSize:") {
-			fields := strings.Fields(line)
-			if len(fields) >= 2 {
-				vmSizeKB, err := strconv.ParseFloat(fields[1], 64)
-				if err == nil {
-					return vmSizeKB / 1024.0 // Convert KB to MB
-				}
-			}
-		}
-	}
-	return 0
-}
-
-func printResourceUsage(logWriter *PrefixedWriter, pid int, peakVmSize *atomic.Uint64) {
-	var rusage syscall.Rusage
-	if err := syscall.Getrusage(syscall.RUSAGE_CHILDREN, &rusage); err != nil {
-		fmt.Fprintf(logWriter, "Failed to get resource usage: %v\n", err)
-		return
-	}
-
-	// Convert maxrss from KB to MB for readability
-	maxRssMB := float64(rusage.Maxrss) / 1024.0
-
-	peakVmSizeMB := peakVmSize.Load()
-
-	if peakVmSizeMB > 0 {
-		fmt.Fprintf(logWriter, "Server resource usage - Peak RSS: %.2f MB, Peak Virtual Memory: %d MB\n", maxRssMB, peakVmSizeMB)
-		return
-	}
-	fmt.Fprintf(logWriter, "Server resource usage - Peak RSS: %.2f MB\n", maxRssMB)
 }
