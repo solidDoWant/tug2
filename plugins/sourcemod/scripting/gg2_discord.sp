@@ -503,10 +503,23 @@ void SendDiscordMessageDirect(const char[] content)
     discord_content.SetString("username", "In-Game Chat");
     discord_content.SetString("content", content);
 
+    // Restrict (and enable) mentions to the admin role only. Webhook role
+    // mentions are left unresolved and render as "@unknown-role" unless the
+    // role is explicitly listed in allowed_mentions. Every non-calladmin
+    // message is already run through no_ats(), so the admin role is the only
+    // mention the plugin ever emits.
+    JSONObject allowed_mentions = new JSONObject();
+    JSONArray  allowed_roles    = new JSONArray();
+    allowed_roles.PushString(AdminRoleID);
+    allowed_mentions.Set("roles", allowed_roles);
+    discord_content.Set("allowed_mentions", allowed_mentions);
+
     HTTPRequest request = new HTTPRequest(WebhookURL);
     request.SetHeader("Content-Type", "application/json");
     request.Post(discord_content, onRequestFinished);
 
+    delete allowed_roles;
+    delete allowed_mentions;
     delete discord_content;
 }
 
