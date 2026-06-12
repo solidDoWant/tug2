@@ -4,8 +4,6 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"os"
-	"os/exec"
 	"sync"
 )
 
@@ -102,10 +100,4 @@ func (pw *PrefixedWriter) Write(p []byte) (n int, err error) {
 	}
 
 	return len(p), nil
-}
-
-// SetupPrefixedStreams configures stdout and stderr for a command with prefixed writers
-func SetupPrefixedStreams(cmd *exec.Cmd, label string) {
-	cmd.Stdout = NewPrefixedWriter(label, os.Stdout)
-	cmd.Stderr = NewPrefixedWriter(label, os.Stderr)
 }

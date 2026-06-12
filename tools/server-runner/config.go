@@ -12,7 +12,6 @@ const separator = "--"
 
 // Config holds runtime configuration
 type Config struct {
-	ConsoleLogPath  string
 	RconHost        string
 	RconPort        int
 	RconPassword    string
@@ -22,7 +21,6 @@ type Config struct {
 
 func buildFlagSet(config *Config) *flag.FlagSet {
 	fs := flag.NewFlagSet("server-runner", flag.ContinueOnError)
-	fs.StringVar(&config.ConsoleLogPath, "console-log", "console.log", "Path to the console log file")
 	fs.StringVar(&config.RconHost, "rcon-host", "127.0.0.1", "RCON server host")
 	fs.IntVar(&config.RconPort, "rcon-port", 27015, "RCON server port")
 	fs.StringVar(&config.RconPassword, "rcon-password", "", "RCON server password")
