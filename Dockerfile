@@ -18,6 +18,12 @@ ARG SOURCEMOD_COMMIT=1059132fe9b390728743faf26b3f8a2 # SourceMod 1.12.0-git7217
 FROM ghcr.io/gameservermanagers/steamcmd:ubuntu-24.04 AS gameserver-builder
 
 RUN \
+    # Persist the depot manifest cache and in-progress download chunks across builds so an
+    # interrupted/failed `app_update` (e.g. the 0x202 out-of-disk case) resumes instead of
+    # re-fetching from zero on the next build. Note: a fully successful install clears
+    # `downloading`, so this speeds up resumes, not clean cache-miss rebuilds.
+    --mount=type=cache,id=steam-depotcache,target=/root/.local/share/Steam/depotcache,sharing=locked \
+    --mount=type=cache,id=steam-downloading,target=/opt/insurgency-server/steamapps/downloading,sharing=locked \
     # Install the game files (Windows x64 version)
     mkdir -p /opt/insurgency-server && \
     # For some reason, all of a sudden steamcmd needs to initialize prior to installing the game files, rather than doing it all in one shot.
