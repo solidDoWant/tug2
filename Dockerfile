@@ -647,6 +647,19 @@ ENTRYPOINT [    \
     "+sv_pure", "0" \
 ]
 
+# Build the casecache LD_PRELOAD shim. srcds_linux is i386, so the .so MUST be built -m32; the
+# readelf checks fail the build if it ever comes out 64-bit. See tools/casecache/ for what it does
+# (it eliminates the native-Linux -workshop case-insensitive directory-descent storm that makes
+# map changes take minutes and intermittently trips the engine watchdog -> crash).
+FROM ubuntu:24.04 AS casecache-builder
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends gcc-multilib libc6-dev-i386 \
+    && rm -rf /var/lib/apt/lists/*
+COPY tools/casecache/casecache.c /casecache.c
+RUN gcc -m32 -shared -fPIC -O2 -Wall -Wno-overflow -o /casecache.so /casecache.c -ldl -lpthread \
+    && readelf -h /casecache.so | grep -qE 'Class:[[:space:]]+ELF32' \
+    && readelf -h /casecache.so | grep -qE 'Machine:[[:space:]]+Intel 80386'
+
 FROM gameserver AS gameserver-main
 
 # Start the server once to generate any missing files (like workshop items), then exit
@@ -699,3 +712,12 @@ COPY --from=sourcemod-plugins-bm2-respawn --chown=0:0 /insurgency /opt/insurgenc
 
 # Copy in the remaining main config files
 COPY ["server config/main/", "/"]
+
+# Install the casecache LD_PRELOAD shim and enable it for the server.
+# Done LAST, after the build-time workshop-download RUN above, so the shim is active only at
+# runtime (a half-built index during the build-time download could shadow files being fetched).
+# LD_PRELOAD via ENV also reaches the 64-bit server-runner wrapper, which logs a harmless
+# "wrong ELF class" and ignores it; only the 32-bit srcds_linux loads the shim. To disable the
+# shim at runtime without a rebuild, set CASECACHE_DISABLE=1 (it becomes a pure passthrough).
+COPY --from=casecache-builder /casecache.so /opt/insurgency-server/casecache.so
+ENV LD_PRELOAD=/opt/insurgency-server/casecache.so
