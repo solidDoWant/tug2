@@ -1,14 +1,8 @@
 # This produces a container with the Insurgency server already installed. This prevents installation from occuring on every single startup. The tradeoff is a much
 # larger (10 GB) container image with copyrighted content, which can't be pushed to public repos (e.g. ghcr.io, dockerhub)
 
-# This produces a Linux container image, but the Insurgency server is actually a Windows x64 binary running under Wine.
-# As a result, plugins and mods must be the Windows versions.
-# This approach fixes several issues with the Linux version of the Insurgency server, including:
-# * The 32-bit Linux server has a memory leak when downloading or checking workshop items, causing it to hit the 4 GB memory limit and crash.
-# * The Linux server has undocumented Linux kernel requirements, causing it to crash on some modern kernels (such as those used by default by Talos).
-
-# The Windows x64 version of the Insurgency server runs fine under Wine, but SourceMod has a bug with it (see https://github.com/alliedmodders/sourcemod/issues/2370),
-# so the 32-bit version and 32-bit plugins are used instead.
+# This produces a Linux container image with the native Linux version of the Insurgency server.
+# Plugins and mods must be the Linux versions.
 
 ARG SERVER_RUNNER_IMAGE_NAME=ghcr.io/soliddowant/server-runner:latest
 ARG METAMOD_VERSION=1.12.0-git1219
@@ -24,19 +18,19 @@ RUN \
     # `downloading`, so this speeds up resumes, not clean cache-miss rebuilds.
     --mount=type=cache,id=steam-depotcache,target=/root/.local/share/Steam/depotcache,sharing=locked \
     --mount=type=cache,id=steam-downloading,target=/opt/insurgency-server/steamapps/downloading,sharing=locked \
-    # Install the game files (Windows x64 version)
+    # Install the game files (Linux i386 version)
     mkdir -p /opt/insurgency-server && \
     # For some reason, all of a sudden steamcmd needs to initialize prior to installing the game files, rather than doing it all in one shot.
     # Without this, it fails with "ERROR! Failed to install app '237410' (Missing configuration)".
     steamcmd +login anonymous +quit && \
     # Note: error message "Error! App '237410' state is 0x202 after update job." means not enough disk space.
-    steamcmd +force_install_dir /opt/insurgency-server +login anonymous +@sSteamCmdForcePlatformType windows +app_update 237410 validate +quit && \
+    steamcmd +force_install_dir /opt/insurgency-server +login anonymous +app_update 237410 validate +quit && \
     # Link console.log to /opt/insurgency-server/run/console.log to allow it to be stored on another filesystem (like a memory-backed filesystem)
     # This will keep it from filling up the disk, and not wear out the drive with constant writes.
     ln -s /opt/insurgency-server/run/console.log /opt/insurgency-server/insurgency/console.log && \
-    # Remove files for other platforms (keep Windows files)
-    rm -rf /opt/insurgency-server/srcds{_linux,_osx,_osx64,_run} && \
-    find /opt/insurgency-server/ \( -name '*.dylib' -or -name 'osx64' -or -name '*.so' \) -delete && \
+    # Remove files for other platforms (keep Linux files)
+    rm -rf /opt/insurgency-server/srcds{_osx,osx64,_run,_64.exe,.exe} && \
+    find /opt/insurgency-server/ \( -name '*.dylib' -or -name 'osx64' -or -name '*.dll' \) -delete && \
     # Remove the joystick config file to reduce logging noise
     rm -f /opt/insurgency-server/insurgency/cfg/joystick.cfg
 
@@ -67,18 +61,22 @@ RUN mkdir /insurgency
 
 FROM gameserver-mods-base AS gameserver-mods-metamod
 
-# MetaMod Source (Windows version)
+# MetaMod Source (Linux version)
 ARG METAMOD_VERSION
 RUN \
-    curl -fsSL -o /tmp/mmsource.zip https://mms.alliedmods.net/mmsdrop/1.12/mmsource-${METAMOD_VERSION}-windows.zip && \
-    unzip -q /tmp/mmsource.zip -d /insurgency && \
-    rm /tmp/mmsource.zip && \
+    curl -fsSL -o /tmp/mmsource.tar.gz https://mms.alliedmods.net/mmsdrop/1.12/mmsource-${METAMOD_VERSION}-linux.tar.gz && \
+    tar -xzf /tmp/mmsource.tar.gz -C /insurgency && \
+    rm /tmp/mmsource.tar.gz && \
     # Remove extra files
     rm -rf /insurgency/addons/metamod_x64.vdf && \
     rm -rf /insurgency/addons/metamod/{README.txt,metaplugins.ini} && \
     rm -rf /insurgency/addons/metamod/bin/win64 && \
-    find /insurgency/addons/metamod/bin -name 'metamod.2.*.dll' -not -name 'metamod.2.insurgency.dll' -delete && \
-    find /insurgency -type d -exec chmod 755 {} \;
+    find /insurgency/addons/metamod/bin -name 'metamod.2.*.so' -not -name 'metamod.2.insurgency.so' -delete && \
+    find /insurgency -type d -exec chmod 755 {} \; && \
+    find /insurgency -type f -name '*.so' -exec chmod 755 {} \; && \
+    # Create metamod.vdf to enable MetaMod (32-bit)
+    printf '"Plugin"\n{\n\t"file"\t"addons/metamod/bin/server"\n}\n' > /insurgency/addons/metamod.vdf && \
+    chmod 644 /insurgency/addons/metamod.vdf
 
 # Build SourceMod extensions
 FROM ubuntu:24.04 AS sourcemod-extensions-ripext
@@ -93,20 +91,23 @@ RUN \
 # Download and extract ripext extensions
 RUN \
     mkdir /insurgency && \
-    curl -fsSL -o /tmp/ripext.zip https://github.com/ErikMinekus/sm-ripext/releases/download/1.3.2/sm-ripext-${RIPEXT_VERSION}-windows.zip && \
+    curl -fsSL -o /tmp/ripext.zip https://github.com/ErikMinekus/sm-ripext/releases/download/1.3.2/sm-ripext-${RIPEXT_VERSION}-linux.zip && \
     unzip -q /tmp/ripext.zip -d /insurgency && \
-    rm /tmp/ripext.zip
+    rm /tmp/ripext.zip && \
+    # Fixup file permissions
+    find /insurgency -type d -exec chmod 755 {} \; && \
+    find /insurgency -type f -name '*.so' -exec chmod 755 {} \;
 
 FROM gameserver-mods-base AS gameserver-mods-sourcemod
 
-# SourceMod (Windows version)
+# SourceMod (Linux version)
 ARG SOURCEMOD_VERSION
 RUN \
     --mount=type=bind,source=./plugins/sourcemod,target=/plugin-source \
     --mount=from=sourcemod-extensions-ripext,target=/plugin-extensions/ripext \
-    curl -fsSL -o /tmp/sourcemod.zip https://sm.alliedmods.net/smdrop/1.12/sourcemod-${SOURCEMOD_VERSION}-windows.zip && \
-    unzip -q /tmp/sourcemod.zip -d /insurgency && \
-    rm /tmp/sourcemod.zip && \
+    curl -fsSL -o /tmp/sourcemod.tar.gz https://sm.alliedmods.net/smdrop/1.12/sourcemod-${SOURCEMOD_VERSION}-linux.tar.gz && \
+    tar -xzf /tmp/sourcemod.tar.gz -C /insurgency && \
+    rm /tmp/sourcemod.tar.gz && \
     # Disable auto updates
     sed -i 's/^\(.*"DisableAutoUpdate"[[:space:]]*\)"no"/\1"yes"/' /insurgency/addons/sourcemod/configs/core.cfg && \
     # Copy in the sourcemod extensions
@@ -114,11 +115,11 @@ RUN \
     # Remove extra files
     rm -rf /insurgency/addons/sourcemod/*.txt && \
     rm -rf /insurgency/sourcemod/bin/x64 && \
-    find /insurgency/addons/sourcemod/bin -name 'sourcemod.2.*.dll' -not -name 'sourcemod.2.insurgency.dll' -delete && \
+    find /insurgency/addons/sourcemod/bin -name 'sourcemod.2.*.so' -not -name 'sourcemod.2.insurgency.so' -delete && \
     rm -rf /insurgency/addons/sourcemod/extensions/x64 && \
-    find /insurgency/addons/sourcemod/bin -name 'game.*.ext.2.*.dll' -not -name 'game.insurgency.ext.2.insurgency.dll' -delete && \
-    find /insurgency/addons/sourcemod/bin -name 'sdkhooks.ext.2.*.dll' -not -name 'sdkhooks.ext.2.insurgency.dll' -delete && \
-    find /insurgency/addons/sourcemod/bin -name 'sdktools.ext.2.*.dll' -not -name 'sdktools.ext.2.insurgency.dll' -delete && \
+    find /insurgency/addons/sourcemod/extensions -name 'game.*.ext.2.*.so' -not -name 'game.insurgency.ext.2.insurgency.so' -delete && \
+    find /insurgency/addons/sourcemod/extensions -name 'sdkhooks.ext.2.*.so' -not -name 'sdkhooks.ext.2.insurgency.so' -delete && \
+    find /insurgency/addons/sourcemod/extensions -name 'sdktools.ext.2.*.so' -not -name 'sdktools.ext.2.insurgency.so' -delete && \
     rm -rf /insurgency/addons/sourcemod/gamedata/{sm-tf2.games.txt,sm-cstrike.games} && \
     find /insurgency/addons/sourcemod/gamedata -name 'engine.*.txt' -not -name 'engine.insurgency.txt' -delete && \
     find /insurgency/addons/sourcemod/gamedata -name 'game.*.txt' -not -name 'game.insurgency.txt' -delete && \
@@ -130,7 +131,9 @@ RUN \
     cp -r /plugin-source/configs/sql-init-scripts/pgsql/create_admins.sql /insurgency/addons/sourcemod/configs/sql-init-scripts/pgsql/create_admins.sql && \
     cp -r /plugin-source/configs/sql-init-scripts/pgsql/clientprefs-pgsql.sql /insurgency/addons/sourcemod/configs/sql-init-scripts/pgsql/clientprefs-pgsql.sql && \
     # Fixup file permissions
-    find /insurgency -type d -exec chmod 755 {} \;
+    find /insurgency -type d -exec chmod 755 {} \; && \
+    find /insurgency -type f -exec chmod 644 {} \; && \
+    find /insurgency -type f -name '*.so' -exec chmod 755 {} \;
 
 # This target is used to compile SourceMod plugins.
 FROM ubuntu:24.04 AS sourcemod-plugins-base
@@ -578,21 +581,15 @@ RUN --mount=type=bind,source=./plugins/sourcemod,target=/plugin-source \
 # Dumb workaround for docker limitation where you can't copy from an image specified by a build arg
 FROM ${SERVER_RUNNER_IMAGE_NAME} AS server-runner
 
-# Using Ubuntu 25:05 is needed for new enough for Wine support for the Windows x64 server
-FROM ubuntu:25.04 AS gameserver
+FROM ubuntu:24.04 AS gameserver
 
 RUN \
     dpkg --add-architecture i386 && \
     apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends -y \
     ca-certificates \
-    wine \
-    wine32:i386 \
-    winbind \
-    libwine \
-    fonts-wine  \
-    xvfb \
-    xauth \
-    x11-utils && \
+    lib32gcc-s1 \
+    lib32stdc++6 \
+    zlib1g:i386 && \
     rm -rf /var/lib/apt/lists/*
 
 # Copy the game server files
@@ -612,18 +609,10 @@ COPY --from=gameserver-builder --chown=1000:1000 --chmod=755 /empty-directory /o
 # Copy the default config
 COPY ["server config/base/", "/"]
 
-# Setup Wine environment
-# Unfortunately due to Wine ownership checks, this forces the container to run as this SPECIFIC UID:GID.
+# Run as non-root user
 USER 1000:1000
 
-ENV WINEARCH=win32
-ENV WINEPREFIX=/home/ubuntu/.wine
-ENV XDG_RUNTIME_DIR=/home/ubuntu/.local/share
-
-RUN \
-    mkdir -p "${WINEPREFIX}" "${XDG_RUNTIME_DIR}" && \
-    wine wineboot --init && wineserver --wait
-
+ENV LD_LIBRARY_PATH=/opt/insurgency-server:/opt/insurgency-server/bin
 ENV SERVER_CONFIG_FILE_PATH=server.cfg
 # This is the max that the game allows and determines how many bots can exist at once
 ENV MAX_PLAYERS=49
@@ -640,8 +629,7 @@ ENTRYPOINT [    \
     "-rcon-port", "${PORT}", \
     "-rcon-password", "${RCON_PASSWORD}", \
     "--", \
-    "wine", \
-    "/opt/insurgency-server/srcds.exe", \
+    "/opt/insurgency-server/srcds_linux", \
     "-condebug", \
     "-ip", "0.0.0.0", \
     "-game", "insurgency", \
@@ -667,8 +655,8 @@ COPY ["server config/main/opt/insurgency-server/insurgency/subscribed_file_ids.t
 
 # Start the server once to generate any missing files (like workshop items), then exit
 # Adding `+quit` to the CLI will cause the server to segfault, but this can be safely ignored.
-# Note: Running as user 1000:1000 (inherited from base stage) - Wine prefix was created with proper ownership
-RUN server-runner -- wine /opt/insurgency-server/srcds.exe -condebug -game insurgency -workshop +servercfgfile server.cfg +map embassy_coop +quit
+# Note: Running as user 1000:1000 (inherited from base stage)
+RUN server-runner -- /opt/insurgency-server/srcds_linux -condebug -game insurgency -workshop +servercfgfile server.cfg +map embassy_coop +quit
 
 # Copy in the map-specific plugins
 COPY --from=sourcemod-plugins-marquis-fix --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
