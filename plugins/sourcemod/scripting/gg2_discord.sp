@@ -55,19 +55,27 @@ bool LoadConfig()
         return false;
     }
 
-    KeyValues hConfig = new KeyValues("Discord");
+    // NOTE: Use an SMC parser rather than KeyValues here. KeyValues auto-types a
+    // purely-numeric value as a 32-bit int, so a 64-bit Discord snowflake read
+    // back via GetString is truncated to INT_MAX (2147483647) - that silently
+    // breaks AdminRoleID. SMC preserves the raw string value.
+    WebhookURL[0]     = '\0';
+    AdminRoleID[0]    = '\0';
 
-    if (!hConfig.ImportFromFile(sPath))
+    SMCParser parser  = new SMCParser();
+    parser.OnKeyValue = Config_OnKeyValue;
+    SMCError err      = parser.ParseFile(sPath);
+
+    if (err != SMCError_Okay)
     {
-        delete hConfig;
-        LogError("[DISCORD] Failed to parse configuration file: %s", sPath);
+        char errMsg[256];
+        parser.GetErrorString(err, errMsg, sizeof(errMsg));
+        delete parser;
+        LogError("[DISCORD] Failed to parse configuration file: %s (%s)", sPath, errMsg);
         return false;
     }
 
-    hConfig.GetString("WebhookURL", WebhookURL, sizeof(WebhookURL));
-    hConfig.GetString("AdminRoleID", AdminRoleID, sizeof(AdminRoleID));
-
-    delete hConfig;
+    delete parser;
 
     if (StrEqual(WebhookURL, ""))
     {
@@ -82,6 +90,20 @@ bool LoadConfig()
     }
 
     return true;
+}
+
+public SMCResult Config_OnKeyValue(SMCParser smc, const char[] key, const char[] value, bool key_quotes, bool value_quotes)
+{
+    if (StrEqual(key, "WebhookURL", false))
+    {
+        strcopy(WebhookURL, sizeof(WebhookURL), value);
+    }
+    else if (StrEqual(key, "AdminRoleID", false))
+    {
+        strcopy(AdminRoleID, sizeof(AdminRoleID), value);
+    }
+
+    return SMCParse_Continue;
 }
 
 void no_ats(char[] value, int size)
