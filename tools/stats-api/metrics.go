@@ -69,6 +69,17 @@ func (m *Metrics) Handler() http.Handler {
 	return mux
 }
 
+// probePatterns are the kubelet health-probe routes, excluded from all HTTP
+// metrics. They are only ever called by the orchestrator on a fixed interval, so
+// their request/latency series carry no operational signal — Kubernetes already
+// reports probe health — while their constant high-frequency traffic would
+// otherwise dominate the aggregate request rate and skew the latency percentiles.
+// Keep these in sync with the probe paths registered in handlers.go.
+var probePatterns = map[string]struct{}{
+	"GET /livez":  {},
+	"GET /readyz": {},
+}
+
 // Instrument wraps the API mux, recording request count and latency labelled by
 // the matched route *pattern* (e.g. "GET /api/v1/players/{steam_id}") rather than
 // the raw path, so high-cardinality path params like {steam_id} cannot explode
@@ -82,6 +93,13 @@ func (m *Metrics) Instrument(mux *http.ServeMux) http.Handler {
 		_, pattern := mux.Handler(r)
 		if pattern == "" {
 			pattern = "unmatched"
+		}
+
+		// Serve health probes without recording any metrics (count, latency, or
+		// in-flight) so they never appear in the series or skew aggregates.
+		if _, ok := probePatterns[pattern]; ok {
+			mux.ServeHTTP(w, r)
+			return
 		}
 
 		m.inflight.Inc()
