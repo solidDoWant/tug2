@@ -51,9 +51,16 @@ type StatusOutput struct {
 }
 
 // PageInput is the shared pagination query for list endpoints.
+//
+// Offset is capped (rather than left unbounded) for two reasons: a deep OFFSET
+// forces Postgres to scan and discard that many rows on every request, and an
+// attacker walking arbitrary offsets would also mint a unique cache key per
+// request, sailing straight past the shared cache to the origin. 100000 is far
+// beyond any legitimate paging depth here while bounding the worst case; raise
+// it if a leaderboard genuinely needs to be paged deeper.
 type PageInput struct {
 	Limit  int `query:"limit" default:"50" minimum:"0" maximum:"200"`
-	Offset int `query:"offset" default:"0" minimum:"0"`
+	Offset int `query:"offset" default:"0" minimum:"0" maximum:"100000"`
 }
 
 type ListPlayersInput struct {

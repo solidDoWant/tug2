@@ -50,11 +50,13 @@ func run(ctx context.Context) error {
 	server := NewServer(store)
 	metrics := NewMetrics(store.Stat)
 
-	// The metrics endpoint is wrapped around the API mux so every request is
-	// counted and timed; metrics themselves are served on a separate listener.
+	// Handler chain, outermost first: CacheControl stamps cache headers based on
+	// the final status, then Instrument counts/times every request. Instrument
+	// must wrap the *http.ServeMux directly so it can resolve each request's
+	// matched route pattern for its labels, so CacheControl goes on the outside.
 	httpServer := &http.Server{
 		Addr:         config.ListenAddr,
-		Handler:      metrics.Instrument(server.Routes()),
+		Handler:      CacheControl(config.CacheControl, metrics.Instrument(server.Routes())),
 		ReadTimeout:  config.ReadTimeout,
 		WriteTimeout: config.WriteTimeout,
 	}

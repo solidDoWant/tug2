@@ -11,10 +11,23 @@ requirements firm up.
 
 This tool only owns its HTTP settings:
 
-| Variable       | Default | Description                                     |
-| -------------- | ------- | ----------------------------------------------- |
-| `LISTEN_ADDR`  | `:8080` | Address the API HTTP server binds to.           |
-| `METRICS_ADDR` | `:9090` | Address the Prometheus metrics server binds to. |
+| Variable        | Default                                                                | Description                                                                                                                                               |
+| --------------- | ---------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `LISTEN_ADDR`   | `:8080`                                                                | Address the API HTTP server binds to.                                                                                                                     |
+| `METRICS_ADDR`  | `:9090`                                                                | Address the Prometheus metrics server binds to.                                                                                                           |
+| `CACHE_CONTROL` | `public, s-maxage=60, stale-while-revalidate=60, stale-if-error=86400` | `Cache-Control` header stamped on successful `GET /api/v1/*` responses so a shared cache/CDN can serve repeated anonymous reads. Set to `off` to disable. |
+
+`CACHE_CONTROL` exists because this API is intended to sit behind a CDN (e.g.
+Cloudflare) on a public network. `s-maxage` targets the shared cache only (no
+browser `max-age`), so responses are at most ~60s stale at the edge; error and
+non-`/api/v1/` responses (probes, docs) are never cached.
+
+To cap how long any single query may run on the database (the origin-side
+backstop for cache misses — chiefly the aggregation endpoints and deep-`offset`
+pages), set Postgres `statement_timeout` through the connection: either
+`DATABASE_URL=...?statement_timeout=5000` (milliseconds) or
+`PGOPTIONS="-c statement_timeout=5000"`. pgx forwards both as session startup
+parameters; the service does not set a default of its own.
 
 ### Database connection
 

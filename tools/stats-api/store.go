@@ -23,7 +23,11 @@ type Store struct {
 // strings and — when the string is empty — the standard libpq environment
 // variables. That means host, credentials, TLS mode (including verify-full and
 // mutual TLS), and pool sizing (pool_max_conns) are all configured through pgx's
-// native inputs rather than anything bespoke here.
+// native inputs rather than anything bespoke here. That includes
+// statement_timeout, which can be set as a connection-string parameter
+// (DATABASE_URL=...?statement_timeout=5000, in milliseconds) or via
+// PGOPTIONS=-c statement_timeout=5000 — pgx forwards both as session startup
+// parameters.
 func NewStore(ctx context.Context, databaseURL string) (*Store, error) {
 	pool, err := pgxpool.New(ctx, databaseURL)
 	if err != nil {
