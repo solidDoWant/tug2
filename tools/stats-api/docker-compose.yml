@@ -43,6 +43,7 @@ services:
       target: stats-api
     environment:
       LISTEN_ADDR: ":8080"
+      METRICS_ADDR: ":9090"
       PGHOST: postgres
       PGPORT: "5432"
       PGDATABASE: sourcemod-insurgency-stats
@@ -51,6 +52,7 @@ services:
       PGSSLMODE: disable
     ports:
       - "8080:8080"
+      - "9090:9090"
     depends_on:
       # Only wait for the container to start, not for the healthcheck. Docker
       # runs healthchecks via `docker exec`, which is unreliable in nested

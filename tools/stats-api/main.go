@@ -48,33 +48,48 @@ func run(ctx context.Context) error {
 	slog.Info("connected to database")
 
 	server := NewServer(store)
+	metrics := NewMetrics(store.Stat)
+
+	// The metrics endpoint is wrapped around the API mux so every request is
+	// counted and timed; metrics themselves are served on a separate listener.
 	httpServer := &http.Server{
 		Addr:         config.ListenAddr,
-		Handler:      server.Routes(),
+		Handler:      metrics.Instrument(server.Routes()),
+		ReadTimeout:  config.ReadTimeout,
+		WriteTimeout: config.WriteTimeout,
+	}
+	metricsServer := &http.Server{
+		Addr:         config.MetricsAddr,
+		Handler:      metrics.Handler(),
 		ReadTimeout:  config.ReadTimeout,
 		WriteTimeout: config.WriteTimeout,
 	}
 
-	serverErr := make(chan error, 1)
-	go func() {
-		slog.Info("listening", "addr", config.ListenAddr)
-		serverErr <- httpServer.ListenAndServe()
-	}()
+	// Buffered for both servers so a failing goroutine never blocks on send.
+	serverErr := make(chan error, 2)
+	serve := func(name string, srv *http.Server) {
+		slog.Info("listening", "server", name, "addr", srv.Addr)
+		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			serverErr <- fmt.Errorf("%s server error: %w", name, err)
+		}
+	}
+	go serve("api", httpServer)
+	go serve("metrics", metricsServer)
 
 	select {
 	case err := <-serverErr:
-		if err != nil && !errors.Is(err, http.ErrServerClosed) {
-			return fmt.Errorf("server error: %w", err)
-		}
-
-		return nil
+		return err
 	case <-ctx.Done():
 		slog.Info("received signal, shutting down")
 
 		shutdownCtx, cancelShutdown := context.WithTimeout(context.Background(), 15*time.Second)
 		defer cancelShutdown()
 
-		if err := httpServer.Shutdown(shutdownCtx); err != nil {
+		// Shut both listeners down; join so neither error is dropped.
+		if err := errors.Join(
+			httpServer.Shutdown(shutdownCtx),
+			metricsServer.Shutdown(shutdownCtx),
+		); err != nil {
 			return fmt.Errorf("graceful shutdown failed: %w", err)
 		}
 

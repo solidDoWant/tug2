@@ -48,6 +48,13 @@ func (s *Store) Ping(ctx context.Context) error {
 	return s.pool.Ping(ctx)
 }
 
+// Stat returns a snapshot of the connection-pool statistics, read lazily by the
+// metrics collector at scrape time. Returning the pgxpool snapshot rather than
+// the pool itself keeps the pool encapsulated in the store.
+func (s *Store) Stat() *pgxpool.Stat {
+	return s.pool.Stat()
+}
+
 // count runs a scalar COUNT query so list endpoints can report a total
 // alongside the current page.
 func (s *Store) count(ctx context.Context, query string, args ...any) (int, error) {

@@ -13,6 +13,6 @@ FROM gcr.io/distroless/static:nonroot AS stats-api
 
 COPY --from=build /stats-api /stats-api
 
-EXPOSE 8080
+EXPOSE 8080 9090
 USER nonroot:nonroot
 ENTRYPOINT ["/stats-api"]

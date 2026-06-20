@@ -11,9 +11,10 @@ requirements firm up.
 
 This tool only owns its HTTP settings:
 
-| Variable      | Default | Description                       |
-| ------------- | ------- | --------------------------------- |
-| `LISTEN_ADDR` | `:8080` | Address the HTTP server binds to. |
+| Variable       | Default | Description                                     |
+| -------------- | ------- | ----------------------------------------------- |
+| `LISTEN_ADDR`  | `:8080` | Address the API HTTP server binds to.           |
+| `METRICS_ADDR` | `:9090` | Address the Prometheus metrics server binds to. |
 
 ### Database connection
 
@@ -62,6 +63,26 @@ When the server is running it serves:
 
 ```sh
 open http://localhost:8080/docs
+```
+
+## Operator metrics
+
+Prometheus metrics are served from `GET /metrics` on a **separate listener**
+(`METRICS_ADDR`, default `:9090`) so they are never exposed on the public API
+port and never appear in the OpenAPI spec. Scrape that port from your monitoring
+network; keep it off any public ingress.
+
+| Metric                                                                       | Type      | Labels                    | Notes                                                                                                                                                                        |
+| ---------------------------------------------------------------------------- | --------- | ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `http_requests_total`                                                        | counter   | `route`, `method`, `code` | `route` is the matched pattern (e.g. `GET /api/v1/players/{steam_id}`), not the raw path, so path params don't explode cardinality. Unmatched paths collapse to `unmatched`. |
+| `http_request_duration_seconds`                                              | histogram | `route`, `method`         | Default buckets.                                                                                                                                                             |
+| `http_requests_in_flight`                                                    | gauge     | —                         | Requests currently being served.                                                                                                                                             |
+| `pgxpool_acquired_conns` / `_idle_conns` / `_total_conns` / `_max_conns`     | gauge     | —                         | Connection-pool snapshot, read at scrape time. Watch `acquired`/`total` against `max` to validate `pool_max_conns` sizing.                                                   |
+| `pgxpool_acquire_total` / `_empty_acquire_total` / `_canceled_acquire_total` | counter   | —                         | A rising `empty_acquire_total` means requests are waiting for a free connection — the pool is undersized.                                                                    |
+| `go_*` / `process_*`                                                         | various   | —                         | Default Go runtime and process collectors.                                                                                                                                   |
+
+```sh
+curl localhost:9090/metrics
 ```
 
 ## Endpoints

@@ -12,8 +12,13 @@ import (
 // the pool_max_conns conn-string param, ...) natively, so DATABASE_URL — or, when
 // it is empty, the libpq environment variables — fully describes the connection.
 type Config struct {
-	// ListenAddr is the host:port the HTTP server binds to.
+	// ListenAddr is the host:port the API HTTP server binds to.
 	ListenAddr string
+
+	// MetricsAddr is the host:port the Prometheus metrics server binds to. It is
+	// deliberately a separate listener from ListenAddr so the operator-facing
+	// /metrics endpoint is not exposed alongside the public API.
+	MetricsAddr string
 
 	// DatabaseURL is passed straight to pgx. When empty, pgx falls back to the
 	// standard libpq environment variables.
@@ -35,6 +40,7 @@ func getEnv(key, fallback string) string {
 func ParseConfig() (*Config, error) {
 	return &Config{
 		ListenAddr:   getEnv("LISTEN_ADDR", ":8080"),
+		MetricsAddr:  getEnv("METRICS_ADDR", ":9090"),
 		DatabaseURL:  os.Getenv("DATABASE_URL"),
 		ReadTimeout:  15 * time.Second,
 		WriteTimeout: 30 * time.Second,

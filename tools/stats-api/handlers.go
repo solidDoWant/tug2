@@ -19,10 +19,14 @@ func NewServer(store *Store) *Server {
 	return &Server{store: store}
 }
 
-// Routes builds the HTTP handler. A huma API is layered over the standard
+// Routes builds the API router. A huma API is layered over the standard
 // library mux so the OpenAPI 3.1 spec and docs are generated from the Go types
 // registered below — served at /docs (UI), /openapi.yaml, and /openapi.json.
-func (s *Server) Routes() http.Handler {
+//
+// The concrete *http.ServeMux is returned (rather than http.Handler) so the
+// metrics middleware can resolve each request's matched route pattern for its
+// labels.
+func (s *Server) Routes() *http.ServeMux {
 	mux := http.NewServeMux()
 
 	config := huma.DefaultConfig("stats-api", "1")
