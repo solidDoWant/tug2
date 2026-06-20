@@ -58,10 +58,21 @@ binary:	$(LOCAL_BINARY_PATH) ## Build the binary for the local platform.
 
 CONTAINER_IMAGE_TAG = $(CONTAINER_REGISTRY)/$(BINARY_NAME):$(VERSION)
 
+# Mirror the root Makefile's push toggle: set PUSH_ALL=true to push the image to
+# the registry instead of loading it into the local Docker daemon. Unlike the
+# root (which uses `docker build`), buildx treats --push and --load as mutually
+# exclusive, so --load is the default branch here rather than always-on.
+PUSH_ALL ?= false
+PUSH_ARG = $(if $(findstring t,$(PUSH_ALL)),--push,--load)
+
 LOCAL_BUILDERS += container-image
 .PHONY: container-image
-container-image: binary	## Build the container image for the local platform.
-	docker buildx build --platform linux/$(LOCALARCH) -t $(CONTAINER_IMAGE_TAG) $(EXTRA_DOCKER_ARGS) --load .
+container-image: binary	## Build the container image. Set PUSH_ALL=true to push instead of load.
+	docker buildx build --platform linux/$(LOCALARCH) -t $(CONTAINER_IMAGE_TAG) $(PUSH_ARG) $(EXTRA_DOCKER_ARGS) .
+
+.PHONY: push
+push:	## Build and push the container image to the registry.
+	$(MAKE) container-image PUSH_ALL=true
 
 .PHONY: clean
 clean:	## Clean up all build artifacts.
