@@ -1,0 +1,92 @@
+# Development stack for stats-api: a Postgres 18 instance with the gg2_mstats2
+# schema applied, plus the API built from this directory's Dockerfile.
+#
+#   docker compose up --build        # start the stack
+#   curl localhost:8080/readyz       # API is up and the DB is reachable
+#   docker compose down -v           # stop and wipe the database volume
+#
+# The schema is applied from the SourceMod init script only when the database
+# volume is first created. After changing the schema, recreate it with
+# `docker compose down -v` followed by `docker compose up`.
+
+name: stats-api-dev
+
+services:
+  postgres:
+    image: postgres:18
+    environment:
+      POSTGRES_DB: sourcemod-insurgency-stats
+      POSTGRES_USER: insurgency
+      POSTGRES_PASSWORD: insurgency
+    ports:
+      - "5432:5432"
+    volumes:
+      # Postgres 18+ stores data in a major-version subdirectory, so the volume
+      # is mounted at /var/lib/postgresql (not .../data).
+      - postgres-data:/var/lib/postgresql
+      # Applied once on first initialisation of the data volume. These plugins
+      # all share the insurgency-stats database (see database-migrations.cfg).
+      - ../../plugins/sourcemod/configs/sql-init-scripts/pgsql/gg2_mstats2.sql:/docker-entrypoint-initdb.d/10-gg2_mstats2.sql:ro
+      - ../../plugins/sourcemod/configs/sql-init-scripts/pgsql/gg2_medic_tracker.sql:/docker-entrypoint-initdb.d/20-gg2_medic_tracker.sql:ro
+      - ../../plugins/sourcemod/configs/sql-init-scripts/pgsql/gg2_teamkill.sql:/docker-entrypoint-initdb.d/30-gg2_teamkill.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U insurgency -d sourcemod-insurgency-stats"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      # Don't count failures during initial schema load / bootstrap restart.
+      start_period: 30s
+
+  stats-api:
+    build:
+      context: .
+      target: stats-api
+    environment:
+      LISTEN_ADDR: ":8080"
+      PGHOST: postgres
+      PGPORT: "5432"
+      PGDATABASE: sourcemod-insurgency-stats
+      PGUSER: insurgency
+      PGPASSWORD: insurgency
+      PGSSLMODE: disable
+    ports:
+      - "8080:8080"
+    depends_on:
+      # Only wait for the container to start, not for the healthcheck. Docker
+      # runs healthchecks via `docker exec`, which is unreliable in nested
+      # Docker-in-Docker sandboxes; gating on it can wedge startup here. Instead
+      # stats-api starts alongside Postgres and `restart: on-failure` retries it
+      # until the schema load finishes and the DB accepts connections.
+      postgres:
+        condition: service_started
+    restart: on-failure
+
+  # Optional one-shot seeder. Gated behind the "seed" profile so it never runs
+  # on a plain `docker compose up`. Apply the dummy data with:
+  #   docker compose run --rm seed
+  seed:
+    image: postgres:18
+    profiles:
+      - seed
+    environment:
+      PGPASSWORD: insurgency
+    depends_on:
+      postgres:
+        condition: service_started
+    volumes:
+      - ./testdata/seed.sql:/seed.sql:ro
+    # Wait for Postgres to accept connections (a TCP check from this container,
+    # so it does not depend on the flaky docker-exec healthcheck), then load the
+    # dummy data.
+    entrypoint:
+      - sh
+      - -c
+      - |
+        until pg_isready -h postgres -U insurgency -d sourcemod-insurgency-stats -q; do
+          echo "waiting for postgres..."; sleep 1;
+        done
+        exec psql -h postgres -U insurgency -d sourcemod-insurgency-stats -v ON_ERROR_STOP=1 -f /seed.sql
+    restart: "no"
+
+volumes:
+  postgres-data:
