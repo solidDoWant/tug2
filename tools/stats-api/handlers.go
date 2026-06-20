@@ -35,6 +35,16 @@ func (s *Server) Routes() *http.ServeMux {
 
 	s.register(api)
 
+	// Send the bare root and common default-document paths to the API docs so a
+	// browser hitting the domain lands on something useful instead of a 404.
+	// Registered on the mux directly (not via huma) so they stay out of the
+	// OpenAPI spec, and as exact patterns ({$} matches only "/") so unknown paths
+	// still 404 rather than being swallowed by a catch-all redirect.
+	docsRedirect := http.RedirectHandler("/docs", http.StatusMovedPermanently)
+	mux.Handle("GET /{$}", docsRedirect)
+	mux.Handle("GET /index.html", docsRedirect)
+	mux.Handle("GET /index.htm", docsRedirect)
+
 	return mux
 }
 
