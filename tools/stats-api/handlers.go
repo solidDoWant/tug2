@@ -104,6 +104,10 @@ type TeamKillsOutput struct {
 // --- registration ----------------------------------------------------------
 
 func (s *Server) register(api huma.API) {
+	// The probes are served on the API listener (so they share fate with the
+	// path they vouch for) but kept out of the OpenAPI spec — the published
+	// contract is the data API only; these are infra endpoints for the
+	// orchestrator, not API consumers.
 	huma.Register(api, huma.Operation{
 		OperationID: "live",
 		Method:      http.MethodGet,
@@ -111,6 +115,7 @@ func (s *Server) register(api huma.API) {
 		Summary:     "Liveness probe",
 		Description: "Returns 200 as long as the server can serve requests. Does not touch the database, so it is safe to use for restart decisions.",
 		Tags:        []string{"operational"},
+		Hidden:      true,
 	}, s.live)
 
 	huma.Register(api, huma.Operation{
@@ -120,6 +125,7 @@ func (s *Server) register(api huma.API) {
 		Summary:     "Readiness probe",
 		Description: "Pings the database; use for load-balancer rotation.",
 		Tags:        []string{"operational"},
+		Hidden:      true,
 	}, s.ready)
 
 	huma.Register(api, huma.Operation{

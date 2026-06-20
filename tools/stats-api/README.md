@@ -65,6 +65,11 @@ When the server is running it serves:
 open http://localhost:8080/docs
 ```
 
+The spec documents the data API only. The `/livez` and `/readyz` probes are
+served on this port but marked `Hidden`, so they are omitted from the spec and
+`/docs` — the published contract stays the resource API, while the probes remain
+on the listener whose health they report.
+
 ## Operator metrics
 
 Prometheus metrics are served from `GET /metrics` on a **separate listener**
