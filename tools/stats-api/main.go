@@ -50,13 +50,15 @@ func run(ctx context.Context) error {
 	server := NewServer(store)
 	metrics := NewMetrics(store.Stat)
 
-	// Handler chain, outermost first: CacheControl stamps cache headers based on
-	// the final status, then Instrument counts/times every request. Instrument
-	// must wrap the *http.ServeMux directly so it can resolve each request's
-	// matched route pattern for its labels, so CacheControl goes on the outside.
+	// Handler chain, outermost first: AccessLog logs each completed request,
+	// CacheControl stamps cache headers based on the final status, then Instrument
+	// counts/times every request. Instrument must wrap the *http.ServeMux directly
+	// so it can resolve each request's matched route pattern for its labels, so
+	// CacheControl goes on the outside; AccessLog sits outermost so its status and
+	// duration cover the whole chain.
 	httpServer := &http.Server{
 		Addr:         config.ListenAddr,
-		Handler:      CacheControl(config.CacheControl, metrics.Instrument(server.Routes())),
+		Handler:      AccessLog(CacheControl(config.CacheControl, metrics.Instrument(server.Routes()))),
 		ReadTimeout:  config.ReadTimeout,
 		WriteTimeout: config.WriteTimeout,
 	}
