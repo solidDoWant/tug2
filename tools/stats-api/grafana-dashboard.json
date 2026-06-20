@@ -43,7 +43,8 @@
         "type": "datasource"
       },
       {
-        "current": {},
+        "allValue": ".*",
+        "current": { "selected": true, "text": ["All"], "value": ["$__all"] },
         "datasource": { "type": "prometheus", "uid": "${datasource}" },
         "definition": "label_values(http_requests_in_flight, job)",
         "hide": 0,
@@ -64,9 +65,11 @@
         "type": "query"
       },
       {
-        "current": {},
+        "allValue": ".*",
+        "current": { "selected": true, "text": ["All"], "value": ["$__all"] },
         "datasource": { "type": "prometheus", "uid": "${datasource}" },
         "definition": "label_values(http_requests_in_flight{job=~\"$job\"}, instance)",
+        "description": "Defaults to All, so every panel aggregates across all running instances. Pick a single instance to drill into one replica.",
         "hide": 0,
         "includeAll": true,
         "label": "Instance",
