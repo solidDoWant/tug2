@@ -28,8 +28,20 @@ type Store struct {
 // (DATABASE_URL=...?statement_timeout=5000, in milliseconds) or via
 // PGOPTIONS=-c statement_timeout=5000 — pgx forwards both as session startup
 // parameters.
+//
+// The config is parsed explicitly (rather than via pgxpool.New) so enableTLSReload
+// can rewire the TLS handshake to reload certificates from disk: pgx otherwise
+// reads sslrootcert/sslcert/sslkey once and reuses them for the pool's lifetime,
+// which means a cert-manager/CNPG-style rotation is invisible until a restart.
 func NewStore(ctx context.Context, databaseURL string) (*Store, error) {
-	pool, err := pgxpool.New(ctx, databaseURL)
+	config, err := pgxpool.ParseConfig(databaseURL)
+	if err != nil {
+		return nil, err
+	}
+
+	enableTLSReload(&config.ConnConfig.Config, databaseURL)
+
+	pool, err := pgxpool.NewWithConfig(ctx, config)
 	if err != nil {
 		return nil, err
 	}
