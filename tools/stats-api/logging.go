@@ -47,18 +47,14 @@ func AccessLog(next http.Handler) http.Handler {
 	})
 }
 
-// clientIP returns the originating client's IP. Behind Cloudflare the TCP peer
-// (r.RemoteAddr) is a Cloudflare edge server, so the real visitor IP is taken
-// from the CF-Connecting-IP header Cloudflare sets. This trusts the header
-// unconditionally, which is sound only because the origin is reachable solely
-// through Cloudflare (firewalled to Cloudflare's IP ranges) — a direct caller
-// could otherwise forge it. The raw peer is logged separately as "peer".
-//
-// When the header is absent (a direct hit such as an in-cluster health probe),
-// it falls back to the host portion of the socket address.
+// clientIP returns the originating client's IP. The TCP peer (r.RemoteAddr) is
+// always the istio gateway, never the real client, so the client is read from
+// X-Forwarded-For, which the gateway sets to a single trusted client IP on both
+// ingress paths. When the header is absent (a direct in-cluster hit such as a
+// health probe) it falls back to the host portion of the socket address.
 func clientIP(r *http.Request) string {
-	if ip := r.Header.Get("CF-Connecting-IP"); ip != "" {
-		return ip
+	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+		return xff
 	}
 	if host, _, err := net.SplitHostPort(r.RemoteAddr); err == nil {
 		return host
