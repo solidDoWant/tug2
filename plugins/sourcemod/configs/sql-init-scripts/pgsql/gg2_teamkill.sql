@@ -5,10 +5,8 @@
 
 CREATE TABLE IF NOT EXISTS player_tks (
     steam_id BIGINT PRIMARY KEY,
-    -- Nothing writes to this column, so it is always 0. Real kill counts live in
-    -- player_stats.kills (see gg2_mstats2.sql), which is what the amnesty query joins against.
-    -- The offender query below still reads this column and therefore never matches.
-    kills INTEGER DEFAULT 0,
+    -- Kill counts are NOT stored here. They live in player_stats.kills (see gg2_mstats2.sql);
+    -- the amnesty and offender queries join that table for them.
     tk_given INTEGER DEFAULT 0,
     tk_taken INTEGER DEFAULT 0,
     last_seen TIMESTAMP DEFAULT NULL,
@@ -27,15 +25,24 @@ CREATE TABLE IF NOT EXISTS player_tk_logs (
 );
 
 -- =====================================================
+-- Migrations
+-- =====================================================
+
+-- player_tks.kills was dead weight: nothing ever wrote it, so it sat at 0 and silently broke
+-- both queries that read it (no player was ever granted amnesty or flagged as an offender).
+-- Both now read player_stats.kills instead, as does the stats API, so the column is unused.
+-- Dropping it also drops idx_player_tks_offender_ratio, which indexed it.
+ALTER TABLE player_tks DROP COLUMN IF EXISTS kills;
+
+-- =====================================================
 -- Indexes for Performance
 -- =====================================================
 
 -- Indexes on player_tks
 CREATE INDEX IF NOT EXISTS idx_player_tks_last_seen ON player_tks(last_seen);
--- Dropped: the amnesty query no longer reads player_tks.kills (it was always 0). It looks
--- players up by primary key in both tables instead.
+-- The amnesty and offender ratio indexes covered player_tks.kills. Both queries now look
+-- players up by primary key in player_stats and player_tks instead, so neither is needed.
 DROP INDEX IF EXISTS idx_player_tks_amnesty_ratio;
-CREATE INDEX IF NOT EXISTS idx_player_tks_offender_ratio ON player_tks(kills, tk_given) WHERE kills >= 500;
 
 -- Indexes on player_tk_logs
 CREATE INDEX IF NOT EXISTS idx_player_tk_logs_victim_steam_id ON player_tk_logs(victim_steam_id);
@@ -47,10 +54,14 @@ CREATE INDEX IF NOT EXISTS idx_player_tk_logs_created_at ON player_tk_logs(creat
 -- Example Data
 -- =====================================================
 
--- Example player with amnesty-qualifying stats:
--- INSERT INTO player_tks (steam_id, kills, tk_given, last_seen) VALUES (
+-- Example player with amnesty-qualifying stats. The kills side of the ratio comes from
+-- player_stats, so both rows are needed:
+-- INSERT INTO player_stats (steam_id, kills) VALUES (
+--   '76561198012345678',
+--   10000
+-- ) ON CONFLICT (steam_id) DO NOTHING;
+-- INSERT INTO player_tks (steam_id, tk_given, last_seen) VALUES (
 --   76561198012345678,
---   10000,
 --   35,
 --   CURRENT_TIMESTAMP  -- last seen now (k/tk ratio ~286, qualifies for amnesty)
 -- ) ON CONFLICT (steam_id) DO NOTHING;
@@ -81,13 +92,15 @@ CREATE INDEX IF NOT EXISTS idx_player_tk_logs_created_at ON player_tk_logs(creat
 -- ORDER BY kill_to_tk_ratio DESC;
 
 -- View known TK offenders (same logic as plugin)
--- SELECT steam_id, kills, tk_given,
---        ROUND(kills::NUMERIC / NULLIF(tk_given, 0), 2) as kill_to_tk_ratio,
---        last_seen
--- FROM player_tks
--- WHERE kills >= 500
---   AND (kills::NUMERIC / NULLIF(tk_given, 0)) < 100
---   AND last_seen > NOW() - INTERVAL '90 days'
+-- SELECT ps.steam_id, ps.kills, pt.tk_given,
+--        ROUND(ps.kills::NUMERIC / NULLIF(pt.tk_given, 0), 2) as kill_to_tk_ratio,
+--        pt.last_seen
+-- FROM player_stats ps
+-- JOIN player_tks pt ON pt.steam_id::TEXT = ps.steam_id
+-- WHERE ps.kills >= 500
+--   AND pt.tk_given > 0
+--   AND (ps.kills::NUMERIC / pt.tk_given) < 100
+--   AND pt.last_seen > NOW() - INTERVAL '90 days'
 -- ORDER BY kill_to_tk_ratio ASC;
 
 -- View recent unforgiven teamkills

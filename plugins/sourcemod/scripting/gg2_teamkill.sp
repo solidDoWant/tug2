@@ -280,7 +280,8 @@ public bool PlayerHasAmnesty(int attacker_client)
 // a kill/TK ratio above tk_amnesty_min_kptk, and activity within tk_amnesty_time_cutoff.
 //
 // Kills are read from player_stats (maintained by gg2_mstats2). This query used to read
-// player_tks.kills, which nothing ever writes, so it was always 0 and no player ever qualified.
+// player_tks.kills, which nothing ever wrote, so it was always 0 and no player ever qualified.
+// That column has since been removed.
 // player_stats is flushed at the end of every round and when a player disconnects, so a player's
 // ratio trails the current round rather than tracking it live.
 public void QueryAmnestyPlayers()
@@ -355,8 +356,8 @@ public void OnAmnestyPlayersLoaded(Database db, DBResultSet results, const char[
 // activity in the last 90 days.
 //
 // Kills are read from player_stats for the same reason as QueryAmnestyPlayers - this query used
-// to read player_tks.kills, which nothing ever writes, so it was always 0 and no player was ever
-// flagged.
+// to read player_tks.kills, which nothing ever wrote, so it was always 0 and no player was ever
+// flagged. That column has since been removed.
 public void QueryOffenderPlayers()
 {
     if (g_Database == null) return;
