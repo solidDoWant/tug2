@@ -375,11 +375,11 @@ func (s *Store) ListMedics(ctx context.Context, limit, offset int) ([]MedicStats
 // total number of tracked players. The teamkill counts come from the
 // gg2_teamkill schema.
 //
-// Total kills are joined in from player_stats (the gg2_mstats2 schema) rather
-// than read from player_tks.kills: nothing ever writes that column, so it is
-// always 0 and this endpoint used to report every player as having no kills.
-// The join is a LEFT JOIN so a player with a teamkill record but no stats row
-// still appears, with 0 kills.
+// Total kills are joined in from player_stats (the gg2_mstats2 schema). This
+// used to read player_tks.kills, which nothing ever wrote, so it was always 0
+// and this endpoint reported every player as having no kills; that column has
+// since been removed. The join is a LEFT JOIN so a player with a teamkill
+// record but no stats row still appears, with 0 kills.
 //
 // player_tks.steam_id is a BIGINT; it is cast to text because a SteamID64
 // exceeds JavaScript's safe-integer range and would lose precision as a JSON

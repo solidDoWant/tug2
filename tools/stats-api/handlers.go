@@ -40,7 +40,9 @@ func (s *Server) Routes() *http.ServeMux {
 	// Registered on the mux directly (not via huma) so they stay out of the
 	// OpenAPI spec, and as exact patterns ({$} matches only "/") so unknown paths
 	// still 404 rather than being swallowed by a catch-all redirect.
-	docsRedirect := http.RedirectHandler("/docs", http.StatusMovedPermanently)
+	// 302, not 301: a permanent redirect is cached by browsers indefinitely, which would strand
+	// anyone who has hit "/" once if it ever serves something other than a redirect to the docs.
+	docsRedirect := http.RedirectHandler("/docs", http.StatusFound)
 	mux.Handle("GET /{$}", docsRedirect)
 	mux.Handle("GET /index.html", docsRedirect)
 	mux.Handle("GET /index.htm", docsRedirect)
