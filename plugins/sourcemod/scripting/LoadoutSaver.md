@@ -7,6 +7,7 @@ Thanks [Bot Chris](https://github.com/santosoch/insurgency) and [Nullifidian](ht
 ## Features
 
 - **Per-Class Loadout Saving**: Each class template has its own saved loadout
+- **Named Loadouts**: Save a kit under a name and load it on any class, capped per player
 - **Manual Save**: Players explicitly save loadouts with `!savelo` command
 - **Automatic Loading**: Saved loadouts automatically apply when selecting a class
 - **PostgreSQL Backend**: Simple, efficient single-row schema with semicolon-separated IDs
@@ -75,12 +76,63 @@ Add database connection details to `addons/sourcemod/configs/databases.cfg`:
 
 ### Player Commands
 
-| Command        | Description                                    | Cooldown  |
-| -------------- | ---------------------------------------------- | --------- |
-| `!savelo`      | Save your current loadout for the active class | 3 seconds |
-| `!clearlo`     | Clear your saved loadout for the active class  | None      |
-| `!clearlo all` | Clear all saved loadouts for all classes       | None      |
-| `!loadlo`      | Manually load your saved loadout               | 100ms     |
+| Command           | Description                                              | Cooldown  |
+| ----------------- | -------------------------------------------------------- | --------- |
+| `!savelo`         | Save your current loadout for the active class           | 3 seconds |
+| `!clearlo`        | Clear your saved loadout for the active class            | None      |
+| `!clearlo all`    | Clear your class loadouts for every class                | None      |
+| `!loadlo`         | Manually load this class's saved loadout                 | 100ms     |
+| `!savelo <name>`  | Save the current loadout under a name, usable on any class | 3 seconds |
+| `!loadlo <name>`  | Load a named loadout, whatever class you are playing      | 100ms     |
+| `!listlo`         | List your named loadouts and how many you have left       | None      |
+| `!dello <name>`   | Delete one named loadout                                  | None      |
+| `!dello all`      | Delete every named loadout                                | None      |
+
+`!listlo` also answers to `!listloadouts`, `!loadouts`, `!lslo`, `!lsloadout` and `!lsloadouts`;
+`!dello` also answers to `!delloadout`, `!deletelo` and `!deleteloadout`.
+
+### Named Loadouts
+
+A bare `!savelo` / `!loadlo` behaves exactly as it always has: one loadout per class, loaded
+automatically when you spawn into that class. Adding a name switches to a separate set of loadouts
+that are not tied to a class:
+
+```
+(as machine gunner)  !savelo cqb kit
+(later, as medic)    !loadlo cqb kit
+```
+
+- Names may be up to 40 characters of letters, digits, spaces, dashes and underscores. Multi-word
+  names work without quotes, and runs of spaces are collapsed so `cqb  kit` and `cqb kit` cannot
+  become two loadouts that look identical in chat.
+- A name that is blank or only whitespace is rejected rather than being treated as a bare
+  `!savelo`, which would otherwise silently overwrite the class loadout instead.
+- Names are matched case-insensitively, so `!loadlo CQB Kit` finds `cqb kit`. You cannot have two
+  names that differ only in case.
+- `all` is reserved, since `!dello all` uses it.
+- Saving under a name you already have overwrites it, and that is allowed even at the cap.
+- The cap (`sm_loadout_max_named`, default 15) applies only to named loadouts. Your per-class
+  loadouts are unlimited and never count towards it. It is enforced twice: inside the plugin's
+  insert statement, and again by a database trigger (see below).
+- `!clearlo all` clears class loadouts only. Named loadouts are removed with `!dello all`.
+
+#### What stops a named loadout smuggling class weapons?
+
+Loading a named loadout on a different class does not bypass class restrictions. Every item is
+applied with the same `inventory_buy_gear` / `inventory_buy_weapon` / `inventory_buy_upgrade`
+commands the in-game buy menu issues, so the game validates each purchase against the current
+class and the player's supply points exactly as it would for a manual buy. A medic loading a
+machine gunner's kit does not receive the LMG; the buy is simply refused.
+
+Because that guarantee lives in the game rather than in this plugin, a cross-class load is checked
+afterwards rather than assumed: 0.5 seconds after applying, the weapons the player is actually
+holding are compared against the ones the loadout asked for. Anything the game refused is reported
+to the player ("N item(s) are not available to this class"), and the comparison is written to the
+server log with the source class, the current class, and both item lists. If the game ever failed
+to enforce a restriction, that log line is the evidence.
+
+`sm_loadout_named_cross_class 0` disables cross-class loading entirely, confining each named
+loadout to the class it was saved on, without otherwise removing the feature.
 
 ### How It Works
 
@@ -109,12 +161,14 @@ The plugin creates a config file at `cfg/sourcemod/plugin.loadoutsaver.cfg` on f
 | `sm_loadoutsaver_version`    | `2.0.0`                                                              | Plugin version (read-only)               |
 | `sm_loadout_msg_saved`       | `{olivedrab}[Loadout]{default} Loadout saved!`                       | Message shown when loadout is saved      |
 | `sm_loadout_msg_cleared`     | `{olivedrab}[Loadout]{default} Loadout cleared!`                     | Message shown when loadout is cleared    |
-| `sm_loadout_msg_cleared_all` | `{olivedrab}[Loadout]{default} All loadouts cleared!`                | Message shown when all loadouts cleared  |
+| `sm_loadout_msg_cleared_all` | `{olivedrab}[Loadout]{default} All class loadouts cleared! ...`      | Message shown when class loadouts cleared |
 | `sm_loadout_msg_loaded`      | `{olivedrab}[Loadout]{default} Loadout loaded!`                      | Message shown when loadout is loaded     |
 | `sm_loadout_msg_failed`      | `{red}[Loadout]{default} Failed to process loadout.`                 | Message shown when operation fails       |
 | `sm_loadout_msg_supply`      | `{red}[Loadout]{default} Can't save loadout that costs more than...` | Message shown when loadout too expensive |
 | `sm_loadout_save_cooldown`   | `3.0`                                                                | Cooldown for save command (seconds)      |
 | `sm_loadout_load_cooldown`   | `0.1`                                                                | Cooldown for load command (seconds)      |
+| `sm_loadout_max_named`       | `15`                                                                 | Named loadouts allowed per player        |
+| `sm_loadout_named_cross_class` | `1`                                                                | Allow named loadouts to load on a different class than they were saved on |
 
 Messages support color tags from the `morecolors` library. See [Color Tags](#color-tags) below.
 
@@ -135,7 +189,9 @@ The plugin uses a simple PostgreSQL database schema with one row per player/clas
 
 **loadouts** table:
 - `steam_id` (VARCHAR(32)): Player's Steam ID
-- `class_template` (VARCHAR(128)): Class template name
+- `class_template` (VARCHAR(128)): Class template name. For a named loadout this records the class
+  it was saved on, which is what the cross-class check compares against
+- `name` (VARCHAR(64)): Loadout name, or NULL for a class loadout
 - `gear` (TEXT): Semicolon-separated list of gear theater IDs
 - `primary_weapon` (TEXT): Semicolon-separated list (weapon ID; upgrade IDs)
 - `secondary_weapon` (TEXT): Semicolon-separated list (weapon ID; upgrade IDs)
@@ -144,7 +200,40 @@ The plugin uses a simple PostgreSQL database schema with one row per player/clas
 - `updated_at` (TIMESTAMP): Last update timestamp
 - `last_seen_at` (TIMESTAMP): Last time player was seen
 - `update_count` (INTEGER): Number of times loadout was updated
-- Primary Key: `(steam_id, class_template)`
+
+Uniqueness is enforced by two partial indexes rather than a primary key, because the two kinds of
+row are unique on different things:
+
+- `(steam_id, class_template) WHERE name IS NULL` - one class loadout per class, which is what the
+  old `(steam_id, class_template)` primary key enforced
+- `(steam_id, lower(name)) WHERE name IS NOT NULL` - one named loadout per name, case-insensitive
+
+The migration in `loadout_saver.sql` adds the `name` column and drops the old primary key. Existing
+rows get `name = NULL`, so every loadout saved before named loadouts existed stays a class loadout
+and behaves identically.
+
+### Cap Enforcement
+
+The cap is enforced in two independent places:
+
+1. **In the insert statement.** The plugin's named-save is a single `INSERT ... SELECT ... WHERE
+   (count < cap OR name already exists) ON CONFLICT ... DO UPDATE`, so the check and the write
+   cannot be separated by a concurrent save. A refused save writes no row, which the plugin
+   detects from the affected row count and reports as "you already have N named loadouts".
+2. **In the database.** `enforce_named_loadout_cap()` runs `BEFORE INSERT OR UPDATE` and raises
+   `check_violation` if a player would exceed the cap. This is the backstop for anything that does
+   not go through the plugin's statement - hand-written SQL, a future code change, a bug.
+
+The trigger is deliberately careful about what does *not* consume a slot, or it would break normal
+use: overwriting a name the player already owns is allowed even at the cap (a `BEFORE INSERT`
+trigger fires before `ON CONFLICT` resolves, so the row being replaced is still present and would
+otherwise be counted), and any update to a row that was already named passes straight through -
+which covers the `last_seen_at` touch applied to all of a player's rows when they connect.
+
+The cap value is hardcoded as `15` in the trigger. If you raise `sm_loadout_max_named` above that,
+update the trigger to match, otherwise saves past 15 fail as a database error instead of a polite
+chat message. (The plugin recognises that specific error and still shows the cap message, but the
+save is refused either way.)
 
 ### Storage Format
 

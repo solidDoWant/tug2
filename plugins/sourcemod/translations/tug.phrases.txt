@@ -800,6 +800,17 @@
     "pt_p"      "{green}!savelo{common} / {green}!loadlo{common} / {green}!clearlo{common} - Salve, carregue ou limpe seu equipamento desta classe"
     "tr"        "{green}!savelo{common} / {green}!loadlo{common} / {green}!clearlo{common} - Bu sınıf için teçhizatını kaydet, yükle veya temizle"
   }
+  "help_loadout_named"
+  {
+    "en"        "{green}!savelo <name>{common} / {green}!loadlo <name>{common} / {green}!listlo{common} / {green}!dello{common} - Named loadouts you can use on any class"
+    "ua"        "{green}!savelo <назва>{common} / {green}!loadlo <назва>{common} / {green}!listlo{common} / {green}!dello{common} - Іменовані набори, доступні для будь-якого класу"
+    "jp"        "{green}!savelo <名前>{common} / {green}!loadlo <名前>{common} / {green}!listlo{common} / {green}!dello{common} - どのクラスでも使える名前付き装備"
+    "chi"       "{green}!savelo <名称>{common} / {green}!loadlo <名称>{common} / {green}!listlo{common} / {green}!dello{common} - 可在任意职业使用的命名装备"
+    "ru"        "{green}!savelo <название>{common} / {green}!loadlo <название>{common} / {green}!listlo{common} / {green}!dello{common} - Именованные наборы для любого класса"
+    "es"        "{green}!savelo <nombre>{common} / {green}!loadlo <nombre>{common} / {green}!listlo{common} / {green}!dello{common} - Equipamientos con nombre, para cualquier clase"
+    "pt_p"      "{green}!savelo <nome>{common} / {green}!loadlo <nome>{common} / {green}!listlo{common} / {green}!dello{common} - Equipamentos nomeados, para qualquer classe"
+    "tr"        "{green}!savelo <ad>{common} / {green}!loadlo <ad>{common} / {green}!listlo{common} / {green}!dello{common} - Her sınıfta kullanılabilen adlandırılmış teçhizatlar"
+  }
   "help_afk"
   {
     "en"        "{green}!afk{common} - Move yourself to spectator"

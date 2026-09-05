@@ -84,6 +84,7 @@ char g_HelpPhrases[][] = {
     "help_calladmin",
     "help_forgive",
     "help_loadout",
+    "help_loadout_named",
     "help_afk",
     "help_fatal",
     "help_lastmaps",
