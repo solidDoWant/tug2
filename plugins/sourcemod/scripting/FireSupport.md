@@ -4,11 +4,12 @@
 
 These are set in `cfg/sourcemod/plugin.firesupport.cfg` or via server console/config files.
 
-| CVar                           | Type    | Default      | Description                                                                                                                             |
-| ------------------------------ | ------- | ------------ | --------------------------------------------------------------------------------------------------------------------------------------- |
-| `sm_firesupport_class`         | String  | `""` (empty) | Player class template that can call fire support. If empty, all classes can use fire support. Example: `"template_recon_security_coop"` |
-| `sm_firesupport_enable_cmd`    | Boolean | `0`          | Enable/disable the `sm_firesupport_call` console command. `0` = disabled, `1` = enabled                                                 |
-| `sm_firesupport_enable_weapon` | Boolean | `1`          | Enable/disable weapon-based fire support triggers. `0` = disabled, `1` = enabled                                                        |
+| CVar                               | Type    | Default      | Description                                                                                                                                       |
+| ---------------------------------- | ------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `sm_firesupport_class`             | String  | `""` (empty) | Player class template that can call fire support. If empty, all classes can use fire support. Example: `"template_recon_security_coop"`           |
+| `sm_firesupport_enable_cmd`        | Boolean | `0`          | Enable/disable the `sm_firesupport_call` console command. `0` = disabled, `1` = enabled                                                           |
+| `sm_firesupport_enable_weapon`     | Boolean | `1`          | Enable/disable weapon-based fire support triggers. `0` = disabled, `1` = enabled                                                                  |
+| `sm_firesupport_team_damage_scale` | Float   | `0.5`        | Multiplier applied to fire support damage dealt to the caller's own team. `1.0` = no reduction, `0.0` = no friendly fire from fire support at all |
 
 ### CVar Usage Examples
 

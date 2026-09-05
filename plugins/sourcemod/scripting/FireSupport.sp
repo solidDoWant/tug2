@@ -89,6 +89,7 @@ int         gNumSupportTypes;
 ConVar      gCvarClass;
 ConVar      gCvarEnableCmd;
 ConVar      gCvarEnableWeapon;
+ConVar      gCvarTeamDamageScale;
 
 bool        IsEnabled[MAXPLAYERS + 1];
 bool        IsEnabledTeam[4][MAX_SUPPORT_TYPES];            // [team][supportType] - per-type cooldown tracking
@@ -150,6 +151,7 @@ public void OnPluginStart()
     gCvarClass        = CreateConVar("sm_firesupport_class", "", "Set fire support specialist class. Leave empty to allow all classes.", FCVAR_PROTECTED);
     gCvarEnableCmd    = CreateConVar("sm_firesupport_enable_cmd", "0", "Player can call fire support using sm_firesupport_call.", FCVAR_PROTECTED);
     gCvarEnableWeapon = CreateConVar("sm_firesupport_enable_weapon", "1", "Player can call fire support using weapon.", FCVAR_PROTECTED);
+    gCvarTeamDamageScale = CreateConVar("sm_firesupport_team_damage_scale", "0.5", "Multiplier applied to fire support damage dealt to the caller's own team. 1.0 = no reduction.", FCVAR_PROTECTED, true, 0.0, true, 1.0);
 
     AutoExecConfig(true, "firesupport");
 
@@ -194,6 +196,15 @@ public void OnPluginStart()
 
     InitSupportCount();
     LoadSupportConfig();
+
+    // Hook clients that are already in game, in case the plugin was loaded mid-map
+    for (int client = 1; client <= MaxClients; client++)
+    {
+        if (IsClientInGame(client))
+        {
+            SDKHook(client, SDKHook_OnTakeDamage, OnClientTakeDamage);
+        }
+    }
 }
 
 public void OnMapStart()
@@ -264,6 +275,50 @@ public void OnEntityDestroyed(int entity)
 public void OnClientConnected(int client)
 {
     IsEnabled[client] = false;
+}
+
+public void OnClientPutInServer(int client)
+{
+    SDKHook(client, SDKHook_OnTakeDamage, OnClientTakeDamage);
+}
+
+// Scale down fire support damage dealt to the caller's own team.
+// Artillery lands on top of a moving squad often enough that full friendly fire damage is a
+// bigger source of teamkills than enemy fire; the strike itself is left at full strength
+// against the other team.
+public Action OnClientTakeDamage(int victim, int &attacker, int &inflictor, float &damage, int &damagetype)
+{
+    float scale = gCvarTeamDamageScale.FloatValue;
+    if (scale >= 1.0) return Plugin_Continue;
+
+    if (!IsFireSupportProjectile(inflictor)) return Plugin_Continue;
+
+    if (!ValidateClient(victim) || !ValidateClient(attacker)) return Plugin_Continue;
+    if (GetClientTeam(victim) != GetClientTeam(attacker)) return Plugin_Continue;
+
+    damage *= scale;
+    return Plugin_Changed;
+}
+
+// Returns true if the entity is a projectile spawned by fire support.
+// Rockets that are still tracked are matched by entity index; the classname check covers
+// projectiles whose tracking info has already been cleaned up.
+bool IsFireSupportProjectile(int entity)
+{
+    if (entity <= MaxClients || !IsValidEntity(entity)) return false;
+
+    if (entity < sizeof(gRocketFireSupportInfo) && gRocketFireSupportInfo[entity] != null) return true;
+
+    char classname[64];
+    if (!GetEntityClassname(entity, classname, sizeof(classname))) return false;
+
+    for (int i = 0; i < gNumSupportTypes; i++)
+    {
+        if (gSupportTypes[i].projectile[0] == '\0') continue;
+        if (StrEqual(classname, gSupportTypes[i].projectile, false)) return true;
+    }
+
+    return false;
 }
 
 void LoadSupportConfig()
