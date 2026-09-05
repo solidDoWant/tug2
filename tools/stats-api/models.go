@@ -66,7 +66,9 @@ type MedicStats struct {
 // SteamID is serialized as a string because a SteamID64 exceeds JavaScript's
 // safe-integer range.
 type TeamKillStats struct {
-	SteamID  string     `json:"steam_id"`
+	SteamID string `json:"steam_id"`
+	// Kills is the player's total kills, joined in from player_stats, so it can
+	// be compared against TKGiven as a kill/teamkill ratio.
 	Kills    int        `json:"kills"`
 	TKGiven  int        `json:"tk_given"`
 	TKTaken  int        `json:"tk_taken"`

@@ -372,16 +372,25 @@ func (s *Store) ListMedics(ctx context.Context, limit, offset int) ([]MedicStats
 }
 
 // ListTeamKills returns a page of players ranked by team kills given, plus the
-// total number of tracked players. Data comes from the gg2_teamkill schema.
+// total number of tracked players. The teamkill counts come from the
+// gg2_teamkill schema.
+//
+// Total kills are joined in from player_stats (the gg2_mstats2 schema) rather
+// than read from player_tks.kills: nothing ever writes that column, so it is
+// always 0 and this endpoint used to report every player as having no kills.
+// The join is a LEFT JOIN so a player with a teamkill record but no stats row
+// still appears, with 0 kills.
 //
 // player_tks.steam_id is a BIGINT; it is cast to text because a SteamID64
 // exceeds JavaScript's safe-integer range and would lose precision as a JSON
-// number.
+// number. That cast is also what joins it to player_stats.steam_id, which is
+// text.
 func (s *Store) ListTeamKills(ctx context.Context, limit, offset int) ([]TeamKillStats, int, error) {
 	query := `
-		SELECT steam_id::text, kills, tk_given, tk_taken, last_seen
-		FROM player_tks
-		ORDER BY tk_given DESC
+		SELECT pt.steam_id::text, COALESCE(ps.kills, 0), pt.tk_given, pt.tk_taken, pt.last_seen
+		FROM player_tks pt
+		LEFT JOIN player_stats ps ON ps.steam_id = pt.steam_id::text
+		ORDER BY pt.tk_given DESC
 		LIMIT $1 OFFSET $2`
 
 	rows, err := s.pool.Query(ctx, query, limit, offset)

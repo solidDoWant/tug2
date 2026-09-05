@@ -73,9 +73,11 @@ VALUES
 ON CONFLICT (steamId) DO NOTHING;
 
 -- Team kills (gg2_teamkill) -- steam_id is BIGINT here -----------------------
-INSERT INTO player_tks (steam_id, kills, tk_given, tk_taken, last_seen)
+-- player_tks.kills is deliberately not seeded: nothing writes it in production
+-- either, so it stays 0 here. Kill counts come from player_stats.
+INSERT INTO player_tks (steam_id, tk_given, tk_taken, last_seen)
 VALUES
-    (76561198000000004,   40, 30,  9, CURRENT_TIMESTAMP),
-    (76561198000000001, 1500, 12,  4, CURRENT_TIMESTAMP),
-    (76561198000000002,  980,  7, 15, CURRENT_TIMESTAMP)
+    (76561198000000004, 30,  9, CURRENT_TIMESTAMP),
+    (76561198000000001, 12,  4, CURRENT_TIMESTAMP),
+    (76561198000000002,  7, 15, CURRENT_TIMESTAMP)
 ON CONFLICT (steam_id) DO NOTHING;
