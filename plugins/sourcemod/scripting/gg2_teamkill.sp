@@ -351,21 +351,38 @@ public void OnAmnestyPlayersLoaded(Database db, DBResultSet results, const char[
     }
 }
 
+// Offender criteria are unchanged: at least 500 lifetime kills, a kill/TK ratio under 100, and
+// activity in the last 90 days.
+//
+// Kills are read from player_stats for the same reason as QueryAmnestyPlayers - this query used
+// to read player_tks.kills, which nothing ever writes, so it was always 0 and no player was ever
+// flagged.
 public void QueryOffenderPlayers()
 {
     if (g_Database == null) return;
 
-    // Build list of connected player Steam IDs
-    char steamIdList[2048];
-    int  count = BuildConnectedSteamIDList(steamIdList, sizeof(steamIdList));
+    // Build lists of connected player Steam IDs, quoted for player_stats (a text column) and bare
+    // for player_tks (a numeric column). Both let the lookup hit each table's primary key.
+    char statsSteamIdList[2560];
+    int  count = BuildConnectedSteamIDList(statsSteamIdList, sizeof(statsSteamIdList), true);
 
     // No players connected, nothing to query
     if (count == 0) return;
 
-    char query[2560];
+    char tkSteamIdList[2048];
+    BuildConnectedSteamIDList(tkSteamIdList, sizeof(tkSteamIdList));
+
+    char query[5120];
     Format(query, sizeof(query),
-           "SELECT steam_id FROM player_tks WHERE kills >= 500 AND tk_given > 0 AND (kills::NUMERIC / tk_given) < 100 AND last_seen > NOW() - INTERVAL '90 days' AND steam_id IN (%s)",
-           steamIdList);
+           "SELECT ps.steam_id FROM player_stats ps \
+           JOIN player_tks pt ON pt.steam_id::TEXT = ps.steam_id \
+           WHERE ps.steam_id IN (%s) \
+           AND pt.steam_id IN (%s) \
+           AND ps.kills >= 500 \
+           AND pt.tk_given > 0 \
+           AND (ps.kills::NUMERIC / pt.tk_given) < 100 \
+           AND pt.last_seen > NOW() - INTERVAL '90 days'",
+           statsSteamIdList, tkSteamIdList);
 
     g_Database.Query(OnOffenderPlayersLoaded, query);
 }

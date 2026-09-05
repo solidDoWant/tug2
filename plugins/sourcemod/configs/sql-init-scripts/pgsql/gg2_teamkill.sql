@@ -5,6 +5,9 @@
 
 CREATE TABLE IF NOT EXISTS player_tks (
     steam_id BIGINT PRIMARY KEY,
+    -- Nothing writes to this column, so it is always 0. Real kill counts live in
+    -- player_stats.kills (see gg2_mstats2.sql), which is what the amnesty query joins against.
+    -- The offender query below still reads this column and therefore never matches.
     kills INTEGER DEFAULT 0,
     tk_given INTEGER DEFAULT 0,
     tk_taken INTEGER DEFAULT 0,
@@ -29,7 +32,9 @@ CREATE TABLE IF NOT EXISTS player_tk_logs (
 
 -- Indexes on player_tks
 CREATE INDEX IF NOT EXISTS idx_player_tks_last_seen ON player_tks(last_seen);
-CREATE INDEX IF NOT EXISTS idx_player_tks_amnesty_ratio ON player_tks(kills, tk_given) WHERE kills >= 1000;
+-- Dropped: the amnesty query no longer reads player_tks.kills (it was always 0). It looks
+-- players up by primary key in both tables instead.
+DROP INDEX IF EXISTS idx_player_tks_amnesty_ratio;
 CREATE INDEX IF NOT EXISTS idx_player_tks_offender_ratio ON player_tks(kills, tk_given) WHERE kills >= 500;
 
 -- Indexes on player_tk_logs
@@ -64,14 +69,15 @@ CREATE INDEX IF NOT EXISTS idx_player_tk_logs_created_at ON player_tk_logs(creat
 -- =====================================================
 
 -- View players with TK amnesty (same logic as plugin)
--- SELECT steam_id, kills, tk_given,
---        ROUND(kills::NUMERIC / NULLIF(tk_given, 0), 2) as kill_to_tk_ratio,
---        last_seen
--- FROM player_tks
--- WHERE kills >= 1000
---   AND tk_given > 0
---   AND (kills::NUMERIC / tk_given) > 250
---   AND last_seen > NOW() - INTERVAL '90 days'
+-- SELECT ps.steam_id, ps.kills, pt.tk_given,
+--        ROUND(ps.kills::NUMERIC / NULLIF(pt.tk_given, 0), 2) as kill_to_tk_ratio,
+--        pt.last_seen
+-- FROM player_stats ps
+-- JOIN player_tks pt ON pt.steam_id::TEXT = ps.steam_id
+-- WHERE ps.kills >= 1000
+--   AND pt.tk_given > 0
+--   AND (ps.kills::NUMERIC / pt.tk_given) > 250
+--   AND pt.last_seen > NOW() - INTERVAL '90 days'
 -- ORDER BY kill_to_tk_ratio DESC;
 
 -- View known TK offenders (same logic as plugin)
