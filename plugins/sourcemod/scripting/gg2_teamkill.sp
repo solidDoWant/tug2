@@ -141,8 +141,10 @@ bool HandleQueryError(DBResultSet results, const char[] error, const char[] oper
 }
 
 // Build a comma-separated list of connected player Steam IDs for SQL IN clause
+// Set quoted for text columns (player_stats.steam_id); leave it off for numeric columns
+// (player_tks.steam_id).
 // Returns the number of connected players added to the buffer
-int BuildConnectedSteamIDList(char[] buffer, int maxlen)
+int BuildConnectedSteamIDList(char[] buffer, int maxlen, bool quoted = false)
 {
     int count  = 0;
     int offset = 0;
@@ -156,7 +158,7 @@ int BuildConnectedSteamIDList(char[] buffer, int maxlen)
             offset += FormatEx(buffer[offset], maxlen - offset, ",");
         }
 
-        offset += FormatEx(buffer[offset], maxlen - offset, "%s", g_ConnectedSteamIDs[i]);
+        offset += FormatEx(buffer[offset], maxlen - offset, quoted ? "'%s'" : "%s", g_ConnectedSteamIDs[i]);
         count++;
     }
 
@@ -274,25 +276,43 @@ public bool PlayerHasAmnesty(int attacker_client)
     return false;
 }
 
+// Amnesty criteria are unchanged from the original: at least tk_amnesty_min_kills lifetime kills,
+// a kill/TK ratio above tk_amnesty_min_kptk, and activity within tk_amnesty_time_cutoff.
+//
+// Kills are read from player_stats (maintained by gg2_mstats2). This query used to read
+// player_tks.kills, which nothing ever writes, so it was always 0 and no player ever qualified.
+// player_stats is flushed at the end of every round and when a player disconnects, so a player's
+// ratio trails the current round rather than tracking it live.
 public void QueryAmnestyPlayers()
 {
     if (g_Database == null) return;
 
-    // Build list of connected player Steam IDs
-    char steamIdList[2048];
-    int  count = BuildConnectedSteamIDList(steamIdList, sizeof(steamIdList));
+    // Build lists of connected player Steam IDs, quoted for player_stats (a text column) and bare
+    // for player_tks (a numeric column). Both let the lookup hit each table's primary key.
+    char statsSteamIdList[2560];
+    int  count = BuildConnectedSteamIDList(statsSteamIdList, sizeof(statsSteamIdList), true);
 
     // No players connected, nothing to query
     if (count == 0) return;
+
+    char tkSteamIdList[2048];
+    BuildConnectedSteamIDList(tkSteamIdList, sizeof(tkSteamIdList));
 
     int  time_cutoff_seconds = g_cvarAmnestyTimeCutoff.IntValue;
     int  min_kills           = g_cvarAmnestyMinKillCount.IntValue;
     int  min_kptk            = g_cvarAmnestyMinKPTK.IntValue;
 
-    char query[2560];
+    char query[5120];
     Format(query, sizeof(query),
-           "SELECT steam_id FROM player_tks WHERE kills >= %i AND tk_given > 0 AND (kills::NUMERIC / tk_given) > %i AND last_seen > NOW() - INTERVAL '%i seconds' AND steam_id IN (%s)",
-           min_kills, min_kptk, time_cutoff_seconds, steamIdList);
+           "SELECT ps.steam_id FROM player_stats ps \
+           JOIN player_tks pt ON pt.steam_id::TEXT = ps.steam_id \
+           WHERE ps.steam_id IN (%s) \
+           AND pt.steam_id IN (%s) \
+           AND ps.kills >= %i \
+           AND pt.tk_given > 0 \
+           AND (ps.kills::NUMERIC / pt.tk_given) > %i \
+           AND pt.last_seen > NOW() - INTERVAL '%i seconds'",
+           statsSteamIdList, tkSteamIdList, min_kills, min_kptk, time_cutoff_seconds);
 
     g_Database.Query(OnAmnestyPlayersLoaded, query);
 }
