@@ -90,6 +90,42 @@ char g_HelpPhrases[][] = {
     "help_stock"
 };
 
+// Admin commands, printed after the player list. The three arrays are index-matched: each phrase
+// is paired with the command it describes and the access flag that command is registered with, so
+// a line is only shown to someone who can actually run it - a chat moderator sees the gag/mute
+// line but not the ban one. CheckCommandAccess also honours admin_overrides.cfg, so if a flag is
+// re-mapped there the list follows it.
+char g_AdminHelpPhrases[][] = {
+    "help_admin_menu",
+    "help_admin_spec",
+    "help_admin_comm",
+    "help_admin_ban",
+    "help_admin_medic",
+    "help_admin_respawn",
+    "help_admin_medicstats",
+    "help_admin_enemies"
+};
+char g_AdminHelpCommands[][] = {
+    "sm_admin",
+    "sm_spec",
+    "sm_gag",
+    "sm_addban",
+    "sm_ban_medic",
+    "sm_respawn",
+    "medic_stats2",
+    "totalb"
+};
+int  g_AdminHelpFlags[] = {
+    ADMFLAG_GENERIC,
+    ADMFLAG_KICK,
+    ADMFLAG_CHAT,
+    ADMFLAG_BAN,
+    ADMFLAG_BAN,
+    ADMFLAG_SLAY,
+    ADMFLAG_GENERIC,
+    ADMFLAG_BAN
+};
+
 public Action Cmd_Help(int client, int args)
 {
     // The engine has its own "help" console command for looking up convars, and SourceMod has
@@ -105,6 +141,22 @@ public Action Cmd_Help(int client, int args)
     }
 
     // CPrintToChat(client, "%T", "help_footer", client);
+
+    // The admin section prints nothing at all for a regular player, and the header only appears
+    // if at least one admin line survived the access check.
+    bool printedAdminHeader = false;
+    for (int i = 0; i < sizeof(g_AdminHelpPhrases); i++)
+    {
+        if (!CheckCommandAccess(client, g_AdminHelpCommands[i], g_AdminHelpFlags[i])) continue;
+
+        if (!printedAdminHeader)
+        {
+            CPrintToChat(client, "%T", "help_admin_header", client);
+            printedAdminHeader = true;
+        }
+
+        CPrintToChat(client, "%T", g_AdminHelpPhrases[i], client);
+    }
 
     return Plugin_Handled;
 }

@@ -855,4 +855,103 @@
     "pt_p"      "{common}Mais informações: {blue}https://www.tug.gg"
     "tr"        "{common}Daha fazla bilgi: {blue}https://www.tug.gg"
   }
+  "help_admin_header"
+  {
+    "en"        "{gold}ADMIN COMMANDS:{common} you also have access to"
+    "ua"        "{gold}КОМАНДИ АДМІНА:{common} вам також доступні"
+    "jp"        "{gold}管理者コマンド:{common} 以下も使用できます"
+    "chi"       "{gold}管理员命令:{common} 你还可以使用"
+    "ru"        "{gold}КОМАНДЫ АДМИНА:{common} вам также доступны"
+    "es"        "{gold}COMANDOS DE ADMIN:{common} también tienes acceso a"
+    "pt_p"      "{gold}COMANDOS DE ADMIN:{common} você também tem acesso a"
+    "tr"        "{gold}YÖNETİCİ KOMUTLARI:{common} ayrıca şunlara erişimin var"
+  }
+  "help_admin_menu"
+  {
+    "en"        "{green}!admin{common} - Open the admin menu (kick, ban, slay, change map)"
+    "ua"        "{green}!admin{common} - Відкрити меню адміністратора (кік, бан, вбивство, зміна карти)"
+    "jp"        "{green}!admin{common} - 管理メニューを開きます（キック、BAN、キル、マップ変更）"
+    "chi"       "{green}!admin{common} - 打开管理菜单（踢出、封禁、击杀、换图）"
+    "ru"        "{green}!admin{common} - Открыть меню администратора (кик, бан, убийство, смена карты)"
+    "es"        "{green}!admin{common} - Abre el menú de administración (expulsar, banear, matar, cambiar mapa)"
+    "pt_p"      "{green}!admin{common} - Abre o menu de administração (expulsar, banir, matar, trocar mapa)"
+    "tr"        "{green}!admin{common} - Yönetici menüsünü aç (at, yasakla, öldür, harita değiştir)"
+  }
+  "help_admin_spec"
+  {
+    "en"        "{green}!spec <player>{common} - Send a player to spectator"
+    "ua"        "{green}!spec <гравець>{common} - Перемістити гравця у спостерігачі"
+    "jp"        "{green}!spec <プレイヤー>{common} - プレイヤーを観戦者に移動します"
+    "chi"       "{green}!spec <玩家>{common} - 将玩家移至观察者"
+    "ru"        "{green}!spec <игрок>{common} - Переместить игрока в наблюдатели"
+    "es"        "{green}!spec <jugador>{common} - Mueve a un jugador a espectador"
+    "pt_p"      "{green}!spec <jogador>{common} - Move um jogador para espectador"
+    "tr"        "{green}!spec <oyuncu>{common} - Bir oyuncuyu izleyiciye al"
+  }
+  "help_admin_comm"
+  {
+    "en"        "{green}!gag !mute !silence <player>{common} - Block voice, text or both ({green}!ungag !unmute !unsilence{common} to undo)"
+    "ua"        "{green}!gag !mute !silence <гравець>{common} - Заблокувати голос, текст або обидва ({green}!ungag !unmute !unsilence{common} - скасувати)"
+    "jp"        "{green}!gag !mute !silence <プレイヤー>{common} - ボイス、テキスト、または両方を禁止（解除は{green}!ungag !unmute !unsilence{common}）"
+    "chi"       "{green}!gag !mute !silence <玩家>{common} - 禁止语音、文字或两者（{green}!ungag !unmute !unsilence{common} 解除）"
+    "ru"        "{green}!gag !mute !silence <игрок>{common} - Заблокировать голос, текст или оба ({green}!ungag !unmute !unsilence{common} - снять)"
+    "es"        "{green}!gag !mute !silence <jugador>{common} - Bloquea voz, texto o ambos ({green}!ungag !unmute !unsilence{common} para revertir)"
+    "pt_p"      "{green}!gag !mute !silence <jogador>{common} - Bloqueia voz, texto ou ambos ({green}!ungag !unmute !unsilence{common} para reverter)"
+    "tr"        "{green}!gag !mute !silence <oyuncu>{common} - Sesi, yazıyı veya ikisini engelle (geri almak için {green}!ungag !unmute !unsilence{common})"
+  }
+  "help_admin_ban"
+  {
+    "en"        "{green}!addban <steamid>{common} / {green}!banip <ip>{common} / {green}!unban{common} - Ban or unban by SteamID or IP"
+    "ua"        "{green}!addban <steamid>{common} / {green}!banip <ip>{common} / {green}!unban{common} - Забанити або розбанити за SteamID чи IP"
+    "jp"        "{green}!addban <steamid>{common} / {green}!banip <ip>{common} / {green}!unban{common} - SteamIDまたはIPでBAN・BAN解除します"
+    "chi"       "{green}!addban <steamid>{common} / {green}!banip <ip>{common} / {green}!unban{common} - 按 SteamID 或 IP 封禁或解封"
+    "ru"        "{green}!addban <steamid>{common} / {green}!banip <ip>{common} / {green}!unban{common} - Забанить или разбанить по SteamID или IP"
+    "es"        "{green}!addban <steamid>{common} / {green}!banip <ip>{common} / {green}!unban{common} - Banea o desbanea por SteamID o IP"
+    "pt_p"      "{green}!addban <steamid>{common} / {green}!banip <ip>{common} / {green}!unban{common} - Bane ou desbane por SteamID ou IP"
+    "tr"        "{green}!addban <steamid>{common} / {green}!banip <ip>{common} / {green}!unban{common} - SteamID veya IP ile yasakla ya da yasağı kaldır"
+  }
+  "help_admin_medic"
+  {
+    "en"        "{green}!ban_medic !unban_medic <player>{common} - Ban a player out of the medic slots"
+    "ua"        "{green}!ban_medic !unban_medic <гравець>{common} - Заборонити гравцю грати за медика"
+    "jp"        "{green}!ban_medic !unban_medic <プレイヤー>{common} - プレイヤーを衛生兵枠から締め出します"
+    "chi"       "{green}!ban_medic !unban_medic <玩家>{common} - 禁止玩家使用医疗兵位置"
+    "ru"        "{green}!ban_medic !unban_medic <игрок>{common} - Запретить игроку играть за медика"
+    "es"        "{green}!ban_medic !unban_medic <jugador>{common} - Prohíbe a un jugador las plazas de médico"
+    "pt_p"      "{green}!ban_medic !unban_medic <jogador>{common} - Proíbe um jogador das vagas de médico"
+    "tr"        "{green}!ban_medic !unban_medic <oyuncu>{common} - Bir oyuncuyu sağlıkçı yerlerinden men et"
+  }
+  "help_admin_respawn"
+  {
+    "en"        "{green}!respawn <player>{common} - Respawn a dead player"
+    "ua"        "{green}!respawn <гравець>{common} - Відродити мертвого гравця"
+    "jp"        "{green}!respawn <プレイヤー>{common} - 死亡したプレイヤーを復活させます"
+    "chi"       "{green}!respawn <玩家>{common} - 复活已阵亡的玩家"
+    "ru"        "{green}!respawn <игрок>{common} - Возродить мёртвого игрока"
+    "es"        "{green}!respawn <jugador>{common} - Reaparece a un jugador muerto"
+    "pt_p"      "{green}!respawn <jogador>{common} - Faz renascer um jogador morto"
+    "tr"        "{green}!respawn <oyuncu>{common} - Ölü bir oyuncuyu yeniden doğur"
+  }
+  "help_admin_medicstats"
+  {
+    "en"        "{green}!medic_stats2{common} - Stats for the current medics"
+    "ua"        "{green}!medic_stats2{common} - Статистика поточних медиків"
+    "jp"        "{green}!medic_stats2{common} - 現在の衛生兵の統計"
+    "chi"       "{green}!medic_stats2{common} - 当前医疗兵的统计"
+    "ru"        "{green}!medic_stats2{common} - Статистика текущих медиков"
+    "es"        "{green}!medic_stats2{common} - Estadísticas de los médicos actuales"
+    "pt_p"      "{green}!medic_stats2{common} - Estatísticas dos médicos atuais"
+    "tr"        "{green}!medic_stats2{common} - Mevcut sağlıkçıların istatistikleri"
+  }
+  "help_admin_enemies"
+  {
+    "en"        "{green}!totalb{common} - Count of enemies still alive"
+    "ua"        "{green}!totalb{common} - Кількість живих ворогів"
+    "jp"        "{green}!totalb{common} - 生存している敵の数"
+    "chi"       "{green}!totalb{common} - 剩余存活敌人数量"
+    "ru"        "{green}!totalb{common} - Количество живых врагов"
+    "es"        "{green}!totalb{common} - Número de enemigos aún vivos"
+    "pt_p"      "{green}!totalb{common} - Número de inimigos ainda vivos"
+    "tr"        "{green}!totalb{common} - Hâlâ hayatta olan düşman sayısı"
+  }
 }
