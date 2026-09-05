@@ -67,7 +67,46 @@ public void OnPluginStart()
 
     Database.Connect(OnDatabaseConnected, "insurgency-stats");
 
+    // Registered as "help" rather than "sm_help" on purpose. SourceMod resolves a chat trigger by
+    // looking up the typed word as a command first, and only prepends "sm_" if that finds nothing,
+    // so "!help" lands here instead of on SourceMod's adminhelp - which answers "see console for
+    // output" and then dumps every registered command, admin ones included, into the console.
+    RegConsoleCmd("help", Cmd_Help, "List the chat commands available to players");
+    RegConsoleCmd("commands", Cmd_Help, "List the chat commands available to players");
+    RegConsoleCmd("cmds", Cmd_Help, "List the chat commands available to players");
+
     LoadTranslations("tug.phrases");
+}
+
+// The player-facing command list, in the order it is printed. Each entry is a phrase in
+// tug.phrases, so the list is translated like every other player message.
+char g_HelpPhrases[][] = {
+    "help_calladmin",
+    "help_forgive",
+    "help_loadout",
+    "help_afk",
+    "help_fatal",
+    "help_lastmaps",
+    "help_stock"
+};
+
+public Action Cmd_Help(int client, int args)
+{
+    // The engine has its own "help" console command for looking up convars, and SourceMod has
+    // sm_help. Neither is worth breaking for whoever is at the server console, so only answer
+    // in-game players and let console callers fall through.
+    if (!IsValidPlayer(client)) return Plugin_Continue;
+
+    CPrintToChat(client, "%T", "help_header", client);
+
+    for (int i = 0; i < sizeof(g_HelpPhrases); i++)
+    {
+        CPrintToChat(client, "%T", g_HelpPhrases[i], client);
+    }
+
+    // CPrintToChat(client, "%T", "help_footer", client);
+
+    return Plugin_Handled;
 }
 
 public Action Event_ControlPointCaptured(Event event, const char[] name, bool dontBroadcast)

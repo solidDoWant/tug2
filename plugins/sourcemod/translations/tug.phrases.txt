@@ -756,4 +756,103 @@
     "pt_p"      "{red}PROTIP: {common}Não chame um médico para reanimá-lo, eles o encontrarão"
     "tr"        "{red}PROTIP: {common}Seni diriltmesi için doktor çağırma, seni bulurlar"
   }
+  "help_header"
+  {
+    "en"        "{gold}TUG COMMANDS:{common} type any of these in chat"
+    "ua"        "{gold}КОМАНДИ TUG:{common} введіть будь-яку з них у чаті"
+    "jp"        "{gold}TUGコマンド:{common} チャットに入力してください"
+    "chi"       "{gold}TUG 命令:{common} 在聊天中输入以下任意命令"
+    "ru"        "{gold}КОМАНДЫ TUG:{common} введите любую из них в чате"
+    "es"        "{gold}COMANDOS TUG:{common} escribe cualquiera de estos en el chat"
+    "pt_p"      "{gold}COMANDOS TUG:{common} digite qualquer um destes no chat"
+    "tr"        "{gold}TUG KOMUTLARI:{common} bunlardan herhangi birini sohbete yazın"
+  }
+  "help_calladmin"
+  {
+    "en"        "{green}!calladmin <message>{common} - Get an admin's attention on Discord"
+    "ua"        "{green}!calladmin <повідомлення>{common} - Привернути увагу адміністратора в Discord"
+    "jp"        "{green}!calladmin <メッセージ>{common} - Discordで管理者を呼びます"
+    "chi"       "{green}!calladmin <消息>{common} - 在 Discord 上引起管理员注意"
+    "ru"        "{green}!calladmin <сообщение>{common} - Привлечь внимание администратора в Discord"
+    "es"        "{green}!calladmin <mensaje>{common} - Llama la atención de un administrador en Discord"
+    "pt_p"      "{green}!calladmin <mensagem>{common} - Chame a atenção de um administrador no Discord"
+    "tr"        "{green}!calladmin <mesaj>{common} - Discord'da bir yöneticinin dikkatini çekin"
+  }
+  "help_forgive"
+  {
+    "en"        "{green}!forgive{common} - Forgive the teammate who last killed you"
+    "ua"        "{green}!forgive{common} - Пробачити товариша по команді, який вас вбив"
+    "jp"        "{green}!forgive{common} - 直前にあなたを殺した味方を許します"
+    "chi"       "{green}!forgive{common} - 原谅刚才杀死你的队友"
+    "ru"        "{green}!forgive{common} - Простить товарища по команде, который вас убил"
+    "es"        "{green}!forgive{common} - Perdona al compañero que te mató"
+    "pt_p"      "{green}!forgive{common} - Perdoe o companheiro que te matou"
+    "tr"        "{green}!forgive{common} - Seni öldüren takım arkadaşını affet"
+  }
+  "help_loadout"
+  {
+    "en"        "{green}!savelo{common} / {green}!loadlo{common} / {green}!clearlo{common} - Save, load or clear your loadout for this class"
+    "ua"        "{green}!savelo{common} / {green}!loadlo{common} / {green}!clearlo{common} - Зберегти, завантажити або очистити спорядження для цього класу"
+    "jp"        "{green}!savelo{common} / {green}!loadlo{common} / {green}!clearlo{common} - このクラスの装備を保存・読み込み・消去します"
+    "chi"       "{green}!savelo{common} / {green}!loadlo{common} / {green}!clearlo{common} - 保存、加载或清除该职业的装备"
+    "ru"        "{green}!savelo{common} / {green}!loadlo{common} / {green}!clearlo{common} - Сохранить, загрузить или очистить снаряжение для этого класса"
+    "es"        "{green}!savelo{common} / {green}!loadlo{common} / {green}!clearlo{common} - Guarda, carga o borra tu equipamiento de esta clase"
+    "pt_p"      "{green}!savelo{common} / {green}!loadlo{common} / {green}!clearlo{common} - Salve, carregue ou limpe seu equipamento desta classe"
+    "tr"        "{green}!savelo{common} / {green}!loadlo{common} / {green}!clearlo{common} - Bu sınıf için teçhizatını kaydet, yükle veya temizle"
+  }
+  "help_afk"
+  {
+    "en"        "{green}!afk{common} - Move yourself to spectator"
+    "ua"        "{green}!afk{common} - Перейти в режим спостерігача"
+    "jp"        "{green}!afk{common} - 観戦者に移動します"
+    "chi"       "{green}!afk{common} - 将自己移至观察者"
+    "ru"        "{green}!afk{common} - Перейти в режим наблюдателя"
+    "es"        "{green}!afk{common} - Muévete a espectador"
+    "pt_p"      "{green}!afk{common} - Mova-se para espectador"
+    "tr"        "{green}!afk{common} - Kendini izleyiciye al"
+  }
+  "help_fatal"
+  {
+    "en"        "{green}!fatal{common} - Die outright instead of waiting to be revived"
+    "ua"        "{green}!fatal{common} - Померти одразу, не чекаючи на реанімацію"
+    "jp"        "{green}!fatal{common} - 蘇生を待たずにその場で死亡します"
+    "chi"       "{green}!fatal{common} - 直接死亡，不再等待被复活"
+    "ru"        "{green}!fatal{common} - Умереть сразу, не дожидаясь реанимации"
+    "es"        "{green}!fatal{common} - Muere de inmediato en vez de esperar a que te reanimen"
+    "pt_p"      "{green}!fatal{common} - Morra imediatamente em vez de esperar ser reanimado"
+    "tr"        "{green}!fatal{common} - Diriltilmeyi beklemeden hemen öl"
+  }
+  "help_lastmaps"
+  {
+    "en"        "{green}!lastmaps{common} - Recently played maps, excluded from the next vote"
+    "ua"        "{green}!lastmaps{common} - Нещодавно зіграні карти, виключені з наступного голосування"
+    "jp"        "{green}!lastmaps{common} - 最近プレイしたマップ（次の投票から除外されます）"
+    "chi"       "{green}!lastmaps{common} - 最近玩过的地图，将从下次投票中排除"
+    "ru"        "{green}!lastmaps{common} - Недавно сыгранные карты, исключённые из следующего голосования"
+    "es"        "{green}!lastmaps{common} - Mapas jugados recientemente, excluidos de la próxima votación"
+    "pt_p"      "{green}!lastmaps{common} - Mapas jogados recentemente, excluídos da próxima votação"
+    "tr"        "{green}!lastmaps{common} - Son oynanan haritalar, sonraki oylamaya dahil edilmez"
+  }
+  "help_stock"
+  {
+    "en"        "{green}!nextmap !timeleft !motd !ff{common} - Next map, time left, server info, friendly fire"
+    "ua"        "{green}!nextmap !timeleft !motd !ff{common} - Наступна карта, час до кінця, інфо сервера, вогонь по своїх"
+    "jp"        "{green}!nextmap !timeleft !motd !ff{common} - 次のマップ、残り時間、サーバー情報、同士討ち設定"
+    "chi"       "{green}!nextmap !timeleft !motd !ff{common} - 下一张地图、剩余时间、服务器信息、友军伤害"
+    "ru"        "{green}!nextmap !timeleft !motd !ff{common} - Следующая карта, оставшееся время, инфо сервера, огонь по своим"
+    "es"        "{green}!nextmap !timeleft !motd !ff{common} - Siguiente mapa, tiempo restante, info del servidor, fuego amigo"
+    "pt_p"      "{green}!nextmap !timeleft !motd !ff{common} - Próximo mapa, tempo restante, info do servidor, fogo amigo"
+    "tr"        "{green}!nextmap !timeleft !motd !ff{common} - Sonraki harita, kalan süre, sunucu bilgisi, dost ateşi"
+  }
+  "help_footer"
+  {
+    "en"        "{common}More info: {blue}https://www.tug.gg"
+    "ua"        "{common}Більше інформації: {blue}https://www.tug.gg"
+    "jp"        "{common}詳細: {blue}https://www.tug.gg"
+    "chi"       "{common}更多信息: {blue}https://www.tug.gg"
+    "ru"        "{common}Подробнее: {blue}https://www.tug.gg"
+    "es"        "{common}Más información: {blue}https://www.tug.gg"
+    "pt_p"      "{common}Mais informações: {blue}https://www.tug.gg"
+    "tr"        "{common}Daha fazla bilgi: {blue}https://www.tug.gg"
+  }
 }
