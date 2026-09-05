@@ -7,6 +7,5 @@ Machine Guns available to the Machine Gunner Role
 
 !calladmin "Your Message Here"
 
-Server is under new management and in testing beta.
 See Discord for details: https://discord.gg/RAQgnjeQuE
 Report issues here: https://github.com/solidDoWant/tug2
