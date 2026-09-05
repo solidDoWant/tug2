@@ -43,7 +43,7 @@
 		"mp_coop_max_bots"			"224"	// number of bots when there are 14 players on the server
 		"ins_bot_count_checkpoint_max" "224"	// maximum number of bots for checkpoint
 		"bot_damage"				"1"	// the amount of damage bots give off compared to normal players
-		"mp_voice_use_3d_voip"			"1"	// disabling this will turn off the 3d voip system and allow all players to hear one another
+		"mp_voice_use_3d_voip"			"0"	// disabling this will turn off the 3d voip system and allow all players to hear one another
 		"sv_vote_issue_changegamemode_allowed"	"0"	// no changegamemode
 	}
 	
