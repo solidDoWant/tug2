@@ -1,0 +1,348 @@
+// TUG2-specific gamedata, kept separate from insurgency.games.txt so that file can stay a verbatim
+// copy of its upstream source.
+//
+// These are all NextBot AI internals used by gg2_bot_smoke_suppress. They are resolved by mangled
+// symbol name (the "@" prefix), NOT by byte signature. That works because the Linux server binary
+// ships its full symbol table: server_srv.so exports only 7 entries in .dynsym, but .symtab holds
+// ~46,500, and SourceMod's symbol resolver reads .symtab for non-stripped libraries. The existing
+// insurgency.games.txt relies on the same behaviour (e.g. ForceRespawn, which bm2_respawn calls in
+// production, is likewise .symtab-only).
+//
+// There are no "windows" keys because there is no Windows build of this server, and a mangled
+// Itanium-ABI name would be meaningless there anyway - it would need a real byte signature.
+"Games"
+{
+	"insurgency"
+	{
+		"Signatures"
+		{
+			// Concrete override for the bot player class. Bots are NextBotPlayer<CINSPlayer>, so
+			// calling this implementation directly is safe and avoids needing a vtable offset.
+			// CBaseEntity::MyNextBotPointer() would return null - do not use that one.
+			"NextBotPlayer_CINSPlayer::MyNextBotPointer"
+			{
+				"library"	"server"
+				"linux"		"@_ZN13NextBotPlayerI10CINSPlayerE16MyNextBotPointerEv"
+			}
+
+			// The pursuit decision. AddKnownEntity gives the bot a threat, but its own assessment
+			// then answers "yes" to pursue, so it walks into the smoke instead of shooting at it.
+			// There are only two ShouldPursue implementations in the whole binary; these are both.
+			"CINSBotMainAction::ShouldPursue"
+			{
+				"library"	"server"
+				"linux"		"@_ZNK17CINSBotMainAction12ShouldPursueEPK8INextBotPK12CKnownEntity"
+			}
+			"CINSBotCombat::ShouldPursue"
+			{
+				"library"	"server"
+				"linux"		"@_ZNK13CINSBotCombat12ShouldPursueEPK8INextBotPK12CKnownEntity"
+			}
+
+			// Measured: with the mechanic working, 57 of 57 suppressing shots came from bots
+			// OUTSIDE the cloud and zero from inside. This is the likely fifth gate - a bot
+			// engulfed in smoke is flagged blinded and refuses to engage at all. Non-virtual and
+			// returns bool, so it is safe to detour (unlike the float accessors that crashed us).
+			"CINSBotVision::IsBlinded"
+			{
+				"library"	"server"
+				"linux"		"@_ZN13CINSBotVision9IsBlindedEv"
+			}
+
+			// Signature form of the same accessor we call by vtable offset elsewhere. Detoured so
+			// sm_bot_smoke_suppress_weapon_classes can genuinely widen who suppresses: the engine's
+			// gate in Combat::Update hardcodes {9,10,12}, so a weapon outside that set is reported
+			// as 10 while its bot is actively seeded. Returns int, so no float-return hazard.
+			"CINSWeapon::GetWeaponClass_sig"
+			{
+				"library"	"server"
+				"linux"		"@_ZNK10CINSWeapon14GetWeaponClassEv"
+			}
+
+			// Denying pursuit alone only removes the chase option - measured at 564 denials with
+			// essentially no gunfire, because nothing pushes the bot toward attacking instead. These
+			// force the other half. Behavior<CINSNextBot> is the aggregate that walks the action
+			// stack, so it overrides whatever the individual actions would have answered;
+			// TacticalMonitor is hooked too since it sits high in the stack and can answer first.
+			"Behavior_CINSNextBot::ShouldAttack"
+			{
+				"library"	"server"
+				"linux"		"@_ZNK8BehaviorI11CINSNextBotE12ShouldAttackEPK8INextBotPK12CKnownEntity"
+			}
+			"CINSBotTacticalMonitor::ShouldAttack"
+			{
+				"library"	"server"
+				"linux"		"@_ZNK22CINSBotTacticalMonitor12ShouldAttackEPK8INextBotPK12CKnownEntity"
+			}
+
+			// THE suppression gate. Disassembly shows CINSBotSuppressTarget - the action that makes
+			// a bot fire at a position rather than a visible target - is constructed in exactly two
+			// places: CINSBotCombat::Update and CINSBotDestroyCache::Update. CINSBotCombat is
+			// confirmed live (its ShouldPursue is called constantly). Forcing this predicate true
+			// should make Combat::Update build that action for us, which is the thing that
+			// ShouldAttack/ShouldPursue could never do - those are advisory, this is the gate.
+			"CINSNextBot::ShouldSuppressThreat"
+			{
+				"library"	"server"
+				"linux"		"@_ZNK11CINSNextBot20ShouldSuppressThreatEPK12CKnownEntity"
+			}
+
+			// The two guards that sit immediately before the ShouldSuppressThreat call inside
+			// CINSBotCombat::Update. Read out of the disassembly:
+			//
+			//   call *0x38(%eax)   -> IsVisibleInFOVNow()        ; TRUE  -> skip suppression
+			//   call *0x30(%eax)   -> GetTimeSinceBecameKnown()  ; < threshold -> skip suppression
+			//
+			// The second is why this never fired. We inject the threat fresh and then re-seed it
+			// every sweep, so "time since became known" sits at ~0 forever and never ages past the
+			// threshold - our own seeding was defeating the gate. Forcing a large value clears it
+			// regardless of the (PIC-relative, hard to read) constant it is compared against.
+			"CKnownEntity::GetTimeSinceBecameKnown"
+			{
+				"library"	"server"
+				"linux"		"@_ZNK12CKnownEntity23GetTimeSinceBecameKnownEv"
+			}
+			"CKnownEntity::IsVisibleInFOVNow"
+			{
+				"library"	"server"
+				"linux"		"@_ZNK12CKnownEntity17IsVisibleInFOVNowEv"
+			}
+
+			// Pure counter, never modified. Called from CINSBotCombat::Update, so counting it says
+			// how often a bot is actually running the Combat action. That separates "bots are never
+			// in Combat" from "they are, but Update exits before reaching the suppression gate" -
+			// ShouldSuppressThreat is the LAST call in Update, behind retreat and weapon branches.
+			// Chosen over detouring Update itself because Update returns ActionResult by value, a
+			// struct return DHooks cannot represent; this one is void/no-args and therefore safe.
+			"CINSBotCombat::UpdateInternalInfo"
+			{
+				"library"	"server"
+				"linux"		"@_ZN13CINSBotCombat18UpdateInternalInfoEv"
+			}
+
+			// Diagnostic only. Non-virtual on CINSNextBot, so it takes the ENTITY address as this -
+			// not the INextBot subobject that MyNextBotPointer returns. Passing the wrong one is
+			// what segfaulted the server earlier. Used to test whether the engine considers smoke
+			// to block a bot's line of fire, which would explain bots refusing to shoot into it
+			// regardless of what they are told about threats.
+			"CINSNextBot::IsLineOfFireClear"
+			{
+				"library"	"server"
+				"linux"		"@_ZNK11CINSNextBot17IsLineOfFireClearERK6Vector"
+			}
+		}
+
+		// Both of these are VIRTUAL, and must be called as such. Calling the concrete
+		// implementations directly by symbol does not work: MyNextBotPointer() hands back a pointer
+		// to the INextBot *subobject*, which is not the same address as the CINSNextBot (the
+		// _ZThn4_ thunks in the binary give the multiple inheritance away). Calling
+		// CINSNextBot::GetVisionInterface with that this-pointer returned 0x870000 - an address
+		// inside the .so image rather than a heap object - and the next call through it segfaulted
+		// the server. Virtual dispatch reads the vptr at the pointer we actually hold, so it lands
+		// on the right override whatever the layout is.
+		//
+		// Slots were read out of the binary: find the function's address with nm, dump the vtable
+		// with objdump, and the slot index is (position - 2) to skip offset-to-top and RTTI.
+		"Offsets"
+		{
+			// vtable for INextBot @ 0x00b92440, INextBot::GetVisionInterface @ 0x00661460
+			"INextBot::GetVisionInterface"
+			{
+				"linux"		"55"
+			}
+
+			// vtable for IVision @ 0x00b92800, IVision::AddKnownEntity(CBaseEntity*) @ 0x00795fc0.
+			// Note IVision::AddKnownEntity(int) is a different overload - this is the entity one.
+			"IVision::AddKnownEntity"
+			{
+				"linux"		"58"
+			}
+
+			// Read-back diagnostics. These let the selftest inspect what the engine actually did
+			// with an injected known entity - whether it stuck, and whether it is considered
+			// visible - rather than inferring it from bot behaviour.
+			"IVision::GetPrimaryKnownThreat"
+			{
+				"linux"		"52"
+			}
+
+			// CKnownEntity accessors. All virtual (vtable @ 0x00b8d460).
+			"CKnownEntity::GetEntity"
+			{
+				"linux"		"4"
+			}
+			"CKnownEntity::IsVisibleRecently"
+			{
+				"linux"		"15"
+			}
+			"CKnownEntity::GetTimeSinceLastSeen"
+			{
+				"linux"		"18"
+			}
+			"CKnownEntity::WasEverVisible"
+			{
+				"linux"		"19"
+			}
+
+			// Forcing "known for 999s but never seen" is a state the engine never produces on its
+			// own, and the suppression path then reaches for data only valid for genuinely-seen
+			// threats (last known VISIBLE spot, etc) - which crashed the server on smoke throw.
+			// Marking the last known position as seen makes the synthesised state internally
+			// coherent instead of impossible.
+			"CKnownEntity::MarkLastKnownPositionAsSeen"
+			{
+				"linux"		"9"
+			}
+
+			// The final gate in CINSBotCombat::Update is a weapon-class whitelist:
+			//   call *0x5f0(%eax) ; cmp $0xc,%eax ; ja skip
+			//   mov $0x1,%edx ; shl %cl,%edx ; and $0x16,%dh ; je skip
+			// i.e. the class must be 9, 10 or 12. Bots holding anything else can never suppress, so
+			// seeding them only denies their pursuit and leaves them standing around doing nothing.
+			// We read the class up front and skip those bots entirely.
+			"CINSWeapon::GetWeaponClass"
+			{
+				"linux"		"380"
+			}
+
+			// The piece that makes the injection actually produce fire rather than a search.
+			// AddKnownEntity alone leaves wasEverVisible=0 / timeSinceSeen~=699 - the bot has never
+			// laid eyes on the target, so it has no visual memory to suppress and goes looking
+			// instead. Calling this true-then-false manufactures the one state the engine already
+			// blind-fires on: "I saw them a moment ago, and now I do not."
+			"CKnownEntity::UpdateVisibilityStatus"
+			{
+				"linux"		"13"
+			}
+		}
+
+		// DHooks detour definitions for the two ShouldPursue implementations above.
+		// QueryResultType is { ANSWER_NO = 0, ANSWER_YES = 1, ANSWER_UNDEFINED = 2 }, so returning
+		// 0 denies the pursuit. "this" is "address" rather than "entity" because these are Action
+		// objects, not entities.
+		"Functions"
+		{
+			"CINSBotMainAction::ShouldPursue"
+			{
+				"signature"	"CINSBotMainAction::ShouldPursue"
+				"callconv"	"thiscall"
+				"return"	"int"
+				"this"		"address"
+				"arguments"
+				{
+					"me"
+					{
+						"type"	"int"
+					}
+					"them"
+					{
+						"type"	"int"
+					}
+				}
+			}
+			"CKnownEntity::GetTimeSinceBecameKnown"
+			{
+				"signature"	"CKnownEntity::GetTimeSinceBecameKnown"
+				"callconv"	"thiscall"
+				"return"	"float"
+				"this"		"address"
+			}
+			"CKnownEntity::IsVisibleInFOVNow"
+			{
+				"signature"	"CKnownEntity::IsVisibleInFOVNow"
+				"callconv"	"thiscall"
+				"return"	"bool"
+				"this"		"address"
+			}
+			"CINSBotCombat::UpdateInternalInfo"
+			{
+				"signature"	"CINSBotCombat::UpdateInternalInfo"
+				"callconv"	"thiscall"
+				"return"	"void"
+				"this"		"address"
+			}
+			"CINSWeapon::GetWeaponClass_sig"
+			{
+				"signature"	"CINSWeapon::GetWeaponClass_sig"
+				"callconv"	"thiscall"
+				"return"	"int"
+				"this"		"address"
+			}
+			"CINSBotVision::IsBlinded"
+			{
+				"signature"	"CINSBotVision::IsBlinded"
+				"callconv"	"thiscall"
+				"return"	"bool"
+				"this"		"address"
+			}
+			"CINSNextBot::ShouldSuppressThreat"
+			{
+				"signature"	"CINSNextBot::ShouldSuppressThreat"
+				"callconv"	"thiscall"
+				"return"	"bool"
+				"this"		"address"
+				"arguments"
+				{
+					"them"
+					{
+						"type"	"int"
+					}
+				}
+			}
+			"Behavior_CINSNextBot::ShouldAttack"
+			{
+				"signature"	"Behavior_CINSNextBot::ShouldAttack"
+				"callconv"	"thiscall"
+				"return"	"int"
+				"this"		"address"
+				"arguments"
+				{
+					"me"
+					{
+						"type"	"int"
+					}
+					"them"
+					{
+						"type"	"int"
+					}
+				}
+			}
+			"CINSBotTacticalMonitor::ShouldAttack"
+			{
+				"signature"	"CINSBotTacticalMonitor::ShouldAttack"
+				"callconv"	"thiscall"
+				"return"	"int"
+				"this"		"address"
+				"arguments"
+				{
+					"me"
+					{
+						"type"	"int"
+					}
+					"them"
+					{
+						"type"	"int"
+					}
+				}
+			}
+			"CINSBotCombat::ShouldPursue"
+			{
+				"signature"	"CINSBotCombat::ShouldPursue"
+				"callconv"	"thiscall"
+				"return"	"int"
+				"this"		"address"
+				"arguments"
+				{
+					"me"
+					{
+						"type"	"int"
+					}
+					"them"
+					{
+						"type"	"int"
+					}
+				}
+			}
+		}
+	}
+}

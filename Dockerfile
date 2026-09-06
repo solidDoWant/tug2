@@ -455,6 +455,17 @@ RUN --mount=type=bind,source=./plugins/sourcemod/scripting,target=/plugin-source
     find /insurgency -type d -exec chmod 755 {} \; && \
     find /insurgency -type f -exec chmod 644 {} \;
 
+FROM sourcemod-plugins-base AS sourcemod-plugins-gg2-bot-smoke-suppress
+
+# Build the gg2_bot_smoke_suppress plugin. Needs gamedata/tug2.games.txt for the NextBot vision
+# signatures; the COPY below already brings the whole gamedata directory in.
+COPY plugins/sourcemod/gamedata/ /insurgency/addons/sourcemod/gamedata/
+RUN --mount=type=bind,source=./plugins/sourcemod/scripting,target=/plugin-source/scripting \
+    /sourcemod/addons/sourcemod/scripting/spcomp --include=/plugin-source/scripting/include  /plugin-source/scripting/gg2_bot_smoke_suppress.sp -o /insurgency/addons/sourcemod/plugins/gg2_bot_smoke_suppress.smx && \
+    # Fixup file permissions
+    find /insurgency -type d -exec chmod 755 {} \; && \
+    find /insurgency -type f -exec chmod 644 {} \;
+
 FROM sourcemod-plugins-base AS sourcemod-plugins-gg2-map-changeups
 
 # Build the gg2_map_changeups plugin
@@ -787,6 +798,9 @@ COPY --from=sourcemod-plugins-gg2-forceretry-optout --chown=0:0 /insurgency /opt
 COPY --from=sourcemod-plugins-gg2-fuckyeah --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
 COPY --from=sourcemod-plugins-gg2-insurgency --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
 COPY --from=sourcemod-plugins-gg2-kill-entities --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
+# Experimental: bots blind-firing into smoke. Test server only, and inert until
+# sm_bot_smoke_suppress_enabled is set to 1.
+COPY --from=sourcemod-plugins-gg2-bot-smoke-suppress --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
 # I don't want plugins writing to the config directory if I can avoid it, because this allows them to execute arbitrary commands.
 # COPY --from=sourcemod-plugins-gg2-map-changeups --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
 COPY --from=sourcemod-plugins-gg2-medic-tracker --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
