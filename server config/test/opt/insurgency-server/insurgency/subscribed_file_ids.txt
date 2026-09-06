@@ -258,6 +258,15 @@
 //2886400751 //gioconda_eron_sandhill checkpoint 90.482 MB
 
 // TEST SERVER ONLY //
+// The custom theaters, also shipped loose in this image under scripts/theaters/. Clients need
+// a byte-identical copy or they are refused at connect: theater files are covered by
+// sv_consistency, which is on by default and is NOT disabled by sv_pure 0. Subscribing here is
+// what gets the file to the client.
+//
+// KEEP THESE IN STEP. If you edit anything under scripts/theaters/, republish this item with
+// `make workshop-package WORKSHOP_ITEM_ID=3796695587` before deploying, or the server will be
+// using a theater no client has and connections will start failing again.
+3796695587 // TUG 2 Test Server Custom Theaters (scripts/theaters/theater_tug_nvg_default*) 0.052 MB
 // Client-side visual and audio mods, being trialled on the test server. None of these are maps,
 // theaters, or entities the server spawns, so nothing here needs a mapcycle or theater_override
 // entry. Note that subscribing server-side may well not be enough either: per gameinfo.txt,
