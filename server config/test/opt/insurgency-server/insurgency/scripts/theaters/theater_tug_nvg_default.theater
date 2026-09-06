@@ -1215,4 +1215,41 @@
 		}
 
 	}
+
+	// ---------------------------------------------------------------------------
+	// Artillery smoke carry capacity
+	// ---------------------------------------------------------------------------
+	// weapon_max_subslot caps how many of the explosive subslots - the grenade slots in the loadout
+	// screen - an item may take, so it is also the carry cap. TUG ships both artillery smokes at 1,
+	// which pins them to a single grenade slot; plain weapon_m18 is 3, matching the three smokes you
+	// can actually carry. Raising these to 2 makes the smoke selectable in grenade slots 1 and 2 -
+	// for the security green smoke that means the Sgt (#Squad_Fireteam_WeaponsSgt /
+	// template_recon_security_coop, the only security class with weapon_m18_us in allowed_items) can
+	// take two.
+	//
+	// NOTE: the exact semantics are inferred, not documented. Across the whole TUG theater the field
+	// only ever holds 0, 1 or 3: 0 on launchers and C4 (which occupy the explosive slot outright),
+	// 1 on most grenades, 3 on weapon_m18 and weapon_healthkit. No base class sets a default. The
+	// 1 -> 2 direction is right under any of the readings that fit that data, but if a smoke turns
+	// up in an unexpected number of slots in game, this field is why.
+	//
+	// These two are the weapons FireSupport is bound to in configs/firesupport.cfg
+	// (security_smoke -> m18_us, insurgent_smoke -> m18_ins), so m18_ins raises what insurgent bot
+	// specialists can bring as well.
+	//
+	// Unlike the allowed_items restatements above, this override is safe to write as a partial
+	// block: #base merges by child NAME, and "weapons", each weapon name and "weapon_max_subslot"
+	// are each unique within their parent. Only that one field is replaced; models, fov, cost and
+	// everything else are inherited untouched.
+	"weapons"
+	{
+		"weapon_m18_us"
+		{
+			"weapon_max_subslot"		"2"
+		}
+		"weapon_m18_ins"
+		{
+			"weapon_max_subslot"		"2"
+		}
+	}
 }
