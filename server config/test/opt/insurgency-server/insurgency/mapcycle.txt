@@ -209,3 +209,82 @@ coastdawn_gf checkpoint
 de_nuke checkpoint
 dedust1p2_aof checkpoint
 almaden_coop checkpoint
+
+// ============================================================================
+// Non-checkpoint co-op modes
+// ============================================================================
+// Generated from the playlist's allowed_maps, so the two cannot disagree. Each map is
+// listed once per co-op mode it supports; a map appearing several times is intentional.
+// Order does not matter: the engine shuffles the vote choices (sv_map_voting_shuffle,
+// default 1), so position in this file does not affect when a map is offered.
+
+// ---- hunt (22) ----
+badlands_b2 hunt
+bunker_busting_coop_ws hunt
+caves_coop hunt
+convoy_pve hunt
+crossbow hunt
+cu_chi_tunnels_x64 hunt
+dust_new hunt
+dusty_nights_coop hunt
+estates_b4 hunt
+ins_bridgeatremagen_coop hunt
+ins_dog_red hunt
+mountain_lake_coopv1_1 hunt
+operation_intrude_v2 hunt
+panama_canal_b2 hunt
+payback_x64 hunt
+point_blank_fix hunt
+pow_raid_x64 hunt
+prospect_coop_b6 hunt
+salerno_pve hunt
+showdown hunt
+tet_x64 hunt
+the_raid_coop_ws hunt
+
+// ---- conquer (19) ----
+badlands_b2 conquer
+breville_pve conquer
+caves_coop conquer
+convoy_pve conquer
+crete conquer
+crossbow conquer
+cu_chi_tunnels_x64 conquer
+doi_resistance_2021 conquer
+estates_b4 conquer
+ins_bridgeatremagen_coop conquer
+ins_dog_red conquer
+mountain_lake_coopv1_1 conquer
+panama_canal_b2 conquer
+payback_x64 conquer
+point_blank_fix conquer
+pow_raid_x64 conquer
+prospect_coop_b6 conquer
+showdown conquer
+tet_x64 conquer
+
+// ---- outpost (13) ----
+badlands_b2 outpost
+caves_coop outpost
+convoy_pve outpost
+crete outpost
+doi_resistance_2021 outpost
+estates_b4 outpost
+ins_bridgeatremagen_coop outpost
+mountain_lake_coopv1_1 outpost
+panama_canal_b2 outpost
+payback_x64 outpost
+point_blank_fix outpost
+prospect_coop_b6 outpost
+salerno_pve outpost
+
+// ---- survival (9) ----
+bunker_busting_coop_ws survival
+convoy_pve survival
+crossbow survival
+cu_chi_tunnels_x64 survival
+estates_b4 survival
+hesitation_coop_ins survival
+payback_x64 survival
+pow_raid_x64 survival
+tet_x64 survival
