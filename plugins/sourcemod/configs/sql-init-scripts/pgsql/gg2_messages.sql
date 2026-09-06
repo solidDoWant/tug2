@@ -77,6 +77,7 @@ INSERT INTO gg2_messages_rotating_player (id, message, enabled) VALUES
   (16, 'tip_stats_reset', TRUE),
   (17, 'Join us on Discord at https://discord.gg/RAQgnjeQuE', TRUE),
   (18, 'Report issues on Discord or at https://github.com/solidDoWant/tug2', TRUE),
+  (19, '{dodgerblue}NEW SERVER:{default} {yellow}TUG GG 2 TEST{default} is up for trying out upcoming changes before they reach main. Find it in the server browser, or ask on Discord: https://discord.gg/RAQgnjeQuE', TRUE),
   (1000, 'protip_stuck', TRUE),
   (1001, 'protip_good_bad_medics', TRUE),
   (1002, 'callmedic', TRUE),
