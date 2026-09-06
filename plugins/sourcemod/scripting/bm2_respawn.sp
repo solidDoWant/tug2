@@ -222,6 +222,17 @@ bool g_preRoundInitial = false,
      isStuck[MAXPLAYERS + 1],
      g_playersReady         = false;
 
+// This plugin's bot reinforcement system is checkpoint-only: it drives respawns off
+// mp_checkpoint_counterattack_* and the checkpoint objective flow, and it puts bots back by
+// calling the game's own ForceRespawn. Every other coop mode spawns its enemies itself (hunt
+// spawns off the navmesh via mp_hunt_nav_spawning; survival/conquer/outpost use wave spawns), so
+// there are no team-3 spawn points for ForceRespawn to pick and each call fails with
+// "Unable to find a spawn point for team 3, collected: 0 , type: 3". RespawnBot rate-limits
+// itself to one respawn per wall-clock second, so the failures arrive at a steady 1/sec for the
+// whole map. Gate the bot half of the plugin on checkpoint; revive/medic/fatal-wound handling is
+// mode-independent and stays on everywhere.
+bool g_bBotRespawnAllowed = true;
+
 bool   g_should_ask_to_heal = true;
 int    g_iBonusPoint[MAXPLAYERS + 1];
 
@@ -828,6 +839,28 @@ Action Timer_should_ask_to_heal(Handle timer)
     return Plugin_Continue;
 }
 
+// Refresh g_bBotRespawnAllowed from mp_gamemode. Same idiom as gg2_playlist_hax, but null-safe:
+// FindConVar returns null if the game has not registered mp_gamemode yet.
+void UpdateBotRespawnAllowed()
+{
+    ConVar cvGamemode = FindConVar("mp_gamemode");
+    if (cvGamemode == null)
+    {
+        g_bBotRespawnAllowed = true;
+        LogMessage("[BM2 RESPAWN] mp_gamemode not found, leaving bot respawns enabled");
+        return;
+    }
+
+    char sGamemode[32];
+    cvGamemode.GetString(sGamemode, sizeof(sGamemode));
+    g_bBotRespawnAllowed = StrEqual(sGamemode, "checkpoint", false);
+
+    if (!g_bBotRespawnAllowed)
+    {
+        LogMessage("[BM2 RESPAWN] gamemode is \"%s\", not checkpoint - bot reinforcement disabled", sGamemode);
+    }
+}
+
 Action Timer_MapStart(Handle timer)
 {
     // Check is map initialized
@@ -836,6 +869,7 @@ Action Timer_MapStart(Handle timer)
         return Plugin_Continue;
     }
     ServerCommand("exec betterbots.cfg");
+    UpdateBotRespawnAllowed();
     FindMapSpawnPoints();
     g_iNCP                = Ins_ObjectiveResource_GetProp("m_iNumControlPoints");    // Get the number of control points
 
@@ -1149,6 +1183,8 @@ Action Timer_EnemyReinforce(Handle timer)
 {
     // int starttime = GetTime();
     // int endtime = 0;
+    // Only checkpoint reinforces bots - see g_bBotRespawnAllowed
+    if (!g_bBotRespawnAllowed) return Plugin_Continue;
     //  Check round state
     if (!g_iRoundStatus) return Plugin_Continue;
     // Check enemy remaining
@@ -2499,6 +2535,8 @@ void CreateReviveTimer(int client)
 void CreateBotRespawnTimer(int client)
 {
     if (client > MaxClients || client <= 0) return;
+    // Only checkpoint reinforces bots - see g_bBotRespawnAllowed
+    if (!g_bBotRespawnAllowed) return;
 
     if (!g_is_respawning[client])
     {
@@ -2579,6 +2617,12 @@ Action RespawnBot(Handle timer, int client)
 {
     // int starttime = GetTime();
     // int endtime = 0;
+    // Only checkpoint reinforces bots - see g_bBotRespawnAllowed
+    if (!g_bBotRespawnAllowed)
+    {
+        g_is_respawning[client] = false;
+        return Plugin_Stop;
+    }
     if (!IsClientInGame(client) || IsPlayerAlive(client) || !g_iRoundStatus)
     {
         return Plugin_Stop;
