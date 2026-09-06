@@ -272,6 +272,13 @@
 3306889421 // Better NVG 0.001 MB
 2608962360 // Ultimate GGX Shader Mod (All Weapons + Accessories) 180.858 MB
 3629465190 // extra audio settings (voice_maxgain / voice_overdrive) 0.012 MB
-378779393 // Mountain Dew Doritos Molotov 5.334 MB
+// DISABLED 2026-09-06 - this is a legacy (HTTP) workshop item and it hangs the server's
+// runtime UGC downloader. The server logs "legacy (HTTP) item up to date!" and then polls
+// "progress: 100.00%" forever without ever firing the completion callback, so the download
+// queue never advances past it: on the test server only 3 of 109 items were processed, and
+// the log grew ~80 lines a minute. main, which has no legacy items, completes all 161/161.
+// Content already on disk from the build-time download still loads, so the visible symptom
+// is log spam rather than missing maps - but console.log is the main diagnostic tool here.
+//378779393 // Mountain Dew Doritos Molotov 5.334 MB
 730009401 // Just do it Remix (Last man Standing) 34.619 MB
 3758847152 // Squeaky Rubber Ducky (replaces M67/F1 frag model + bounce sounds) 7.403 MB
