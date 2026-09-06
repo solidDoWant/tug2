@@ -407,6 +407,22 @@ RUN --mount=type=bind,source=./plugins/sourcemod,target=/plugin-source \
     find /insurgency -type d -exec chmod 755 {} \; && \
     find /insurgency -type f -exec chmod 644 {} \;
 
+FROM sourcemod-plugins-base AS sourcemod-plugins-gg2-forceretry-optout
+
+# Build the gg2_forceretry_optout plugin. This is gg2_forceretry plus a player-facing
+# !autoreconnect opt-out, and it REPLACES that plugin on the test server - running both would mean
+# two plugins racing to force the same reconnect. Only the test server stage copies this one.
+COPY plugins/sourcemod/gamedata/ /insurgency/addons/sourcemod/gamedata/
+RUN --mount=type=bind,source=./plugins/sourcemod,target=/plugin-source \
+    /sourcemod/addons/sourcemod/scripting/spcomp --include=/plugin-source/scripting/include  /plugin-source/scripting/gg2_forceretry_optout.sp -o /insurgency/addons/sourcemod/plugins/gg2_forceretry_optout.smx && \
+    mkdir -p /insurgency/cfg/sourcemod && \
+    touch /insurgency/cfg/sourcemod/gg2_forceretry_optout.cfg && \
+    mkdir -p /insurgency/addons/sourcemod/configs/sql-init-scripts/pgsql && \
+    cp /plugin-source/configs/sql-init-scripts/pgsql/gg2_forceretry_optout.sql /insurgency/addons/sourcemod/configs/sql-init-scripts/pgsql/gg2_forceretry_optout.sql && \
+    # Fixup file permissions
+    find /insurgency -type d -exec chmod 755 {} \; && \
+    find /insurgency -type f -exec chmod 644 {} \;
+
 FROM sourcemod-plugins-base AS sourcemod-plugins-gg2-fuckyeah
 
 # Build the gg2_fuckyeah plugin
@@ -766,7 +782,8 @@ COPY --from=sourcemod-plugins-gg2-connection-tracker --chown=0:0 /insurgency /op
 COPY --from=sourcemod-plugins-gg2-damage --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
 COPY --from=sourcemod-plugins-gg2-discord --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
 COPY --from=sourcemod-plugins-gg2-forceauthorize --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
-COPY --from=sourcemod-plugins-gg2-forceretry --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
+# Test server runs the opt-out variant instead of gg2_forceretry (never both).
+COPY --from=sourcemod-plugins-gg2-forceretry-optout --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
 COPY --from=sourcemod-plugins-gg2-fuckyeah --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
 COPY --from=sourcemod-plugins-gg2-insurgency --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
 COPY --from=sourcemod-plugins-gg2-kill-entities --chown=0:0 /insurgency /opt/insurgency-server/insurgency/

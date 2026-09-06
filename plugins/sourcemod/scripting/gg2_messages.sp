@@ -88,7 +88,25 @@ char g_HelpPhrases[][] = {
     "help_afk",
     "help_fatal",
     "help_lastmaps",
-    "help_stock"
+    "help_stock",
+    "help_autoreconnect"
+};
+
+// Index-matched with g_HelpPhrases. An empty string means the line is always printed; otherwise
+// the line is only printed if that command is actually registered on this server. This plugin
+// ships to every server, but some commands do not - !autoreconnect comes from
+// gg2_forceretry_optout, which only the test server runs - and advertising a command that does
+// nothing is worse than not mentioning it.
+char g_HelpGateCommands[][] = {
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "sm_autoreconnect"
 };
 
 // Admin commands, printed after the player list. The three arrays are index-matched: each phrase
@@ -138,6 +156,8 @@ public Action Cmd_Help(int client, int args)
 
     for (int i = 0; i < sizeof(g_HelpPhrases); i++)
     {
+        if (g_HelpGateCommands[i][0] != '\0' && !CommandExists(g_HelpGateCommands[i])) continue;
+
         CPrintToChat(client, "%T", g_HelpPhrases[i], client);
     }
 

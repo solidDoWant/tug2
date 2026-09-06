@@ -855,6 +855,17 @@
     "pt_p"      "{green}!nextmap !timeleft !motd !ff{common} - Próximo mapa, tempo restante, info do servidor, fogo amigo"
     "tr"        "{green}!nextmap !timeleft !motd !ff{common} - Sonraki harita, kalan süre, sunucu bilgisi, dost ateşi"
   }
+  "help_autoreconnect"
+  {
+    "en"        "{green}!autoreconnect{common} - Turn the automatic reconnect on or off for yourself"
+    "ua"        "{green}!autoreconnect{common} - Увімкнути або вимкнути автоматичне перепідключення для себе"
+    "jp"        "{green}!autoreconnect{common} - 自動再接続のオン/オフを切り替えます"
+    "chi"       "{green}!autoreconnect{common} - 为自己开启或关闭自动重连"
+    "ru"        "{green}!autoreconnect{common} - Включить или выключить автоматическое переподключение для себя"
+    "es"        "{green}!autoreconnect{common} - Activa o desactiva la reconexión automática para ti"
+    "pt_p"      "{green}!autoreconnect{common} - Ative ou desative a reconexão automática para você"
+    "tr"        "{green}!autoreconnect{common} - Otomatik yeniden bağlanmayı kendin için aç veya kapat"
+  }
   "help_footer"
   {
     "en"        "{common}More info: {blue}https://www.tug.gg"
