@@ -28,6 +28,7 @@ char   GRENADE_IED[12] = "grenade_ied";
 ConVar gg_bomber_headshot_multiplier;
 ConVar gg_bomber_nonheadshot_value;
 ConVar gg_notification_cooldown;
+ConVar gg_defib_team_damage;
 
 char   g_one_shot_weapons[][] = {
     "weapon_defib",
@@ -56,6 +57,14 @@ public void OnPluginStart()
     gg_bomber_headshot_multiplier = CreateConVar("gg_bomber_headshot_multiplier", "500.0", "Multiply headshot on bombers by this much");
     gg_bomber_nonheadshot_value   = CreateConVar("gg_bomber_nonheadshot_value", "35.0", "Non-Headshots on bombers give this much damage");
     gg_notification_cooldown      = CreateConVar("gg_bomber_notification_cooldown", "3.0", "Cooldown time in seconds for bomber hit notifications");
+    // weapon_defib is in g_one_shot_weapons, so a paddle hit is normally rewritten to 1024 damage,
+    // and CalculateTeamDamage deliberately exempts defib from the friendly-fire reduction. Together
+    // that meant a medic who swung the paddles at the instant their target came back up killed them
+    // outright. Cap friendly paddle damage just below the lowest health a medic revive can leave
+    // someone on, so the hit can never be fatal: sm_medic_critical_revive_hp is 35, hence 34.
+    // Keep this below that cvar (and below sm_medic_moderate_revive_hp / sm_medic_minor_revive_hp,
+    // 50 and 70) if any of them are ever retuned in plugin.respawn.cfg.
+    gg_defib_team_damage          = CreateConVar("gg_defib_team_damage", "34.0", "Damage a defib does to a teammate. Must stay below sm_medic_critical_revive_hp so it cannot kill a just-revived player.");
     AutoExecConfig(true, "gg2_damage");
 
     LoadTranslations("tug.phrases.txt");
@@ -158,6 +167,17 @@ public Action OnTakeDamage(int victim, int& attacker, int& inflictor, float& dam
 
     char weapon[32];
     GetClientWeapon(attacker, weapon, sizeof(weapon));
+
+    // Friendly defib hits are capped so they cannot finish off a teammate who has just been
+    // revived - see gg_defib_team_damage. Checked before CalculateTeamDamage because that function
+    // exempts defib, and before IsOneShotKillWeapon because that would otherwise raise it to 1024.
+    if (StrEqual(weapon, "weapon_defib", false)
+        && IsValidPlayer(victim)
+        && GetClientTeam(victim) == GetClientTeam(attacker))
+    {
+        damage = gg_defib_team_damage.FloatValue;
+        return Plugin_Changed;
+    }
 
     float teamDamage = CalculateTeamDamage(victim, attacker, weapon, damage, damagetype);
     if (teamDamage != damage)
