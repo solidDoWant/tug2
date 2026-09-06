@@ -49,6 +49,48 @@ clean:	## Clean up all built images and temporary files.
 	@docker image rm -f "$(CONTAINER_REGISTRY)-base:$(VERSION)" 2> /dev/null > /dev/null || true
 	@$(MAKE) -C "$(PROJECT_DIR)/tools/server-runner" clean
 
+##@ Workshop
+
+# Insurgency enforces file consistency for theater files (sv_consistency, on by default and
+# separate from sv_pure), so a client that does not have a byte-identical copy of a theater the
+# server uses is refused at connect. Files baked into the server image cannot reach the client, so
+# anything client-visible has to be published as a Workshop item - and Workshop items are VPKs.
+WORKSHOP_APP_ID = 222880
+WORKSHOP_SERVER ?= test
+WORKSHOP_NAME ?= tug_custom_theaters
+WORKSHOP_TITLE ?= TUG Custom Theaters
+WORKSHOP_DESCRIPTION ?= Theater files for the TUG servers. Built from https://github.com/solidDoWant/tug2
+# 0 creates a new item; set this to an existing ID to publish an update to it instead.
+WORKSHOP_ITEM_ID ?= 3796695587
+# 0 public, 1 friends only, 2 private. Defaults to private so a first publish is never accidentally public.
+WORKSHOP_VISIBILITY ?= 0
+WORKSHOP_BUILD_DIR = $(PROJECT_DIR)/build/workshop/$(WORKSHOP_NAME)
+WORKSHOP_SOURCE_DIR = $(PROJECT_DIR)/server config/$(WORKSHOP_SERVER)/opt/insurgency-server/insurgency
+
+.PHONY: workshop-package
+workshop-package:	## Build a Workshop VPK of a server's custom theaters. Usage: make workshop-package [WORKSHOP_SERVER=test] [WORKSHOP_ITEM_ID=123]
+	@test -d "$(WORKSHOP_SOURCE_DIR)/scripts/theaters" || (2>&1 echo "No scripts/theaters in server config/$(WORKSHOP_SERVER) - nothing to publish" && exit 1)
+	rm -rf "$(WORKSHOP_BUILD_DIR)"
+	mkdir -p "$(WORKSHOP_BUILD_DIR)/content/scripts/theaters"
+	cp "$(WORKSHOP_SOURCE_DIR)/scripts/theaters/"*.theater "$(WORKSHOP_BUILD_DIR)/content/scripts/theaters/"
+	python3 "$(PROJECT_DIR)/tools/workshop/pack_vpk.py" "$(WORKSHOP_BUILD_DIR)/content" "$(WORKSHOP_BUILD_DIR)/item" "$(WORKSHOP_NAME)"
+	@rm -rf "$(WORKSHOP_BUILD_DIR)/content"
+	@printf '"workshopitem"\n{\n\t"appid"\t\t\t"$(WORKSHOP_APP_ID)"\n\t"publishedfileid"\t"$(WORKSHOP_ITEM_ID)"\n\t"contentfolder"\t\t"%s"\n\t"visibility"\t\t"$(WORKSHOP_VISIBILITY)"\n\t"title"\t\t\t"$(WORKSHOP_TITLE)"\n\t"description"\t\t"$(WORKSHOP_DESCRIPTION)"\n\t"changenote"\t\t"Built from $(shell git -C "$(PROJECT_DIR)" rev-parse --short HEAD 2>/dev/null || echo unknown)"\n}\n' "$(WORKSHOP_BUILD_DIR)/item" > "$(WORKSHOP_BUILD_DIR)/$(WORKSHOP_NAME).vdf"
+	@echo
+	@echo "Item content : $(WORKSHOP_BUILD_DIR)/item"
+	@echo "steamcmd VDF : $(WORKSHOP_BUILD_DIR)/$(WORKSHOP_NAME).vdf"
+	@echo
+	@echo "To publish (visibility is $(WORKSHOP_VISIBILITY); 0=public 1=friends 2=private):"
+	@echo "  steamcmd +login <account> +workshop_build_item \"$(WORKSHOP_BUILD_DIR)/$(WORKSHOP_NAME).vdf\" +quit"
+	@echo
+	@echo "Publishing needs an account that owns Insurgency and has accepted the Workshop legal"
+	@echo "agreement. For an update, re-run with WORKSHOP_ITEM_ID=<existing id>."
+	@echo "After publishing, add the item ID to the server's subscribed_file_ids.txt so clients get it."
+
+.PHONY: clean-workshop
+clean-workshop:	## Remove built Workshop packages.
+	rm -rf "$(PROJECT_DIR)/build/workshop"
+
 ##@ Testing
 
 LOCAL_RCON_PASSWORD = password
