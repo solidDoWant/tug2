@@ -34,6 +34,30 @@ public void OnDatabaseConnected(Database db, const char[] error, any data)
 
     g_Database = db;
     LogMessage("Successfully connected to database");
+
+    RecordPendingMapStart();
+}
+
+// OnMapStart gives up when the database is down, so the start of that map is never written. It is
+// not enough to just let the next map recover: g_bMapStartRecorded stays false for the whole
+// session, which also suppresses the round-end playtime update, so the map disappears from the
+// stats entirely rather than merely losing its timestamp.
+//
+// Called once a connection is (re)established. The g_bMapStartRecorded guard matters: a mid-map
+// reconnect triggered by HandleQueryError must NOT rewrite last_start, because UpdateMapTimePlayed
+// derives play_time from (CURRENT_TIMESTAMP - last_start) and resetting it would discard the time
+// already accumulated this session.
+//
+// Playtime for a recovered map is still slightly short, by however long the outage lasted, since
+// last_start is stamped at recovery rather than at the true map start. That is a much smaller
+// error than dropping the map altogether.
+void RecordPendingMapStart()
+{
+    if (g_bMapStartRecorded || g_sMapName[0] == '\0')
+        return;
+
+    LogMessage("Recording map start for '%s' that was missed while the database was unavailable", g_sMapName);
+    UpdateMapLastStart(g_sMapName);
 }
 
 // Attempt to reconnect to the database
@@ -56,6 +80,8 @@ public void OnDatabaseReconnected(Database db, const char[] error, any data)
 
     g_Database = db;
     LogMessage("Successfully reconnected to database");
+
+    RecordPendingMapStart();
 }
 
 public Action Timer_RetryReconnect(Handle timer)
@@ -75,7 +101,7 @@ public void OnMapStart()
     {
         LogMessage("Database unavailable at map start, attempting reconnection...");
         ReconnectDatabase();
-        return;    // Functions will be called after reconnection succeeds
+        return;    // RecordPendingMapStart() writes this map once the connection comes back
     }
 
     UpdateMapLastStart(g_sMapName);
