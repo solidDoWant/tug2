@@ -693,7 +693,17 @@ public Action Event_RoundEnd(Event event, const char[] name, bool dontBroadcast)
         FlushAllPlayerStats(client, sec_forces_won ? 1 : 0, sec_forces_won ? 0 : 1);
     }
 
-    // Insert map if not exists, then log the match result
+    // Insert map if not exists, then log the match result.
+    // ExecuteQueryWithRetry checks for a null handle, but g_Database.Format below runs first and
+    // would throw on one, so the round result has to be dropped explicitly when the database is
+    // down. Without this the error surfaces as an invalid-handle exception at every round end for
+    // the duration of an outage.
+    if (g_Database == null)
+    {
+        LogError("[GG2 MSTATS2] Database unavailable at round end, map win/loss not recorded");
+        return Plugin_Continue;
+    }
+
     char map_name[128];
     GetCurrentMap(map_name, sizeof(map_name));
 
