@@ -23,6 +23,880 @@
 {
 	"player_templates"
 	{
+		// ---------------------------------------------------------------------------
+		// Bot loadout variants
+		// ---------------------------------------------------------------------------
+		// Bot equipment is DETERMINISTIC: CPlayerInventory::PurchaseClassTemplateItems and
+		// GiveItemsFromTemplate contain no RNG, and nothing reads allowed_items for bots. A bot
+		// gets exactly its template's buy_order, so with 8 bot templates filling 48 cell slots you
+		// saw 8 loadouts on repeat. Variety therefore has to come from having more templates.
+		//
+		// These are NEW template names, so unlike the security classes above nothing is being
+		// overridden and no full-list restatement is needed. team/print_name/models are copied
+		// from the matching TUG archetype so the bots look unchanged.
+		//
+		// Every weapon is team_access insurgent and every attachment was checked against that
+		// upgrade's own allowed_weapons list. Do not hand-add attachments without checking:
+		// underbarrel_foregrip_ins2 is weapon_toz only and magazine_drum_75rd is galil only,
+		// despite what their names suggest.
+		"template_tugvar_fighter_ak74"
+		{
+			"team"					"security,insurgents"
+			"print_name"				"#Squad_Cell_Fighter"
+			"models"
+			{
+			"player"				"models/characters/insurgent_heavy.mdl"
+			"viewmodel_hands"			"models/weapons/v_hands_ins_h.mdl"
+
+			"bodygoups"
+			{
+			"kit"					"0"
+			"backpack"				"0"
+			}
+
+			"attachments"
+			{
+			"helmet"
+			{
+			"model"			"models/characters/ins_helmet_head.mdl"
+			}
+			}
+			}
+			"buy_order"
+			{
+				"gear"					"ins_heavy_armor"
+				"gear"					"ins_chest_carrier"
+				"weapon"				"weapon_kabar"
+				"weapon"				"weapon_ak74"
+				"weapon_upgrade"		"ammo_ap_ak74"
+				"weapon_upgrade"		"optic_2xaimpoint"
+				"weapon_upgrade"		"magazine_extended_akseries_45rd"
+				"weapon"				"weapon_f1"
+			}
+		}
+		"template_tugvar_fighter_akm"
+		{
+			"team"					"security,insurgents"
+			"print_name"				"#Squad_Cell_Fighter"
+			"models"
+			{
+			"player"				"models/characters/insurgent_heavy.mdl"
+			"viewmodel_hands"			"models/weapons/v_hands_ins_h.mdl"
+
+			"bodygoups"
+			{
+			"kit"					"0"
+			"backpack"				"0"
+			}
+
+			"attachments"
+			{
+			"helmet"
+			{
+			"model"			"models/characters/ins_helmet_head.mdl"
+			}
+			}
+			}
+			"buy_order"
+			{
+				"gear"					"ins_heavy_armor"
+				"gear"					"ins_chest_rig"
+				"weapon"				"weapon_kabar"
+				"weapon"				"weapon_akm"
+				"weapon_upgrade"		"ammo_hp_akm"
+				"weapon_upgrade"		"optic_acog"
+				"weapon_upgrade"		"magazine_extended_akseries_45rd"
+				"weapon"				"weapon_molotov"
+			}
+		}
+		"template_tugvar_fighter_galil"
+		{
+			"team"					"security,insurgents"
+			"print_name"				"#Squad_Cell_Fighter"
+			"models"
+			{
+			"player"				"models/characters/insurgent_heavy.mdl"
+			"viewmodel_hands"			"models/weapons/v_hands_ins_h.mdl"
+
+			"bodygoups"
+			{
+			"kit"					"0"
+			"backpack"				"0"
+			}
+
+			"attachments"
+			{
+			"helmet"
+			{
+			"model"			"models/characters/ins_helmet_head.mdl"
+			}
+			}
+			}
+			"buy_order"
+			{
+				"gear"					"ins_light_armor"
+				"gear"					"ins_chest_rig"
+				"weapon"				"weapon_kabar"
+				"weapon"				"weapon_galil_sar"
+				"weapon_upgrade"		"ammo_ap_galil"
+				"weapon_upgrade"		"optic_aimpoint"
+				"weapon_upgrade"		"magazine_drum_75rd"
+				"weapon_upgrade"		"underbarrel_foregrip_sec2"
+				"weapon"				"weapon_makarov"
+				"weapon"				"weapon_m84"
+			}
+		}
+		"template_tugvar_fighter_fal"
+		{
+			"team"					"security,insurgents"
+			"print_name"				"#Squad_Cell_Fighter"
+			"models"
+			{
+			"player"				"models/characters/insurgent_heavy.mdl"
+			"viewmodel_hands"			"models/weapons/v_hands_ins_h.mdl"
+
+			"bodygoups"
+			{
+			"kit"					"0"
+			"backpack"				"0"
+			}
+
+			"attachments"
+			{
+			"helmet"
+			{
+			"model"			"models/characters/ins_helmet_head.mdl"
+			}
+			}
+			}
+			"buy_order"
+			{
+				"gear"					"ins_heavy_armor"
+				"gear"					"ins_chest_carrier"
+				"weapon"				"weapon_kabar"
+				"weapon"				"weapon_fal"
+				"weapon_upgrade"		"ammo_hp_fal"
+				"weapon_upgrade"		"optic_elcan"
+				"weapon_upgrade"		"magazine_extended_rifle_30rd"
+				"weapon_upgrade"		"underbarrel_foregrip_ins1"
+				"weapon"				"weapon_f1"
+			}
+		}
+		"template_tugvar_fighter_stg44"
+		{
+			"team"					"security,insurgents"
+			"print_name"				"#Squad_Cell_Fighter"
+			"models"
+			{
+			"player"				"models/characters/insurgent_heavy.mdl"
+			"viewmodel_hands"			"models/weapons/v_hands_ins_h.mdl"
+
+			"bodygoups"
+			{
+			"kit"					"0"
+			"backpack"				"0"
+			}
+
+			"attachments"
+			{
+			"helmet"
+			{
+			"model"			"models/characters/ins_helmet_head.mdl"
+			}
+			}
+			}
+			"buy_order"
+			{
+				"gear"					"ins_heavy_armor"
+				"weapon"				"weapon_kabar"
+				"weapon"				"weapon_stg44"
+				"weapon_upgrade"		"ammo_ap_fal"
+				"weapon_upgrade"		"optic_eotech"
+				"weapon_upgrade"		"magazine_extended_rifle_30rd"
+				"weapon_upgrade"		"underbarrel_foregrip_ins1"
+				"weapon"				"weapon_makarov"
+				"weapon"				"weapon_molotov"
+			}
+		}
+		"template_tugvar_machinegunner_rpk"
+		{
+			"team"					"security,insurgents"
+			"print_name"				"#Squad_Cell_MachineGunner"
+			"models"
+			{
+			"player"				"models/characters/insurgent_heavy.mdl"
+			"viewmodel_hands"			"models/weapons/v_hands_ins_h.mdl"
+
+			"bodygoups"
+			{
+			"kit"					"0"
+			"backpack"				"0"
+			}
+
+			"attachments"
+			{
+			"helmet"
+			{
+			"model"			"models/characters/ins_helmet_head.mdl"
+			}
+			}
+			}
+			"buy_order"
+			{
+				"gear"					"ins_heavy_armor"
+				"gear"					"ins_chest_rig"
+				"weapon"				"weapon_kabar"
+				"weapon"				"weapon_rpk"
+				"weapon_upgrade"		"ammo_ap_rpk"
+				"weapon_upgrade"		"optic_2xaimpoint"
+			}
+		}
+		"template_tugvar_machinegunner_pecheneg"
+		{
+			"team"					"security,insurgents"
+			"print_name"				"#Squad_Cell_MachineGunner"
+			"models"
+			{
+			"player"				"models/characters/insurgent_heavy.mdl"
+			"viewmodel_hands"			"models/weapons/v_hands_ins_h.mdl"
+
+			"bodygoups"
+			{
+			"kit"					"0"
+			"backpack"				"0"
+			}
+
+			"attachments"
+			{
+			"helmet"
+			{
+			"model"			"models/characters/ins_helmet_head.mdl"
+			}
+			}
+			}
+			"buy_order"
+			{
+				"gear"					"ins_heavy_armor"
+				"gear"					"ins_chest_carrier"
+				"weapon"				"weapon_kabar"
+				"weapon"				"weapon_pecheneg"
+				"weapon_upgrade"		"ammo_hp_m249"
+				"weapon_upgrade"		"optic_aimpoint"
+				"weapon"				"weapon_f1"
+			}
+		}
+		"template_tugvar_machinegunner_m60"
+		{
+			"team"					"security,insurgents"
+			"print_name"				"#Squad_Cell_MachineGunner"
+			"models"
+			{
+			"player"				"models/characters/insurgent_heavy.mdl"
+			"viewmodel_hands"			"models/weapons/v_hands_ins_h.mdl"
+
+			"bodygoups"
+			{
+			"kit"					"0"
+			"backpack"				"0"
+			}
+
+			"attachments"
+			{
+			"helmet"
+			{
+			"model"			"models/characters/ins_helmet_head.mdl"
+			}
+			}
+			}
+			"buy_order"
+			{
+				"gear"					"ins_heavy_armor"
+				"gear"					"ins_chest_rig"
+				"weapon"				"weapon_kabar"
+				"weapon"				"weapon_m60"
+				"weapon_upgrade"		"ammo_ap_m240"
+				"weapon_upgrade"		"optic_elcan"
+				"weapon"				"weapon_molotov"
+			}
+		}
+		"template_tugvar_machinegunner_m240"
+		{
+			"team"					"security,insurgents"
+			"print_name"				"#Squad_Cell_MachineGunner"
+			"models"
+			{
+			"player"				"models/characters/insurgent_heavy.mdl"
+			"viewmodel_hands"			"models/weapons/v_hands_ins_h.mdl"
+
+			"bodygoups"
+			{
+			"kit"					"0"
+			"backpack"				"0"
+			}
+
+			"attachments"
+			{
+			"helmet"
+			{
+			"model"			"models/characters/ins_helmet_head.mdl"
+			}
+			}
+			}
+			"buy_order"
+			{
+				"gear"					"ins_heavy_armor"
+				"gear"					"ins_chest_carrier"
+				"weapon"				"weapon_kabar"
+				"weapon"				"weapon_m240"
+				"weapon_upgrade"		"ammo_hp_m240"
+				"weapon_upgrade"		"optic_eotech"
+			}
+		}
+		"template_tugvar_sharpshooter_sks"
+		{
+			"team"					"security,insurgents"
+			"print_name"				"#Squad_Cell_Sharpshooter"
+			"models"
+			{
+			"player"				"models/characters/insurgent_light.mdl"
+			"viewmodel_hands"			"models/weapons/v_hands_ins_l.mdl"
+
+			"bodygoups"
+			{
+			"kit"					"0"
+			"backpack"				"0"
+			}
+
+			}
+			"buy_order"
+			{
+				"gear"					"ins_light_armor"
+				"gear"					"ins_chest_rig"
+				"weapon"				"weapon_kabar"
+				"weapon"				"weapon_sks"
+				"weapon_upgrade"		"ammo_ap_sks"
+				"weapon_upgrade"		"optic_2xaimpoint"
+				"weapon_upgrade"		"underbarrel_foregrip_ins1"
+				"weapon"				"weapon_makarov"
+				"weapon"				"weapon_molotov"
+			}
+		}
+		"template_tugvar_sharpshooter_mosin"
+		{
+			"team"					"security,insurgents"
+			"print_name"				"#Squad_Cell_Sharpshooter"
+			"models"
+			{
+			"player"				"models/characters/insurgent_light.mdl"
+			"viewmodel_hands"			"models/weapons/v_hands_ins_l.mdl"
+
+			"bodygoups"
+			{
+			"kit"					"0"
+			"backpack"				"0"
+			}
+
+			}
+			"buy_order"
+			{
+				"gear"					"ins_light_armor"
+				"gear"					"ins_chest_rig"
+				"weapon"				"weapon_kabar"
+				"weapon"				"weapon_mosin"
+				"weapon_upgrade"		"ammo_ap_mosin"
+				"weapon_upgrade"		"optic_acog"
+				"weapon"				"weapon_ots33"
+			}
+		}
+		"template_tugvar_sharpshooter_svd"
+		{
+			"team"					"security,insurgents"
+			"print_name"				"#Squad_Cell_Sharpshooter"
+			"models"
+			{
+			"player"				"models/characters/insurgent_light.mdl"
+			"viewmodel_hands"			"models/weapons/v_hands_ins_l.mdl"
+
+			"bodygoups"
+			{
+			"kit"					"0"
+			"backpack"				"0"
+			}
+
+			}
+			"buy_order"
+			{
+				"gear"					"ins_light_armor"
+				"gear"					"ins_chest_carrier"
+				"weapon"				"weapon_kabar"
+				"weapon"				"weapon_svd"
+				"weapon_upgrade"		"ammo_tracer_svd"
+				"weapon_upgrade"		"optic_aimpoint"
+				"weapon_upgrade"		"magazine_extended_svd_20rd"
+				"weapon_upgrade"		"underbarrel_foregrip_ins1"
+				"weapon"				"weapon_makarov"
+			}
+		}
+		"template_tugvar_sharpshooter_svu"
+		{
+			"team"					"security,insurgents"
+			"print_name"				"#Squad_Cell_Sharpshooter"
+			"models"
+			{
+			"player"				"models/characters/insurgent_light.mdl"
+			"viewmodel_hands"			"models/weapons/v_hands_ins_l.mdl"
+
+			"bodygoups"
+			{
+			"kit"					"0"
+			"backpack"				"0"
+			}
+
+			}
+			"buy_order"
+			{
+				"gear"					"ins_light_armor"
+				"gear"					"ins_chest_rig"
+				"weapon"				"weapon_kabar"
+				"weapon"				"weapon_dragunovsvu"
+				"weapon_upgrade"		"ammo_ap_dragunovsvu"
+				"weapon_upgrade"		"optic_elcan"
+				"weapon_upgrade"		"magazine_extended_dragunovsvu_30rd"
+				"weapon_upgrade"		"underbarrel_foregrip_ins1"
+				"weapon"				"weapon_m84"
+			}
+		}
+		"template_tugvar_submachinegunner_mac10"
+		{
+			"team"					"security,insurgents"
+			"print_name"				"#Squad_Cell_SubmachineGunner"
+			"models"
+			{
+			"player"				"models/characters/insurgent_light.mdl"
+			"viewmodel_hands"			"models/weapons/v_hands_ins_l.mdl"
+
+			"bodygoups"
+			{
+			"kit"					"0"
+			"backpack"				"0"
+			}
+
+			}
+			"buy_order"
+			{
+				"gear"					"ins_light_armor"
+				"gear"					"ins_chest_rig"
+				"weapon"				"weapon_kabar"
+				"weapon"				"weapon_mac10"
+				"weapon_upgrade"		"ammo_ap_mp40"
+				"weapon"				"weapon_f1"
+			}
+		}
+		"template_tugvar_submachinegunner_ppsh"
+		{
+			"team"					"security,insurgents"
+			"print_name"				"#Squad_Cell_SubmachineGunner"
+			"models"
+			{
+			"player"				"models/characters/insurgent_light.mdl"
+			"viewmodel_hands"			"models/weapons/v_hands_ins_l.mdl"
+
+			"bodygoups"
+			{
+			"kit"					"0"
+			"backpack"				"0"
+			}
+
+			}
+			"buy_order"
+			{
+				"gear"					"ins_light_armor"
+				"gear"					"ins_chest_rig"
+				"weapon"				"weapon_kabar"
+				"weapon"				"weapon_ppsh41"
+				"weapon_upgrade"		"ammo_hp_ppsh"
+				"weapon_upgrade"		"magazine_extended_ppsh41"
+				"weapon"				"weapon_molotov"
+			}
+		}
+		"template_tugvar_submachinegunner_mp40"
+		{
+			"team"					"security,insurgents"
+			"print_name"				"#Squad_Cell_SubmachineGunner"
+			"models"
+			{
+			"player"				"models/characters/insurgent_light.mdl"
+			"viewmodel_hands"			"models/weapons/v_hands_ins_l.mdl"
+
+			"bodygoups"
+			{
+			"kit"					"0"
+			"backpack"				"0"
+			}
+
+			}
+			"buy_order"
+			{
+				"gear"					"ins_light_armor"
+				"weapon"				"weapon_kabar"
+				"weapon"				"weapon_mp40"
+				"weapon_upgrade"		"ammo_tracer_mp40"
+				"weapon_upgrade"		"optic_eotech"
+				"weapon"				"weapon_makarov"
+				"weapon"				"weapon_m84"
+			}
+		}
+		"template_tugvar_submachinegunner_uzi"
+		{
+			"team"					"security,insurgents"
+			"print_name"				"#Squad_Cell_SubmachineGunner"
+			"models"
+			{
+			"player"				"models/characters/insurgent_light.mdl"
+			"viewmodel_hands"			"models/weapons/v_hands_ins_l.mdl"
+
+			"bodygoups"
+			{
+			"kit"					"0"
+			"backpack"				"0"
+			}
+
+			}
+			"buy_order"
+			{
+				"gear"					"ins_light_armor"
+				"gear"					"ins_chest_carrier"
+				"weapon"				"weapon_kabar"
+				"weapon"				"weapon_uzi"
+				"weapon_upgrade"		"ammo_ap_mp5"
+				"weapon_upgrade"		"optic_eotech"
+				"weapon"				"weapon_f1"
+			}
+		}
+		"template_tugvar_submachinegunner_sterling"
+		{
+			"team"					"security,insurgents"
+			"print_name"				"#Squad_Cell_SubmachineGunner"
+			"models"
+			{
+			"player"				"models/characters/insurgent_light.mdl"
+			"viewmodel_hands"			"models/weapons/v_hands_ins_l.mdl"
+
+			"bodygoups"
+			{
+			"kit"					"0"
+			"backpack"				"0"
+			}
+
+			}
+			"buy_order"
+			{
+				"gear"					"ins_light_armor"
+				"gear"					"ins_chest_rig"
+				"weapon"				"weapon_kabar"
+				"weapon"				"weapon_sterling"
+				"weapon_upgrade"		"ammo_hp_mp40"
+				"weapon_upgrade"		"optic_kobra"
+				"weapon"				"weapon_ots33"
+			}
+		}
+		"template_tugvar_specialist_aks74u"
+		{
+			"team"					"security,insurgents"
+			"print_name"				"#Squad_Cell_Specialist"
+			"models"
+			{
+			"player"				"models/characters/insurgent_standard.mdl"
+			"viewmodel_hands"			"models/weapons/v_hands_ins_m.mdl"
+
+			"bodygoups"
+			{
+			"kit"					"0"
+			"backpack"				"0"
+			}
+
+			}
+			"buy_order"
+			{
+				"gear"					"ins_heavy_armor"
+				"gear"					"ins_chest_carrier"
+				"weapon"				"weapon_kabar"
+				"weapon"				"weapon_aks74u"
+				"weapon_upgrade"		"ammo_ap_aks74u"
+				"weapon_upgrade"		"optic_2xaimpoint"
+				"weapon_upgrade"		"magazine_extended_akseries_45rd"
+				"weapon"				"weapon_makarov"
+				"weapon"				"weapon_m18_ins"
+			}
+		}
+		"template_tugvar_specialist_asval"
+		{
+			"team"					"security,insurgents"
+			"print_name"				"#Squad_Cell_Specialist"
+			"models"
+			{
+			"player"				"models/characters/insurgent_standard.mdl"
+			"viewmodel_hands"			"models/weapons/v_hands_ins_m.mdl"
+
+			"bodygoups"
+			{
+			"kit"					"0"
+			"backpack"				"0"
+			}
+
+			}
+			"buy_order"
+			{
+				"gear"					"ins_light_armor"
+				"gear"					"ins_chest_rig"
+				"weapon"				"weapon_kabar"
+				"weapon"				"weapon_asval"
+				"weapon_upgrade"		"ammo_hp_asval"
+				"weapon_upgrade"		"optic_acog"
+				"weapon_upgrade"		"underbarrel_foregrip_sec2"
+				"weapon"				"weapon_anm14"
+			}
+		}
+		"template_tugvar_specialist_mp5"
+		{
+			"team"					"security,insurgents"
+			"print_name"				"#Squad_Cell_Specialist"
+			"models"
+			{
+			"player"				"models/characters/insurgent_standard.mdl"
+			"viewmodel_hands"			"models/weapons/v_hands_ins_m.mdl"
+
+			"bodygoups"
+			{
+			"kit"					"0"
+			"backpack"				"0"
+			}
+
+			}
+			"buy_order"
+			{
+				"gear"					"ins_light_armor"
+				"gear"					"ins_chest_carrier"
+				"weapon"				"weapon_kabar"
+				"weapon"				"weapon_mp5"
+				"weapon_upgrade"		"ammo_tracer_mp5"
+				"weapon_upgrade"		"optic_elcan"
+				"weapon"				"weapon_makarov"
+				"weapon"				"weapon_m18_ins"
+			}
+		}
+		"template_tugvar_sapper_rpg7"
+		{
+			"team"					"security,insurgents"
+			"print_name"				"#Squad_Cell_Sapper"
+			"models"
+			{
+			"player"				"models/characters/insurgent_standard.mdl"
+			"viewmodel_hands"			"models/weapons/v_hands_ins_m.mdl"
+
+			"bodygoups"
+			{
+			"kit"					"0"
+			"backpack"				"0"
+			}
+
+			"attachments"
+			{
+			"helmet"
+			{
+			"model"			"models/characters/ins_helmet_head.mdl"
+			}
+			}
+			}
+			"buy_order"
+			{
+				"gear"					"ins_heavy_armor"
+				"weapon"				"weapon_kabar"
+				"weapon"				"weapon_aks74u"
+				"weapon_upgrade"		"ammo_ap_aks74u"
+				"weapon_upgrade"		"optic_2xaimpoint"
+				"weapon_upgrade"		"magazine_extended_akseries_45rd"
+				"weapon"				"weapon_makarov"
+				"weapon"				"weapon_rpg7"
+			}
+		}
+		"template_tugvar_sapper_law"
+		{
+			"team"					"security,insurgents"
+			"print_name"				"#Squad_Cell_Sapper"
+			"models"
+			{
+			"player"				"models/characters/insurgent_standard.mdl"
+			"viewmodel_hands"			"models/weapons/v_hands_ins_m.mdl"
+
+			"bodygoups"
+			{
+			"kit"					"0"
+			"backpack"				"0"
+			}
+
+			"attachments"
+			{
+			"helmet"
+			{
+			"model"			"models/characters/ins_helmet_head.mdl"
+			}
+			}
+			}
+			"buy_order"
+			{
+				"gear"					"ins_light_armor"
+				"gear"					"ins_chest_rig"
+				"weapon"				"weapon_kabar"
+				"weapon"				"weapon_akm"
+				"weapon_upgrade"		"ammo_hp_akm"
+				"weapon_upgrade"		"optic_acog"
+				"weapon_upgrade"		"magazine_extended_akseries_45rd"
+				"weapon"				"weapon_law"
+			}
+		}
+		"template_tugvar_sapper_at4"
+		{
+			"team"					"security,insurgents"
+			"print_name"				"#Squad_Cell_Sapper"
+			"models"
+			{
+			"player"				"models/characters/insurgent_standard.mdl"
+			"viewmodel_hands"			"models/weapons/v_hands_ins_m.mdl"
+
+			"bodygoups"
+			{
+			"kit"					"0"
+			"backpack"				"0"
+			}
+
+			"attachments"
+			{
+			"helmet"
+			{
+			"model"			"models/characters/ins_helmet_head.mdl"
+			}
+			}
+			}
+			"buy_order"
+			{
+				"gear"					"ins_heavy_armor"
+				"gear"					"ins_chest_carrier"
+				"weapon"				"weapon_kabar"
+				"weapon"				"weapon_ak74"
+				"weapon_upgrade"		"ammo_ap_ak74"
+				"weapon_upgrade"		"optic_aimpoint"
+				"weapon_upgrade"		"magazine_extended_akseries_45rd"
+				"weapon"				"weapon_makarov"
+				"weapon"				"weapon_at4"
+			}
+		}
+		"template_tugvar_heavygunner_m249"
+		{
+			"team"					"security,insurgents"
+			"print_name"				"#Squad_Cell_HeavyGunner"
+			"models"
+			{
+			"player"				"models/characters/insurgent_heavy.mdl"
+			"viewmodel_hands"			"models/weapons/v_hands_ins_h.mdl"
+
+			"bodygoups"
+			{
+			"kit"					"2"
+			"backpack"				"1"
+			}
+
+			"attachments"
+			{
+			"helmet"
+			{
+			"model"			"models/characters/ins_helmet_head.mdl"
+			}
+			}
+
+			}
+			"buy_order"
+			{
+				"gear"					"ins_heavy_armor"
+				"gear"					"ins_chest_rig"
+				"weapon"				"weapon_kabar"
+				"weapon"				"weapon_m249"
+				"weapon_upgrade"		"ammo_ap_m249"
+				"weapon_upgrade"		"optic_2xaimpoint"
+				"weapon"				"weapon_toz"
+				"weapon"				"weapon_molotov"
+			}
+		}
+		"template_tugvar_heavygunner_mk46"
+		{
+			"team"					"security,insurgents"
+			"print_name"				"#Squad_Cell_HeavyGunner"
+			"models"
+			{
+			"player"				"models/characters/insurgent_heavy.mdl"
+			"viewmodel_hands"			"models/weapons/v_hands_ins_h.mdl"
+
+			"bodygoups"
+			{
+			"kit"					"2"
+			"backpack"				"1"
+			}
+
+			"attachments"
+			{
+			"helmet"
+			{
+			"model"			"models/characters/ins_helmet_head.mdl"
+			}
+			}
+
+			}
+			"buy_order"
+			{
+				"gear"					"ins_heavy_armor"
+				"gear"					"ins_chest_carrier"
+				"weapon"				"weapon_kabar"
+				"weapon"				"weapon_mk46"
+				"weapon_upgrade"		"ammo_hp_m249"
+				"weapon_upgrade"		"optic_aimpoint"
+				"weapon"				"weapon_toz"
+			}
+		}
+		"template_tugvar_heavygunner_m1918bar"
+		{
+			"team"					"security,insurgents"
+			"print_name"				"#Squad_Cell_HeavyGunner"
+			"models"
+			{
+			"player"				"models/characters/insurgent_heavy.mdl"
+			"viewmodel_hands"			"models/weapons/v_hands_ins_h.mdl"
+
+			"bodygoups"
+			{
+			"kit"					"2"
+			"backpack"				"1"
+			}
+
+			"attachments"
+			{
+			"helmet"
+			{
+			"model"			"models/characters/ins_helmet_head.mdl"
+			}
+			}
+
+			}
+			"buy_order"
+			{
+				"gear"					"ins_heavy_armor"
+				"gear"					"ins_chest_rig"
+				"weapon"				"weapon_kabar"
+				"weapon"				"weapon_m1918bar"
+				"weapon_upgrade"		"ammo_tracer_bar"
+				"weapon"				"weapon_f1"
+			}
+		}
+
 		"template_rifleman_security_coop"
 		{
 			"allowed_items"

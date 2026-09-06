@@ -46,79 +46,79 @@
 				"#Cell_Alpha"	// assault team #1
 				{
 					// role name								preset
-					"#Squad_Cell_Leader_Specialist"			"template_coop_specialist"	// Smoke
-					"#Squad_Cell_Fighter"					"template_coop_fighter"	// Incendiary
-					"#Squad_Cell_SubmachineGunner"			"template_coop_submachinegunner"	// Incendiary
+					"#Squad_Cell_Leader_Specialist"			"template_tugvar_specialist_asval"	// Smoke
+					"#Squad_Cell_Fighter"					"template_tugvar_fighter_akm"	// Incendiary
+					"#Squad_Cell_SubmachineGunner"			"template_tugvar_submachinegunner_mp40"	// Incendiary
 					"#Squad_Cell_Bomber"					"template_coop_bomber"	// bomber
-					"#Squad_Cell_MachineGunner"				"template_coop_machinegunner"	// Frag
-					"#Squad_Cell_MachineGunner"				"template_coop_machinegunner"	// Frag
-					"#Squad_Cell_Sapper"					"template_coop_sapper"	// RPG
-					"#Squad_Cell_HeavyGunner"				"template_coop_heavygunner"	// Frag
+					"#Squad_Cell_MachineGunner"				"template_tugvar_machinegunner_m60"	// Frag
+					"#Squad_Cell_MachineGunner"				"template_tugvar_machinegunner_pecheneg"	// Frag
+					"#Squad_Cell_Sapper"					"template_tugvar_sapper_law"	// RPG
+					"#Squad_Cell_HeavyGunner"				"template_tugvar_heavygunner_m249"	// Frag
 				}
 				
 				"#Cell_Bravo"	// assault team #2
 				{
 					// role name								preset
-					"#Squad_Cell_Leader_Specialist"			"template_coop_specialist"	// smokes
-					"#Squad_Cell_Fighter"					"template_coop_fighter"	// incendiary
-					"#Squad_Cell_SubmachineGunner"			"template_coop_submachinegunner"	// incendiary
-					"#Squad_Cell_MachineGunner"				"template_coop_machinegunner"	// Frag
-					"#Squad_Cell_SharpShooter"				"template_coop_sharpshooter"	// smokes
-					"#Squad_Cell_MachineGunner"				"template_coop_machinegunner"	// Frag
-					"#Squad_Cell_Sapper"					"template_coop_sapper"	// RPG
-					"#Squad_Cell_SharpShooter"				"template_coop_sharpshooter"	// Frag
+					"#Squad_Cell_Leader_Specialist"			"template_tugvar_specialist_mp5"	// smokes
+					"#Squad_Cell_Fighter"					"template_tugvar_fighter_fal"	// incendiary
+					"#Squad_Cell_SubmachineGunner"			"template_tugvar_submachinegunner_ppsh"	// incendiary
+					"#Squad_Cell_MachineGunner"				"template_tugvar_machinegunner_rpk"	// Frag
+					"#Squad_Cell_SharpShooter"				"template_tugvar_sharpshooter_sks"	// smokes
+					"#Squad_Cell_MachineGunner"				"template_tugvar_machinegunner_m240"	// Frag
+					"#Squad_Cell_Sapper"					"template_tugvar_sapper_rpg7"	// RPG
+					"#Squad_Cell_SharpShooter"				"template_tugvar_sharpshooter_svd"	// Frag
 				}
 				
 				"#Cell_Charlie"	// support team
 				{
 					// role name								preset
-					"#Squad_Cell_Leader_Specialist"			"template_coop_specialist"	// smokes
-					"#Squad_Cell_Specialist"				"template_coop_specialist"	// incendiary
+					"#Squad_Cell_Leader_Specialist"			"template_tugvar_specialist_aks74u"	// smokes
+					"#Squad_Cell_Specialist"				"template_tugvar_specialist_asval"	// incendiary
 					"#Squad_Cell_Bomber"					"template_coop_bomber"	// bomber
-					"#Squad_Cell_MachineGunner"				"template_coop_machinegunner"	// Frag
-					"#Squad_Cell_SubmachineGunner"			"template_coop_submachinegunner"	// incendiary
-					"#Squad_Cell_MachineGunner"				"template_coop_machinegunner"	// Frag
-					"#Squad_Cell_MachineGunner"				"template_coop_machinegunner"	// Frag
-					"#Squad_Cell_SharpShooter"				"template_coop_sharpshooter"	// Frag
+					"#Squad_Cell_MachineGunner"				"template_tugvar_machinegunner_m60"	// Frag
+					"#Squad_Cell_SubmachineGunner"			"template_tugvar_submachinegunner_sterling"	// incendiary
+					"#Squad_Cell_MachineGunner"				"template_tugvar_machinegunner_pecheneg"	// Frag
+					"#Squad_Cell_MachineGunner"				"template_tugvar_machinegunner_rpk"	// Frag
+					"#Squad_Cell_SharpShooter"				"template_tugvar_sharpshooter_svu"	// Frag
 				}
 				
 				"#Cell_Delta"	// heavy weapons team
 				{
 					// role name								preset
-					"#Squad_Cell_Leader_Specialist"			"template_coop_specialist"	// smokes
-					"#Squad_Cell_Fighter"					"template_coop_fighter"	// incendiary
-					"#Squad_Cell_Fighter"					"template_coop_fighter"	// incendiary
-					"#Squad_Cell_MachineGunner"				"template_coop_machinegunner"	// RPG
-					"#Squad_Cell_Specialist"				"template_coop_specialist"	// smokes
+					"#Squad_Cell_Leader_Specialist"			"template_tugvar_specialist_mp5"	// smokes
+					"#Squad_Cell_Fighter"					"template_tugvar_fighter_galil"	// incendiary
+					"#Squad_Cell_Fighter"					"template_tugvar_fighter_stg44"	// incendiary
+					"#Squad_Cell_MachineGunner"				"template_tugvar_machinegunner_m240"	// RPG
+					"#Squad_Cell_Specialist"				"template_tugvar_specialist_aks74u"	// smokes
 					"#Squad_Cell_Bomber"					"template_coop_bomber"	// bomber
-					"#Squad_Cell_Fighter"					"template_coop_fighter"	// incendiary
-					"#Squad_Cell_SharpShooter"				"template_coop_sharpshooter"	// Frag
+					"#Squad_Cell_Fighter"					"template_tugvar_fighter_ak74"	// incendiary
+					"#Squad_Cell_SharpShooter"				"template_tugvar_sharpshooter_mosin"	// Frag
 				}
 				
 				"#Cell_Echo"
 				{
 					// role name								preset
-					"#Squad_Cell_Leader_Specialist"			"template_coop_specialist"	// smokes
+					"#Squad_Cell_Leader_Specialist"			"template_tugvar_specialist_asval"	// smokes
 					"#Squad_Cell_Bomber"					"template_coop_bomber"	// bomber
-					"#Squad_Cell_Fighter"					"template_coop_fighter"	// incendiary
-					"#Squad_Cell_MachineGunner"				"template_coop_machinegunner"	// RPG
-					"#Squad_Cell_Specialist"				"template_coop_specialist"	// smokes
-					"#Squad_Cell_Sapper"					"template_coop_sapper"	// RPG
-					"#Squad_Cell_Fighter"					"template_coop_fighter"	// incendiary
-					"#Squad_Cell_SharpShooter"				"template_coop_sharpshooter"	// Frag
+					"#Squad_Cell_Fighter"					"template_tugvar_fighter_akm"	// incendiary
+					"#Squad_Cell_MachineGunner"				"template_tugvar_machinegunner_m60"	// RPG
+					"#Squad_Cell_Specialist"				"template_tugvar_specialist_mp5"	// smokes
+					"#Squad_Cell_Sapper"					"template_tugvar_sapper_at4"	// RPG
+					"#Squad_Cell_Fighter"					"template_tugvar_fighter_fal"	// incendiary
+					"#Squad_Cell_SharpShooter"				"template_tugvar_sharpshooter_sks"	// Frag
 				}
 				
 				"#Cell_Foxtrot"
 				{
 					// role name								preset
-					"#Squad_Cell_Leader_Specialist"			"template_coop_specialist"	// smokes
+					"#Squad_Cell_Leader_Specialist"			"template_tugvar_specialist_aks74u"	// smokes
 					"#Squad_Cell_Bomber"					"template_coop_bomber"	// bomber
-					"#Squad_Cell_Fighter"					"template_coop_fighter"	// incendiary
-					"#Squad_Cell_MachineGunner"				"template_coop_machinegunner"	// RPG
-					"#Squad_Cell_Specialist"				"template_coop_specialist"	// smokes
-					"#Squad_Cell_HeavyGunner"				"template_coop_heavygunner"	// RPG
-					"#Squad_Cell_SubmachineGunner"			"template_coop_submachinegunner"	// incendiary
-					"#Squad_Cell_SharpShooter"				"template_coop_sharpshooter"	// Frag
+					"#Squad_Cell_Fighter"					"template_tugvar_fighter_galil"	// incendiary
+					"#Squad_Cell_MachineGunner"				"template_tugvar_machinegunner_pecheneg"	// RPG
+					"#Squad_Cell_Specialist"				"template_tugvar_specialist_asval"	// smokes
+					"#Squad_Cell_HeavyGunner"				"template_tugvar_heavygunner_mk46"	// RPG
+					"#Squad_Cell_SubmachineGunner"			"template_tugvar_submachinegunner_uzi"	// incendiary
+					"#Squad_Cell_SharpShooter"				"template_tugvar_sharpshooter_svd"	// Frag
 				}
 			}
 		}
