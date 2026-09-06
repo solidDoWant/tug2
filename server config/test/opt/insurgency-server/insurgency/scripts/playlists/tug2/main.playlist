@@ -194,7 +194,7 @@
 	{
 		// Base name only. The engine loads <this>.theater and <this>_<gamemode>.theater, so a
 		// value with "_checkpoint" baked in would look for ..._checkpoint_checkpoint.theater.
-		"mp_theater_override"			"theater_tug_39_medicbomber_12p_default"
+		"mp_theater_override"			"theater_tug_nvg_default"
 		"mp_minteamplayers"			"1"	// min players on each team to start the match
 		"sv_nwi_banlist"			"1"	// global ban list
 		"host_timescale"			"1.0"

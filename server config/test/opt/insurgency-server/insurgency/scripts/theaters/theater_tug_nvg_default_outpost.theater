@@ -1,24 +1,9 @@
-// TUG conquer theater - shipped by this repo, NOT by the TUG Scripts workshop item.
-//
-// Why this file exists: the engine resolves a theater as <mp_theater_override>_<gamemode>.theater.
-// mp_theater_override is "theater_tug_39_medicbomber_12p_default", so checkpoint resolves to the
-// _checkpoint file inside workshop item 3551935737, but conquer had no _conquer file anywhere and
-// fell back to stock team composition - no TUG classes, loadouts, medic system or custom weapons.
-//
-// This is a plain file under insurgency/scripts/theaters/, which the engine reads the same way it
-// reads scripts/playlists/tug2/main.playlist (also shipped by this repo and loaded on every map).
-// Nothing here overrides a workshop file: _conquer.theater exists in no VPK, so there is no search
-// path precedence to win - the filename is simply new.
-//
-// The squad definitions below are a VERBATIM COPY of _checkpoint.theater. That is deliberate: it
-// guarantees conquer gets the same TUG classes and loadouts checkpoint has, and nothing more.
-// Conquer runs multiple simultaneous objectives, so it may want more/smaller cells.
-// Tune it after playing it, rather than guessing now.
-//
-// Only the 12p variant exists because server.cfg sets the 12p override. If mp_theater_override is
-// ever pointed at the 10p or 14p base, matching _conquer files are needed for those too.
+// TUG outpost theater. Inherits theater_tug_nvg_default.theater (TUG's theater plus the
+// night vision option) and supplies this mode's squads.
+// Squads copied verbatim from _checkpoint; outpost is wave defence, so the per-wave bot mix is the thing to revisit.
+// Only the 12p variant exists, because server.cfg sets the 12p override.
 
-"#base" "theater_tug_39_medicbomber_12p_default_coop_shared.theater"
+"#base" "theater_tug_nvg_default.theater"
 
 "theater"
 {

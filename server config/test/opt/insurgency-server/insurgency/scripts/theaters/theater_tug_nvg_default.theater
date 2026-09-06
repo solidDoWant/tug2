@@ -1,0 +1,163 @@
+// TUG theater + night vision - shipped by this repo, not by the TUG Scripts workshop item.
+//
+// mp_theater_override points here (server.cfg and the playlist) instead of at
+// theater_tug_39_medicbomber_12p_default. This file inherits that theater wholesale via #base and
+// changes exactly one thing: every security class may now buy sec_nightvision.
+//
+// sec_nightvision is already defined by TUG's own gear file (accessory slot, cost 0, weight 0);
+// it was simply never listed in any class's allowed_items, so nothing could buy it.
+//
+// WHY THE FULL LISTS ARE RESTATED BELOW: KeyValues #base merging matches children by NAME and
+// takes the FIRST match only (tier1/KeyValues.cpp, RecursiveMergeKeyValues). Every entry in
+// allowed_items is named "gear" or "weapon", so declaring a single extra "gear" here would
+// collapse all of the inherited "gear" entries onto it and silently delete the armour and rig
+// options. Restating each list in full is what keeps them. buy_order is deliberately NOT declared,
+// so it is inherited untouched and nobody's default loadout changes.
+//
+// This means the lists below are a snapshot. If TUG Scripts is updated and a class gains gear,
+// re-extract from the workshop VPK rather than hand-editing.
+
+"#base" "theater_tug_39_medicbomber_12p_default.theater"
+
+"theater"
+{
+	"player_templates"
+	{
+		"template_rifleman_security_coop"
+		{
+			"allowed_items"
+			{
+							"gear"					"sec_light_armor"
+							"gear"					"sec_heavy_armor"
+							"gear"					"sec_chest_rig"
+							"gear"					"sec_chest_carrier"
+							"gear"					"sec_tactical_carrier"
+							"weapon"				"weapon_healthkit"
+							"weapon"				"weapon_galil_sar"
+				"gear"					"sec_nightvision"
+			}
+		}
+		"template_specialist_security_coop"
+		{
+			"allowed_items"
+			{
+							"gear"					"sec_light_armor"
+							"gear"					"sec_heavy_armor"
+							"gear"					"sec_chest_rig"
+							"gear"					"sec_chest_carrier"
+							"gear"					"sec_tactical_carrier"
+							"weapon"				"weapon_healthkit"			
+							"weapon"				"weapon_galil_sar"
+				"gear"					"sec_nightvision"
+			}
+		}
+		"template_recon_security_coop"
+		{
+			"allowed_items"
+			{
+							"gear"					"sec_light_armor"
+							"gear"					"sec_heavy_armor"
+							"gear"					"sec_chest_rig"
+							"gear"					"sec_chest_carrier"
+							"gear"					"sec_tactical_carrier"	
+							"weapon"				"weapon_healthkit"
+							"weapon"				"weapon_m18_us"		
+							"weapon"				"weapon_galil_sar"
+				"gear"					"sec_nightvision"
+			}
+		}
+		"template_designated_marksman_security_coop"
+		{
+			"allowed_items"
+			{
+							"gear"					"sec_light_armor"
+							"gear"					"sec_heavy_armor"
+							"gear"					"sec_chest_rig"
+							"gear"					"sec_chest_carrier"
+							"gear"					"sec_tactical_carrier"
+							"weapon"				"weapon_healthkit"							
+							"weapon"				"weapon_galil_sar"
+				"gear"					"sec_nightvision"
+			}
+		}
+		"template_breacher_security_coop"
+		{
+			"allowed_items"
+			{
+							"gear"					"sec_light_armor"
+							"gear"					"sec_heavy_armor"
+							"gear"					"sec_chest_rig"
+							"gear"					"sec_chest_carrier"
+							"gear"					"sec_tactical_carrier"		
+							"weapon"				"weapon_healthkit"	
+							"weapon"				"weapon_galil_sar"
+				"gear"					"sec_nightvision"
+			}
+		}
+		"template_support_security_coop"
+		{
+			"allowed_items"
+			{
+							"gear"					"sec_light_armor"
+							"gear"					"sec_heavy_armor"
+							"gear"					"sec_chest_rig"
+							"gear"					"sec_chest_carrier"
+							"gear"					"sec_tactical_carrier"	
+							"weapon"				"weapon_healthkit"
+							"weapon"				"weapon_g36c"
+							"weapon"				"weapon_galil_sar"
+							"weapon"				"weapon_m249"
+							"weapon"				"weapon_mg42"
+							"weapon"				"weapon_mk46"
+							"weapon"				"weapon_m60"
+							"weapon"				"weapon_pecheneg"
+							"weapon"				"weapon_m240"
+							"weapon"				"weapon_rpk"
+							"weapon_upgrade"		"magazine_drum_75rd"
+				"gear"					"sec_nightvision"
+			}
+		}
+		"template_sniper_security_coop"
+		{
+			"allowed_items"
+			{
+							"gear"					"sec_light_armor"
+							"gear"					"sec_heavy_armor"
+							"gear"					"sec_chest_rig"
+							"gear"					"sec_chest_carrier"
+							"gear"					"sec_tactical_carrier"	
+							"weapon"				"weapon_healthkit"			
+							"weapon"				"weapon_galil_sar"
+				"gear"					"sec_nightvision"
+			}
+		}
+		"template_demolitions_security_coop"
+		{
+			"allowed_items"
+			{
+							"gear"					"sec_light_armor"
+							"gear"					"sec_heavy_armor"
+							"gear"					"sec_chest_rig"
+							"gear"					"sec_chest_carrier"
+							"gear"					"sec_tactical_carrier"	
+							"weapon"				"weapon_healthkit"		
+							"weapon"				"weapon_galil_sar"
+				"gear"					"sec_nightvision"
+			}
+		}
+		"template_combat_medic"
+		{
+			"allowed_items"
+			{
+							"gear"					"sec_medic_heavy_armor"
+							"gear"					"sec_medic_tactical_carrier"
+							"weapon"				"weapon_m18_impact" // HIGH END EXPLOSIVE
+							"weapon"				"weapon_defib" // MEDIC ONLY DEFIB
+							"weapon"				"weapon_healthkit"
+							"weapon"				"weapon_galil_sar"
+				"gear"					"sec_nightvision"
+			}
+		}
+
+	}
+}
