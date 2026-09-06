@@ -229,9 +229,17 @@ bool g_preRoundInitial = false,
 // there are no team-3 spawn points for ForceRespawn to pick and each call fails with
 // "Unable to find a spawn point for team 3, collected: 0 , type: 3". RespawnBot rate-limits
 // itself to one respawn per wall-clock second, so the failures arrive at a steady 1/sec for the
-// whole map. Gate the bot half of the plugin on checkpoint; revive/medic/fatal-wound handling is
-// mode-independent and stays on everywhere.
-bool g_bBotRespawnAllowed = true;
+// whole map.
+//
+// The counterattack half is checkpoint-only for the same reason: it forces the checkpoint-specific
+// mp_checkpoint_counterattack_disable/_always cvars on, suicides the insurgent team on the final
+// point and respawns security, all keyed off control-point captures and cache destruction. Modes
+// like conquer and outpost still fire controlpoint_captured, so without a gate the plugin would
+// stage checkpoint counterattacks in modes that have no concept of them.
+//
+// Gate both halves on checkpoint; revive/medic/fatal-wound handling is mode-independent and stays
+// on everywhere.
+bool g_bCheckpointManaged = true;
 
 bool   g_should_ask_to_heal = true;
 int    g_iBonusPoint[MAXPLAYERS + 1];
@@ -839,23 +847,23 @@ Action Timer_should_ask_to_heal(Handle timer)
     return Plugin_Continue;
 }
 
-// Refresh g_bBotRespawnAllowed from mp_gamemode. Same idiom as gg2_playlist_hax, but null-safe:
+// Refresh g_bCheckpointManaged from mp_gamemode. Same idiom as gg2_playlist_hax, but null-safe:
 // FindConVar returns null if the game has not registered mp_gamemode yet.
-void UpdateBotRespawnAllowed()
+void UpdateCheckpointManaged()
 {
     ConVar cvGamemode = FindConVar("mp_gamemode");
     if (cvGamemode == null)
     {
-        g_bBotRespawnAllowed = true;
+        g_bCheckpointManaged = true;
         LogMessage("[BM2 RESPAWN] mp_gamemode not found, leaving bot respawns enabled");
         return;
     }
 
     char sGamemode[32];
     cvGamemode.GetString(sGamemode, sizeof(sGamemode));
-    g_bBotRespawnAllowed = StrEqual(sGamemode, "checkpoint", false);
+    g_bCheckpointManaged = StrEqual(sGamemode, "checkpoint", false);
 
-    if (!g_bBotRespawnAllowed)
+    if (!g_bCheckpointManaged)
     {
         LogMessage("[BM2 RESPAWN] gamemode is \"%s\", not checkpoint - bot reinforcement disabled", sGamemode);
     }
@@ -869,7 +877,7 @@ Action Timer_MapStart(Handle timer)
         return Plugin_Continue;
     }
     ServerCommand("exec betterbots.cfg");
-    UpdateBotRespawnAllowed();
+    UpdateCheckpointManaged();
     FindMapSpawnPoints();
     g_iNCP                = Ins_ObjectiveResource_GetProp("m_iNumControlPoints");    // Get the number of control points
 
@@ -1183,8 +1191,8 @@ Action Timer_EnemyReinforce(Handle timer)
 {
     // int starttime = GetTime();
     // int endtime = 0;
-    // Only checkpoint reinforces bots - see g_bBotRespawnAllowed
-    if (!g_bBotRespawnAllowed) return Plugin_Continue;
+    // Only checkpoint reinforces bots - see g_bCheckpointManaged
+    if (!g_bCheckpointManaged) return Plugin_Continue;
     //  Check round state
     if (!g_iRoundStatus) return Plugin_Continue;
     // Check enemy remaining
@@ -1244,6 +1252,14 @@ Action Timer_EnemyReinforce(Handle timer)
 
 Action Timer_CheckIfCounter(Handle timer)
 {
+    // Outside checkpoint the plugin does not stage counterattacks, so never latch onto one - this
+    // keeps IsInfiniteCounterAttack() and the counterattack branches in Event_PlayerDeath inert.
+    if (!g_bCheckpointManaged)
+    {
+        g_bCounterAttack = false;
+        return Plugin_Continue;
+    }
+
     g_bCounterAttack = view_as<bool>(GameRules_GetProp("m_bCounterAttack"));
     return Plugin_Continue;
     /*
@@ -1895,6 +1911,8 @@ public Action Event_RoundEnd(Event event, const char[] name, bool dontBroadcast)
 // Check occouring counter attack when control point captured
 public Action Event_ControlPointCaptured_Pre(Event event, const char[] name, bool dontBroadcast)
 {
+    // Counterattacks are plugin-managed on checkpoint only - see g_bCheckpointManaged
+    if (!g_bCheckpointManaged) return Plugin_Continue;
     g_iPushSpawnStatus              = -1;
     g_iNextSpawnStatus              = -1;
 
@@ -1963,6 +1981,8 @@ public Action Event_ControlPointCaptured_Pre(Event event, const char[] name, boo
 // When control point captured, reset variables
 public Action Event_ControlPointCaptured(Event event, const char[] name, bool dontBroadcast)
 {
+    // Counterattacks are plugin-managed on checkpoint only - see g_bCheckpointManaged
+    if (!g_bCheckpointManaged) return Plugin_Continue;
     // Reset reinforcement time
     g_iTimerReinforceTime = g_iReinforceTime;
     // Reset respawn tokens
@@ -1993,6 +2013,8 @@ public Action Event_ControlPointCaptured_Post(Event event, const char[] name, bo
 // When ammo cache destroyed, update respawn position and reset variables
 public Action Event_ObjectDestroyed_Pre(Event event, const char[] name, bool dontBroadcast)
 {
+    // Counterattacks are plugin-managed on checkpoint only - see g_bCheckpointManaged
+    if (!g_bCheckpointManaged) return Plugin_Continue;
     g_iPushSpawnStatus = -1;
     g_iNextSpawnStatus = -1;
 
@@ -2048,6 +2070,8 @@ public Action Event_ObjectDestroyed_Pre(Event event, const char[] name, bool don
 
 public Action Event_ObjectDestroyed(Event event, const char[] name, bool dontBroadcast)
 {
+    // Counterattacks are plugin-managed on checkpoint only - see g_bCheckpointManaged
+    if (!g_bCheckpointManaged) return Plugin_Continue;
     g_iTimerReinforceTime = g_iReinforceTime;    // Reset reinforcement time
     ResetInsurgencyLives();                      // Reset respawn token
     int attacker = GetEventInt(event, "attacker");
@@ -2535,8 +2559,8 @@ void CreateReviveTimer(int client)
 void CreateBotRespawnTimer(int client)
 {
     if (client > MaxClients || client <= 0) return;
-    // Only checkpoint reinforces bots - see g_bBotRespawnAllowed
-    if (!g_bBotRespawnAllowed) return;
+    // Only checkpoint reinforces bots - see g_bCheckpointManaged
+    if (!g_bCheckpointManaged) return;
 
     if (!g_is_respawning[client])
     {
@@ -2617,8 +2641,8 @@ Action RespawnBot(Handle timer, int client)
 {
     // int starttime = GetTime();
     // int endtime = 0;
-    // Only checkpoint reinforces bots - see g_bBotRespawnAllowed
-    if (!g_bBotRespawnAllowed)
+    // Only checkpoint reinforces bots - see g_bCheckpointManaged
+    if (!g_bCheckpointManaged)
     {
         g_is_respawning[client] = false;
         return Plugin_Stop;
