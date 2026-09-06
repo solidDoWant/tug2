@@ -1,152 +1,159 @@
 // INSURGENCY_1
-buhriz_coop checkpoint
-district_coop checkpoint
+//buhriz_coop checkpoint  [checkpoint-only, removed]
+//district_coop checkpoint  [checkpoint-only, removed]
+// Deliberately kept despite being checkpoint-only: a stock base-game map is the reliable
+// smoke test that the server itself works, independent of any workshop content.
 embassy_coop checkpoint
-heights_coop checkpoint
-market_coop checkpoint
-ministry_coop checkpoint
-revolt_coop checkpoint
-siege_coop checkpoint
-sinjar_coop checkpoint
-tell_coop checkpoint
-verticality_coop checkpoint
-drycanal_coop checkpoint
-contact_coop checkpoint
+//heights_coop checkpoint  [checkpoint-only, removed]
+//market_coop checkpoint  [checkpoint-only, removed]
+//ministry_coop checkpoint  [checkpoint-only, removed]
+//revolt_coop checkpoint  [checkpoint-only, removed]
+//siege_coop checkpoint  [checkpoint-only, removed]
+//sinjar_coop checkpoint  [checkpoint-only, removed]
+//tell_coop checkpoint  [checkpoint-only, removed]
+//verticality_coop checkpoint  [checkpoint-only, removed]
+//drycanal_coop checkpoint  [checkpoint-only, removed]
+//contact_coop checkpoint  [checkpoint-only, removed]
 convoy_pve checkpoint
-crash_course checkpoint
+//crash_course checkpoint  [checkpoint-only, removed]
 crete checkpoint
 crossbow checkpoint
 cs_motel_coop_nd_v1_3 checkpoint
-cutoff4-9 checkpoint
-de_centered_v1 checkpoint
-depot_checkpoint checkpoint
+//cutoff4-9 checkpoint  [checkpoint-only, removed]
+//de_centered_v1 checkpoint  [checkpoint-only, removed]
+//depot_checkpoint checkpoint  [checkpoint-only, removed]
 district_night_coop checkpoint
 doi_resistance_2021 checkpoint
 downtown_coop checkpoint
-drycanal_coop_old checkpoint
+//drycanal_coop_old checkpoint  [checkpoint-only, removed]
 dust_open checkpoint
 gauntlet checkpoint
 //gioconda_eron_market checkpoint
 //gioconda_eron_panj checkpoint
 warehouse_coopv3b4 checkpoint
-winter_rescue_ws checkpoint
+//winter_rescue_ws checkpoint  [checkpoint-only, removed]
 zagros_convoy_b5 checkpoint
 //gioconda_eron_smalltown checkpoint
 //gioconda_eron_village checkpoint
-2022_BB_Arena_1 checkpoint
+//2022_BB_Arena_1 checkpoint  [checkpoint-only, removed]
 Docks_coopb2_day checkpoint
-almaden_coop
+//almaden_coop  [checkpoint-only, removed]
 arcate_aof checkpoint
-badel_coop_2020 checkpoint
+//badel_coop_2020 checkpoint  [checkpoint-only, removed]
 badlands_b2 checkpoint
-baghdad_remastered checkpoint
+//baghdad_remastered checkpoint  [checkpoint-only, removed]
 breville_pve checkpoint
 bridge_coop_2021 checkpoint
 bunker_busting_coop_ws checkpoint
 caves_coop checkpoint
-cementplant checkpoint
-citadel_coop checkpoint
-congress_open_coop checkpoint
-convoy_day_apc_coop_v1_1 checkpoint
+//cementplant checkpoint  [checkpoint-only, removed]
+//citadel_coop checkpoint  [checkpoint-only, removed]
+//congress_open_coop checkpoint  [checkpoint-only, removed]
+//convoy_day_apc_coop_v1_1 checkpoint  [checkpoint-only, removed]
 //gizab_aof checkpoint
-glycencity checkpoint
-haditha_coop checkpoint
+//glycencity checkpoint  [checkpoint-only, removed]
+//haditha_coop checkpoint  [checkpoint-only, removed]
 haditha_dam_2022 checkpoint
 hideout_aof checkpoint
 ins_bastogne checkpoint
 ins_bridgeatremagen_coop checkpoint
 ins_dog_red checkpoint
-ins_leveled checkpoint
+//ins_leveled checkpoint  [checkpoint-only, removed]
 dusty_anguish_coopvfix checkpoint
 dusty_nights_coop checkpoint
-facilityb2_coop_v1_1 checkpoint
+//facilityb2_coop_v1_1 checkpoint  [checkpoint-only, removed]
 fairgrounds checkpoint
-flakturm checkpoint
+//flakturm checkpoint  [checkpoint-only, removed]
 fortress_coop_fixed checkpoint
 game_day checkpoint
-ins_saint_lo_v1 checkpoint
+//ins_saint_lo_v1 checkpoint  [checkpoint-only, removed]
 ins_workout checkpoint
-iron_express checkpoint
-jail_break_fix checkpoint
+//iron_express checkpoint  [checkpoint-only, removed]
+//jail_break_fix checkpoint  [checkpoint-only, removed]
 kandagal_aof checkpoint
-karkand_redux_p2 checkpoint
-karkar_b11 checkpoint
-kunar checkpoint
-laboratory checkpoint
-launch_control_coop_ws checkpoint
-operation_metro_b_ins checkpoint
+//karkand_redux_p2 checkpoint  [checkpoint-only, removed]
+//karkar_b11 checkpoint  [checkpoint-only, removed]
+//kunar checkpoint  [checkpoint-only, removed]
+//laboratory checkpoint  [checkpoint-only, removed]
+//launch_control_coop_ws checkpoint  [checkpoint-only, removed]
+//operation_metro_b_ins checkpoint  [checkpoint-only, removed]
 osama_b3_checkpoint checkpoint
 panama_canal_b2 checkpoint
-peak_coop checkpoint
+//peak_coop checkpoint  [checkpoint-only, removed]
 point_blank_fix checkpoint
 pow_raid_x64 checkpoint
-pripyat checkpoint
+//pripyat checkpoint  [checkpoint-only, removed]
 prophet_coop2021 checkpoint
 prospect_coop_b6 checkpoint
 salerno_pve checkpoint
-shellshock checkpoint
+//shellshock checkpoint  [checkpoint-only, removed]
 showdown checkpoint
-shrine_coop_v1 checkpoint
-sotu_keep_v1 checkpoint
-station_aof checkpoint
-szepezd_redux_coop checkpoint
+//shrine_coop_v1 checkpoint  [checkpoint-only, removed]
+//sotu_keep_v1 checkpoint  [checkpoint-only, removed]
+//station_aof checkpoint  [checkpoint-only, removed]
+//szepezd_redux_coop checkpoint  [checkpoint-only, removed]
 tet_x64 checkpoint
-the_burbs_coop checkpoint
-the_sacrifice checkpoint
+//the_burbs_coop checkpoint  [checkpoint-only, removed]
+//the_sacrifice checkpoint  [checkpoint-only, removed]
 limansk_aof checkpoint
-market_night_coop  checkpoint
-miransh_alpha checkpoint
+market_night_coop checkpoint
+//miransh_alpha checkpoint  [checkpoint-only, removed]
 mountain_lake_coopv1_1 checkpoint
 operation_intrude_v2 checkpoint
 trenches6_coop_v1_2 checkpoint
-tunnel_rats checkpoint
+//tunnel_rats checkpoint  [checkpoint-only, removed]
 
 // TESTING //
+pl_minecraft_redstone_f15_ins_b checkpoint
+// Checkpoint-only, kept as a deliberate exemption.
+de_train_csgo_pb2 checkpoint
+// Checkpoint-only, kept as a deliberate exemption.
+buhriz_heavyrain_v1 checkpoint
 cu_chi_tunnels_x64 checkpoint
-ins_desert_atrocity_a1 checkpoint
-jack_hammer_coopvfix checkpoint
-de_breach_d checkpoint
-nomercy_coopv1
+//ins_desert_atrocity_a1 checkpoint  [checkpoint-only, removed]
+//jack_hammer_coopvfix checkpoint  [checkpoint-only, removed]
+//de_breach_d checkpoint  [checkpoint-only, removed]
+//nomercy_coopv1  [checkpoint-only, removed]
 //hijacked_ws checkpoint
 //christmas_house_coop checkpoint
 //kunar_fixed_a3 checkpoint
-insz_favela checkpoint
+//insz_favela checkpoint  [checkpoint-only, removed]
 hesitation_coop_ins checkpoint
-gizab_bm checkpoint
+//gizab_bm checkpoint  [checkpoint-only, removed]
 estates_b4 checkpoint
-de_vertigo_coop checkpoint
+//de_vertigo_coop checkpoint  [checkpoint-only, removed]
 //fairgrounds_open_b4 checkpoint
-cs_office_coop_b2 checkpoint
+//cs_office_coop_b2 checkpoint  [checkpoint-only, removed]
 de_coldwater_tug24 checkpoint
-de_mirage_csco_pb4 checkpoint
+//de_mirage_csco_pb4 checkpoint  [checkpoint-only, removed]
 the_raid_coop_ws checkpoint
-dead_air checkpoint
-ministry_coop_oldv1 checkpoint
-ins_arcate_npb1 checkpoint
+//dead_air checkpoint  [checkpoint-only, removed]
+//ministry_coop_oldv1 checkpoint  [checkpoint-only, removed]
+//ins_arcate_npb1 checkpoint  [checkpoint-only, removed]
 ins_tosca_nv1 checkpoint
 
-cobblestone checkpoint
+//cobblestone checkpoint  [checkpoint-only, removed]
 shop_invasion_coop_b2 checkpoint
 ins_goldrush checkpoint
 ins_dustbowl checkpoint
 payback_x64 checkpoint
 marquis checkpoint
-l4d2_bridge checkpoint
+//l4d2_bridge checkpoint  [checkpoint-only, removed]
 dust_new checkpoint
 l4d_garage_alley_day checkpoint
-cityhall checkpoint
+//cityhall checkpoint  [checkpoint-only, removed]
 inferno_new_v1 checkpoint
 bombshelter checkpoint
-clean_sweep_coop_ws checkpoint
-ps7_co_b91 checkpoint
+//clean_sweep_coop_ws checkpoint  [checkpoint-only, removed]
+//ps7_co_b91 checkpoint  [checkpoint-only, removed]
 //gioconda_eron_bunkers checkpoint
 bastion_coop checkpoint
 ikazuchi_jungle_coop_b3 checkpoint
-ins_abdallah_coop_fix checkpoint
+//ins_abdallah_coop_fix checkpoint  [checkpoint-only, removed]
 
-hard_rain checkpoint
-liberty_mall checkpoint
-block_party_fixed checkpoint
+//hard_rain checkpoint  [checkpoint-only, removed]
+//liberty_mall checkpoint  [checkpoint-only, removed]
+//block_party_fixed checkpoint  [checkpoint-only, removed]
 //gioconda_eron_chernomaysk checkpoint
 
 //uprising_open_coop checkpoint
@@ -195,3 +202,10 @@ block_party_fixed checkpoint
 //almaden_coop_v1_1 checkpoint
 //dedust1p2_aof checkpoint
 //gioconda_eron_sandhill checkpoint
+
+// Re-added by play-count selection (no prior mapcycle entry)
+bb_desertpass_coop_ws checkpoint
+coastdawn_gf checkpoint
+de_nuke checkpoint
+dedust1p2_aof checkpoint
+almaden_coop checkpoint

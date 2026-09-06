@@ -6,24 +6,167 @@
 	
 	"require_maxplayers_min"		"24"	// Min player slots required for this playlist
 
-// This will be controlled via mapcycle.txt	
-//	"allowed_maps"
-//	{
-//		"sinjar_coop"				"checkpoint"
-//		"revolt_coop"				"checkpoint"
-//		"buhriz_coop"				"checkpoint"
-//		"market_coop"				"checkpoint"
-//		"heights_coop"				"checkpoint"
-//		"contact_coop"				"checkpoint"
-//		"district_coop"				"checkpoint"
-//		"ministry_coop"				"checkpoint"
-//		"siege_coop"				"checkpoint"
-//		"tell_coop"				"checkpoint"
-//		"ins_abdallah_coop_fix" "checkpoint"
-//		"crash_course" "checkpoint"
-//		"the_burbs_coop" "checkpoint"
-//		"iron_express" "checkpoint"
-//	}
+	// Every installed coop map, paired with each coop gamemode it supports. Generated from the
+	// Steam Workshop mode tags for each subscribed item, cross-referenced against mapcycle.txt.
+	//
+	// NOTE: this block gates the playlist - a map not listed here cannot be played on it, so any
+	// map added to mapcycle.txt must be added here too.
+	//
+	// NOTE: modes other than checkpoint have no TUG theater yet. The engine resolves a theater as
+	// <mp_theater_override>_<gamemode>.theater, and TUG Scripts 3.9 ships only
+	// theater_tug_39_medicbomber_12p_default_checkpoint. Until _hunt/_survival/_conquer/_outpost
+	// variants exist, those modes fall back to stock team composition - no TUG classes, loadouts
+	// or custom weapons.
+	"allowed_maps"
+	{
+		// ---- checkpoint (70) ----
+		"pl_minecraft_redstone_f15_ins_b"	"checkpoint"
+		// Checkpoint-only, kept as a deliberate exemption.
+		"buhriz_heavyrain_v1"		"checkpoint"
+		// Checkpoint-only, kept as a deliberate exemption.
+		"de_train_csgo_pb2"		"checkpoint"
+		// Stock base-game map, kept as a smoke test even though it is checkpoint-only.
+		"embassy_coop"			"checkpoint"
+		"convoy_pve"				"checkpoint"
+		"crete"					"checkpoint"
+		"crossbow"				"checkpoint"
+		"doi_resistance_2021"			"checkpoint"
+		"badlands_b2"				"checkpoint"
+		"breville_pve"				"checkpoint"
+		"bunker_busting_coop_ws"			"checkpoint"
+		"caves_coop"				"checkpoint"
+		"ins_bridgeatremagen_coop"		"checkpoint"
+		"ins_dog_red"				"checkpoint"
+		"dusty_nights_coop"			"checkpoint"
+		"panama_canal_b2"				"checkpoint"
+		"point_blank_fix"				"checkpoint"
+		"pow_raid_x64"				"checkpoint"
+		"prospect_coop_b6"			"checkpoint"
+		"salerno_pve"				"checkpoint"
+		"showdown"				"checkpoint"
+		"tet_x64"					"checkpoint"
+		"mountain_lake_coopv1_1"			"checkpoint"
+		"operation_intrude_v2"			"checkpoint"
+		"cu_chi_tunnels_x64"			"checkpoint"
+		"hesitation_coop_ins"			"checkpoint"
+		"estates_b4"				"checkpoint"
+		"the_raid_coop_ws"			"checkpoint"
+		"payback_x64"				"checkpoint"
+		"dust_new"				"checkpoint"
+
+		// ---- hunt (22) ----
+		"convoy_pve"				"hunt"
+		"crossbow"				"hunt"
+		"badlands_b2"				"hunt"
+		"bunker_busting_coop_ws"			"hunt"
+		"caves_coop"				"hunt"
+		"ins_bridgeatremagen_coop"		"hunt"
+		"ins_dog_red"				"hunt"
+		"dusty_nights_coop"			"hunt"
+		"panama_canal_b2"				"hunt"
+		"point_blank_fix"				"hunt"
+		"pow_raid_x64"				"hunt"
+		"prospect_coop_b6"			"hunt"
+		"salerno_pve"				"hunt"
+		"showdown"				"hunt"
+		"tet_x64"					"hunt"
+		"mountain_lake_coopv1_1"			"hunt"
+		"operation_intrude_v2"			"hunt"
+		"cu_chi_tunnels_x64"			"hunt"
+		"estates_b4"				"hunt"
+		"the_raid_coop_ws"			"hunt"
+		"payback_x64"				"hunt"
+		"dust_new"				"hunt"
+
+		// ---- survival (9) ----
+		"convoy_pve"				"survival"
+		"crossbow"				"survival"
+		"bunker_busting_coop_ws"			"survival"
+		"pow_raid_x64"				"survival"
+		"tet_x64"					"survival"
+		"cu_chi_tunnels_x64"			"survival"
+		"hesitation_coop_ins"			"survival"
+		"estates_b4"				"survival"
+		"payback_x64"				"survival"
+
+		// ---- conquer (19) ----
+		"convoy_pve"				"conquer"
+		"crete"					"conquer"
+		"crossbow"				"conquer"
+		"doi_resistance_2021"			"conquer"
+		"badlands_b2"				"conquer"
+		"breville_pve"				"conquer"
+		"caves_coop"				"conquer"
+		"ins_bridgeatremagen_coop"		"conquer"
+		"ins_dog_red"				"conquer"
+		"panama_canal_b2"				"conquer"
+		"point_blank_fix"				"conquer"
+		"pow_raid_x64"				"conquer"
+		"prospect_coop_b6"			"conquer"
+		"showdown"				"conquer"
+		"tet_x64"					"conquer"
+		"mountain_lake_coopv1_1"			"conquer"
+		"cu_chi_tunnels_x64"			"conquer"
+		"estates_b4"				"conquer"
+		"payback_x64"				"conquer"
+
+		// ---- outpost (13) ----
+		"convoy_pve"				"outpost"
+		"crete"					"outpost"
+		"doi_resistance_2021"			"outpost"
+		"badlands_b2"				"outpost"
+		"caves_coop"				"outpost"
+		"ins_bridgeatremagen_coop"		"outpost"
+		"panama_canal_b2"				"outpost"
+		"point_blank_fix"				"outpost"
+		"prospect_coop_b6"			"outpost"
+		"salerno_pve"				"outpost"
+		"mountain_lake_coopv1_1"			"outpost"
+		"estates_b4"				"outpost"
+		"payback_x64"				"outpost"
+
+		// ---- re-added by play count (checkpoint) ----
+		"Docks_coopb2_day"			"checkpoint"
+		"almaden_coop"				"checkpoint"
+		"arcate_aof"				"checkpoint"
+		"bastion_coop"				"checkpoint"
+		"bb_desertpass_coop_ws"			"checkpoint"
+		"bombshelter"				"checkpoint"
+		"bridge_coop_2021"			"checkpoint"
+		"coastdawn_gf"				"checkpoint"
+		"cs_motel_coop_nd_v1_3"			"checkpoint"
+		"de_coldwater_tug24"			"checkpoint"
+		"de_nuke"					"checkpoint"
+		"dedust1p2_aof"				"checkpoint"
+		"district_night_coop"			"checkpoint"
+		"downtown_coop"				"checkpoint"
+		"dust_open"				"checkpoint"
+		"dusty_anguish_coopvfix"			"checkpoint"
+		"fairgrounds"				"checkpoint"
+		"fortress_coop_fixed"			"checkpoint"
+		"game_day"				"checkpoint"
+		"gauntlet"				"checkpoint"
+		"haditha_dam_2022"			"checkpoint"
+		"hideout_aof"				"checkpoint"
+		"ikazuchi_jungle_coop_b3"			"checkpoint"
+		"inferno_new_v1"				"checkpoint"
+		"ins_bastogne"				"checkpoint"
+		"ins_dustbowl"				"checkpoint"
+		"ins_goldrush"				"checkpoint"
+		"ins_tosca_nv1"				"checkpoint"
+		"ins_workout"				"checkpoint"
+		"kandagal_aof"				"checkpoint"
+		"l4d_garage_alley_day"			"checkpoint"
+		"limansk_aof"				"checkpoint"
+		"market_night_coop"			"checkpoint"
+		"marquis"					"checkpoint"
+		"osama_b3_checkpoint"			"checkpoint"
+		"prophet_coop2021"			"checkpoint"
+		"shop_invasion_coop_b2"			"checkpoint"
+		"trenches6_coop_v1_2"			"checkpoint"
+		"warehouse_coopv3b4"			"checkpoint"
+		"zagros_convoy_b5"			"checkpoint"
+	}
 	
 	"cvars"
 	{
@@ -49,7 +192,9 @@
 	
 	"forced_cvars"
 	{
-		"mp_theater_override"			"theater_tug_39_medicbomber_12p_default_checkpoint"
+		// Base name only. The engine loads <this>.theater and <this>_<gamemode>.theater, so a
+		// value with "_checkpoint" baked in would look for ..._checkpoint_checkpoint.theater.
+		"mp_theater_override"			"theater_tug_39_medicbomber_12p_default"
 		"mp_minteamplayers"			"1"	// min players on each team to start the match
 		"sv_nwi_banlist"			"1"	// global ban list
 		"host_timescale"			"1.0"
