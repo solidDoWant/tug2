@@ -27,9 +27,21 @@
 		// Bot loadout variants
 		// ---------------------------------------------------------------------------
 		// Bot equipment is DETERMINISTIC: CPlayerInventory::PurchaseClassTemplateItems and
-		// GiveItemsFromTemplate contain no RNG, and nothing reads allowed_items for bots. A bot
-		// gets exactly its template's buy_order, so with 8 bot templates filling 48 cell slots you
-		// saw 8 loadouts on repeat. Variety therefore has to come from having more templates.
+		// GiveItemsFromTemplate contain no RNG. A bot gets exactly its template's buy_order, so with
+		// 8 bot templates filling 48 cell slots you saw 8 loadouts on repeat. Variety therefore has
+		// to come from having more templates.
+		//
+		// allowed_items IS read for bots - an earlier version of this file assumed it was not, and
+		// every machine gun, weapon_m84 and weapon_m18_ins in these templates was silently refused
+		// at spawn with Invalid player (1) in the console. The follow-on Invalid definition (3)
+		// errors for that weapon's attachments are a cascade of it, not a separate fault.
+		// Restricted items must be listed in the template's own allowed_items; default items
+		// (rifles, pistols, weapon_kabar, weapon_molotov, weapon_f1) work without it. Compare stock
+		// TUG: template_coop_machinegunner allowlists weapon_rpk, template_coop_heavygunner
+		// weapon_m240, template_coop_specialist weapon_m84 and weapon_m18_ins, and
+		// template_support_security_coop every MG it can carry. allowed_items ADDS to the defaults
+		// rather than replacing them, which is why those stock templates never list their own gear
+		// or weapon_kabar. Each template below therefore allowlists exactly the weapons it buys.
 		//
 		// These are NEW template names, so unlike the security classes above nothing is being
 		// overridden and no full-list restatement is needed. team/print_name/models are copied
@@ -73,6 +85,12 @@
 				"weapon_upgrade"		"magazine_extended_akseries_45rd"
 				"weapon"				"weapon_f1"
 			}
+			"allowed_items"
+			{
+				"weapon"				"weapon_kabar"
+				"weapon"				"weapon_ak74"
+				"weapon"				"weapon_f1"
+			}
 		}
 		"template_tugvar_fighter_akm"
 		{
@@ -106,6 +124,12 @@
 				"weapon_upgrade"		"ammo_hp_akm"
 				"weapon_upgrade"		"optic_acog"
 				"weapon_upgrade"		"magazine_extended_akseries_45rd"
+				"weapon"				"weapon_molotov"
+			}
+			"allowed_items"
+			{
+				"weapon"				"weapon_kabar"
+				"weapon"				"weapon_akm"
 				"weapon"				"weapon_molotov"
 			}
 		}
@@ -145,6 +169,13 @@
 				"weapon"				"weapon_makarov"
 				"weapon"				"weapon_m84"
 			}
+			"allowed_items"
+			{
+				"weapon"				"weapon_kabar"
+				"weapon"				"weapon_galil_sar"
+				"weapon"				"weapon_makarov"
+				"weapon"				"weapon_m84"
+			}
 		}
 		"template_tugvar_fighter_fal"
 		{
@@ -179,6 +210,12 @@
 				"weapon_upgrade"		"optic_elcan"
 				"weapon_upgrade"		"magazine_extended_rifle_30rd"
 				"weapon_upgrade"		"underbarrel_foregrip_ins1"
+				"weapon"				"weapon_f1"
+			}
+			"allowed_items"
+			{
+				"weapon"				"weapon_kabar"
+				"weapon"				"weapon_fal"
 				"weapon"				"weapon_f1"
 			}
 		}
@@ -217,6 +254,13 @@
 				"weapon"				"weapon_makarov"
 				"weapon"				"weapon_molotov"
 			}
+			"allowed_items"
+			{
+				"weapon"				"weapon_kabar"
+				"weapon"				"weapon_stg44"
+				"weapon"				"weapon_makarov"
+				"weapon"				"weapon_molotov"
+			}
 		}
 		"template_tugvar_machinegunner_rpk"
 		{
@@ -250,6 +294,11 @@
 				"weapon_upgrade"		"ammo_ap_rpk"
 				"weapon_upgrade"		"optic_2xaimpoint"
 			}
+			"allowed_items"
+			{
+				"weapon"				"weapon_kabar"
+				"weapon"				"weapon_rpk"
+			}
 		}
 		"template_tugvar_machinegunner_pecheneg"
 		{
@@ -282,6 +331,12 @@
 				"weapon"				"weapon_pecheneg"
 				"weapon_upgrade"		"ammo_hp_m249"
 				"weapon_upgrade"		"optic_aimpoint"
+				"weapon"				"weapon_f1"
+			}
+			"allowed_items"
+			{
+				"weapon"				"weapon_kabar"
+				"weapon"				"weapon_pecheneg"
 				"weapon"				"weapon_f1"
 			}
 		}
@@ -318,6 +373,12 @@
 				"weapon_upgrade"		"optic_elcan"
 				"weapon"				"weapon_molotov"
 			}
+			"allowed_items"
+			{
+				"weapon"				"weapon_kabar"
+				"weapon"				"weapon_m60"
+				"weapon"				"weapon_molotov"
+			}
 		}
 		"template_tugvar_machinegunner_m240"
 		{
@@ -351,6 +412,11 @@
 				"weapon_upgrade"		"ammo_hp_m240"
 				"weapon_upgrade"		"optic_eotech"
 			}
+			"allowed_items"
+			{
+				"weapon"				"weapon_kabar"
+				"weapon"				"weapon_m240"
+			}
 		}
 		"template_tugvar_sharpshooter_sks"
 		{
@@ -380,6 +446,13 @@
 				"weapon"				"weapon_makarov"
 				"weapon"				"weapon_molotov"
 			}
+			"allowed_items"
+			{
+				"weapon"				"weapon_kabar"
+				"weapon"				"weapon_sks"
+				"weapon"				"weapon_makarov"
+				"weapon"				"weapon_molotov"
+			}
 		}
 		"template_tugvar_sharpshooter_mosin"
 		{
@@ -405,6 +478,12 @@
 				"weapon"				"weapon_mosin"
 				"weapon_upgrade"		"ammo_ap_mosin"
 				"weapon_upgrade"		"optic_acog"
+				"weapon"				"weapon_ots33"
+			}
+			"allowed_items"
+			{
+				"weapon"				"weapon_kabar"
+				"weapon"				"weapon_mosin"
 				"weapon"				"weapon_ots33"
 			}
 		}
@@ -436,6 +515,12 @@
 				"weapon_upgrade"		"underbarrel_foregrip_ins1"
 				"weapon"				"weapon_makarov"
 			}
+			"allowed_items"
+			{
+				"weapon"				"weapon_kabar"
+				"weapon"				"weapon_svd"
+				"weapon"				"weapon_makarov"
+			}
 		}
 		"template_tugvar_sharpshooter_svu"
 		{
@@ -465,6 +550,12 @@
 				"weapon_upgrade"		"underbarrel_foregrip_ins1"
 				"weapon"				"weapon_m84"
 			}
+			"allowed_items"
+			{
+				"weapon"				"weapon_kabar"
+				"weapon"				"weapon_dragunovsvu"
+				"weapon"				"weapon_m84"
+			}
 		}
 		"template_tugvar_submachinegunner_mac10"
 		{
@@ -489,6 +580,12 @@
 				"weapon"				"weapon_kabar"
 				"weapon"				"weapon_mac10"
 				"weapon_upgrade"		"ammo_ap_mp40"
+				"weapon"				"weapon_f1"
+			}
+			"allowed_items"
+			{
+				"weapon"				"weapon_kabar"
+				"weapon"				"weapon_mac10"
 				"weapon"				"weapon_f1"
 			}
 		}
@@ -518,6 +615,12 @@
 				"weapon_upgrade"		"magazine_extended_ppsh41"
 				"weapon"				"weapon_molotov"
 			}
+			"allowed_items"
+			{
+				"weapon"				"weapon_kabar"
+				"weapon"				"weapon_ppsh41"
+				"weapon"				"weapon_molotov"
+			}
 		}
 		"template_tugvar_submachinegunner_mp40"
 		{
@@ -542,6 +645,13 @@
 				"weapon"				"weapon_mp40"
 				"weapon_upgrade"		"ammo_tracer_mp40"
 				"weapon_upgrade"		"optic_eotech"
+				"weapon"				"weapon_makarov"
+				"weapon"				"weapon_m84"
+			}
+			"allowed_items"
+			{
+				"weapon"				"weapon_kabar"
+				"weapon"				"weapon_mp40"
 				"weapon"				"weapon_makarov"
 				"weapon"				"weapon_m84"
 			}
@@ -572,6 +682,12 @@
 				"weapon_upgrade"		"optic_eotech"
 				"weapon"				"weapon_f1"
 			}
+			"allowed_items"
+			{
+				"weapon"				"weapon_kabar"
+				"weapon"				"weapon_uzi"
+				"weapon"				"weapon_f1"
+			}
 		}
 		"template_tugvar_submachinegunner_sterling"
 		{
@@ -597,6 +713,12 @@
 				"weapon"				"weapon_sterling"
 				"weapon_upgrade"		"ammo_hp_mp40"
 				"weapon_upgrade"		"optic_kobra"
+				"weapon"				"weapon_ots33"
+			}
+			"allowed_items"
+			{
+				"weapon"				"weapon_kabar"
+				"weapon"				"weapon_sterling"
 				"weapon"				"weapon_ots33"
 			}
 		}
@@ -628,6 +750,13 @@
 				"weapon"				"weapon_makarov"
 				"weapon"				"weapon_m18_ins"
 			}
+			"allowed_items"
+			{
+				"weapon"				"weapon_kabar"
+				"weapon"				"weapon_aks74u"
+				"weapon"				"weapon_makarov"
+				"weapon"				"weapon_m18_ins"
+			}
 		}
 		"template_tugvar_specialist_asval"
 		{
@@ -656,6 +785,12 @@
 				"weapon_upgrade"		"underbarrel_foregrip_sec2"
 				"weapon"				"weapon_anm14"
 			}
+			"allowed_items"
+			{
+				"weapon"				"weapon_kabar"
+				"weapon"				"weapon_asval"
+				"weapon"				"weapon_anm14"
+			}
 		}
 		"template_tugvar_specialist_mp5"
 		{
@@ -681,6 +816,13 @@
 				"weapon"				"weapon_mp5"
 				"weapon_upgrade"		"ammo_tracer_mp5"
 				"weapon_upgrade"		"optic_elcan"
+				"weapon"				"weapon_makarov"
+				"weapon"				"weapon_m18_ins"
+			}
+			"allowed_items"
+			{
+				"weapon"				"weapon_kabar"
+				"weapon"				"weapon_mp5"
 				"weapon"				"weapon_makarov"
 				"weapon"				"weapon_m18_ins"
 			}
@@ -719,6 +861,13 @@
 				"weapon"				"weapon_makarov"
 				"weapon"				"weapon_rpg7"
 			}
+			"allowed_items"
+			{
+				"weapon"				"weapon_kabar"
+				"weapon"				"weapon_aks74u"
+				"weapon"				"weapon_makarov"
+				"weapon"				"weapon_rpg7"
+			}
 		}
 		"template_tugvar_sapper_law"
 		{
@@ -754,6 +903,12 @@
 				"weapon_upgrade"		"magazine_extended_akseries_45rd"
 				"weapon"				"weapon_law"
 			}
+			"allowed_items"
+			{
+				"weapon"				"weapon_kabar"
+				"weapon"				"weapon_akm"
+				"weapon"				"weapon_law"
+			}
 		}
 		"template_tugvar_sapper_at4"
 		{
@@ -787,6 +942,13 @@
 				"weapon_upgrade"		"ammo_ap_ak74"
 				"weapon_upgrade"		"optic_aimpoint"
 				"weapon_upgrade"		"magazine_extended_akseries_45rd"
+				"weapon"				"weapon_makarov"
+				"weapon"				"weapon_at4"
+			}
+			"allowed_items"
+			{
+				"weapon"				"weapon_kabar"
+				"weapon"				"weapon_ak74"
 				"weapon"				"weapon_makarov"
 				"weapon"				"weapon_at4"
 			}
@@ -826,6 +988,13 @@
 				"weapon"				"weapon_toz"
 				"weapon"				"weapon_molotov"
 			}
+			"allowed_items"
+			{
+				"weapon"				"weapon_kabar"
+				"weapon"				"weapon_m249"
+				"weapon"				"weapon_toz"
+				"weapon"				"weapon_molotov"
+			}
 		}
 		"template_tugvar_heavygunner_mk46"
 		{
@@ -861,6 +1030,12 @@
 				"weapon_upgrade"		"optic_aimpoint"
 				"weapon"				"weapon_toz"
 			}
+			"allowed_items"
+			{
+				"weapon"				"weapon_kabar"
+				"weapon"				"weapon_mk46"
+				"weapon"				"weapon_toz"
+			}
 		}
 		"template_tugvar_heavygunner_m1918bar"
 		{
@@ -893,6 +1068,12 @@
 				"weapon"				"weapon_kabar"
 				"weapon"				"weapon_m1918bar"
 				"weapon_upgrade"		"ammo_tracer_bar"
+				"weapon"				"weapon_f1"
+			}
+			"allowed_items"
+			{
+				"weapon"				"weapon_kabar"
+				"weapon"				"weapon_m1918bar"
 				"weapon"				"weapon_f1"
 			}
 		}
