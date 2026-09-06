@@ -660,6 +660,17 @@ RUN gcc -m32 -shared -fPIC -O2 -Wall -Wno-overflow -o /casecache.so /casecache.c
     && readelf -h /casecache.so | grep -qE 'Class:[[:space:]]+ELF32' \
     && readelf -h /casecache.so | grep -qE 'Machine:[[:space:]]+Intel 80386'
 
+# ==============================================================================================
+# Server images
+# ==============================================================================================
+# One stage per server, each built independently from `gameserver`. `main` is the live public
+# server; `test` is for trying changes out before they reach `main`. The two are deliberately
+# separate all the way down -- separate config directories, separate workshop downloads,
+# separate images -- so a change to one cannot affect the other.
+#
+# The trade-off is that the stages are near-identical by hand. When adding a plugin or changing
+# how a server is assembled, apply it to both stages unless the difference is intentional.
+
 FROM gameserver AS gameserver-main
 
 # Start the server once to generate any missing files (like workshop items), then exit
@@ -712,6 +723,69 @@ COPY --from=sourcemod-plugins-bm2-respawn --chown=0:0 /insurgency /opt/insurgenc
 
 # Copy in the remaining main config files
 COPY ["server config/main/", "/"]
+
+# Install the casecache LD_PRELOAD shim and enable it for the server.
+# Done LAST, after the build-time workshop-download RUN above, so the shim is active only at
+# runtime (a half-built index during the build-time download could shadow files being fetched).
+# LD_PRELOAD via ENV also reaches the 64-bit server-runner wrapper, which logs a harmless
+# "wrong ELF class" and ignores it; only the 32-bit srcds_linux loads the shim. To disable the
+# shim at runtime without a rebuild, set CASECACHE_DISABLE=1 (it becomes a pure passthrough).
+COPY --from=casecache-builder /casecache.so /opt/insurgency-server/casecache.so
+ENV LD_PRELOAD=/opt/insurgency-server/casecache.so
+
+
+FROM gameserver AS gameserver-test
+
+# Start the server once to generate any missing files (like workshop items), then exit
+# Adding `+quit` to the CLI will cause the server to segfault, but this can be safely ignored.
+COPY ["server config/test/opt/insurgency-server/insurgency/subscribed_file_ids.txt", "/opt/insurgency-server/insurgency/subscribed_file_ids.txt"]
+
+# Start the server once to generate any missing files (like workshop items), then exit
+# Adding `+quit` to the CLI will cause the server to segfault, but this can be safely ignored.
+# Note: Running as user 1000:1000 (inherited from base stage)
+RUN server-runner -- /opt/insurgency-server/srcds_linux -condebug -game insurgency -workshop +servercfgfile server.cfg +map embassy_coop +quit
+
+# Copy in the map-specific plugins
+COPY --from=sourcemod-plugins-marquis-fix --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
+COPY --from=sourcemod-plugins-citadel-coop-spawn-fix --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
+COPY --from=sourcemod-plugins-firesupport --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
+COPY --from=sourcemod-plugins-databasemigrator --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
+COPY --from=sourcemod-plugins-loadoutsaver --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
+COPY --from=sourcemod-plugins-counterattack-countdown --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
+COPY --from=sourcemod-plugins-restrictedarea --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
+COPY --from=sourcemod-plugins-bot-flashlights --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
+COPY --from=sourcemod-plugins-bot-names --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
+COPY --from=sourcemod-plugins-teamflash --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
+COPY --from=sourcemod-plugins-punitive-persistence --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
+COPY --from=sourcemod-plugins-map-logger --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
+COPY --from=sourcemod-plugins-gg2-weapon-spam --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
+COPY --from=sourcemod-plugins-gg2-admin-logger --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
+COPY --from=sourcemod-plugins-gg2-burn --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
+COPY --from=sourcemod-plugins-gg2-cache-protect --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
+COPY --from=sourcemod-plugins-gg2-connection-tracker --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
+COPY --from=sourcemod-plugins-gg2-damage --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
+COPY --from=sourcemod-plugins-gg2-discord --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
+COPY --from=sourcemod-plugins-gg2-forceauthorize --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
+COPY --from=sourcemod-plugins-gg2-forceretry --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
+COPY --from=sourcemod-plugins-gg2-fuckyeah --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
+COPY --from=sourcemod-plugins-gg2-insurgency --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
+COPY --from=sourcemod-plugins-gg2-kill-entities --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
+# I don't want plugins writing to the config directory if I can avoid it, because this allows them to execute arbitrary commands.
+# COPY --from=sourcemod-plugins-gg2-map-changeups --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
+COPY --from=sourcemod-plugins-gg2-medic-tracker --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
+COPY --from=sourcemod-plugins-gg2-messages --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
+COPY --from=sourcemod-plugins-gg2-mstats2 --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
+# This seems unnecessary for now
+# COPY --from=sourcemod-plugins-gg2-playlist-hax --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
+COPY --from=sourcemod-plugins-gg2-show-health-simp --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
+COPY --from=sourcemod-plugins-gg2-spectator --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
+COPY --from=sourcemod-plugins-gg2-supply --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
+COPY --from=sourcemod-plugins-gg2-teamkill --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
+COPY --from=sourcemod-plugins-gg2-votekick-immunity --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
+COPY --from=sourcemod-plugins-bm2-respawn --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
+
+# Copy in the remaining test config files
+COPY ["server config/test/", "/"]
 
 # Install the casecache LD_PRELOAD shim and enable it for the server.
 # Done LAST, after the build-time workshop-download RUN above, so the shim is active only at

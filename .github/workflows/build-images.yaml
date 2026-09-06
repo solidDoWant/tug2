@@ -31,6 +31,8 @@ jobs:
               - .github/workflows/build-images.yaml
             main-server-image:
               - server config/main/**
+            test-server-image:
+              - server config/test/**
 
       - name: Determine image version
         run: |
@@ -43,7 +45,8 @@ jobs:
           fi
         if: &any_images_need_built >-
           steps.changes.outputs.all-images == 'true' ||
-          steps.changes.outputs.main-server-image == 'true'
+          steps.changes.outputs.main-server-image == 'true' ||
+          steps.changes.outputs.test-server-image == 'true'
 
       - name: Determine if image should be pushed
         run: |
@@ -97,20 +100,47 @@ jobs:
         run: make base-image # EXTRA_DOCKER_ARGS="--cache-to type=gha,scope=base-image,mode=max --cache-from type=gha,scope=base-image"
         if: *any_images_need_built
 
+      # The servers are independent of each other, so each image is built only when something it
+      # actually contains changed. A config change to one does not spend runner time on the other.
       - name: Build the main server image
         env:
           CONTAINER_REGISTRY: ${{ secrets.CONTAINER_REGISTRY }}
         run: make server-image-main VERSION="${VERSION}" CONTAINER_REGISTRY="${CONTAINER_REGISTRY}/tug2" PUSH_ALL="${PUSH_ALL}" # EXTRA_DOCKER_ARGS="--cache-to type=gha,scope=main-image,mode=max --cache-from type=gha,scope=main-image"
-        if: *any_images_need_built
+        if: >-
+          steps.changes.outputs.all-images == 'true' ||
+          steps.changes.outputs.main-server-image == 'true'
 
-      - name: Record the built image version to GH summary
+      - name: Build the test server image
+        env:
+          CONTAINER_REGISTRY: ${{ secrets.CONTAINER_REGISTRY }}
+        run: make server-image-test VERSION="${VERSION}" CONTAINER_REGISTRY="${CONTAINER_REGISTRY}/tug2" PUSH_ALL="${PUSH_ALL}" # EXTRA_DOCKER_ARGS="--cache-to type=gha,scope=test-image,mode=max --cache-from type=gha,scope=test-image"
+        if: >-
+          steps.changes.outputs.all-images == 'true' ||
+          steps.changes.outputs.test-server-image == 'true'
+
+      - name: Record the built image versions to GH summary
         if: *any_images_need_built
+        env:
+          CONTAINER_REGISTRY: ${{ secrets.CONTAINER_REGISTRY }}
+          BUILT_MAIN: ${{ steps.changes.outputs.all-images == 'true' || steps.changes.outputs.main-server-image == 'true' }}
+          BUILT_TEST: ${{ steps.changes.outputs.all-images == 'true' || steps.changes.outputs.test-server-image == 'true' }}
         run: |
-          MAIN_SERVER_IMAGE_NAME="$(make print-name-server-image-main VERSION="${VERSION}"" CONTAINER_REGISTRY='${SECRET_PUBLIC_DOMAIN_NAME}/tug2')"
-          cat << EOF >> "${GITHUB_STEP_SUMMARY}"
-          ## Built image versions
+          {
+            echo '## Built image versions'
+            echo
+            echo '| Image             | Version |'
+            echo '|-------------------|---------|'
+          } >> "${GITHUB_STEP_SUMMARY}"
 
-          | Image                  | Version                                                            |
-          |------------------------|--------------------------------------------------------------------|
-          | Main server image      | [\`${MAIN_SERVER_IMAGE_NAME}\`](https://${MAIN_SERVER_IMAGE_NAME}) |
-          EOF
+          record_image() {
+            IMAGE_NAME="$(make "print-name-server-image-$1" VERSION="${VERSION}" CONTAINER_REGISTRY="${CONTAINER_REGISTRY}/tug2")"
+            echo "| $2 | [\`${IMAGE_NAME}\`](https://${IMAGE_NAME}) |" >> "${GITHUB_STEP_SUMMARY}"
+          }
+
+          if [ "${BUILT_MAIN}" = "true" ]; then
+            record_image main "Main server image"
+          fi
+
+          if [ "${BUILT_TEST}" = "true" ]; then
+            record_image test "Test server image"
+          fi

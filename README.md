@@ -19,6 +19,35 @@ for the hosting infrastructure to download and use. To avoid potential copyright
 This approach makes it somewhat easy for anybody to propose a change, to track complete history of all changes to be publicly recorded, for others 
 to reproduce this work, and for the community to move to another hosting provider if desired.
 
+## Servers
+
+| Name   | Shows up as     | Purpose                                                                                                          |
+| ------ | --------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `main` | `TUG GG 2 MAIN` | The live public server.                                                                                          |
+| `test` | `TUG GG 2 TEST` | Trying out new features and config changes before they go to `main`. Expect it to be broken or offline at times. |
+
+Each server is built into its own container image (`insurgency-<name>`) and runs independently of the other. The test
+server starts out as a copy of the main server, differing only in its hostname. Changes that are likely to break something
+should be tried there first, then copied across to the main server once they have been played on for a bit.
+
+### Shared vs. per-server config
+
+Configuration lives in two places under [`server config/`](./server%20config):
+
+* [`base/`](./server%20config/base) is applied to **every** server. This is for things that have no reason to differ between
+  servers: the admin list, SourceMod's own settings, network rates.
+* [`main/`](./server%20config/main) and [`test/`](./server%20config/test) are applied to that server only, on top of `base/`.
+  This is for anything that makes a server what it is: hostname, map cycle, MOTD, workshop items, bot and gameplay tuning,
+  and which databases the server reads and writes.
+
+A file in a server's directory overrides the same file in `base/`, so a server can always take its own copy of something
+shared. Editing a file under `base/` changes both servers at once; editing one under `main/` or `test/` changes only that
+server.
+
+One exception is worth knowing about: a few SourceMod configs are shipped by the plugins themselves, and the plugins are
+installed *after* `base/` is applied. `database-migrations.cfg`, `discord.cfg` and `firesupport.cfg` therefore have to stay
+in each server's own directory - if they were moved to `base/`, the plugin's default version would silently replace them.
+
 ## Hosting infra
 
 The servers are managed via a Kubernetes cluster comprised of several nodes. All nodes have modern 20 core CPUs, 96 GB of DDR5 RAM, enterprise
@@ -83,12 +112,12 @@ Most external files like plugins should be "referenced" by this repo, rather tha
 1. Open the [Dockerfile](./Dockerfile) used to create the container images for all servers.
 2. Edit the `gameserver-mods` target to download required files. See examples in the dockerfile for details.
 3. Under whichever server(s) should use the third-party file, add a `COPY` command to copy from the `gameserver-mods` target to the `gameserver-<server name>` target, to whatever directory the file(s) should be installed to.
-   The server root is at `/opt/insurgency-server`.
+   The server root is at `/opt/insurgency-server`. There is one such target per server, so a file that both servers should have needs adding to both.
 
 ### How do I add or remove admins?
 
 1. Determine the `Steam2 ID` (e.g. `STEAM_1:0:11101`) for the user to add or remove. If you know their Steam profile link, you can plug it into [here](https://steamdb.info/calculator/) to get this (even if their profile is private).
-2. Update [this file](./server%20config/main/opt/insurgency-server/insurgency/addons/sourcemod/configs/admins.cfg), adding or removing entries based upon the existing ones.
+2. Update [this file](./server%20config/base/opt/insurgency-server/insurgency/addons/sourcemod/configs/admins.cfg), adding or removing entries based upon the existing ones. It is shared, so admins are the same on every server.
 
 ### What do I do if the server disappears and/or the sysadmin is hit by a bus?
 

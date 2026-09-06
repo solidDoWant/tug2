@@ -38,7 +38,7 @@ server-image-%: base-image Dockerfile	## Build the container image for the speci
 	docker build --target gameserver-$* -t "$(CONTAINER_REPOSITORY)-$*:$(VERSION)" $(PUSH_ARG) --load $(DOCKER_ARGS) $(EXTRA_DOCKER_ARGS) "$(PROJECT_DIR)"
 
 .PHONY: server-images
-server-images: server-image-main	## Build all server images.
+server-images: server-image-main server-image-test	## Build all server images.
 
 .PHONY: print-name-server-image-%
 print-name-server-image-%:	## Print the full name of the specified server image. Usage: make print-name-server-image-SERVER_NAME

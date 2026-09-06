@@ -1,0 +1,11 @@
+TUG 2 TESTING SERVER FOR UPCOMING CHANGES
+
+If you're a medic, BE A MEDIC! Use smoke, revive folks.
+Crouch + Sprint + Direction (WASD) to drag bodies.
+
+Machine Guns available to the Machine Gunner Role
+
+!calladmin "Your Message Here"
+
+See Discord for details: https://discord.gg/RAQgnjeQuE
+Report issues here: https://github.com/solidDoWant/tug2
