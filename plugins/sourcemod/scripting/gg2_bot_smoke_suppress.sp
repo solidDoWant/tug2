@@ -38,6 +38,26 @@
 #pragma newdecls required
 #pragma semicolon 1
 
+// Test scaffolding for verifying the grenade half of the mechanic. OFF.
+//
+// Set to 1 and recompile to bring back two things that exist only to observe a test, never to make
+// the mechanic work:
+//
+//   sm_bot_smoke_suppress_hide_client + the CINSBotVision::IsIgnored detour
+//       Hides ONE client index from bot vision, so seeding is the only channel by which bots can
+//       learn about the tester. notarget does not work on NextBot vision and nb_blind is too blunt
+//       (it kills the vision update outright, leaving nothing to inject into). Do not ship this
+//       enabled: on a live server it is a "make me invisible to bots" switch for anyone with rcon.
+//
+//   the CINSBotAttack::ctor detour
+//       A whole detour whose body is one increment. atkCtor == fovForced means the fork works and
+//       OnStart is killing the action; atkCtor == 0 means the branch is not being taken at all.
+//       It is the only ground truth for whether the grenade fork reached the attack branch.
+//
+// To verify grenades: set this to 1, recompile, then set grenade_chance 1.0 and debug 1, throw one
+// smoke, and check fovForced -> atkCtor -> icaCalls -> nadeHits still run 1:1:1:1.
+#define GRENADE_VERIFY 0
+
 public Plugin myinfo =
 {
     name        = "[GG2 BOT SMOKE SUPPRESS] Blind fire into smoke",
@@ -51,31 +71,22 @@ Handle    g_hMyNextBotPointer  = null;
 Handle    g_hGetVisionInterface = null;
 Handle    g_hGetBodyInterface = null;
 Handle    g_hAddKnownEntity    = null;
-// Diagnostics, used only by the selftest command.
 Handle    g_hGetPrimaryThreat  = null;
 Handle    g_hKE_GetEntity      = null;
-Handle    g_hKE_VisibleRecent  = null;
-Handle    g_hKE_TimeSinceSeen  = null;
-Handle    g_hKE_WasEverVisible = null;
 Handle    g_hKE_UpdateVis      = null;
-Handle    g_hLineOfFireClear   = null;
-Handle    g_hKE_MarkSeen       = null;
 Handle    g_hKE_UpdatePos      = null;
 Handle    g_hGetWeaponClass    = null;
 bool      g_bReady             = false;
 
 ConVar    g_cvEnabled, g_cvChance, g_cvInterval, g_cvRange, g_cvRadius, g_cvClassnames, g_cvDebug;
 ConVar    g_cvNoPursue;
-ConVar    g_cvStage;
 ConVar    g_cvReseed;
 ConVar    g_cvWeaponClasses;
 ConVar    g_cvInSmoke;
 ConVar    g_cvGrenadeChance;
 ConVar    g_cvGrenadeClass;
-ConVar    g_cvGrenadeFlash;
 ConVar    g_cvSmokeLife;
 ArrayList g_aSmokeBorn;
-int       g_iFlashed = 0;
 float     g_fBotLastSeed[MAXPLAYERS + 1];
 
 // GetGameTime() until which a given client counts as smoke-seeded. While that is in the future the
@@ -151,26 +162,7 @@ int       g_iNadeArmed = 0, g_iNadeHits = 0;
 int       g_aNadeKnown[NADE_SLOTS];
 float     g_aNadeExp[NADE_SLOTS];
 int       g_iNadeSlot = 0, g_iFovForced = 0, g_iFovSkip = 0, g_iNadeSkipNoNade = 0;
-int       g_iFovAll = 0;
 
-// The gate at 0x706d6e, which has never actually been measured:
-//
-//     706d6e:  call *0x38(%eax)   ; CKnownEntity::IsVisibleInFOVNow on [ebp-0x3c4]
-//     706d73:  jne  706f6e        ; TRUE -> attack branch, suppression never reached
-//
-// An old note in this file asserts "for a target in smoke it is already false, so it changed
-// nothing". That was an assumption, never a measurement - and it was written before the seeding
-// sequence started writing visual memory (stage 1), which is exactly the kind of thing that would
-// make it answer true. If it does answer true, the bot leaves for the attack branch three
-// instructions before the weapon-class gate, which is consistent with everything observed:
-// denied and gateHits healthy, suppCalls ~0, shots 0.
-//
-// Latched on the SAME CKnownEntity ShouldPursue was handed, so the pointer test is exact. Pointer
-// compared first because this runs ~4000x/second.
-int       g_iSeedKnown = 0;
-float     g_fSeedKnownExp = 0.0;
-int       g_iFovSeedTrue = 0, g_iFovSeedFalse = 0, g_iFovSeedForced = 0;
-ConVar    g_cvForceNotVisible;
 ConVar    g_cvArousalCap;
 int       g_iArousalClamped = 0;
 
@@ -186,16 +178,6 @@ int       g_iArousalClamped = 0;
 // gate inside Update is irrelevant.
 int       g_iPursueCombat = 0, g_iPursueMain = 0, g_iPursueCombatOk = 0;
 
-// The weapon-class gate at 0x706dd2 is now the ONLY hard filter left between pursuit denial and
-// ShouldSuppressThreat - read out of the binary, the two branches before it (IsAbleToSee at
-// 0x706d80 and the age gate at 0x706dbb) both rejoin the suppression path at 0x706d86/0x706dc1
-// instead of leaving it. A natively-eligible weapon (9/10/12) passes that gate unaided; anything
-// else depends on the one-shot promotion landing on the right call, which it demonstrably does not
-// always do. So the question "why did suppression die" reduces to "what are these bots holding".
-// pCombatNative counts bots in the Combat action holding a NATIVELY eligible weapon; the histogram
-// is the full distribution for every bot near a cloud.
-int       g_iPursueCombatNative = 0;
-
 // Arousal. CINSBotCombat::Update's FIRST branch is:
 //
 //     706baa:  call *0x164(%edx)   ; CINSBotBody::IsMinArousal(8)
@@ -208,7 +190,6 @@ int       g_iPursueCombatNative = 0;
 // at 0. The server's own cvars make this a one-way door: combat_falloff is NEGATIVE (-0.25/s, i.e.
 // arousal RISES while in combat) and default_falloff only applies out of combat. This mechanic
 // holds bots in combat indefinitely, so arousal climbs to the cap and never comes back down.
-float     g_fArousal[MAXPLAYERS + 1];
 int       g_iArousalHigh = 0, g_iArousalSampled = 0;
 float     g_fArousalMin = 99.0, g_fArousalMax = -1.0;
 #define AROUSAL_OFFSET  0x138
@@ -226,7 +207,9 @@ float     g_fNadeHeldSince[MAXPLAYERS + 1];
 int       g_iUnstuck = 0, g_iHoldingNade = 0;
 bool      g_bInShouldPursue = false;
 int       g_iFovInPursue = 0;
+#if GRENADE_VERIFY
 int       g_iAttackCtor = 0;
+#endif
 
 // Arming the fork off UpdateInternalInfo did not work: measured 20 forced -> 0 constructions.
 // That flag has 8 arming sites, 5 of them OUTSIDE CINSBotCombat::Update (OnStart/OnResume/OnEnd),
@@ -252,18 +235,11 @@ int       g_iSuppCalls = 0, g_iSuppOther = 0;
 // The age gate at 0x706dbb, read straight out of the binary: skip suppression unless the threat has
 // been known for >= 1.0s. It sits BEFORE the weapon-class gate, so a bot failing it never reaches
 // ShouldSuppressThreat at all - which is exactly the signature of the per-smoke dropouts
-// (suppCalls=0 while seeding and gateHits look healthy). Sampled live to confirm or kill it.
+// (suppCalls=0 while seeding and gateHits look healthy). Measured and CLEARED as a suspect: seeded
+// threats aged 2-25s against the 1.0s threshold, never below it.
 #define AGE_THRESHOLD 1.0
 Handle    g_hKE_Age = null;
 
-// Every age measurement before this one sampled GetPrimaryKnownThreat(), which is not necessarily
-// the object the gates read. The gates at 0x706db8/0x706dbb operate on [ebp-0x3c4] - the SAME
-// CKnownEntity that CINSBotCombat::ShouldPursue receives as parameter 2. Sampling THAT pointer is
-// the only measurement that can settle whether the age gate is what kills suppression after the
-// first smoke. p2Below counts seeded threats younger than the 1.0s threshold when ShouldPursue
-// runs; if that is high in the dead state, the age gate is the blocker.
-int       g_iP2Sampled = 0, g_iP2Below = 0;
-float     g_fP2Min = 999.0, g_fP2Max = 0.0;
 Handle    g_hAmmoRatio = null;
 Handle    g_hChooseBestWeapon = null;
 Handle    g_hKE_Destroy = null;
@@ -278,15 +254,14 @@ float     g_fAmmoMin = 1.0;
 int       g_iAgeBelow = 0, g_iAgeSampled = 0;
 float     g_fAgeMax = 0.0;
 
-// Testing aid. notarget does not work on NextBot vision and nb_blind is too blunt (it kills the
-// vision update outright, so nothing is left to inject into). This hides ONE player from bot
-// vision by name of client index, leaving every other bot-vs-bot sightline intact.
+#if GRENADE_VERIFY
 ConVar    g_cvHideClient;
 int       g_iHidden = 0;
+#endif
 
 // Which pointer is a CINSNextBot* actually equal to? MyNextBotPointer returns the INextBot
 // subobject, which is NOT the entity address - so match against both and count which one hits.
-int       g_iIcaCalls = 0, g_iIcaMatchEnt = 0, g_iIcaMatchNb = 0;
+int       g_iIcaCalls = 0, g_iIcaMatchEnt = 0;
 int       g_iBotEntAddr[MAXPLAYERS + 1];
 bool      g_bBotCanSuppress[MAXPLAYERS + 1];
 int       g_iAttackForced = 0;
@@ -349,11 +324,10 @@ public void OnPluginStart()
     g_cvArousalCap = CreateConVar("sm_bot_smoke_suppress_arousal_cap", "6.5",
         "Clamp a seeded bot's arousal to this value so it stays under the engine's IsMinArousal(8) gate, which routes aroused bots to cover instead of suppressing. 0 = off. Without this the mechanic works for roughly 30 seconds and then stops permanently.", _, true, 0.0, true, 10.0);
 
-    g_cvForceNotVisible = CreateConVar("sm_bot_smoke_suppress_force_notvisible", "0",
-        "Answer false to IsVisibleInFOVNow for a seeded threat, so Combat::Update takes the suppression branch at 0x706d6e instead of the attack branch. 0 = measure only.", _, true, 0.0, true, 1.0);
-
+#if GRENADE_VERIFY
     g_cvHideClient = CreateConVar("sm_bot_smoke_suppress_hide_client", "0",
         "DEBUG/TESTING: hide this client index from bot vision (0 = nobody). Unlike nb_blind this leaves the vision system running, so seeding still works.", _, true, 0.0, true, float(MAXPLAYERS));
+#endif
 
     g_cvReseed = CreateConVar("sm_bot_smoke_suppress_reseed_cooldown", "8.0",
         "Seconds before the same bot may be seeded again. Lets the injected threat age past the engine's suppression threshold.", _, true, 0.0, true, 60.0);
@@ -382,16 +356,12 @@ public void OnPluginStart()
     //
     // This is the one thing we spent the session avoiding: visible means accurately shootable. Keep
     // it low, and watch whether incoming fire starts tracking you rather than spraying.
-    g_cvGrenadeFlash = CreateConVar("sm_bot_smoke_suppress_grenade_flash", "0.0",
-        "Chance a seed leaves the threat briefly visible, to provoke attack-branch entry so grenades can be thrown.", _, true, 0.0, true, 1.0);
     // Smoke entities OUTLIVE their visible cloud - the projectile stays valid long after the smoke
     // has gone. Tracking on entity validity alone meant stale clouds piled up (19 tracked at once),
     // so bots were seeded and pursuit-denied for smoke that no longer existed and stood around
     // servicing phantoms. Suppression measured 0 shots at 19 tracked clouds vs 184 at 3-10.
     g_cvSmokeLife = CreateConVar("sm_bot_smoke_suppress_smoke_life", "18.0",
         "Seconds a smoke stays tracked. Should roughly match how long the cloud is actually visible.", _, true, 1.0, true, 120.0);
-    g_cvStage = CreateConVar("sm_bot_smoke_suppress_stage", "1",
-        "How far the seeding sequence runs. 0=AddKnownEntity, 1=+visual memory, 2=+mark position seen.", _, true, 0.0, true, 2.0);
     g_cvDebug = CreateConVar("sm_bot_smoke_suppress_debug", "0",
         "Log every suppression decision. Noisy - troubleshooting only.");
 
@@ -421,8 +391,8 @@ public void OnPluginStart()
     }
     if (g_hGetVisionInterface == null) LogError("[SMOKE SUPPRESS] Failed to prepare INextBot::GetVisionInterface");
 
-    // Same pattern, two slots earlier in the INextBot vtable. Used read-only: the arousal value is
-    // loaded straight out of the body object, nothing is called on it.
+    // Same pattern, two slots earlier in the INextBot vtable. Nothing is ever CALLED on the result:
+    // the arousal float is read - and clamped - straight out of the body object at +0x138.
     StartPrepSDKCall(SDKCall_Raw);
     if (PrepSDKCall_SetFromConf(conf, SDKConf_Virtual, "INextBot::GetBodyInterface"))
     {
@@ -446,9 +416,6 @@ public void OnPluginStart()
 
     g_hGetPrimaryThreat  = PrepVirt(conf, "IVision::GetPrimaryKnownThreat", SDKType_Bool, true);
     g_hKE_GetEntity      = PrepVirtEnt(conf, "CKnownEntity::GetEntity");
-    g_hKE_VisibleRecent  = PrepVirtRet(conf, "CKnownEntity::IsVisibleRecently", SDKType_Bool);
-    g_hKE_TimeSinceSeen  = PrepVirtRet(conf, "CKnownEntity::GetTimeSinceLastSeen", SDKType_Float);
-    g_hKE_WasEverVisible = PrepVirtRet(conf, "CKnownEntity::WasEverVisible", SDKType_Bool);
 
     // int CINSWeapon::GetWeaponClass() const - virtual on the weapon entity. Returns int, so it is
     // safe to detour/call (unlike the float-returning accessors).
@@ -460,11 +427,6 @@ public void OnPluginStart()
     }
     if (g_hGetWeaponClass == null)
         LogError("[SMOKE SUPPRESS] GetWeaponClass unavailable - cannot filter bots that can never suppress");
-
-    // void CKnownEntity::MarkLastKnownPositionAsSeen()
-    StartPrepSDKCall(SDKCall_Raw);
-    if (PrepSDKCall_SetFromConf(conf, SDKConf_Virtual, "CKnownEntity::MarkLastKnownPositionAsSeen"))
-        g_hKE_MarkSeen = EndPrepSDKCall();
 
     // void CKnownEntity::UpdatePosition(Vector) - vtable slot 3. Sets the aim point that
     // CINSBotCombat::Update reads back out of slot 5 and hands to CINSBotSuppressTarget's ctor.
@@ -551,10 +513,11 @@ public void OnPluginStart()
     if (ddWc != null && ddWc.Enable(Hook_Pre, Detour_GetWeaponClass)) detours++;
     else LogError("[SMOKE SUPPRESS] GetWeaponClass promotion detour not installed");
 
-    // Arms the grenade window. Its return is a pointer, so an int return type is correct here.
+#if GRENADE_VERIFY
     DynamicDetour ddCtor = DynamicDetour.FromConf(conf, "CINSBotAttack::ctor");
     if (ddCtor != null && ddCtor.Enable(Hook_Pre, Detour_AttackCtor)) detours++;
     else LogError("[SMOKE SUPPRESS] attack-ctor counter not installed");
+#endif
 
     DynamicDetour ddIca = DynamicDetour.FromConf(conf, "CINSBotAttack::InitialContainedAction");
     if (ddIca != null && ddIca.Enable(Hook_Pre, Detour_InitialContainedAction)) detours++;
@@ -565,44 +528,26 @@ public void OnPluginStart()
     if (ddBlind != null && ddBlind.Enable(Hook_Pre, Detour_IsBlinded)) detours++;
     else LogError("[SMOKE SUPPRESS] IsBlinded detour not installed");
 
-    // Pure observer: how often does the Combat action actually run?
+#if GRENADE_VERIFY
     DynamicDetour ddIgn = DynamicDetour.FromConf(conf, "CINSBotVision::IsIgnored");
     if (ddIgn != null && ddIgn.Enable(Hook_Pre, Detour_IsIgnored)) detours++;
     else LogError("[SMOKE SUPPRESS] hide-client detour not installed");
+#endif
 
-    // Two hooks on one detour: the pre hook answers the 0x706d6e gate (grenade fork, or the
-    // suppression override), the post hook only reports what the engine itself answered. Kept as an
-    // explicit block - written as a chain of ifs, the trailing else binds to the wrong one and logs
-    // "grenades disabled" on a perfectly healthy install.
+    // Answers the 0x706d6e gate: true forks Update into CINSBotAttack so a grenade can be thrown.
     DynamicDetour ddFov = DynamicDetour.FromConf(conf, "CKnownEntity::IsVisibleInFOVNow");
-    if (ddFov == null)
-        LogError("[SMOKE SUPPRESS] FOV fork detour not installed - grenades disabled");
-    else
-    {
-        if (ddFov.Enable(Hook_Pre, Detour_IsVisibleInFOVNow)) detours++;
-        else LogError("[SMOKE SUPPRESS] FOV fork detour not installed - grenades disabled");
+    if (ddFov != null && ddFov.Enable(Hook_Pre, Detour_IsVisibleInFOVNow)) detours++;
+    else LogError("[SMOKE SUPPRESS] FOV fork detour not installed - grenades disabled");
 
-        if (!ddFov.Enable(Hook_Post, Detour_IsVisibleInFOVNow_Post))
-            LogError("[SMOKE SUPPRESS] IsVisibleInFOVNow post hook failed - the 0x706d6e gate cannot be measured");
-    }
-
+    // Arms the weapon-class gate window - load-bearing for promotion, not just a counter.
     DynamicDetour ddc = DynamicDetour.FromConf(conf, "CINSBotCombat::UpdateInternalInfo");
     if (ddc != null && ddc.Enable(Hook_Pre, Detour_CombatUpdate)) detours++;
-    else LogError("[SMOKE SUPPRESS] combat-update counter not installed");
+    else LogError("[SMOKE SUPPRESS] UpdateInternalInfo detour not installed - weapon-class promotion will not work, so only natively eligible weapons (9/10/12) can suppress");
 
     if (detours == 0)
         LogError("[SMOKE SUPPRESS] No pursuit detours installed - bots will walk into smoke rather than shoot it");
     else
         LogMessage("[SMOKE SUPPRESS] %d pursuit detour(s) installed", detours);
-
-    // Diagnostic: does smoke block the bot's line of fire? Entity address is the this-pointer.
-    StartPrepSDKCall(SDKCall_Raw);
-    if (PrepSDKCall_SetFromConf(conf, SDKConf_Signature, "CINSNextBot::IsLineOfFireClear"))
-    {
-        PrepSDKCall_AddParameter(SDKType_Vector, SDKPass_ByRef);
-        PrepSDKCall_SetReturnInfo(SDKType_Bool, SDKPass_Plain);
-        g_hLineOfFireClear = EndPrepSDKCall();
-    }
 
     delete conf;
 
@@ -613,15 +558,10 @@ public void OnPluginStart()
         return;
     }
 
-    // DEBUG ONLY. Exercises the SDKCall chain directly on two clients, bypassing the smoke and
-    // geometry checks, so the dangerous part can be validated on an empty server. Each step is
-    // logged before it runs: if the server dies, the last line written names the call that did it.
-    // RegServerCmd, so this is reachable from RCON/console only - never from a client.
-    // Read a bot's current primary known threat WITHOUT injecting anything. Run this a second or
-    // two after a selftest to see whether the injected entry survived the engine's vision update.
-    // Map GetWeaponClass() ints to real weapons empirically - the enum has no symbol and the
-    // name table could not be recovered statically, so the whitelist {9,10,12} was read out of a
-    // bitmask in the disassembly and is otherwise unlabelled.
+    // All RegServerCmd, so these are reachable from RCON/console only - never from a client.
+    // dumpclasses maps GetWeaponClass() ints to real weapons empirically: the enum has no symbol
+    // and the name table could not be recovered statically, so the whitelist {9,10,12} was read
+    // out of a bitmask in the disassembly and is otherwise unlabelled.
     RegServerCmd("sm_bot_smoke_suppress_reset", Cmd_Reset,
         "DEBUG: clear ALL plugin runtime state without touching the engine or reinstalling detours");
 
@@ -634,23 +574,17 @@ public void OnPluginStart()
     RegServerCmd("sm_bot_smoke_suppress_dumpclasses", Cmd_DumpClasses,
         "DEBUG: print each bot's active weapon and its GetWeaponClass() value");
 
-    RegServerCmd("sm_bot_smoke_suppress_peek", Cmd_Peek,
-        "DEBUG: read a bot's primary known threat. Args: <botIndex>");
-
-    RegServerCmd("sm_bot_smoke_suppress_selftest", Cmd_SelfTest,
-        "DEBUG: exercise the NextBot SDKCall chain. Args: <botIndex> <targetIndex>");
-
     RestartTimer();
     LogMessage("[SMOKE SUPPRESS] Loaded. Enabled=%d interval=%.1f", g_cvEnabled.BoolValue, g_cvInterval.FloatValue);
 }
 
-// A plugin reload restores suppression every time; a round restart does not. A round restart
-// resets bot ammo, weapons and positions but no plugin state; a reload resets plugin state but no
-// bot state. So whatever is breaking lives in HERE, not in the bots - which rules out the ammo and
-// loadout explanations entirely. This clears every piece of runtime state a reload would clear,
-// WITHOUT reinstalling detours, so the two can be told apart:
-//   reset fixes it      -> the fault is in this state, and it can be bisected
-//   reset does not fix  -> the fault is in the detours/SDKCalls themselves
+// Clears every piece of runtime state a plugin reload would clear, without reinstalling detours.
+// Built to bisect "a reload fixes suppression but a round restart does not" - which it did: reset
+// alone never helped, so the fault was never in this state (it was bot arousal).
+//
+// Careful with it now. It clears g_bBotCanSuppress, and the arousal clamp only acts on bots with
+// that flag set - so running this mid-round un-clamps every bot until the next sweep re-populates
+// the flag, which needs a live smoke. It is a debugging tool, not a "fix it" button.
 Action Cmd_Reset(int args)
 {
     for (int i = 1; i <= MAXPLAYERS; i++)
@@ -681,6 +615,7 @@ Action Cmd_Reset(int args)
 // confirming or killing one guess at a time.
 //
 // The gates, in the order CINSBotCombat::Update applies them:
+//   0. arousal < 8                                (706baa - IsMinArousal; the one that killed it)
 //   1. active weapon exists                       (706b18)
 //   2. ammo ratio >= 0.10                         (706c5d)
 //   3. threat known >= 1.0s                       (706db8)
@@ -747,11 +682,23 @@ Action Cmd_Why(int args)
         // Two different questions, and conflating them made this dump lie once weapon_classes was
         // widened: "native" is what the engine accepts unaided, "allowed" is what the cvar lets
         // through (non-native entries get promoted at the gate). Only "allowed" predicts behaviour.
+        // Arousal, gate 0 - added after it turned out to be the one that actually kills the
+        // mechanic. Without it this dump can show every other gate green on a bot that has not
+        // fired a shot in minutes.
+        float arousal = -1.0;
+        if (nextbot != 0 && g_hGetBodyInterface != null)
+        {
+            int body = SDKCall(g_hGetBodyInterface, nextbot);
+            if (body != 0)
+                arousal = view_as<float>(LoadFromAddress(view_as<Address>(body + AROUSAL_OFFSET), NumberType_Int32));
+        }
+
         bool nativeOk = (cls == 9 || cls == 10 || cls == 12);
         bool classOk  = nativeOk || IsClassInCvarList(cls);
         PrintToServer("[SMOKE SUPPRESS]   ^ inv: %s| hasFirearm=%s", inv, hasFirearm ? "Y" : "**NO**");
-        PrintToServer("[SMOKE SUPPRESS] %N: wep=%s cls=%d classOk=%s%s | ammo=%.2f %s | threat=%s age=%.1f %s | seedFresh=%s",
-                      bot, wname, cls, classOk ? "Y" : "n", nativeOk ? "" : "(promo)",
+        PrintToServer("[SMOKE SUPPRESS] %N: arousal=%.1f %s | wep=%s cls=%d classOk=%s%s | ammo=%.2f %s | threat=%s age=%.1f %s | seedFresh=%s",
+                      arousal, arousal < AROUSAL_GATE ? "OK" : "**PINNED**",
+                      wname, cls, classOk ? "Y" : "n", nativeOk ? "" : "(promo)",
                       ratio, ratio >= AMMO_GATE ? "OK" : "**FAIL**",
                       threatIsHuman ? "human" : "other/none", age,
                       age >= AGE_THRESHOLD ? "OK" : "**FAIL**",
@@ -844,136 +791,6 @@ Action Cmd_DumpClasses(int args)
     return Plugin_Handled;
 }
 
-Action Cmd_Peek(int args)
-{
-    if (!g_bReady || g_hGetPrimaryThreat == null) { PrintToServer("[SMOKE SUPPRESS] peek: not ready"); return Plugin_Handled; }
-    char a1[8]; GetCmdArg(1, a1, sizeof(a1));
-    int bot = StringToInt(a1);
-    if (bot < 1 || bot > MaxClients || !IsClientInGame(bot)) { PrintToServer("[SMOKE SUPPRESS] peek: bad bot index"); return Plugin_Handled; }
-
-    int nextbot = SDKCall(g_hMyNextBotPointer, bot);
-    if (nextbot == 0) { PrintToServer("[SMOKE SUPPRESS] peek: no nextbot"); return Plugin_Handled; }
-    int vision = SDKCall(g_hGetVisionInterface, nextbot);
-    if (vision == 0) { PrintToServer("[SMOKE SUPPRESS] peek: no vision"); return Plugin_Handled; }
-
-    int known = SDKCall(g_hGetPrimaryThreat, vision, false);
-    if (known == 0) { PrintToServer("[SMOKE SUPPRESS] peek: NO primary known threat (injection did not survive)"); return Plugin_Handled; }
-
-    int ent = SDKCall(g_hKE_GetEntity, known);
-    bool visRecent = SDKCall(g_hKE_VisibleRecent, known);
-    bool everVis = SDKCall(g_hKE_WasEverVisible, known);
-    float since = SDKCall(g_hKE_TimeSinceSeen, known);
-    PrintToServer("[SMOKE SUPPRESS] peek: primary threat entity=%d visibleRecently=%d wasEverVisible=%d timeSinceSeen=%.2f",
-                  ent, visRecent, everVis, since);
-    return Plugin_Handled;
-}
-
-Action Cmd_SelfTest(int args)
-{
-    if (!g_bReady)
-    {
-        PrintToServer("[SMOKE SUPPRESS] selftest: plugin not ready (signatures missing)");
-        return Plugin_Handled;
-    }
-    if (args < 2)
-    {
-        PrintToServer("[SMOKE SUPPRESS] usage: sm_bot_smoke_suppress_selftest <botIndex> <targetIndex>");
-        return Plugin_Handled;
-    }
-
-    char a1[8], a2[8];
-    GetCmdArg(1, a1, sizeof(a1));
-    GetCmdArg(2, a2, sizeof(a2));
-    int bot = StringToInt(a1), target = StringToInt(a2);
-
-    if (bot < 1 || bot > MaxClients || !IsClientInGame(bot) || !IsPlayerAlive(bot))
-    {
-        PrintToServer("[SMOKE SUPPRESS] selftest: bot %d not an in-game living client", bot);
-        return Plugin_Handled;
-    }
-    if (target < 1 || target > MaxClients || !IsClientInGame(target) || !IsPlayerAlive(target))
-    {
-        PrintToServer("[SMOKE SUPPRESS] selftest: target %d not an in-game living client", target);
-        return Plugin_Handled;
-    }
-
-    PrintToServer("[SMOKE SUPPRESS] selftest: step 1 MyNextBotPointer(%d)", bot);
-    int nextbot = SDKCall(g_hMyNextBotPointer, bot);
-    PrintToServer("[SMOKE SUPPRESS] selftest: step 1 ok, INextBot=0x%x", nextbot);
-    if (nextbot == 0) return Plugin_Handled;
-
-    PrintToServer("[SMOKE SUPPRESS] selftest: step 2 GetVisionInterface");
-    int vision = SDKCall(g_hGetVisionInterface, nextbot);
-    PrintToServer("[SMOKE SUPPRESS] selftest: step 2 ok, IVision=0x%x", vision);
-    if (vision == 0) return Plugin_Handled;
-
-    PrintToServer("[SMOKE SUPPRESS] selftest: step 4 AddKnownEntity(target=%d)", target);
-    SDKCall(g_hAddKnownEntity, vision, target);
-    PrintToServer("[SMOKE SUPPRESS] selftest: step 4 ok - full chain survived");
-
-    // Is the engine willing to let this bot shoot at the target's position at all?
-    if (g_hLineOfFireClear != null)
-    {
-        float tpos[3];
-        GetClientAbsOrigin(target, tpos);
-        tpos[2] += 40.0;
-        Address botAddr = GetEntityAddress(bot);
-        PrintToServer("[SMOKE SUPPRESS] selftest: step 7 IsLineOfFireClear via entity addr 0x%x", botAddr);
-        bool lof = SDKCall(g_hLineOfFireClear, botAddr, tpos);
-        PrintToServer("[SMOKE SUPPRESS] selftest: LINE OF FIRE to target = %s", lof ? "CLEAR (engine would allow the shot)" : "BLOCKED (engine will never shoot there)");
-    }
-
-    // Read the injection back. This is the part that actually answers whether the engine kept the
-    // known entity, and whether it thinks the target is visible (-> accurate fire) or merely known
-    // (-> suppression of the last known position, which is what we want).
-    if (g_hGetPrimaryThreat == null) { PrintToServer("[SMOKE SUPPRESS] selftest: no read-back handles"); return Plugin_Handled; }
-
-    int known = SDKCall(g_hGetPrimaryThreat, vision, false);
-    PrintToServer("[SMOKE SUPPRESS] selftest: step 5 GetPrimaryKnownThreat = 0x%x", known);
-    if (known == 0)
-    {
-        PrintToServer("[SMOKE SUPPRESS] selftest: VERDICT injection did NOT stick (no primary threat)");
-        return Plugin_Handled;
-    }
-
-    int ent = (g_hKE_GetEntity != null) ? SDKCall(g_hKE_GetEntity, known) : -1;
-    bool visRecent = (g_hKE_VisibleRecent != null) ? SDKCall(g_hKE_VisibleRecent, known) : false;
-    bool everVis = (g_hKE_WasEverVisible != null) ? SDKCall(g_hKE_WasEverVisible, known) : false;
-    float sinceSeen = (g_hKE_TimeSinceSeen != null) ? SDKCall(g_hKE_TimeSinceSeen, known) : -1.0;
-
-    PrintToServer("[SMOKE SUPPRESS] selftest: BEFORE memory: entity=%d (target %d) visibleRecently=%d wasEverVisible=%d timeSinceSeen=%.2f",
-                  ent, target, visRecent, everVis, sinceSeen);
-
-    if (ent == target && g_hKE_UpdateVis != null)
-    {
-        PrintToServer("[SMOKE SUPPRESS] selftest: step 6 UpdateVisibilityStatus(true) then (false)");
-        // Point the entry at where the target actually is. Without this the engine's suppressing fire
-    // aims at whatever position the entry was created with - which for a target the engine has
-    // never legitimately seen is stale or unset, and showed up in game as bots firing high.
-    if (g_hKE_UpdatePos != null)
-    {
-        float tPos[3];
-        GetClientAbsOrigin(target, tPos);
-        SDKCall(g_hKE_UpdatePos, known, tPos);
-    }
-
-    SDKCall(g_hKE_UpdateVis, known, true);
-        SDKCall(g_hKE_UpdateVis, known, false);
-        visRecent = SDKCall(g_hKE_VisibleRecent, known);
-        everVis   = SDKCall(g_hKE_WasEverVisible, known);
-        sinceSeen = SDKCall(g_hKE_TimeSinceSeen, known);
-        PrintToServer("[SMOKE SUPPRESS] selftest: AFTER  memory: visibleRecently=%d wasEverVisible=%d timeSinceSeen=%.2f",
-                      visRecent, everVis, sinceSeen);
-    }
-    if (ent != target)
-        PrintToServer("[SMOKE SUPPRESS] selftest: VERDICT primary threat is a DIFFERENT entity - injection lost or outranked");
-    else if (visRecent)
-        PrintToServer("[SMOKE SUPPRESS] selftest: VERDICT treated as VISIBLE - bots would shoot accurately. Approach is a dead end.");
-    else
-        PrintToServer("[SMOKE SUPPRESS] selftest: VERDICT known but NOT visible - correct state for suppression.");
-    return Plugin_Handled;
-}
-
 // Both of these return a raw pointer. onPlayer selects the call type: the first is invoked on a
 // player entity, the rest on pointers we already hold.
 Handle PrepCall(Handle conf, const char[] name, bool onPlayer)
@@ -1004,15 +821,6 @@ Handle PrepVirtEnt(Handle conf, const char[] name)
     StartPrepSDKCall(SDKCall_Raw);
     if (!PrepSDKCall_SetFromConf(conf, SDKConf_Virtual, name)) { LogError("[SMOKE SUPPRESS] missing %s", name); return null; }
     PrepSDKCall_SetReturnInfo(SDKType_CBaseEntity, SDKPass_Pointer);
-    return EndPrepSDKCall();
-}
-
-// Virtual call returning a plain value.
-Handle PrepVirtRet(Handle conf, const char[] name, SDKType ret)
-{
-    StartPrepSDKCall(SDKCall_Raw);
-    if (!PrepSDKCall_SetFromConf(conf, SDKConf_Virtual, name)) { LogError("[SMOKE SUPPRESS] missing %s", name); return null; }
-    PrepSDKCall_SetReturnInfo(ret, SDKPass_Plain);
     return EndPrepSDKCall();
 }
 
@@ -1069,7 +877,7 @@ public MRESReturn Detour_InitialContainedAction(Address pThis, DHookReturn hRetu
         bool hitEnt = (g_iBotEntAddr[b] == bot);
         bool hitNb  = (g_iBotNextBot[b] == bot);
         if (!hitEnt && !hitNb) continue;
-        if (hitEnt) g_iIcaMatchEnt++; else g_iIcaMatchNb++;
+        if (hitEnt) g_iIcaMatchEnt++;
 
         if (g_fBotLastSeed[b] <= GetGameTime() - g_cvNoPursue.FloatValue) return MRES_Ignored;
         if (GetURandomFloat() > chance) return MRES_Ignored;
@@ -1136,27 +944,11 @@ public MRESReturn Detour_IsBlinded(Address pThis, DHookReturn hReturn)
 // downstream - aiming, line of fire, the vision update - ever sees the threat as visible.
 public MRESReturn Detour_IsVisibleInFOVNow(Address pThis, DHookReturn hReturn)
 {
-    // Counted before every early return. IsVisibleInFOVNow is called at 0x706d6e, which sits
-    // between the ammo gate and the age/class gates - so if this tracks pCombat in a dead window,
-    // execution really is reaching that far and the blocker is below it. If it does not, execution
-    // is leaving Update earlier than any gate I have examined.
-    g_iFovAll++;
-
     if (!g_bReady || !g_cvEnabled.BoolValue) return MRES_Ignored;
     if (g_cvGrenadeChance.FloatValue <= 0.0) return MRES_Ignored;
 
     // Only the fork window counts - see g_bForkWindow for why UpdateInternalInfo was the wrong
     // trigger. Must be the same known entity ShouldPursue just handed us.
-    // Suppression branch. Checked before the fork window because the fork wants the opposite
-    // answer, and a bot armed for a grenade should still get its grenade.
-    if (g_cvForceNotVisible.BoolValue && !g_bForkWindow
-        && view_as<int>(pThis) == g_iSeedKnown && g_fSeedKnownExp > GetGameTime())
-    {
-        g_iFovSeedForced++;
-        DHookSetReturn(hReturn, false);
-        return MRES_Supercede;
-    }
-
     if (!g_bForkWindow) { g_iFovSkip++; return MRES_Ignored; }
 
     // Inside a ShouldPursue call, so this is not the fork. Leave the window open for the real one.
@@ -1182,18 +974,7 @@ public MRESReturn Detour_IsVisibleInFOVNow(Address pThis, DHookReturn hReturn)
     return MRES_Supercede;
 }
 
-// Observation only - reads what the engine actually answered for the threat we seeded. Pointer
-// test first: this fires thousands of times a second across every known entity in the level.
-public MRESReturn Detour_IsVisibleInFOVNow_Post(Address pThis, DHookReturn hReturn)
-{
-    if (view_as<int>(pThis) != g_iSeedKnown || g_iSeedKnown == 0) return MRES_Ignored;
-    if (!g_bReady || !g_cvEnabled.BoolValue) return MRES_Ignored;
-    if (g_fSeedKnownExp <= GetGameTime()) return MRES_Ignored;
-
-    if (DHookGetReturn(hReturn)) g_iFovSeedTrue++; else g_iFovSeedFalse++;
-    return MRES_Ignored;
-}
-
+#if GRENADE_VERIFY
 // Hide one player from bot vision without disabling it. The engine calls this to decide whether an
 // entity is worth considering at all, so returning true for the test subject makes bots unable to
 // acquire them naturally - while our own AddKnownEntity injection, which bypasses this filter, still
@@ -1226,6 +1007,7 @@ public MRESReturn Detour_AttackCtor(Address pThis)
     g_iAttackCtor++;
     return MRES_Ignored;
 }
+#endif  // GRENADE_VERIFY
 
 public MRESReturn Detour_CombatUpdate(Address pThis)
 {
@@ -1236,11 +1018,11 @@ public MRESReturn Detour_CombatUpdate(Address pThis)
     // are imprecise, but suppression never depended on them: native class-10 rifles pass anyway.
     g_bGateWindow = true;
 
-    // (old note kept: this used to be described as the precise arming point - it is not) UpdateInternalInfo has 8 call sites, 5 of them
-    // outside CINSBotCombat::Update, so the one-shot was routinely spent on an unrelated
-    // GetWeaponClass call and the real gate at 0x706dcc saw the bot's true class. That is fine
-    // while bots hold rifles (class 10 passes natively) and fatal once they fall back to pistols
-    // or DMRs, which only pass via promotion - which is exactly when suppression dies.
+    // This is an imprecise arming point, and knowingly so. UpdateInternalInfo has 8 call sites, 5
+    // of them outside CINSBotCombat::Update, so the one-shot is routinely spent on an unrelated
+    // GetWeaponClass call and the real gate at 0x706dcc sees the bot's true class. That is fine
+    // while bots hold rifles (class 10 passes natively) and only matters for weapon classes that
+    // depend on promotion - DMRs, pistols.
     //
     // Proven by the same bug in the grenade fork: moving its arming point from here to
     // ShouldPursue took constructions from 0 to 9. See Detour_ShouldPursue_Combat.
@@ -1338,54 +1120,33 @@ public MRESReturn Detour_ShouldPursue_Combat(Address pThis, DHookReturn hReturn,
 {
     g_iPursueCombat++;
 
-    // Of the bots actually running the Combat action, how many hold a weapon the engine will let
-    // suppress? promoted=11-21 while suppCalls=0 is only consistent with those promotions landing
-    // on GetWeaponClass calls other than the gate - in which case the gate sees the true class and
-    // only natively-eligible bots can pass. If none of the bots in Combat are natively eligible,
-    // that is the whole explanation and the weapon mix is the entire story.
-    int me = DHookGetParam(hParams, 1);
-    if (me != 0)
-        for (int b = 1; b <= MaxClients; b++)
-            if (g_iBotNextBot[b] == me)
-            {
-                if (g_bBotCanSuppress[b]) g_iPursueCombatOk++;
-                int wc = g_iBotWepCls[b];
-                if (wc == 9 || wc == 10 || wc == 12) g_iPursueCombatNative++;
-                break;
-            }
-
-    // The age gate, measured on the object the gate itself uses. Restricted to threats we seeded so
-    // the numbers describe the mechanic and not the bots' ordinary combat.
-    if (g_hKE_Age != null && g_hKE_GetEntity != null)
+    // Diagnostic only, and behind the debug gate: this is a linear scan over every client on every
+    // ShouldPursue call, and Detour_ShouldPursue immediately does the same scan for real.
+    if (g_cvDebug.BoolValue)
     {
-        int k2 = DHookGetParam(hParams, 2);
-        if (k2 != 0)
-        {
-            int e2 = SDKCall(g_hKE_GetEntity, k2);
-            if (e2 >= 1 && e2 <= MaxClients && g_fSeededUntil[e2] > GetGameTime())
-            {
-                float a = SDKCall(g_hKE_Age, k2);
-                g_iP2Sampled++;
-                if (a < AGE_THRESHOLD) g_iP2Below++;
-                if (a < g_fP2Min) g_fP2Min = a;
-                if (a > g_fP2Max) g_fP2Max = a;
-            }
-        }
+        int me = DHookGetParam(hParams, 1);
+        if (me != 0)
+            for (int b = 1; b <= MaxClients; b++)
+                if (g_iBotNextBot[b] == me)
+                {
+                    if (g_bBotCanSuppress[b]) g_iPursueCombatOk++;
+                    break;
+                }
     }
 
     // The window is armed in the POST hook, not here - see Detour_ShouldPursue_Post. Arming it
     // pre meant that for any bot we did NOT deny, the engine's own ShouldPursue body ran next and
     // consumed the one-shot before Update reached the gate. Measured: promotions fell 10-20 -> 1-6.
-    return Detour_ShouldPursue(pThis, hReturn, hParams);
+    return Detour_ShouldPursue(hReturn, hParams);
 }
 
 public MRESReturn Detour_ShouldPursue_Main(Address pThis, DHookReturn hReturn, DHookParam hParams)
 {
     g_iPursueMain++;
-    return Detour_ShouldPursue(pThis, hReturn, hParams);
+    return Detour_ShouldPursue(hReturn, hParams);
 }
 
-MRESReturn Detour_ShouldPursue(Address pThis, DHookReturn hReturn, DHookParam hParams)
+MRESReturn Detour_ShouldPursue(DHookReturn hReturn, DHookParam hParams)
 {
     if (!g_bReady || !g_cvEnabled.BoolValue) return MRES_Ignored;
     if (g_hKE_GetEntity == null) return MRES_Ignored;
@@ -1428,11 +1189,6 @@ MRESReturn Detour_ShouldPursue(Address pThis, DHookReturn hReturn, DHookParam hP
         g_iForkKnown  = known;
         break;
     }
-
-    // Latch this exact CKnownEntity so the IsVisibleInFOVNow hooks can identify the call the gate
-    // at 0x706d6e makes, a few instructions later in the same Update.
-    g_iSeedKnown    = known;
-    g_fSeedKnownExp = nowP + 1.0;
 
     g_iPursueDenied++;
     DHookSetReturn(hReturn, 0);
@@ -1500,8 +1256,12 @@ void SampleArousal()
 
     for (int b = 1; b <= MaxClients; b++)
     {
-        g_fArousal[b] = -1.0;
         if (!IsClientInGame(b) || !IsFakeClient(b) || !IsPlayerAlive(b)) continue;
+
+        // Two SDKCalls and a raw read per bot per sweep. The clamp below only ever acts on a bot
+        // with g_bBotCanSuppress set, so for every other bot this whole body is measurement - skip
+        // it unless someone is watching. Clamping behaviour is byte-for-byte identical either way.
+        if (!g_bBotCanSuppress[b] && !g_cvDebug.BoolValue) continue;
 
         int nb = SDKCall(g_hMyNextBotPointer, b);
         if (nb == 0) continue;
@@ -1512,6 +1272,16 @@ void SampleArousal()
 
         // Clamp before recording, so the logged numbers describe what the engine will actually see.
         // Only bots we are currently driving: a bot we never seeded is none of our business.
+        //
+        // Two things about g_bBotCanSuppress are load-bearing here and easy to break:
+        //   - It is refreshed in Timer_Sweep BELOW the `no smokes -> return` guard, so between
+        //     clouds it holds whatever the last sweep with smoke decided. That is deliberate. The
+        //     arousal pin outlives the cloud that caused it, and a bot left pinned at 10 is dead to
+        //     the mechanic for the rest of the round; keeping the last known set clamped is what
+        //     lets the NEXT smoke work. Move the refresh above that guard and the pin comes back.
+        //   - A bot near a cloud holding an ineligible weapon class is never clamped, so it is free
+        //     to drift to the cap. Correct as long as it stays ineligible - but it is one weapon
+        //     switch away from being eligible AND pinned, which reads as "some bots never join in".
         float cap = g_cvArousalCap.FloatValue;
         if (cap > 0.0 && a > cap && g_bBotCanSuppress[b])
         {
@@ -1520,7 +1290,6 @@ void SampleArousal()
             g_iArousalClamped++;
         }
 
-        g_fArousal[b] = a;
         g_iArousalSampled++;
         if (a >= AROUSAL_GATE) g_iArousalHigh++;
         if (a < g_fArousalMin) g_fArousalMin = a;
@@ -1540,10 +1309,14 @@ Action Timer_Sweep(Handle timer)
         for (int c = 0; c < sizeof(g_aClsHist); c++)
             if (g_aClsHist[c] > 0) Format(hist, sizeof(hist), "%s%d:%d ", hist, c, g_aClsHist[c]);
 
-        LogMessage("[SMOKE SUPPRESS] pursue detour: calls=%d pCombat=%d pCombatOk=%d pMain=%d denied=%d nonClient=%d stale=%d attackForced=%d suppressForced=%d suppCalls=%d suppOther=%d combatUpd=%d ageForced=%d ageSampled=%d ageBelow=%d ageMax=%.1f ammoSampled=%d ammoBelow=%d ammoMin=%.2f refilled=%d rearmed=%d clipFill=%d forgot=%d holdNade=%d unstuck=%d | smokes=%d | BOT SHOTS near smoke=%d (inSmoke=%d outside=%d) | seeded=%d skipNoWep=%d skipClass=%d lastBadCls=%d unblinded=%d promoted=%d gateHits=%d nadeArmed=%d nadeHits=%d icaCalls=%d mEnt=%d flashed=%d fovForced=%d fovAll=%d fovSkip=%d fovInPursue=%d atkCtor=%d hidden=%d noNade=%d | p2Sampled=%d p2Below=%d p2Min=%.2f p2Max=%.2f | fovSeedTrue=%d fovSeedFalse=%d fovSeedForced=%d | pNative=%d clsHist=%s | arousal n=%d high=%d min=%.1f max=%.1f clamped=%d",
-                   g_iPursueCalls, g_iPursueCombat, g_iPursueCombatOk, g_iPursueMain, g_iPursueDenied, g_iPursueNonClient, g_iPursueStale, g_iAttackForced, g_iSuppressForced, g_iSuppCalls, g_iSuppOther, g_iCombatUpdates, g_iAgeForced, g_iAgeSampled, g_iAgeBelow, g_fAgeMax, g_iAmmoSampled, g_iAmmoBelow, g_fAmmoMin, g_iRefilled, g_iRearmed, g_iClipFilled, g_iForgot, g_iHoldingNade, g_iUnstuck, g_aSmokes.Length, g_iBotShotsNearSmoke, g_iShotsInSmoke, g_iShotsOutSmoke, g_iSeeded, g_iSkipNoWeapon, g_iSkipBadClass, g_iLastBadClass, g_iUnblinded, g_iPromoted, g_iGateHits, g_iNadeArmed, g_iNadeHits, g_iIcaCalls, g_iIcaMatchEnt, g_iFlashed, g_iFovForced, g_iFovAll, g_iFovSkip, g_iFovInPursue, g_iAttackCtor, g_iHidden, g_iNadeSkipNoNade, g_iP2Sampled, g_iP2Below, g_fP2Min, g_fP2Max, g_iFovSeedTrue, g_iFovSeedFalse, g_iFovSeedForced, g_iPursueCombatNative, hist, g_iArousalSampled, g_iArousalHigh, g_fArousalMin, g_fArousalMax, g_iArousalClamped);
-        g_iPursueCalls = 0; g_iPursueCombat = 0; g_iPursueCombatOk = 0; g_iPursueMain = 0; g_iPursueDenied = 0; g_iPursueNonClient = 0; g_iPursueStale = 0; g_iBotShotsNearSmoke = 0; g_iShotsInSmoke = 0; g_iShotsOutSmoke = 0; g_iSeeded = 0; g_iSkipNoWeapon = 0; g_iSkipBadClass = 0; g_iUnblinded = 0; g_iPromoted = 0; g_iGateHits = 0; g_iNadeArmed = 0; g_iNadeHits = 0; g_iIcaCalls = 0; g_iIcaMatchEnt = 0; g_iIcaMatchNb = 0; g_iFlashed = 0; g_iFovForced = 0; g_iFovSkip = 0; g_iFovAll = 0; g_iFovInPursue = 0; g_iAttackCtor = 0; g_iHidden = 0; g_iNadeSkipNoNade = 0; g_iAttackForced = 0; g_iSuppressForced = 0; g_iSuppCalls = 0; g_iSuppOther = 0; g_iCombatUpdates = 0; g_iAgeForced = 0; g_iAgeSampled = 0; g_iAgeBelow = 0; g_fAgeMax = 0.0; g_iAmmoSampled = 0; g_iAmmoBelow = 0; g_fAmmoMin = 1.0; g_iRefilled = 0; g_iRearmed = 0; g_iClipFilled = 0; g_iForgot = 0; g_iHoldingNade = 0; g_iUnstuck = 0; g_iP2Sampled = 0; g_iP2Below = 0; g_fP2Min = 999.0; g_fP2Max = 0.0; g_iFovSeedTrue = 0; g_iFovSeedFalse = 0; g_iFovSeedForced = 0; g_iPursueCombatNative = 0; g_iArousalSampled = 0; g_iArousalHigh = 0; g_fArousalMin = 99.0; g_fArousalMax = -1.0; g_iArousalClamped = 0;
+        LogMessage("[SMOKE SUPPRESS] pursue detour: calls=%d pCombat=%d pCombatOk=%d pMain=%d denied=%d nonClient=%d stale=%d attackForced=%d suppressForced=%d suppCalls=%d suppOther=%d combatUpd=%d ageForced=%d ageSampled=%d ageBelow=%d ageMax=%.1f ammoSampled=%d ammoBelow=%d ammoMin=%.2f refilled=%d rearmed=%d clipFill=%d forgot=%d holdNade=%d unstuck=%d | smokes=%d | BOT SHOTS near smoke=%d (inSmoke=%d outside=%d) | seeded=%d skipNoWep=%d skipClass=%d lastBadCls=%d unblinded=%d promoted=%d gateHits=%d nadeArmed=%d nadeHits=%d icaCalls=%d mEnt=%d fovForced=%d fovSkip=%d fovInPursue=%d noNade=%d | clsHist=%s | arousal n=%d high=%d min=%.1f max=%.1f clamped=%d",
+                   g_iPursueCalls, g_iPursueCombat, g_iPursueCombatOk, g_iPursueMain, g_iPursueDenied, g_iPursueNonClient, g_iPursueStale, g_iAttackForced, g_iSuppressForced, g_iSuppCalls, g_iSuppOther, g_iCombatUpdates, g_iAgeForced, g_iAgeSampled, g_iAgeBelow, g_fAgeMax, g_iAmmoSampled, g_iAmmoBelow, g_fAmmoMin, g_iRefilled, g_iRearmed, g_iClipFilled, g_iForgot, g_iHoldingNade, g_iUnstuck, g_aSmokes.Length, g_iBotShotsNearSmoke, g_iShotsInSmoke, g_iShotsOutSmoke, g_iSeeded, g_iSkipNoWeapon, g_iSkipBadClass, g_iLastBadClass, g_iUnblinded, g_iPromoted, g_iGateHits, g_iNadeArmed, g_iNadeHits, g_iIcaCalls, g_iIcaMatchEnt, g_iFovForced, g_iFovSkip, g_iFovInPursue, g_iNadeSkipNoNade, hist, g_iArousalSampled, g_iArousalHigh, g_fArousalMin, g_fArousalMax, g_iArousalClamped);
+        g_iPursueCalls = 0; g_iPursueCombat = 0; g_iPursueCombatOk = 0; g_iPursueMain = 0; g_iPursueDenied = 0; g_iPursueNonClient = 0; g_iPursueStale = 0; g_iBotShotsNearSmoke = 0; g_iShotsInSmoke = 0; g_iShotsOutSmoke = 0; g_iSeeded = 0; g_iSkipNoWeapon = 0; g_iSkipBadClass = 0; g_iUnblinded = 0; g_iPromoted = 0; g_iGateHits = 0; g_iNadeArmed = 0; g_iNadeHits = 0; g_iIcaCalls = 0; g_iIcaMatchEnt = 0; g_iFovForced = 0; g_iFovSkip = 0; g_iFovInPursue = 0; g_iNadeSkipNoNade = 0; g_iAttackForced = 0; g_iSuppressForced = 0; g_iSuppCalls = 0; g_iSuppOther = 0; g_iCombatUpdates = 0; g_iAgeForced = 0; g_iAgeSampled = 0; g_iAgeBelow = 0; g_fAgeMax = 0.0; g_iAmmoSampled = 0; g_iAmmoBelow = 0; g_fAmmoMin = 1.0; g_iRefilled = 0; g_iRearmed = 0; g_iClipFilled = 0; g_iForgot = 0; g_iHoldingNade = 0; g_iUnstuck = 0; g_iArousalSampled = 0; g_iArousalHigh = 0; g_fArousalMin = 99.0; g_fArousalMax = -1.0; g_iArousalClamped = 0;
         for (int c = 0; c < sizeof(g_aClsHist); c++) g_aClsHist[c] = 0;
+#if GRENADE_VERIFY
+        LogMessage("[SMOKE SUPPRESS] grenade verify: atkCtor=%d hidden=%d", g_iAttackCtor, g_iHidden);
+        g_iAttackCtor = 0; g_iHidden = 0;
+#endif
     }
 
     // Runs regardless of smoke: a bot stuck holding a grenade stays stuck long after the cloud is
@@ -1580,7 +1353,7 @@ Action Timer_Sweep(Handle timer)
         }
 
         g_iBotWepCls[b] = -1;
-        if (nearSmoke && g_hGetWeaponClass != null)
+        if (nearSmoke && g_cvDebug.BoolValue && g_hGetWeaponClass != null)
         {
             int aw = GetEntPropEnt(b, Prop_Send, "m_hActiveWeapon");
             if (aw > 0 && IsValidEntity(aw))
@@ -1656,7 +1429,7 @@ Action Timer_Sweep(Handle timer)
                 float bPos[3];
                 GetClientAbsOrigin(bot, bPos);
                 if (GetVectorDistance(bPos, smokePos) > range) continue;
-                SampleThreatAge(bot, client);
+                if (g_cvDebug.BoolValue) SampleThreatAge(bot, client);
                 SampleAndRefillAmmo(bot);
 
                 if (GetURandomFloat() > chance) continue;
@@ -1682,23 +1455,13 @@ int GiveVisualMemory(int vision, int target)
 {
     if (g_hGetPrimaryThreat == null || g_hKE_GetEntity == null || g_hKE_UpdateVis == null) return 0;
 
-    int stage = g_cvStage.IntValue;
-    if (stage < 1) return 0;
-
     int known = SDKCall(g_hGetPrimaryThreat, vision, false);
     if (known == 0) return 0;
     if (SDKCall(g_hKE_GetEntity, known) != target) return 0;
 
+    // Seen, then immediately unseen. Both halves are required: see the comment above.
     SDKCall(g_hKE_UpdateVis, known, true);
-
-    // Leave it visible for this fraction of seeds - see g_cvGrenadeFlash.
-    if (GetURandomFloat() < g_cvGrenadeFlash.FloatValue) g_iFlashed++;
-    else                                                 SDKCall(g_hKE_UpdateVis, known, false);
-
-    // Make the synthesised state coherent: an entity we claim is long-known must also have a last
-    // known position the engine considers seen, or the suppression path dereferences data that was
-    // never populated.
-    if (stage >= 2 && g_hKE_MarkSeen != null) SDKCall(g_hKE_MarkSeen, known);
+    SDKCall(g_hKE_UpdateVis, known, false);
 
     return known;
 }
@@ -1838,11 +1601,15 @@ void SampleAndRefillAmmo(int bot)
 
     // Diagnostic only, and read it carefully: this is the ratio for the ACTIVE weapon. A bot that
     // has burned its rifle dry and switched to a knife reports 1.00 here, which is what made this
-    // number look healthy for hours while bots were in fact out of ammo.
-    float ratio = SDKCall(g_hAmmoRatio, GetEntityAddress(bot));
-    g_iAmmoSampled++;
-    if (ratio < AMMO_GATE) g_iAmmoBelow++;
-    if (ratio < g_fAmmoMin) g_fAmmoMin = ratio;
+    // number look healthy for hours while bots were in fact out of ammo. Behind the debug gate -
+    // the refill below is the part that has to run in production.
+    if (g_cvDebug.BoolValue)
+    {
+        float ratio = SDKCall(g_hAmmoRatio, GetEntityAddress(bot));
+        g_iAmmoSampled++;
+        if (ratio < AMMO_GATE) g_iAmmoBelow++;
+        if (ratio < g_fAmmoMin) g_fAmmoMin = ratio;
+    }
 
     if (!g_cvRefillAmmo.BoolValue) return;
 
@@ -1882,7 +1649,10 @@ void SampleAndRefillAmmo(int bot)
 }
 
 // How long has this bot known the player? Below AGE_THRESHOLD the engine refuses to suppress and
-// never even reaches the weapon-class gate.
+// never even reaches the weapon-class gate. Instrumentation only - it walks five SDKCalls per
+// seeded bot per sweep and writes nothing - so the caller runs it only under `debug`. The gate
+// itself was cleared as a suspect (ages measured 2-25s against a 1.0s threshold); this stays
+// because it is the cheapest way to re-check that if the mechanic ever goes quiet again.
 void SampleThreatAge(int bot, int target)
 {
     if (g_hKE_Age == null || g_hMyNextBotPointer == null || g_hGetVisionInterface == null) return;

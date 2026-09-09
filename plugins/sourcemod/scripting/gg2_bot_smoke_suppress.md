@@ -387,18 +387,14 @@ still lands. Confirm it is matching with `hidden=` in the debug line.
 | `..._unstick_grenade` | 0 | seconds a bot may hold an unthrown grenade before being switched back to a firearm. Safety valve; bots put it away on their own |
 | `..._include_in_smoke` | 0 | let bots inside the cloud suppress too |
 | `..._smoke_life` | 18.0 | seconds a smoke stays tracked - **prevents the stale-smoke failure** |
-| `..._stage` | 1 | how far the seeding sequence runs (0 AddKnownEntity, 1 +visual memory, 2 +mark position seen) |
 | `..._grenade_chance` | 0.0 | steer seeded bots onto the grenade action |
 | `..._grenade_class` | 2 | class reported at the attack dispatch (2 frag 3 molotov 4 smoke 7 AT4) |
-| `..._grenade_flash` | 0.0 | **obsolete** - superseded by the FOV fork; leave at 0 |
-| `..._force_notvisible` | 0 | answer false to `IsVisibleInFOVNow` for a seeded threat. **Measured to be unnecessary** - it already answers false. Kept as a switch, not a fix |
-| `..._hide_client` | 0 | TESTING: hide one client index from bot vision (see notarget/nb_blind above) |
 | `..._classnames` | grenade_m18,grenade_smoke | smoke entity substrings |
 | `..._debug` | 0 | per-sweep counters |
 
-Debug commands: `..._selftest <bot> <target>`, `..._peek <bot>`, `..._dumpclasses`,
-`..._nadecheck` (per-bot throwable inventory), `..._why` (all gates per bot plus full inventory),
-`..._reset` (clears runtime state, leaves detours alone).
+Debug commands: `..._why` (all gates per bot, arousal first, plus full inventory - **start here**),
+`..._dumpclasses`, `..._nadecheck` (per-bot throwable inventory), `..._reset` (clears runtime state,
+leaves detours alone - see the warning on it, it un-clamps arousal).
 
 Measured effect of widening `weapon_classes`, same map and position:
 
@@ -411,13 +407,16 @@ Measured effect of widening `weapon_classes`, same map and position:
 Debug counters worth knowing: `arousalHigh`/`arousalMax`/`clamped` (**check these first** - if
 `arousalHigh` is nonzero the bots have left the suppression path entirely and nothing downstream
 matters), `suppCalls` (the discriminator - 0 means the engine never reached `ShouldSuppressThreat`),
-`pNative` (bots in Combat holding a natively eligible weapon), `clsHist` (active weapon class
-distribution near a cloud), `fovForced` (attack-branch forks taken), `fovSkip` (matches rejected
-because the gate window was shut), `noNade` (bots skipped for carrying no throwable), `hidden`
-(hide_client filter hits), `denied`/`stale` (pursuit denial working vs lapsed), `skipClass` with
-`lastBadCls` (bots excluded by weapon class), `atkCtor` (`CINSBotAttack` constructions - ground
-truth for whether the grenade fork branch was taken), and `p2Sampled`/`p2Below` (threat age on the
-exact `CKnownEntity` the gate reads).
+`clsHist` (active weapon class distribution near a cloud), `fovForced` (attack-branch forks taken),
+`fovSkip` (matches rejected because the gate window was shut), `noNade` (bots skipped for carrying
+no throwable), `hidden` (hide_client filter hits), `denied`/`stale` (pursuit denial working vs
+lapsed), `skipClass` with `lastBadCls` (bots excluded by weapon class), and `atkCtor`
+(`CINSBotAttack` constructions - ground truth for whether the grenade fork branch was taken).
+
+`..._why` is the faster first move: it dumps every gate, arousal first, for every living bot in one
+shot. Several counters that existed only to settle a specific hypothesis (`p2Sampled`/`p2Below`,
+`fovSeedTrue`/`fovSeedFalse`, `pNative`) have been removed now that they have answered - the
+measurements they produced are recorded in the eliminated-hypotheses table below.
 
 ## Testing notes
 
@@ -657,18 +656,96 @@ Server was left in production shape: cheats off, round limits restored, `debug 0
    denies pursuit, fakes weapon classes and writes arousal - all scoped to bots eligible near a
    cloud, but that scoping is argued, not observed.
 
-4. **Performance.** Never measured. The `IsVisibleInFOVNow` detour fires ~4000x/second and now
-   carries a post hook as well, plus 25 SDKCalls per sweep for arousal. Check frame time before this
-   goes anywhere near the main server.
+4. **Performance.** Never measured. The `IsVisibleInFOVNow` pre-detour still fires ~4000x/second,
+   though with `grenade_chance` at 0 it returns on the second line. With `debug` off the sweep now
+   costs 2 SDKCalls per *clamp-eligible* bot rather than per living bot, and the per-seed age and
+   ammo sampling is gone entirely. Check frame time before this goes anywhere near the main server. If the pre-detour turns out to cost real time, it only exists for the
+   grenade fork and could be installed lazily on a `grenade_chance` change hook.
 
-5. **Cleanup.**
-   - `force_notvisible` is dead weight - measured unnecessary, `IsVisibleInFOVNow` already answers
-     false for a smoked target. Remove it.
-   - Gate the arousal and weapon-class-histogram sampling behind `debug` so they cost nothing in
-     production.
-   - `Detour_ShouldPursue`'s unused `pThis` parameter still warns on every compile.
-   - The arousal clamp is gated on `g_bBotCanSuppress`, so a bot holding an ineligible weapon class
-     never gets clamped and can still drift to 10. Harmless but visible as `arousalHigh=1`.
+5. **Cleanup.** Done - see the section below. One item was deliberately left alone: the arousal
+   clamp is gated on `g_bBotCanSuppress`, so a bot near a cloud holding an ineligible weapon class
+   is never clamped and can drift to 10. Changing that would alter behaviour that is currently
+   verified working, so it is documented at the clamp instead of fixed.
+
+## Cleanup pass
+
+Done after the mechanic was confirmed working, with no behaviour change intended and a clean
+compile (previously one warning):
+
+- Removed `force_notvisible` and its branch - measured unnecessary, `IsVisibleInFOVNow` already
+  answers false for a smoked target.
+- Removed the `IsVisibleInFOVNow` **post** hook and the `g_iSeedKnown` latch that fed it. That hook
+  ran on every one of ~4000 calls a second purely to count `fovSeedTrue`/`fovSeedFalse`, and those
+  counters had already answered their question.
+- Removed the parameter-2 age sampling from `Detour_ShouldPursue_Combat`. It cost an SDKCall on
+  every `ShouldPursue` call to produce `p2Below`, which measured 0 every time.
+- Removed `pNative`, and put the surviving per-call client scan in that detour behind `debug` - it
+  is a linear scan over every client that `Detour_ShouldPursue` then immediately repeats for real.
+- Weapon-class histogram sampling now only runs when `debug` is on.
+- Deleted write-only state (`g_fArousal[]`, `g_iIcaMatchNb`) and fixed the unused-parameter warning
+  in `Detour_ShouldPursue`.
+- Removed `..._selftest` and `..._peek`. `selftest` was a bring-up scaffold: it wrote engine state
+  on live bots with no smoke involved, its verdicts answered a question settled long ago, and its
+  step numbering had rotted (1, 2, 4, 7, 5, 6). `..._why` covers the same SDKCall chain read-only
+  and is the better post-update health check. With them went `IsVisibleRecently`,
+  `GetTimeSinceLastSeen`, `WasEverVisible`, `IsLineOfFireClear` and the `PrepVirtRet` helper.
+- `SampleThreatAge` now runs only under `debug`. It walked five SDKCalls per seeded bot per sweep
+  and wrote nothing - pure instrumentation for a gate that was cleared as a suspect.
+- Split `SampleAndRefillAmmo`: the ratio sample is behind `debug`, the refill still always runs.
+- `SampleArousal` now skips the body read for bots the clamp could not act on anyway (no
+  `g_bBotCanSuppress`) unless `debug` is on. Clamping behaviour is unchanged.
+- Dropped `fovAll`, which counted every call on the ~4000/sec path before any early-out.
+- Removed `..._grenade_flash` (documented obsolete, superseded by the FOV fork) and `..._stage`,
+  a bisection dial whose only ever-used setting was the default - stage 0 disabled seeding and
+  re-arming, stage 2 called `MarkLastKnownPositionAsSeen`, which was never on. Behaviour at the
+  defaults is unchanged. `MarkLastKnownPositionAsSeen` went with it.
+- Relabelled the `CINSBotCombat::UpdateInternalInfo` detour. It was registered and logged as a
+  "combat-update counter", but it arms the weapon-class gate window - if it fails to install,
+  promotion silently stops and only natively eligible weapons can suppress. The failure message now
+  says that.
+- Put the two grenade-verification-only pieces behind `#define GRENADE_VERIFY 0` - see the scope
+  section. Also fixed two block comments that had drifted onto the wrong detour: "Pure observer: how
+  often does the Combat action actually run?" sat above the `IsIgnored` install rather than
+  `UpdateInternalInfo`, and the `IsVisibleInFOVNow` comment was truncated mid-sentence and still
+  described the post hook that was removed in the first pass.
+- Added arousal to `..._why` as gate 0. It was the gate that actually killed the mechanic and the
+  one-shot diagnostic dump did not show it, so the dump could report every gate green on a bot that
+  had not fired in minutes.
+
+## Scope: what is in here that is not the mechanic
+
+### Compiled out: `#define GRENADE_VERIFY`
+
+Two pieces exist only to observe a test, never to make the mechanic work, and both are now behind a
+compile-time switch at the top of the `.sp`, set to `0`. Both configurations compile clean; flip it
+to `1` and recompile to get them back.
+
+| Behind the switch | Why it is not shipped |
+|---|---|
+| `..._hide_client` + the `CINSBotVision::IsIgnored` detour | A test harness that hides one client index from bot vision, so seeding is the only channel by which bots can learn about the tester. `notarget` does not work on NextBot vision and `nb_blind` kills the vision update outright, leaving nothing to inject into. On a live server it is a "make me invisible to bots" switch for anyone with rcon |
+| the `CINSBotAttack::ctor` detour | A whole detour whose body is one increment. `atkCtor` is the only ground truth for whether the grenade fork reached the attack branch |
+
+When `GRENADE_VERIFY` is on, `atkCtor` and `hidden` are reported on their own log line rather than
+being wedged into the main counter dump.
+
+**To verify grenades:** set it to `1`, recompile, then `grenade_chance 1.0` and `debug 1`, throw one
+smoke, and check `fovForced` -> `atkCtor` -> `icaCalls` -> `nadeHits` still run 1:1:1:1. Note that
+the grenade *mechanism* - the FOV fork, `InitialContainedAction`, `grenade_chance` - is not behind
+the switch and ships as normal. Only the instrumentation is.
+
+### Shipped, but not the mechanic
+
+None of the below is load-bearing for "bots shoot into smoke", so each is a decision rather than a
+bug.
+
+- **`..._include_in_smoke`.** Off by default, and arguably the opposite of the plugin's job: it
+  clears the blinded flag so bots *inside* the cloud can see out. Keep or cut on gameplay grounds,
+  not correctness.
+- **`..._refill_ammo` (on) and `..._unstick_grenade` (off).** Both are compensation for side
+  effects the mechanic itself causes - drained magazines, bots left holding a grenade. In scope,
+  but worth knowing they are the plugin cleaning up after itself rather than doing its job.
+- **`..._dumpclasses`.** A discovery tool for building the weapon-class map. That map is built and
+  recorded above; the command is kept only because it costs nothing.
 
 ### Separate from this plugin
 

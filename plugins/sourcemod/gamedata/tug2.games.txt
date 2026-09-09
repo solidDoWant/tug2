@@ -174,11 +174,10 @@
 				"linux"		"@_ZN13CINSBotCombat18UpdateInternalInfoEv"
 			}
 
-			// Diagnostic only. Non-virtual on CINSNextBot, so it takes the ENTITY address as this -
-			// not the INextBot subobject that MyNextBotPointer returns. Passing the wrong one is
-			// what segfaulted the server earlier. Used to test whether the engine considers smoke
-			// to block a bot's line of fire, which would explain bots refusing to shoot into it
-			// regardless of what they are told about threats.
+			// UNUSED by the plugin - kept as reference. Non-virtual on CINSNextBot, so it takes the
+			// ENTITY address as this, not the INextBot subobject that MyNextBotPointer returns;
+			// passing the wrong one segfaulted the server. It was only ever used to test whether the
+			// engine considers smoke to block a bot's line of fire, and that question is answered.
 			"CINSNextBot::IsLineOfFireClear"
 			{
 				"library"	"server"
@@ -234,6 +233,11 @@
 			{
 				"linux"		"4"
 			}
+
+			// The next three, and GetLastKnownPosition below, are UNUSED by the plugin - they went
+			// out with the selftest/peek commands. Kept because slot numbers are expensive to
+			// re-derive and free to carry: an unreferenced entry is never looked up, so it cannot
+			// fail at load the way a stale signature can.
 			"CKnownEntity::IsVisibleRecently"
 			{
 				"linux"		"15"
@@ -277,6 +281,7 @@
 			{
 				"linux"		"5"
 			}
+			// UNUSED - went out with the `stage` bisection dial (stage 2 was never the default).
 			"CKnownEntity::MarkLastKnownPositionAsSeen"
 			{
 				"linux"		"9"
