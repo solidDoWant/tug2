@@ -49,6 +49,29 @@
 				"linux"		"@_ZN13CINSBotVision9IsBlindedEv"
 			}
 
+			// Grenades. CINSBotAttack::InitialContainedAction picks the attack sub-action from a
+			// jump table indexed on GetWeaponClass():
+			//   call *0x5f0(%eax) ; cmp $0xe,%eax ; mov -0x22735c(%ebx,%eax,4),%eax
+			// ...selecting Melee / CQC / Sniper / Rifle / LMG / Pistol / ThrowGrenade. So reporting
+			// a grenade class at THAT call makes the engine build CINSBotThrowGrenade itself - no
+			// action-stack injection needed. Measured classes: 2=frag 3=molotov 4=smoke 7=AT4.
+			// Returns a pointer (int-sized), so it is safe to detour.
+			// Counting construction separates "the fork was not taken" from "the action was
+			// created and then killed itself in OnStart" - OnStart has four Done exits, and
+			// InitialContainedAction only runs when it returns Continue. Void return, so this is
+			// safe to detour (unlike the float-returning accessors that crashed the server).
+			"CINSBotAttack::ctor"
+			{
+				"library"	"server"
+				"linux"		"@_ZN13CINSBotAttackC1Ev"
+			}
+
+			"CINSBotAttack::InitialContainedAction"
+			{
+				"library"	"server"
+				"linux"		"@_ZN13CINSBotAttack22InitialContainedActionEP11CINSNextBot"
+			}
+
 			// Signature form of the same accessor we call by vtable offset elsewhere. Detoured so
 			// sm_bot_smoke_suppress_weapon_classes can genuinely widen who suppresses: the engine's
 			// gate in Combat::Update hardcodes {9,10,12}, so a weapon outside that set is reported
@@ -97,6 +120,27 @@
 			// every sweep, so "time since became known" sits at ~0 forever and never ages past the
 			// threshold - our own seeding was defeating the gate. Forcing a large value clears it
 			// regardless of the (PIC-relative, hard to read) constant it is compared against.
+			// The real gate behind the per-smoke dropouts. CINSBotCombat::Update does:
+			//   706b2c: call GetActiveWeaponAmmoRatio ; 706b3d: fstps -0x3d8(%ebp)
+			//   706c55: movss 0.1 ; comiss -0x3d8(%ebp) ; 706c64: jbe <suppression path>
+			// Below a 10% ammo ratio the bot never reaches the suppression path at all - not the
+			// age gate, not the weapon-class gate, not ShouldSuppressThreat.
+			// The engine's own weapon selection. A bot that ran dry falls back to a pistol and
+			// then to its knife, and nothing re-runs selection once ammo is restored - so it sits
+			// on a knife holding full magazines, and melee can never pass the suppression gate.
+			// Measured live: 7 of 25 bots on knives, 6 on pistols, only 7 still eligible.
+			"CINSNextBot::ChooseBestWeapon"
+			{
+				"library"	"server"
+				"linux"		"@_ZN11CINSNextBot16ChooseBestWeaponEPK12CKnownEntity"
+			}
+
+			"CINSNextBot::GetActiveWeaponAmmoRatio"
+			{
+				"library"	"server"
+				"linux"		"@_ZN11CINSNextBot24GetActiveWeaponAmmoRatioEv"
+			}
+
 			"CKnownEntity::GetTimeSinceBecameKnown"
 			{
 				"library"	"server"
@@ -106,6 +150,16 @@
 			{
 				"library"	"server"
 				"linux"		"@_ZNK12CKnownEntity17IsVisibleInFOVNowEv"
+			}
+
+			// Per-entity vision filter. nb_blind is useless as a test harness - it disables the
+			// vision update wholesale, so no CKnownEntity exists to inject into and Combat::Update
+			// never runs (measured: fovSkip and combatUpd both 0). This filters a single entity
+			// instead, leaving the rest of the vision system running.
+			"CINSBotVision::IsIgnored"
+			{
+				"library"	"server"
+				"linux"		"@_ZNK13CINSBotVision9IsIgnoredEP11CBaseEntity"
 			}
 
 			// Pure counter, never modified. Called from CINSBotCombat::Update, so counting it says
@@ -151,6 +205,15 @@
 				"linux"		"55"
 			}
 
+			// vtable for INextBot @ 0x00b92440, INextBot::GetBodyInterface @ slot 53 (one before
+			// GetIntentionInterface/GetVisionInterface). Needed to reach CINSBotBody, whose arousal
+			// float lives at +0x138: CINSBotCombat::Update gates the entire suppression path on
+			// IsMinArousal(8), and IsMinArousal is just round(*(float*)(this+0x138)) >= arg.
+			"INextBot::GetBodyInterface"
+			{
+				"linux"		"53"
+			}
+
 			// vtable for IVision @ 0x00b92800, IVision::AddKnownEntity(CBaseEntity*) @ 0x00795fc0.
 			// Note IVision::AddKnownEntity(int) is a different overload - this is the entity one.
 			"IVision::AddKnownEntity"
@@ -189,6 +252,31 @@
 			// threats (last known VISIBLE spot, etc) - which crashed the server on smoke throw.
 			// Marking the last known position as seen makes the synthesised state internally
 			// coherent instead of impossible.
+			// The aim point for suppressing fire. The engine only ever writes this from its own
+			// vision update, for entities it actually sees - so an injected entry never gets one
+			// and bots suppress a stale or uninitialised point. Observed live as bots firing at
+			// roughly 45 degrees above horizontal, which suppresses nothing.
+			"CKnownEntity::UpdatePosition"
+			{
+				"linux"		"3"
+			}
+
+			// The aim point CINSBotCombat::Update reads and hands to CINSBotSuppressTarget's
+			// ctor. Not called by the plugin - recorded because it is the counterpart to
+			// UpdatePosition (slot 3) and proves the two touch the same field.
+			// Forgetting a threat so the next AddKnownEntity reads as a NEW acquisition. Re-adding
+			// an entity the bot already knows does not move the behavior back into Combat -
+			// measured as pCombat collapsing 65 -> 14 on the second smoke while seeding, re-arming
+			// and the weapon-class counts stayed identical.
+			"CKnownEntity::Destroy"
+			{
+				"linux"		"2"
+			}
+
+			"CKnownEntity::GetLastKnownPosition"
+			{
+				"linux"		"5"
+			}
 			"CKnownEntity::MarkLastKnownPositionAsSeen"
 			{
 				"linux"		"9"
@@ -254,6 +342,20 @@
 				"return"	"bool"
 				"this"		"address"
 			}
+			"CINSBotVision::IsIgnored"
+			{
+				"signature"	"CINSBotVision::IsIgnored"
+				"callconv"	"thiscall"
+				"return"	"bool"
+				"this"		"address"
+				"arguments"
+				{
+					"entity"
+					{
+						"type"	"int"
+					}
+				}
+			}
 			"CINSBotCombat::UpdateInternalInfo"
 			{
 				"signature"	"CINSBotCombat::UpdateInternalInfo"
@@ -267,6 +369,27 @@
 				"callconv"	"thiscall"
 				"return"	"int"
 				"this"		"address"
+			}
+			"CINSBotAttack::ctor"
+			{
+				"signature"	"CINSBotAttack::ctor"
+				"callconv"	"thiscall"
+				"return"	"void"
+				"this"		"address"
+			}
+			"CINSBotAttack::InitialContainedAction"
+			{
+				"signature"	"CINSBotAttack::InitialContainedAction"
+				"callconv"	"thiscall"
+				"return"	"int"
+				"this"		"address"
+				"arguments"
+				{
+					"bot"
+					{
+						"type"	"int"
+					}
+				}
 			}
 			"CINSBotVision::IsBlinded"
 			{
