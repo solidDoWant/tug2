@@ -435,6 +435,16 @@ RUN --mount=type=bind,source=./plugins/sourcemod/scripting,target=/plugin-source
     find /insurgency -type d -exec chmod 755 {} \; && \
     find /insurgency -type f -exec chmod 644 {} \;
 
+FROM sourcemod-plugins-base AS sourcemod-plugins-gg2-hostname-rounds
+
+# Build the gg2_hostname_rounds plugin
+COPY plugins/sourcemod/gamedata/ /insurgency/addons/sourcemod/gamedata/
+RUN --mount=type=bind,source=./plugins/sourcemod/scripting,target=/plugin-source/scripting \
+    /sourcemod/addons/sourcemod/scripting/spcomp --include=/plugin-source/scripting/include  /plugin-source/scripting/gg2_hostname_rounds.sp -o /insurgency/addons/sourcemod/plugins/gg2_hostname_rounds.smx && \
+    # Fixup file permissions
+    find /insurgency -type d -exec chmod 755 {} \; && \
+    find /insurgency -type f -exec chmod 644 {} \;
+
 FROM sourcemod-plugins-base AS sourcemod-plugins-gg2-insurgency
 
 # Build the gg2_insurgency plugin
@@ -818,6 +828,7 @@ COPY --from=sourcemod-plugins-gg2-forceauthorize --chown=0:0 /insurgency /opt/in
 # Test server runs the opt-out variant instead of gg2_forceretry (never both).
 COPY --from=sourcemod-plugins-gg2-forceretry-optout --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
 COPY --from=sourcemod-plugins-gg2-fuckyeah --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
+COPY --from=sourcemod-plugins-gg2-hostname-rounds --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
 COPY --from=sourcemod-plugins-gg2-insurgency --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
 COPY --from=sourcemod-plugins-gg2-kill-entities --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
 # Experimental: bots blind-firing into smoke. Test server only, and inert until
