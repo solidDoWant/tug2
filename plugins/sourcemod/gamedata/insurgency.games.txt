@@ -1,4 +1,26 @@
 // Copied from https://raw.githubusercontent.com/rrrfffrrr/Insurgency-server-plugins/b75c055eb8c87f609f4f88ec32a96daab99bd226/gamedata/insurgency.games.txt
+//
+// LINUX OFFSET CORRECTION, 2026-09-11. Every bare CBaseCombatWeapon virtual below (the ones with no
+// class prefix: ShouldBlockPrimaryFire, CheckReload, GetFireRate, GetMaxClip1, GetDefaultClip1,
+// GetWeight, GetSlot, GetName, GetPrintName) was ONE TOO HIGH for the server binary this repo
+// ships, so each resolved to the next function along - GetSlot landed on GetPosition, GetName on
+// GetPrintName, and so on. All nine return small ints or pointers, so nothing crashed; they just
+// silently answered the wrong question.
+//
+// Verified by reading _ZTV17CBaseCombatWeapon out of insurgency/bin/server_srv.so and resolving
+// each entry against the symbol table, with the index base confirmed by entries 0 and 1 being the
+// two GCC destructors. Cross-checked at a call site: CINSPlayer::GetWeaponInSlot calls
+// "call DWORD PTR [eax+0x530]" (0x530/4 = 332) and compares the result against its slot argument,
+// which is GetSlot at 332, not 333.
+//
+// The "windows" values are untouched: they cannot be checked from a Linux binary, and no server
+// here runs Windows. Note they now read the same as linux, which is unusual - the upstream file had
+// linux = windows + 1 throughout, the normal GCC-has-two-destructors relationship - so if these are
+// ever needed on Windows, verify them there rather than trusting either number.
+//
+// None of these nine were used by any plugin in this repo when the correction was made, which is
+// why the error went unnoticed. The class-prefixed offsets (CINSWeapon::*, CINSPlayer::*,
+// CINSSpawnZone::*) are in other vtables, are in active use, and were NOT touched.
 "Games"
 {
 	"insurgency"
@@ -90,42 +112,42 @@
 			"CheckReload"
 			{
 				"windows"	"282"
-				"linux"		"283"
+				"linux"		"282"
 			}
 			"GetDefaultClip1"
 			{
 				"windows"	"326"
-				"linux"		"327"
+				"linux"		"326"
 			}
 			"GetFireRate"
 			{
 				"windows"	"297"
-				"linux"		"298"
+				"linux"		"297"
 			}
 			"GetMaxClip1"
 			{
 				"windows"	"324"
-				"linux"		"325"
+				"linux"		"324"
 			}
 			"GetName"
 			{
 				"windows"	"334"
-				"linux"		"335"
+				"linux"		"334"
 			}
 			"GetPrintName"
 			{
 				"windows"	"335"
-				"linux"		"336"
+				"linux"		"335"
 			}
 			"GetSlot"
 			{
 				"windows"	"332"
-				"linux"		"333"
+				"linux"		"332"
 			}
 			"GetWeight"
 			{
 				"windows"	"328"
-				"linux"		"329"
+				"linux"		"328"
 			}
 			"RemovePlayerItem"
 			{
@@ -136,7 +158,7 @@
 			"ShouldBlockPrimaryFire"
 			{
 				"windows"	"280"
-				"linux"		"281"
+				"linux"		"280"
 			}
 		}
 		"Signatures"

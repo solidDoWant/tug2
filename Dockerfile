@@ -246,6 +246,22 @@ RUN --mount=type=bind,source=./plugins/sourcemod,target=/plugin-source \
     find /insurgency -type d -exec chmod 755 {} \; && \
     find /insurgency -type f -exec chmod 644 {} \;
 
+FROM sourcemod-plugins-base AS sourcemod-plugins-loadoutsaver-slots
+
+# Build the all-slots variant of the loadout saver. Registers the same commands as LoadoutSaver and
+# must never be deployed alongside it - the test image takes this one instead, the way it already
+# takes gg2_forceretry_optout instead of gg2_forceretry.
+COPY plugins/sourcemod/gamedata/ /insurgency/addons/sourcemod/gamedata/
+RUN --mount=type=bind,source=./plugins/sourcemod,target=/plugin-source \
+    /sourcemod/addons/sourcemod/scripting/spcomp --include=/plugin-source/scripting/include  /plugin-source/scripting/LoadoutSaverSlots.sp -o /insurgency/addons/sourcemod/plugins/LoadoutSaverSlots.smx && \
+    mkdir -p /insurgency/addons/sourcemod/configs/sql-init-scripts/pgsql && \
+    cp /plugin-source/configs/sql-init-scripts/pgsql/loadout_saver_slots.sql /insurgency/addons/sourcemod/configs/sql-init-scripts/pgsql/loadout_saver_slots.sql && \
+    mkdir -p /insurgency/cfg/sourcemod && \
+    touch /insurgency/cfg/sourcemod/plugin.loadoutsaverslots.cfg && \
+    # Fixup file permissions
+    find /insurgency -type d -exec chmod 755 {} \; && \
+    find /insurgency -type f -exec chmod 644 {} \;
+
 FROM sourcemod-plugins-base AS sourcemod-plugins-restrictedarea
 
 # Build the restricted area removal plugin
@@ -809,7 +825,8 @@ COPY --from=sourcemod-plugins-marquis-fix --chown=0:0 /insurgency /opt/insurgenc
 COPY --from=sourcemod-plugins-citadel-coop-spawn-fix --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
 COPY --from=sourcemod-plugins-firesupport --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
 COPY --from=sourcemod-plugins-databasemigrator --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
-COPY --from=sourcemod-plugins-loadoutsaver --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
+# Test server runs the all-slots variant instead of LoadoutSaver (never both).
+COPY --from=sourcemod-plugins-loadoutsaver-slots --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
 COPY --from=sourcemod-plugins-counterattack-countdown --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
 COPY --from=sourcemod-plugins-restrictedarea --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
 COPY --from=sourcemod-plugins-bot-flashlights --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
