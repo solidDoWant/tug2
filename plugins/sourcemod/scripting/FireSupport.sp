@@ -91,6 +91,9 @@ ConVar      gCvarEnableCmd;
 ConVar      gCvarEnableWeapon;
 ConVar      gCvarTeamDamageScale;
 ConVar      gCvarSpectatorMessages;
+ConVar      gCvarSkySearchRadius;
+ConVar      gCvarSkySearchRings;
+ConVar      gCvarSkySearchPoints;
 
 bool        IsEnabled[MAXPLAYERS + 1];
 bool        IsEnabledTeam[4][MAX_SUPPORT_TYPES];            // [team][supportType] - per-type cooldown tracking
@@ -154,6 +157,9 @@ public void OnPluginStart()
     gCvarEnableWeapon = CreateConVar("sm_firesupport_enable_weapon", "1", "Player can call fire support using weapon.", FCVAR_PROTECTED);
     gCvarTeamDamageScale = CreateConVar("sm_firesupport_team_damage_scale", "0.5", "Multiplier applied to fire support damage dealt to the caller's own team. 1.0 = no reduction.", FCVAR_PROTECTED, true, 0.0, true, 1.0);
     gCvarSpectatorMessages = CreateConVar("sm_firesupport_spectator_messages", "1", "Spectators also see fire support messages, whichever team called it. Off restores the strictly team-only behaviour.", FCVAR_PROTECTED, true, 0.0, true, 1.0);
+    gCvarSkySearchRadius = CreateConVar("sm_firesupport_sky_search_radius", "256.0", "If the marker itself has no sky overhead, search out to this radius for a spot that does. 0 = only check directly above, the old behaviour.", FCVAR_PROTECTED, true, 0.0, true, 1024.0);
+    gCvarSkySearchRings = CreateConVar("sm_firesupport_sky_search_rings", "2", "How many rings of samples to try between the marker and the search radius.", FCVAR_PROTECTED, true, 1.0, true, 8.0);
+    gCvarSkySearchPoints = CreateConVar("sm_firesupport_sky_search_points", "8", "Samples per ring. Total traces on a failed centre check is rings x points.", FCVAR_PROTECTED, true, 1.0, true, 32.0);
 
     AutoExecConfig(true, "firesupport");
 
@@ -1283,10 +1289,13 @@ bool GetAimGround(int client, float vec[3])
     return false;
 }
 
-bool GetSkyPos(int client, float pos[3], float vec[3])
+// One straight-up trace. True only if it ends on the skybox, which is what makes a spot reachable
+// by something falling from above.
+static bool SkyTraceAt(int client, const float from[3], float vec[3])
 {
-    Handle ray = TR_TraceRayFilterEx(pos, UP_VECTOR, MASK_SOLID_BRUSHONLY, RayType_Infinite, TraceWorldOnly, client);
+    Handle ray = TR_TraceRayFilterEx(from, UP_VECTOR, MASK_SOLID_BRUSHONLY, RayType_Infinite, TraceWorldOnly, client);
 
+    bool hitSky = false;
     if (TR_DidHit(ray))
     {
         char surface[64];
@@ -1294,12 +1303,61 @@ bool GetSkyPos(int client, float pos[3], float vec[3])
         if (StrEqual(surface, "TOOLS/TOOLSSKYBOX", false))
         {
             TR_GetEndPosition(vec, ray);
-            CloseHandle(ray);
-            return true;
+            hitSky = true;
         }
     }
 
     CloseHandle(ray);
+    return hitSky;
+}
+
+// Find a spot near the target that the sky can actually reach.
+//
+// This used to be a single trace straight up from the marker. Anything overhead - a balcony, an
+// awning, a bit of pipework, the lip of a courtyard - failed the whole call, even when open sky
+// was a couple of feet away. Now the centre is tried first and, failing that, rings of samples
+// outward until one sees sky.
+//
+// The point that succeeds becomes the barrage centre: shells spawn at sky[0]/sky[1] and fall
+// straight down, so they have to come through the hole that was actually found. Searching from
+// the centre outward and stopping at the first hit keeps that hole as close to the marker as
+// possible. Cap the radius with sm_firesupport_sky_search_radius - too generous and a strike
+// called under a roof lands somewhere the player was not pointing at.
+//
+// Cost is bounded and only paid on failure: rings x points traces, once, when someone throws a
+// marker. Default 2 x 8 = 16.
+bool GetSkyPos(int client, const float pos[3], float vec[3])
+{
+    if (SkyTraceAt(client, pos, vec)) return true;
+
+    float maxRadius = (gCvarSkySearchRadius == null) ? 256.0 : gCvarSkySearchRadius.FloatValue;
+    if (maxRadius <= 0.0) return false;
+
+    int rings  = (gCvarSkySearchRings  == null) ? 2 : gCvarSkySearchRings.IntValue;
+    int points = (gCvarSkySearchPoints == null) ? 8 : gCvarSkySearchPoints.IntValue;
+    if (rings < 1 || points < 1) return false;
+
+    for (int r = 1; r <= rings; r++)
+    {
+        float radius = maxRadius * float(r) / float(rings);
+
+        // Offset each ring so samples do not stack along the same spokes - a narrow gap between
+        // two buildings is easy to miss if every ring probes the same eight directions.
+        float offset = (MATH_PI / float(points)) * float(r - 1);
+
+        for (int i = 0; i < points; i++)
+        {
+            float ang = offset + (2.0 * MATH_PI * float(i) / float(points));
+
+            float test[3];
+            test[0] = pos[0] + Cosine(ang) * radius;
+            test[1] = pos[1] + Sine(ang) * radius;
+            test[2] = pos[2];
+
+            if (SkyTraceAt(client, test, vec)) return true;
+        }
+    }
+
     return false;
 }
 
