@@ -25,6 +25,23 @@
 				"linux"		"@_ZN13NextBotPlayerI10CINSPlayerE16MyNextBotPointerEv"
 			}
 
+			// The theater's definition tables, for resolving item names to the integer ids the
+			// inventory_* console commands take. See theateritems.inc.
+			//
+			// This is a send proxy, not a getter: it exists so DT_TheaterDirectorProxy can network
+			// the director, and its whole body is "return TheaterDirector". Calling it is simply
+			// the cheapest way to read that global - the alternative is resolving the global's
+			// address directly, which on this PIC build means reconstructing a GOT-relative
+			// reference rather than reading an immediate.
+			//
+			// Pass nulls for everything. The only argument it touches is pRecipients, which it
+			// writes to when non-null.
+			"SendProxy_TheaterDirector"
+			{
+				"library"	"server"
+				"linux"		"@_Z25SendProxy_TheaterDirectorPK8SendPropPKvS3_P20CSendProxyRecipientsi"
+			}
+
 			// The pursuit decision. AddKnownEntity gives the bot a threat, but its own assessment
 			// then answers "yes" to pursue, so it walks into the smoke instead of shooting at it.
 			// There are only two ShouldPursue implementations in the whole binary; these are both.
