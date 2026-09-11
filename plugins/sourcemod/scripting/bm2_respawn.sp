@@ -2842,17 +2842,38 @@ Action Timer_ReviveMonitor(Handle timer)
                 g_revivedByMedic[deadPlayer] = false;
                 CreateReviveTimer(deadPlayer);
 
-                /*
-                int iAmmoType = GetEntProp(ActiveWeapon, Prop_Data, "m_iPrimaryAmmoType"),
-                    iAmmo = GetEntProp(alivePlayer, Prop_Data, "m_iAmmo", _, iAmmoType);
-                if (iAmmo > 0) {
-                    SetEntProp(alivePlayer, Prop_Send, "m_iAmmo", iAmmo-1, _, iAmmoType);
-                } else {
-                    RemovePlayerItem(alivePlayer,ActiveWeapon);
-                    ChangePlayerWeaponSlot(alivePlayer, 2);
+                // Spend ONE healthkit, not the whole stack.
+                //
+                // A stack of healthkits is a single weapon entity - the theater gives
+                // weapon_healthkit clip_max_rounds -1 (no clip), so the quantity a player carries
+                // lives in their reserve ammo for the "healthkit" ammo type. RemovePlayerItem
+                // deletes that one entity, and every remaining charge goes with it, which is why a
+                // single revive used to cost a player their entire supply.
+                //
+                // Prop_Send on BOTH the read and the write. The version this replaces (kept below
+                // in the original commented-out form until now) read m_iAmmo through Prop_Data and
+                // wrote it through Prop_Send, which is the most likely reason it never worked and
+                // was abandoned in favour of the unconditional remove.
+                //
+                // Failure mode is deliberately the old behaviour: if the count is not where this
+                // expects it, iAmmo reads 0, the else branch runs, and the weapon is removed
+                // exactly as before. It can under-refund, never duplicate.
+                int iAmmoType = GetEntProp(ActiveWeapon, Prop_Send, "m_iPrimaryAmmoType");
+                int iAmmo     = (iAmmoType >= 0)
+                                ? GetEntProp(alivePlayer, Prop_Send, "m_iAmmo", _, iAmmoType) : 0;
+
+                if (iAmmo > 1)
+                {
+                    SetEntProp(alivePlayer, Prop_Send, "m_iAmmo", iAmmo - 1, _, iAmmoType);
                 }
-                */
-                RemovePlayerItem(alivePlayer, ActiveWeapon);
+                else
+                {
+                    if (iAmmoType >= 0 && iAmmo == 1)
+                    {
+                        SetEntProp(alivePlayer, Prop_Send, "m_iAmmo", 0, _, iAmmoType);
+                    }
+                    RemovePlayerItem(alivePlayer, ActiveWeapon);
+                }
                 // LogMessage("[RESPAWN] Changing %N weapon to slot 2 now", alivePlayer);
                 CreateTimer(0.1, Timer_ChangeWeaponFromHK, alivePlayer, TIMER_FLAG_NO_MAPCHANGE);
                 // ChangePlayerWeaponSlot(alivePlayer, 2);
