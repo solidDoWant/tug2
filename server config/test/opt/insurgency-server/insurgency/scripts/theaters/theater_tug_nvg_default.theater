@@ -1309,6 +1309,111 @@
 		{
 			"carry"					"2"
 		}
+
+		// ================================================================================
+		// .50 BMG heavy ammunition for the M107 - see gg2_heavy_ammo.sp
+		// ================================================================================
+		//
+		// The rifle itself needs nothing here. weapon_M107 is "class_restricted" "0", which is what
+		// makes it buyable without appearing in any class's allowed_items - every class_restricted
+		// "1" weapon in this theater is listed, and most of the "0" ones are not. Do not "fix" its
+		// absence from the lists below by adding it; it is already available.
+		//
+		// These are NEW names, so the partial-block rule is satisfied trivially: #base merges by
+		// child NAME and nothing inherited is called any of these, so the stock 50_bmg, _hp and _ap
+		// entries are untouched and remain selectable.
+		//
+		// The area effect is NOT here. Nothing in an ammo definition can make a bullet explode -
+		// "damageType" only relabels the damage, and bullets are hitscan traces with no projectile
+		// to detonate. These entries supply the round's ballistics, scarcity and suppression; the
+		// blast and the fire come from the plugin, which recognises the round by its ammo type.
+		//
+		// SuppressionIncrement is the game's own per-bullet suppression, applied to whatever the
+		// round passes near. It is raised over the 330 of standard .50 BMG because both of these
+		// are meant to be frightening to be shot at with, independently of what the plugin adds.
+
+		// Mk 211 Mod 0 HEIAP. Real ones carry a zirconium incendiary and an RDX/HMX charge behind a
+		// tungsten penetrator, so: penetration close to AP, slightly less direct damage than AP
+		// because some of the projectile mass is filler, and the difference made up by the blast.
+		"50_bmg_mk211"
+		{
+			"import"				"50_bmg_ap"
+			"SuppressionIncrement"	"450"
+			"DamageHitgroups"
+			{
+				"HITGROUP_HEAD"       "7.6"
+				"HITGROUP_CHEST"      "7.5"
+				"HITGROUP_STOMACH"    "7.5"
+				"HITGROUP_LEFTARM"    "2.8"
+				"HITGROUP_RIGHTARM"   "2.8"
+				"HITGROUP_LEFTLEG"    "2.8"
+				"HITGROUP_RIGHTLEG"   "2.8"
+			}
+		}
+
+		// M8 API. Armour-piercing incendiary with no explosive filler - it starts fires, it does not
+		// burst. Ballistically it is the AP round, which is why it inherits it unchanged.
+		"50_bmg_api"
+		{
+			"import"				"50_bmg_ap"
+			"SuppressionIncrement"	"380"
+		}
+
+		// The magazine variants are what a weapon actually references. carry is deliberately below
+		// the 10 of "50_bmg_ap_mag": both rounds are strictly better than AP once the plugin is
+		// involved, so scarcity is the balance lever rather than damage numbers.
+		"50_bmg_mk211_mag"
+		{
+			"import"				"50_bmg_mk211"
+			"carry"					"5"
+			"magsize"				"11"
+		}
+
+		"50_bmg_api_mag"
+		{
+			"import"				"50_bmg_api"
+			"carry"					"7"
+			"magsize"				"11"
+		}
+	}
+
+	// ================================================================================
+	// Heavy .50 ammunition, as buyable upgrades in the M107's "ammo" slot
+	// ================================================================================
+	//
+	// Same shape as TUG's own ammo_hp_m107 / ammo_ap_m107: import the AP base for the slot and
+	// wiring, restrict to one weapon with allowed_weapons, and point ammo_type_override at the new
+	// ammo. Both names are new, so this whole block merges in without displacing anything.
+	//
+	// allowed_weapons says "weapon_m107" in lower case purely to match how every other upgrade in
+	// TUG's file spells it; the definition itself is "weapon_M107".
+	"weapon_upgrades"
+	{
+		"ammo_mk211_m107"
+		{
+			"import"				"base_ammo_ap"
+			"upgrade_cost"			"4"
+			"print_name"			"#weapon_upgrade_mk211"
+			"print_desc"			"#weapon_upgrade_mk211_desc"
+			"allowed_weapons"
+			{
+				"weapon"			"weapon_m107"
+			}
+			"ammo_type_override"	"50_bmg_mk211_mag"
+		}
+
+		"ammo_api_m107"
+		{
+			"import"				"base_ammo_ap"
+			"upgrade_cost"			"3"
+			"print_name"			"#weapon_upgrade_api"
+			"print_desc"			"#weapon_upgrade_api_desc"
+			"allowed_weapons"
+			{
+				"weapon"			"weapon_m107"
+			}
+			"ammo_type_override"	"50_bmg_api_mag"
+		}
 	}
 
 	"weapons"

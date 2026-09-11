@@ -340,6 +340,32 @@ RUN --mount=type=bind,source=./plugins/sourcemod/scripting,target=/plugin-source
     find /insurgency -type d -exec chmod 755 {} \; && \
     find /insurgency -type f -exec chmod 644 {} \;
 
+FROM sourcemod-plugins-base AS sourcemod-plugins-gg2-theater-items
+
+# Build the theater item name/id lookup. Provides natives for other plugins, so it must be present
+# wherever a consumer is - currently gg2_heavy_ammo, on test only.
+COPY plugins/sourcemod/gamedata/ /insurgency/addons/sourcemod/gamedata/
+RUN --mount=type=bind,source=./plugins/sourcemod,target=/plugin-source \
+    /sourcemod/addons/sourcemod/scripting/spcomp --include=/plugin-source/scripting/include  /plugin-source/scripting/gg2_theater_items.sp -o /insurgency/addons/sourcemod/plugins/gg2_theater_items.smx && \
+    # Fixup file permissions
+    find /insurgency -type d -exec chmod 755 {} \; && \
+    find /insurgency -type f -exec chmod 644 {} \;
+
+FROM sourcemod-plugins-base AS sourcemod-plugins-gg2-heavy-ammo
+
+# Build the heavy .50 ammunition plugin. Test-only: the Mk 211 and API rounds it drives are defined
+# in the test server's theater, and the M107 they belong to is not granted to any class on main.
+COPY plugins/sourcemod/gamedata/ /insurgency/addons/sourcemod/gamedata/
+RUN --mount=type=bind,source=./plugins/sourcemod,target=/plugin-source \
+    /sourcemod/addons/sourcemod/scripting/spcomp --include=/plugin-source/scripting/include  /plugin-source/scripting/gg2_heavy_ammo.sp -o /insurgency/addons/sourcemod/plugins/gg2_heavy_ammo.smx && \
+    mkdir -p /insurgency/addons/sourcemod/configs && \
+    cp /plugin-source/configs/heavyammo.cfg /insurgency/addons/sourcemod/configs/ && \
+    mkdir -p /insurgency/cfg/sourcemod && \
+    touch /insurgency/cfg/sourcemod/plugin.heavyammo.cfg && \
+    # Fixup file permissions
+    find /insurgency -type d -exec chmod 755 {} \; && \
+    find /insurgency -type f -exec chmod 644 {} \;
+
 FROM sourcemod-plugins-base AS sourcemod-plugins-gg2-burn
 
 # Build the gg2_burn plugin
@@ -837,6 +863,9 @@ COPY --from=sourcemod-plugins-map-logger --chown=0:0 /insurgency /opt/insurgency
 COPY --from=sourcemod-plugins-gg2-weapon-spam --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
 COPY --from=sourcemod-plugins-gg2-admin-logger --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
 COPY --from=sourcemod-plugins-gg2-burn --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
+# Test server only: the M107 these rounds belong to is granted by the test theater alone.
+COPY --from=sourcemod-plugins-gg2-theater-items --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
+COPY --from=sourcemod-plugins-gg2-heavy-ammo --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
 COPY --from=sourcemod-plugins-gg2-cache-protect --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
 COPY --from=sourcemod-plugins-gg2-connection-tracker --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
 COPY --from=sourcemod-plugins-gg2-damage --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
