@@ -7,6 +7,16 @@
 // This should be _way_ more than enough for any reasonable server
 int              g_iObjWeaponCache[64] = { 0, ... };
 
+// Counterattacks - cap a point, then hold it while the enemy pushes back - are a checkpoint
+// mechanic, and freezing the caches for their duration is the whole point of this plugin.
+// m_bCounterAttack is not checkpoint-only though: hunt raises it when a cache goes up, which is what
+// mp_hunt_counterattack_distance steers the bots by. Hunt is won by clearing the map rather than by
+// outlasting anything, so protecting its caches only stops players finishing the round.
+//
+// Refreshed on round_start, by which point mp_gamemode is always registered. Same idiom as
+// bm2_respawn's g_bCheckpointManaged.
+bool             g_bCheckpointMode     = true;
+
 public Plugin myinfo =
 {
     name        = "[GG2 Cache Protector]",
@@ -24,8 +34,32 @@ public void OnPluginStart()
 
 public Action Event_RoundStart(Event event, const char[] name, bool dontBroadcast)
 {
+    UpdateCheckpointMode();
     SetupCacheTracking();
     return Plugin_Continue;
+}
+
+void UpdateCheckpointMode()
+{
+    bool wasCheckpoint = g_bCheckpointMode;
+
+    ConVar cvGamemode = FindConVar("mp_gamemode");
+    if (cvGamemode == null)
+    {
+        g_bCheckpointMode = true;
+    }
+    else
+    {
+        char sGamemode[32];
+        cvGamemode.GetString(sGamemode, sizeof(sGamemode));
+        g_bCheckpointMode = StrEqual(sGamemode, "checkpoint", false);
+    }
+
+    // Only on a change, so this stays one line per map rather than one per round.
+    if (g_bCheckpointMode != wasCheckpoint)
+    {
+        LogMessage("[GG2 Cache Protector] cache protection %s", g_bCheckpointMode ? "enabled (checkpoint)" : "disabled (not checkpoint)");
+    }
 }
 
 public Action get_current_caches_protected(int caller_client, int args)
@@ -53,7 +87,7 @@ int InCounterAttack()
 
 Action CacheOnTakeDamage(int victim, int& attacker, int& inflictor, float& damage, int& damagetype)
 {
-    if (!InCounterAttack()) return Plugin_Continue;
+    if (!g_bCheckpointMode || !InCounterAttack()) return Plugin_Continue;
 
     LogMessage("[GG2 Cache Protector] Cache damage during counter (damage: %f)", damage);
     damage = 0.0;
