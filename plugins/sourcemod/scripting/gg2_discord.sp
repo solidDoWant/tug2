@@ -5,7 +5,6 @@
 #define TEAM_SPEC                1
 #define TEAM_1_SEC               2
 #define TEAM_2_INS               3
-#define max_rounds               3
 #define MAX_QUEUE_SIZE           100
 #define MAX_DISCORD_MESSAGE_SIZE 2000
 #define MAX_MESSAGE_SIZE         MAX_DISCORD_MESSAGE_SIZE
@@ -17,6 +16,13 @@ char  BAWT_AUTH_ID[32] = "STEAM_ID_STOP_IGNORING_RETVALS";
 
 int   g_cps_capped     = 0;
 int   g_rounds_played  = 0;
+
+// mp_maxrounds, looked up rather than hard-coded. This used to be "#define max_rounds 3", which is
+// why round-end reported "(4/3 mapname)" on a server running mp_maxrounds 5 - the numerator counted
+// real rounds while the denominator was a constant that had nothing to do with the server config.
+// Resolved once at load: mp_maxrounds is a stock cvar and always exists, so a null here means the
+// lookup itself failed, not that the server is unconfigured.
+ConVar g_cvMaxRounds = null;
 
 // Message batching queue (circular buffer)
 char  g_MessageQueue[MAX_QUEUE_SIZE][MAX_MESSAGE_SIZE];
@@ -119,6 +125,10 @@ public void OnPluginStart()
         SetFailState("Couldn't load the configuration file.");
         return;
     }
+
+    g_cvMaxRounds = FindConVar("mp_maxrounds");
+    if (g_cvMaxRounds == null)
+        LogError("[DISCORD] mp_maxrounds not found - round end will report the round limit as ?");
 
     HookEvent("server_addban", Event_ServerAddBan);
     HookEvent("vote_started", Event_VoteStarted);
@@ -314,8 +324,16 @@ public Action Event_RoundEnd(Event event, const char[] name, bool dontBroadcast)
     char mapname[32];
     GetCurrentMap(mapname, sizeof(mapname));
 
+    // mp_maxrounds 0 means "no limit", so print the count on its own rather than "4/0".
+    int max_rounds = (g_cvMaxRounds != null) ? g_cvMaxRounds.IntValue : -1;
+
+    char round_progress[16];
+    if (max_rounds > 0) Format(round_progress, sizeof(round_progress), "%i/%i", g_rounds_played, max_rounds);
+    else if (max_rounds == 0) Format(round_progress, sizeof(round_progress), "%i", g_rounds_played);
+    else Format(round_progress, sizeof(round_progress), "%i/?", g_rounds_played);
+
     char round_message[1024];
-    Format(round_message, sizeof(round_message), "**ROUND END:** __%s Forces WIN!__ (%i/%i %s)", winning_team, g_rounds_played, max_rounds, mapname);
+    Format(round_message, sizeof(round_message), "**ROUND END:** __%s Forces WIN!__ (%s %s)", winning_team, round_progress, mapname);
     send_discord(round_message, sizeof(round_message));
 
     return Plugin_Continue;
