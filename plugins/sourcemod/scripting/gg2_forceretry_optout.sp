@@ -23,8 +23,24 @@ ConVar    gg2_always_retry;
 bool      g_bIsRetrying[MAXPLAYERS + 1];
 // Mirrors auto_retry_opt_out for connected players so the retry decision needs no extra query.
 bool      g_bOptOut[MAXPLAYERS + 1];
-// Whether the DB lookup for this client has come back yet; guards against acting on a stale value.
+// Whether the DB lookup for this client has RESOLVED - success or failure. Set either way: it used
+// to be set only on success, so a failed lookup left it false for the rest of the session and
+// !autoreconnect answered "Still loading your setting" forever. The stats database on test drops
+// connections often enough that this was the normal case, not an edge one.
 bool      g_bOptOutKnown[MAXPLAYERS + 1];
+// Whether g_bOptOut actually came from the database, as opposed to being the default assumed after
+// a failed lookup. Only used to warn the player that what they see may not be what is saved.
+bool      g_bOptOutFromDb[MAXPLAYERS + 1];
+// Retries left on the lookup, so a transient outage heals itself instead of stranding the player
+// on a default for the whole session.
+int       g_iOptOutRetries[MAXPLAYERS + 1];
+
+// Set while a lookup is only meant to load the opt-out setting - a late load, where the players are
+// already connected and must NOT be force-reconnected as a side effect of reloading the plugin.
+bool      g_bSettingLookupOnly[MAXPLAYERS + 1];
+
+#define OPT_OUT_MAX_RETRIES   3
+#define OPT_OUT_RETRY_DELAY   5.0
 
 public Plugin myinfo =
 {
@@ -76,6 +92,13 @@ public Action Cmd_AutoReconnect(int client, int args)
     {
         PrintToChat(client, "[Auto-reconnect] Still loading your setting, try again in a moment.");
         return Plugin_Handled;
+    }
+
+    // Resolved, but from a failed lookup rather than the database. Say so: the value shown is the
+    // default, not necessarily what this player saved previously.
+    if (!g_bOptOutFromDb[client])
+    {
+        PrintToChat(client, "[Auto-reconnect] Note: your saved setting could not be loaded, showing the default.");
     }
 
     bool wantOptOut;
@@ -132,9 +155,12 @@ public void OnClientPostAdminCheck(int client)
 {
     if (!IsValidPlayer(client) || IsFakeClient(client)) return;
 
-    g_bIsRetrying[client]   = false;
-    g_bOptOut[client]       = false;
-    g_bOptOutKnown[client]  = false;
+    g_bIsRetrying[client]    = false;
+    g_bOptOut[client]        = false;
+    g_bOptOutKnown[client]   = false;
+    g_bOptOutFromDb[client]  = false;
+    g_iOptOutRetries[client] = OPT_OUT_MAX_RETRIES;
+    g_bSettingLookupOnly[client] = false;
 
     char steamId[32];
     if (!GetClientAuthId(client, AuthId_SteamID64, steamId, sizeof(steamId))) return;
@@ -153,6 +179,21 @@ public void OnClientPostAdminCheck(int client)
         // In this case, the player must have reconnected (otherwise, they wouldn't be in the map).
         // This means they now have smoke particles cached.
         db_update_player_has_smoke(client);
+
+        // ...and their opt-out still has to be loaded, exactly as in the branch above. Missing it
+        // here is worse than it looks, because this is the branch a player lands in immediately
+        // AFTER being force-reconnected:
+        //   - g_bOptOutKnown stays false, so !autoreconnect answers "Still loading your setting"
+        //     for the rest of the session, and
+        //   - g_bOptOut stays false in memory, so every later force-retry check believes the player
+        //     is opted in and can reconnect them again - even with auto_retry_opt_out TRUE in the
+        //     database.
+        //
+        // Setting-only: the write above is the authoritative has_smoke update for this reconnect,
+        // and re-running the retry decision against a read that may still say FALSE could bounce
+        // the player a second time.
+        g_bSettingLookupOnly[client] = true;
+        db_check_player_state(client);
         return;
     }
 
@@ -181,8 +222,10 @@ public Action Event_PlayerDisconnect_Pre(Handle event, const char[] name, bool d
 
     // Store retry state before resetting
     bool wasRetrying       = g_bIsRetrying[client];
-    g_bIsRetrying[client]  = false;
-    g_bOptOutKnown[client] = false;
+    g_bIsRetrying[client]    = false;
+    g_bOptOutKnown[client]   = false;
+    g_bOptOutFromDb[client]  = false;
+    g_iOptOutRetries[client] = OPT_OUT_MAX_RETRIES;
 
     // If player was being forced to retry, keep them in playerList
     if (wasRetrying) return Plugin_Continue;
@@ -242,7 +285,13 @@ public void db_check_player_state(int client)
 
     char query[512];
     g_Database.Format(query, sizeof(query),
-                      "SELECT has_smoke, auto_retry_opt_out FROM players_smoke_cache WHERE steam_id = %s LIMIT 1", steamId);
+                      // ::int on both. These are PostgreSQL BOOLEAN columns, and the pgsql driver
+                      // hands FetchInt the value's TEXT form - "true"/"false" - which atoi parses
+                      // as 0. Every read came back false regardless of what was stored, so
+                      // has_smoke looked uncached on every join (hence the reconnect every time)
+                      // and auto_retry_opt_out looked unset (hence the opt-out never applying).
+                      // Casting in SQL is what makes FetchInt meaningful here.
+                      "SELECT has_smoke::int, auto_retry_opt_out::int FROM players_smoke_cache WHERE steam_id = %s LIMIT 1", steamId);
     g_Database.Query(OnPlayerStateChecked, query, GetClientUserId(client));
 }
 
@@ -401,8 +450,29 @@ public void OnPlayerStateChecked(Database db, DBResultSet results, const char[] 
     int client = GetClientOfUserId(userid);
 
     HandleQueryError(results, error, "check player smoke cache");
-    if (results == null) return;
     if (!IsValidPlayer(client)) return;
+
+    if (results == null)
+    {
+        // The lookup failed. Resolve the setting to its default ANYWAY so !autoreconnect stays
+        // usable - leaving it unresolved is what made the command answer "Still loading your
+        // setting" for the rest of the session.
+        //
+        // Deliberately NOT touching playerList or forcing a reconnect: a failed lookup says nothing
+        // about whether this player has the particles cached, and guessing "not cached" would
+        // black-screen somebody every time the database hiccups.
+        g_bOptOut[client]       = false;
+        g_bOptOutKnown[client]  = true;
+        g_bOptOutFromDb[client] = false;
+        g_bSettingLookupOnly[client] = false;
+
+        if (g_iOptOutRetries[client] > 0)
+        {
+            g_iOptOutRetries[client]--;
+            CreateTimer(OPT_OUT_RETRY_DELAY, Timer_RetryStateCheck, GetClientUserId(client), TIMER_FLAG_NO_MAPCHANGE);
+        }
+        return;
+    }
 
     bool hasSmoke = false;
 
@@ -413,7 +483,16 @@ public void OnPlayerStateChecked(Database db, DBResultSet results, const char[] 
         hasSmoke          = view_as<bool>(results.FetchInt(0));
         g_bOptOut[client] = view_as<bool>(results.FetchInt(1));
     }
-    g_bOptOutKnown[client] = true;
+    g_bOptOutKnown[client]  = true;
+    g_bOptOutFromDb[client] = true;
+
+    // A late-load lookup wanted the setting and nothing else. Leaving playerList and the
+    // force-retry decision alone is what stops a plugin reload reconnecting everyone in game.
+    if (g_bSettingLookupOnly[client])
+    {
+        g_bSettingLookupOnly[client] = false;
+        return;
+    }
 
     char steamId[32];
     if (GetClientAuthId(client, AuthId_SteamID64, steamId, sizeof(steamId)))
@@ -439,6 +518,37 @@ public void OnPlayerStateChecked(Database db, DBResultSet results, const char[] 
     }
 }
 
+// Re-runs the lookup after a failure. If the database is still down, db_check_player_state logs and
+// returns, and no further retry is scheduled - the player keeps the default, which is usable.
+public Action Timer_RetryStateCheck(Handle timer, any userid)
+{
+    int client = GetClientOfUserId(userid);
+    if (!IsValidPlayer(client) || IsFakeClient(client)) return Plugin_Stop;
+    if (g_bOptOutFromDb[client]) return Plugin_Stop;    // a write since then already settled it
+
+    db_check_player_state(client);
+    return Plugin_Stop;
+}
+
+// OnClientPostAdminCheck does not fire for players who are already connected, so a reload would
+// leave every one of them with an unresolved setting - the exact symptom this plugin was just fixed
+// for. Load the setting for them once the database is up.
+//
+// Only the SETTING: g_bSettingLookupOnly suppresses the has_smoke/force-retry half, because
+// reloading a plugin must never black-screen everyone on the server.
+void LoadSettingsForConnectedPlayers()
+{
+    for (int i = 1; i <= MaxClients; i++)
+    {
+        if (!IsValidPlayer(i) || IsFakeClient(i)) continue;
+        if (g_bOptOutFromDb[i]) continue;
+
+        g_iOptOutRetries[i]     = OPT_OUT_MAX_RETRIES;
+        g_bSettingLookupOnly[i] = true;
+        db_check_player_state(i);
+    }
+}
+
 public void OnDatabaseConnected(Database db, const char[] error, any data)
 {
     if (db == null)
@@ -451,6 +561,8 @@ public void OnDatabaseConnected(Database db, const char[] error, any data)
 
     g_Database = db;
     LogMessage("[INS GG ForceRetry] Connected to database");
+
+    LoadSettingsForConnectedPlayers();
 }
 
 // Attempt to reconnect to the database

@@ -154,7 +154,7 @@ public void db_check_player_has_smoke(int client)
     }
 
     char query[512];
-    g_Database.Format(query, sizeof(query), "SELECT has_smoke FROM players_smoke_cache WHERE steam_id = %s LIMIT 1", steamId);
+    g_Database.Format(query, sizeof(query), "SELECT has_smoke::int FROM players_smoke_cache WHERE steam_id = %s LIMIT 1", steamId);
     g_Database.Query(OnPlayerSmokeCacheChecked, query, client);
 }
 
