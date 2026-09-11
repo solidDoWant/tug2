@@ -1,0 +1,19 @@
+// Buy-menu icon for the WP marker.
+//
+// The icon is looked up by weapon name - materials/vgui/inventory/<weapon>.vmt - with no way to
+// override the path from the theater, so weapon_m18_wp_us needs its own file or it shows blank.
+//
+// Same approach as the can (materials/models/twp/mi_1p_m18.vmt): reference the green marker's
+// texture from workshop item 2744181131 in place and tint it, rather than ship a second 700KB VTF.
+// $color2 multiplies, so this shifts the icon toward the can's colour; if the can ends up needing
+// a repainted texture then this wants the matching treatment.
+"UnlitGeneric"
+{
+	"$translucent" 1
+	"$basetexture" "vgui/inventory/weapon_m18_us"
+	"$color2" "[3 2.2 0.15]"
+	"$vertexcolor" 1
+	"$vertexalpha" 1
+	"$no_fullbright" 1
+	"$ignorez" 1
+}

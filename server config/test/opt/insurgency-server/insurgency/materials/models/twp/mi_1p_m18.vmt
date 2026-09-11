@@ -1,0 +1,28 @@
+// Yellow WP marker can.
+//
+// A copy of the green marker's material (2744181131, materials/models/tug/mi_1p_m18.vmt) with a
+// tint applied. The textures and envmap are deliberately NOT copied - they are referenced in
+// place, so every client that already has the green smoke item has them and this ships as one
+// small text file rather than 11MB of duplicated VTFs.
+//
+// The models in models/twp/ are the same item's geometry with their $cdmaterials repointed from
+// models\tug\ to models\twp\, which is what lets this material apply to the WP marker alone.
+//
+// $srgbtint MULTIPLIES the diffuse. If the base can is painted olive/green it has little red to
+// scale up, so this may land closer to olive-gold than yellow - if so the fix is a repainted
+// T_1P_M18_D rather than a bigger multiplier. Tune against the green can in game.
+"SurfaceGGX"
+{
+	"$basetexture" "models\tug\m18\T_1P_M18_D"
+	"$bumpmap" "models\tug\m18\T_1P_M18_N"
+	"$phongexponenttexture" "models\tug\m18\T_1P_M18_M"
+
+	"$metal" "1"
+	"$roughnessmultiplier" ".75"
+
+	"$fuzz" "1"
+	"$fuzzmultiplier" ".2"
+
+	"$envmap" "models\tug\envmap_unfuck"
+	"$srgbtint" "[3 2.2 0.15]"
+}

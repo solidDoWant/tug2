@@ -34,6 +34,11 @@ char fireWeapons[][32] = {
     "grenade_anm14",
     "grenade_m203_incid",
     "grenade_gp25_incid",
+    // M777 white phosphorus fire support, declared in the test server's
+    // scripts/theaters/theater_tug_nvg_default.theater and selected in configs/firesupport.cfg.
+    // Its grenade_aoe field already does damage on its own; being listed here is what adds the
+    // stacking ignite, so a player caught in it keeps burning after walking out.
+    "grenade_m777_wp_us",
 };
 
 // Fire armor is not currently used or implemented

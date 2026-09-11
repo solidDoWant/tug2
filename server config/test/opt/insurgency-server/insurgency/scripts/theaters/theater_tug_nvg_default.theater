@@ -1117,6 +1117,7 @@
 							"gear"					"sec_tactical_carrier"	
 							"weapon"				"weapon_healthkit"
 							"weapon"				"weapon_m18_us"		
+							"weapon"				"weapon_m18_wp_us"
 							"weapon"				"weapon_galil_sar"
 				"gear"					"sec_nightvision"
 			}
@@ -1241,6 +1242,16 @@
 	// block: #base merges by child NAME, and "weapons", each weapon name and "weapon_max_subslot"
 	// are each unique within their parent. Only that one field is replaced; models, fov, cost and
 	// everything else are inherited untouched.
+	// Carry count for the WP marker's ammo type. A weapon whose ammo_type has no entry here cannot
+	// be carried at all - it is refused at spawn with "Invalid player".
+	"ammo"
+	{
+		"grenade_m18_wp_us"
+		{
+			"carry"					"1"
+		}
+	}
+
 	"weapons"
 	{
 		"weapon_m18_us"
@@ -1251,5 +1262,178 @@
 		{
 			"weapon_max_subslot"		"2"
 		}
+
+		// The WP marker. FireSupport picks a support type by testing the HELD weapon's classname
+		// against the "weapon" key in configs/firesupport.cfg with StrContains, first match wins -
+		// so these two have to be distinguishable as substrings. "weapon_m18_wp_us" does not
+		// contain "m18_us" (it reads m18_wp_us), so the HE entry cannot swallow the WP throw.
+		// Renaming either one means rechecking that.
+		"weapon_m18_wp_us"
+		{
+			"import"					"weapon_grenade_base"
+			"weapon_class"				"grenade_smoke"
+			"weapon_type"				"grenade"
+			"print_name"				"#weapon_m18_wp_us"
+			"print_desc"				"#weapon_m18_wp_us_desc"
+
+			// models/twp/ is this repo's own yellow can: the green marker's geometry from workshop
+			// item 2744181131 with its $cdmaterials repointed from models\tug\ to models\twp\ by a
+			// same-length byte edit, so it picks up materials/models/twp/mi_1p_m18.vmt instead.
+			// That material tints in place and references the ORIGINAL textures, so no texture or
+			// model art is duplicated - see the VMT for the tint and its caveat.
+			//
+			// Only the $cdmaterials path and the .mdl's own internal name were changed, and both
+			// replacements are byte-for-byte the same length. A .mdl addresses most of its strings
+			// by offset, so a length change there corrupts the file silently.
+			"view_model"				"models/twp/v_m18.mdl"
+			"world_model"				"models/twp/w_m18.mdl"
+			"weapon_slot"				"explosive"
+			"weapon_max_subslot"		"2"
+			"act_table"					"grenade"
+			"weapon_weight"				"0"
+			"weapon_cost"				"1"
+			"class_restricted"			"1"
+
+			"fov"
+			{
+				"fov_wpn_default"		"65"
+			}
+
+			"explosives"
+			{
+				"entity"				"grenade_m18_wp_us"
+			}
+			"ammo_clip"
+			{
+				"ammo_type"				"grenade_m18_wp_us"
+				"clip_max_rounds"		"-1"	// no clips
+				"clip_default"			"1"
+			}
+
+			"sounds"
+			{
+				"special1"				"Weapon_M67.SpoonEject"
+			}
+
+			"team_access"				"security"
+		}
+	}
+	// ---------------------------------------------------------------------------
+	// M777 white phosphorus - the fire-support shell
+	// ---------------------------------------------------------------------------
+	// SECURITY ONLY. There is deliberately no insurgent counterpart: the insurgent fire support is
+	// themed as improvised rockets and stays on HE (grenade_m777_ins). Access is already correct
+	// without any change here - FireSupport binds to weapon_m18_us, and the only security class
+	// with weapon_m18_us in allowed_items is template_recon_security_coop, the Weapons Sgt.
+	// Restricting the shell would be redundant; restricting the smoke is what gates the call.
+	// Projectiles are theater data, not code. The HE rounds this replaces (grenade_m777_us /
+	// grenade_m777_ins) are declared exactly like this in the TUG Scripts 3.9 item, under
+	// theater_tug_39_custom_weapon.theater -> explosives. Nothing in the game binary knows the
+	// name; addons/sourcemod/configs/firesupport.cfg names the projectile and FireSupport.sp
+	// spawns it through CBaseRocketMissile::CreateRocketMissile.
+	//
+	// Safe as a partial block, for the same reason the "weapons" override below is: #base merges
+	// by child NAME, and "explosives" plus each shell name are unique within their parent. These
+	// are NEW names, so nothing inherited is matched or replaced - the HE rounds stay defined and
+	// can be switched back to from the plugin config alone, with no theater change.
+	//
+	// The difference from HE is entity_class. grenade_frag is a blast; grenade_aoe is a persistent
+	// damage field that keeps applying after detonation, which is how the stock molotov, ANM14 and
+	// the 40mm grenade_m79_napalm all burn. The AreaDamage* fields below are that field.
+	"explosives"
+	{
+		// The thrown marker that calls the WP mission. Yellow, for visibility against the dust and
+		// concrete most of these maps are made of, and unambiguous against the HE marker's green.
+		//
+		// NOT red, which was the obvious choice: "smokegrenade_red" exists, but it is defined in
+		// particles/ins_smokegrenade_red.pcf shipped by the 35AB *weapons* items (2593516111 and
+		// friends), which this server does not subscribe to. Particles also have to be listed in
+		// particles_manifest.txt to load at all, and that item overrides the whole manifest - so
+		// shipping the effect ourselves would mean redistributing their file AND fighting every
+		// other item that overrides the manifest. A particle name that does not resolve fails
+		// silently as an invisible cloud, which for a marker grenade is the worst failure mode.
+		//
+		// The colours actually available come from 2393118985 (Masterchief, subscribed), which
+		// provides exactly: smokegrenade_color, _green, _pink, _purple, _yellow. Green is the HE
+		// marker and pink is the insurgent one, so yellow or purple were the real choices.
+		"grenade_m18_wp_us"
+		{
+			"import"					"baseGrenade"
+			"entity_class"				"grenade_smoke"
+			"Model"						"models/twp/w_m18.mdl"
+			"FuseTime"					"3.5"
+			"RocketStartSpeed"			"2500"
+
+			"Particles"
+			{
+				"DetonateParticle"			"smokegrenade_color_yellow"
+			}
+
+			"Sounds"
+			{
+				"DetonateSound"				"BaseSmokeEffect.Sound"
+				"BounceSound"				"Weapon_M18.Bounce"
+			}
+		}
+
+		"grenade_m777_wp_us"
+		{
+			"import"					"baseGrenade"
+			"entity_class"				"grenade_aoe"
+
+			// NOT the a_projectile_m203.mdl the HE M777 rounds use - that is a 40mm grenade, and
+			// at this size it is close to invisible coming down. The RPG-7 projectile is the
+			// largest falling-munition model available and reads as an artillery round at speed;
+			// TUG's own "rocket_arty_us" entry uses it for the same reason. It is spawned pointing
+			// along DOWN_VECTOR, so it falls nose-first rather than tumbling.
+			//
+			// Trade-off: up close it is recognisably a rocket, fins and all, rather than a shell.
+			// Being visible on the way down is worth more here than being correct, because it is
+			// the only warning a player gets that the ground is about to catch fire.
+			"Model"						"models/weapons/w_rpg7_projectile.mdl"
+
+			// WP is incendiary, not high explosive. The HE round is 230 damage over a 1000 radius;
+			// this is a burst big enough to be lethal at the point of impact and no more. The kill
+			// should come from the fire, not the bang.
+			"DetonateDamage"			"50"
+			"DetonatePenetrationRadius"	"14"
+			"DetonateDamageRadius"		"300"
+			"ShakeAmplitude"			"0"
+
+			"FuseTime"					"0"
+			"ImpactDetonation"			"1"
+			"RocketStartSpeed"			"3000"
+			"UseVPhysics"				"0"
+			"Elasticity"				"0.0"
+
+			// The burn. AreaDamageAmount is per tick, so the sustained figure is roughly
+			// Amount / Frequency = ~39/sec to anyone standing in it, for AreaDamageTime seconds.
+			// Radius grows from Min to Max at GrowSpeed, which is what gives the spreading look.
+			"AreaDamageTime"			"20"
+			"AreaDamageFrequency"		"0.44"
+			"AreaDamageMinRadius"		"200"
+			"AreaDamageMaxRadius"		"280"
+			"AreaDamageGrowSpeed"		"5"
+			"AreaDamageAmount"			"17"
+
+			"Health"					"50"
+			"ReactExplosions"			"1"
+			"ReactBullets"				"1"
+
+			"Particles"
+			{
+				"DetonateParticle"			"ins_molotov_explosion"
+				"DetonateWaterParticle"		"ins_molotov_explosion"
+				"FollowOrigin"				"1"
+				"BroadcastAll"				"1"
+			}
+
+			"Sounds"
+			{
+				"DetonateSound"				"Napalm.Burn"
+				"DetonateWaterSound"		"C4.ExplodeWater"
+			}
+		}
+
 	}
 }
