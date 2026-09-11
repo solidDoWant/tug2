@@ -507,9 +507,25 @@ public any Native_send_to_discord(Handle plugin, int numParams)
     return true;
 }
 
+public any Native_discord_player_link(Handle plugin, int numParams)
+{
+    int client = GetNativeCell(1);
+    if (client < 1 || client > MaxClients || !IsClientInGame(client))
+    {
+        return false;
+    }
+
+    char link[256];
+    gen_tug_link(client, link, sizeof(link));
+    SetNativeString(2, link, GetNativeCell(3));
+
+    return true;
+}
+
 public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max)
 {
     CreateNative("send_to_discord", Native_send_to_discord);
+    CreateNative("discord_player_link", Native_discord_player_link);
     return APLRes_Success;
 }
 
