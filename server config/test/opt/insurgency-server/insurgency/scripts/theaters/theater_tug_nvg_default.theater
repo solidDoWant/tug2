@@ -1514,5 +1514,39 @@
 			}
 		}
 
+		// Launched smoke will not detonate until 0.06s after it leaves the tube, which at
+		// RocketStartSpeed 3000 is ~180 units (roughly 3.4m) of travel. Fired at anything closer
+		// than that the round is still inert on impact: it bounces off and rolls instead of popping,
+		// which is what makes smoking a doorway or a window you are stacked on impossible. Zero
+		// removes the delay, so the round goes off wherever it first hits.
+		//
+		// This covers all three smoke rounds: the two underbarrel tubes (m203 security, gp25
+		// insurgent) and the standalone M79.
+		//
+		// The HE and incendiary rounds keep their 0.12 on purpose - that delay is the only thing
+		// stopping a 40mm HE detonating in the firer's face, and it is a real safety feature rather
+		// than an annoyance. Smoke has no such problem: DetonateDamage is unset, so an instant pop
+		// at point-blank range hurts nobody.
+		//
+		// Safe as a partial block for the usual reason: #base merges by child NAME and takes the
+		// FIRST match, and "explosives", each round name and "ArmDelay" are unique within their
+		// parent - everything else about these rounds is inherited untouched.
+		//
+		// grenade_gp25_smoke is defined by TUG as `"import" "grenade_m203_smoke"` plus a model swap,
+		// so it would likely pick this up on its own. Set explicitly anyway: import resolution and
+		// #base merging are separate passes and the ordering between them is not worth depending on.
+		"grenade_m203_smoke"
+		{
+			"ArmDelay"					"0"
+		}
+		"grenade_gp25_smoke"
+		{
+			"ArmDelay"					"0"
+		}
+		"grenade_m79_smoke"
+		{
+			"ArmDelay"					"0"
+		}
+
 	}
 }
