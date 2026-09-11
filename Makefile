@@ -39,7 +39,7 @@ FASTDL_SERVERS ?= test
 
 .PHONY: fastdl-image-%
 fastdl-image-%:	Dockerfile ## Build the fast-download content image for a server. Usage: make fastdl-image-SERVER_NAME
-	docker build --target fastdl-$* --build-arg FASTDL_SERVER=$* -t "$(CONTAINER_REPOSITORY)-fastdl-$*:$(VERSION)" $(PUSH_ARG) --load $(DOCKER_ARGS) $(EXTRA_DOCKER_ARGS) "$(PROJECT_DIR)"
+	docker build --target fastdl-$* --build-arg FASTDL_SERVER=$* -t "$(CONTAINER_REPOSITORY)-$*-fastdl:$(VERSION)" $(PUSH_ARG) --load $(DOCKER_ARGS) $(EXTRA_DOCKER_ARGS) "$(PROJECT_DIR)"
 
 .PHONY: fastdl-images
 fastdl-images: $(addprefix fastdl-image-,$(FASTDL_SERVERS))	## Build every fast-download content image.
