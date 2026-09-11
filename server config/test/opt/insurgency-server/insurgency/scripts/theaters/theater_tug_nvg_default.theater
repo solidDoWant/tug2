@@ -1401,6 +1401,26 @@
 	// the 40mm grenade_m79_napalm all burn. The AreaDamage* fields below are that field.
 	"explosives"
 	{
+		// The HE rounds, matched to the WP round's model.
+		//
+		// These are TUG's, defined in theater_tug_39_custom_weapon.theater, and only the Model is
+		// replaced here - damage, radii, fuse, particles and sounds are all inherited untouched.
+		// Safe as a partial block for the usual reason: #base merges by child NAME, and
+		// "explosives", each shell name and "Model" are unique within their parent.
+		//
+		// Same reasoning as the WP round: a_projectile_m203.mdl is a 40mm grenade and is close to
+		// invisible falling at RocketStartSpeed 3000. The RPG-7 projectile is the largest
+		// falling-munition model available and is the only warning a player gets that the ground is
+		// about to be hit. Stock model, so this costs nothing - the workshop item gains no files.
+		"grenade_m777_us"
+		{
+			"Model"						"models/weapons/w_rpg7_projectile.mdl"
+		}
+		"grenade_m777_ins"
+		{
+			"Model"						"models/weapons/w_rpg7_projectile.mdl"
+		}
+
 		// The thrown marker that calls the WP mission. Yellow, for visibility against the dust and
 		// concrete most of these maps are made of, and unambiguous against the HE marker's green.
 		//
