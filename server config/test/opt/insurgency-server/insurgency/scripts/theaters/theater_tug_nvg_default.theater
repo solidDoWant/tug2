@@ -1279,13 +1279,35 @@
 		}
 	}
 
-	// Carry count for the WP marker's ammo type. A weapon whose ammo_type has no entry here cannot
-	// be carried at all - it is refused at spawn with "Invalid player".
+	// Carry counts. TWO separate things gate how many grenades a player ends up with, and both have
+	// to be raised together:
+	//
+	//   weapon_max_subslot  how many grenade slots the item may occupy   (in "weapons", below)
+	//   carry               the hard cap on how many are actually given  (here)
+	//
+	// Raising only the first is why buying two arty smokes granted one. TUG ships grenade_m18_us
+	// and grenade_m18_ins at carry 1 - they are the ONLY throwables in the whole set at 1 apart
+	// from C4 and the Geballteladung, which are single-use by design. Every comparable grenade sits
+	// at subslot+1 or better: weapon_molotov and weapon_anm14 are subslot 1 / carry 2, the stock
+	// weapon_m18 is subslot 3 / carry 4.
+	//
+	// An ammo_type with no entry here cannot be carried at all - the weapon is refused at spawn
+	// with "Invalid player".
 	"ammo"
 	{
+		"grenade_m18_us"
+		{
+			"carry"					"2"
+		}
+		"grenade_m18_ins"
+		{
+			"carry"					"2"
+		}
+		// Same pair of gates as above - this one was introduced with the same mistake, since it was
+		// copied from the green marker before the cause was understood.
 		"grenade_m18_wp_us"
 		{
-			"carry"					"1"
+			"carry"					"2"
 		}
 	}
 
