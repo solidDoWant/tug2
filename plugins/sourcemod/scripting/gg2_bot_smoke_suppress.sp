@@ -273,6 +273,31 @@ int       g_iAgeForced = 0;
 // Entity references for live smoke clouds. References rather than indices so a recycled index
 // cannot make us read a different entity.
 ArrayList g_aSmokes;
+
+// ---------------------------------------------------------------------------------------------
+// Player warning
+//
+// Bots blind-firing into smoke is not a base-game behaviour, so a player who walks into a cloud and
+// gets shot has no way to know that was a mechanic rather than bad luck. This tells them once.
+//
+// Delivered as a game_text entity rather than a user message. Insurgency registers ObjMsg and
+// GameMessage - the objective-style popups - but the server never sends either; the objective HUD is
+// driven client-side off the objective resource, so there is nothing to borrow. game_text is the
+// screen-space path that is actually reachable from a plugin: CEntityFactory<CGameText> and
+// CGameText::InputDisplay are both in the binary, it takes position, colour, fade and hold time as
+// keyvalues, and firing Display with a player as the activator shows it to that player alone.
+//
+// Shown at most once per round per player, and at most sm_bot_smoke_suppress_warn_max times ever -
+// regulars stop seeing it. That cap is persisted per steam id, and rows untouched for
+// sm_bot_smoke_suppress_warn_forget_days are treated as unseen, so someone returning after a long
+// break gets the explanation again.
+ConVar    g_cvWarnEnabled, g_cvWarnRadius, g_cvWarnMax, g_cvWarnForgetDays;
+ConVar    g_cvWarnText, g_cvWarnHold, g_cvWarnX, g_cvWarnY, g_cvWarnColor;
+
+Database  g_hWarnDb = null;
+bool      g_bWarnedThisRound[MAXPLAYERS + 1];
+int       g_iWarnCount[MAXPLAYERS + 1];        // -1 = not loaded yet
+char      g_sWarnSteamId[MAXPLAYERS + 1][32];
 Handle    g_hTimer = null;
 
 public void OnPluginStart()
@@ -360,6 +385,26 @@ public void OnPluginStart()
     // has gone. Tracking on entity validity alone meant stale clouds piled up (19 tracked at once),
     // so bots were seeded and pursuit-denied for smoke that no longer existed and stood around
     // servicing phantoms. Suppression measured 0 shots at 19 tracked clouds vs 184 at 3-10.
+    g_cvWarnEnabled = CreateConVar("sm_bot_smoke_suppress_warn", "1",
+        "Warn players on screen the first few times they are near smoke that bots may fire into it. Only ever fires while the mechanic itself is enabled.", _, true, 0.0, true, 1.0);
+    g_cvWarnRadius = CreateConVar("sm_bot_smoke_suppress_warn_radius", "400.0",
+        "How close to a live cloud a player must be to be warned. Distance rather than line of sight - it is one check per player per sweep either way, and being beside a cloud you cannot see is exactly when the mechanic surprises people.", _, true, 0.0);
+    g_cvWarnMax = CreateConVar("sm_bot_smoke_suppress_warn_max", "10",
+        "How many times a player is ever shown the warning. 0 = unlimited.", _, true, 0.0);
+    g_cvWarnForgetDays = CreateConVar("sm_bot_smoke_suppress_warn_forget_days", "90",
+        "A player whose last warning was longer ago than this is treated as new and starts the count again. 0 = never forget.", _, true, 0.0);
+    g_cvWarnText = CreateConVar("sm_bot_smoke_suppress_warn_text",
+        "Enemies may fire blindly into smoke on this server.",
+        "The warning text. Keep it short - it is a popup, not a briefing.");
+    g_cvWarnHold = CreateConVar("sm_bot_smoke_suppress_warn_hold", "5.0",
+        "Seconds the warning stays on screen.", _, true, 0.5);
+    g_cvWarnX = CreateConVar("sm_bot_smoke_suppress_warn_x", "-1",
+        "Horizontal position, 0.0-1.0 across the screen. -1 centres it.");
+    g_cvWarnY = CreateConVar("sm_bot_smoke_suppress_warn_y", "0.65",
+        "Vertical position, 0.0-1.0 down the screen. -1 centres it.");
+    g_cvWarnColor = CreateConVar("sm_bot_smoke_suppress_warn_color", "255 200 60 255",
+        "Warning colour as \"R G B A\".");
+
     g_cvSmokeLife = CreateConVar("sm_bot_smoke_suppress_smoke_life", "18.0",
         "Seconds a smoke stays tracked. Should roughly match how long the cloud is actually visible.", _, true, 1.0, true, 120.0);
     g_cvDebug = CreateConVar("sm_bot_smoke_suppress_debug", "0",
@@ -372,6 +417,10 @@ public void OnPluginStart()
     AutoExecConfig(true, "gg2_bot_smoke_suppress");
 
     HookEvent("weapon_fire", Event_WeaponFire);
+    HookEvent("round_start", Event_WarnRoundStart);
+
+    for (int i = 1; i <= MaxClients; i++) g_iWarnCount[i] = -1;
+    Database.Connect(OnWarnDatabaseConnected, "insurgency-stats");
 
     Handle conf = LoadGameConfigFile("tug2.games");
     if (conf == null)
@@ -1197,7 +1246,21 @@ MRESReturn Detour_ShouldPursue(DHookReturn hReturn, DHookParam hParams)
 
 public void OnClientDisconnect(int client)
 {
-    g_fSeededUntil[client] = 0.0;
+    g_fSeededUntil[client]    = 0.0;
+    g_bWarnedThisRound[client] = false;
+    g_iWarnCount[client]       = -1;
+    g_sWarnSteamId[client][0]  = '\0';
+}
+
+public void OnClientPostAdminCheck(int client)
+{
+    g_bWarnedThisRound[client] = false;
+    g_iWarnCount[client]       = -1;
+
+    if (IsFakeClient(client)) return;
+    if (!GetClientAuthId(client, AuthId_SteamID64, g_sWarnSteamId[client], sizeof(g_sWarnSteamId[]))) return;
+
+    LoadWarnCount(client);
 }
 
 public void OnIntervalChanged(ConVar cvar, const char[] oldValue, const char[] newValue)
@@ -1209,7 +1272,13 @@ public void OnMapStart()
 {
     g_aSmokes.Clear();
     g_aSmokeBorn.Clear();
+    for (int i = 1; i <= MaxClients; i++) g_bWarnedThisRound[i] = false;
     RestartTimer();
+}
+
+public void Event_WarnRoundStart(Event event, const char[] name, bool dontBroadcast)
+{
+    for (int i = 1; i <= MaxClients; i++) g_bWarnedThisRound[i] = false;
 }
 
 public void OnMapEnd()
@@ -1217,6 +1286,180 @@ public void OnMapEnd()
     g_aSmokes.Clear();
     g_aSmokeBorn.Clear();
     if (g_hTimer != null) { KillTimer(g_hTimer); g_hTimer = null; }
+}
+
+// ---------------------------------------------------------------------------------------------
+// Player warning - see the block comment by g_cvWarnEnabled
+// ---------------------------------------------------------------------------------------------
+
+public void OnWarnDatabaseConnected(Database db, const char[] error, any data)
+{
+    if (db == null)
+    {
+        // Not fatal, and deliberately not retried on a timer. Without the table the per-player cap
+        // cannot be enforced, so the warning falls back to once per round and no lifetime limit -
+        // noisy for regulars, but better than never explaining the mechanic to anyone.
+        LogError("[SMOKE SUPPRESS] No database - the warning cap cannot be enforced, warnings fall back to once per round: %s", error);
+        return;
+    }
+
+    g_hWarnDb = db;
+
+    for (int i = 1; i <= MaxClients; i++)
+        if (IsClientInGame(i) && !IsFakeClient(i) && g_sWarnSteamId[i][0] != '\0') LoadWarnCount(i);
+}
+
+void LoadWarnCount(int client)
+{
+    if (g_hWarnDb == null || g_sWarnSteamId[client][0] == '\0') return;
+
+    // A row older than the forget window counts as zero rather than being deleted - the row is
+    // still useful history, and treating it as unseen is all the behaviour needs.
+    char query[512];
+    int  days = g_cvWarnForgetDays.IntValue;
+
+    if (days > 0)
+        g_hWarnDb.Format(query, sizeof(query),
+            "SELECT CASE WHEN last_shown_at < NOW() - INTERVAL '%d days' THEN 0 ELSE shown_count END FROM smoke_warning_seen WHERE steam_id = %s",
+            days, g_sWarnSteamId[client]);
+    else
+        g_hWarnDb.Format(query, sizeof(query),
+            "SELECT shown_count FROM smoke_warning_seen WHERE steam_id = %s", g_sWarnSteamId[client]);
+
+    g_hWarnDb.Query(OnWarnCountLoaded, query, GetClientUserId(client));
+}
+
+public void OnWarnCountLoaded(Database db, DBResultSet results, const char[] error, any userid)
+{
+    int client = GetClientOfUserId(userid);
+    if (client < 1) return;
+
+    if (results == null)
+    {
+        LogError("[SMOKE SUPPRESS] Failed to read the warning count: %s", error);
+        g_iWarnCount[client] = 0;    // unknown, so treat as new rather than silently never warning
+        return;
+    }
+
+    g_iWarnCount[client] = results.FetchRow() ? results.FetchInt(0) : 0;
+}
+
+// Called once per sweep. One distance check per eligible human per live cloud, and every player is
+// eliminated by the cheap in-memory gates long before the loop is reached once they have been told.
+void WarnPlayersNearSmoke()
+{
+    if (!g_cvWarnEnabled.BoolValue || g_aSmokes.Length == 0) return;
+
+    float radius = g_cvWarnRadius.FloatValue;
+    int   cap    = g_cvWarnMax.IntValue;
+
+    for (int client = 1; client <= MaxClients; client++)
+    {
+        if (g_bWarnedThisRound[client]) continue;
+        if (!IsClientInGame(client) || IsFakeClient(client) || !IsPlayerAlive(client)) continue;
+        if (cap > 0 && g_iWarnCount[client] >= cap) continue;
+        if (g_iWarnCount[client] < 0) continue;    // still loading, do not burn the one-per-round
+
+        float pos[3];
+        GetClientAbsOrigin(client, pos);
+
+        for (int i = 0; i < g_aSmokes.Length; i++)
+        {
+            int ent = EntRefToEntIndex(g_aSmokes.Get(i));
+            if (ent == INVALID_ENT_REFERENCE || !IsValidEntity(ent)) continue;
+
+            float smokePos[3];
+            GetEntPropVector(ent, Prop_Send, "m_vecOrigin", smokePos);
+            if (GetVectorDistance(pos, smokePos) > radius) continue;
+
+            ShowWarning(client);
+            break;
+        }
+    }
+}
+
+void ShowWarning(int client)
+{
+    g_bWarnedThisRound[client] = true;
+    g_iWarnCount[client]++;
+
+    char text[192];
+    g_cvWarnText.GetString(text, sizeof(text));
+    if (text[0] != '\0') ShowGameText(client, text);
+
+    RecordWarning(client);
+}
+
+// game_text without the "All Players" spawnflag shows only to the entity's activator, which is what
+// makes this per-player. The entity is created per use and removed once the text has faded: one
+// short-lived edict per warning, and a player only ever sees a handful.
+void ShowGameText(int client, const char[] text)
+{
+    int entity = CreateEntityByName("game_text");
+    if (entity <= 0) return;
+
+    char buffer[32];
+
+    DispatchKeyValue(entity, "message", text);
+    DispatchKeyValue(entity, "spawnflags", "0");    // 0 = activator only, 1 would be everyone
+
+    FloatToString(g_cvWarnX.FloatValue, buffer, sizeof(buffer));
+    DispatchKeyValue(entity, "x", buffer);
+    FloatToString(g_cvWarnY.FloatValue, buffer, sizeof(buffer));
+    DispatchKeyValue(entity, "y", buffer);
+
+    g_cvWarnColor.GetString(buffer, sizeof(buffer));
+    DispatchKeyValue(entity, "color", buffer);
+    DispatchKeyValue(entity, "color2", buffer);
+
+    float hold = g_cvWarnHold.FloatValue;
+    FloatToString(hold, buffer, sizeof(buffer));
+    DispatchKeyValue(entity, "holdtime", buffer);
+    DispatchKeyValue(entity, "fadein", "0.4");
+    DispatchKeyValue(entity, "fadeout", "0.8");
+    DispatchKeyValue(entity, "effect", "0");
+    DispatchKeyValue(entity, "channel", "3");
+
+    DispatchSpawn(entity);
+    ActivateEntity(entity);
+    AcceptEntityInput(entity, "Display", client, client);
+
+    CreateTimer(hold + 2.0, Timer_KillWarnText, EntIndexToEntRef(entity), TIMER_FLAG_NO_MAPCHANGE);
+}
+
+public Action Timer_KillWarnText(Handle timer, int ref)
+{
+    int entity = EntRefToEntIndex(ref);
+    if (entity != INVALID_ENT_REFERENCE && IsValidEntity(entity)) AcceptEntityInput(entity, "Kill");
+
+    return Plugin_Stop;
+}
+
+void RecordWarning(int client)
+{
+    if (g_hWarnDb == null || g_sWarnSteamId[client][0] == '\0') return;
+
+    // The count is recomputed from the stored row rather than written from memory, so two servers
+    // warning the same player cannot lose an increment. GREATEST keeps a forgotten row from
+    // resurrecting an old total: once the window has passed it restarts from this warning.
+    char query[768];
+    int  days = g_cvWarnForgetDays.IntValue;
+
+    if (days > 0)
+        g_hWarnDb.Format(query, sizeof(query),
+            "INSERT INTO smoke_warning_seen (steam_id, shown_count, first_shown_at, last_shown_at) VALUES (%s, 1, NOW(), NOW()) ON CONFLICT (steam_id) DO UPDATE SET shown_count = CASE WHEN smoke_warning_seen.last_shown_at < NOW() - INTERVAL '%d days' THEN 1 ELSE smoke_warning_seen.shown_count + 1 END, last_shown_at = NOW()",
+            g_sWarnSteamId[client], days);
+    else
+        g_hWarnDb.Format(query, sizeof(query),
+            "INSERT INTO smoke_warning_seen (steam_id, shown_count, first_shown_at, last_shown_at) VALUES (%s, 1, NOW(), NOW()) ON CONFLICT (steam_id) DO UPDATE SET shown_count = smoke_warning_seen.shown_count + 1, last_shown_at = NOW()",
+            g_sWarnSteamId[client]);
+
+    g_hWarnDb.Query(OnWarnRecorded, query);
+}
+
+public void OnWarnRecorded(Database db, DBResultSet results, const char[] error, any data)
+{
+    if (results == null) LogError("[SMOKE SUPPRESS] Failed to record a warning: %s", error);
 }
 
 void RestartTimer()
@@ -1302,6 +1545,7 @@ Action Timer_Sweep(Handle timer)
     if (!g_bReady || !g_cvEnabled.BoolValue) return Plugin_Continue;
 
     SampleArousal();
+    WarnPlayersNearSmoke();
 
     if (g_cvDebug.BoolValue)
     {

@@ -754,3 +754,54 @@ puts every bot on the server past the `IsMinArousal(8)` gate in any sustained fi
 prefer `CINSBotRetreatToCover` over engaging. The `frac_*` aim and reaction tuning that config
 actually wants scales continuously with arousal and does not need the cap that high - crossing the
 discrete gate looks like collateral damage rather than intent. Worth investigating on main.
+
+## Player warning
+
+Bots blind-firing into smoke is not a base-game behaviour, so a player who walks into a cloud and
+gets shot has no way to know that was a mechanic rather than bad luck. A short on-screen warning
+explains it, a limited number of times.
+
+**Delivery is a `game_text` entity, not a user message.** Insurgency registers `ObjMsg` and
+`GameMessage` — the objective-style popups — but the server never sends either; the only reference
+to both is `RegisterUserMessages` itself, because the objective HUD is driven client-side off the
+objective resource. `game_text` is the screen-space path actually reachable from a plugin:
+`CEntityFactory<CGameText>` and `CGameText::InputDisplay` are both in the binary, it takes position,
+colour, fade and hold time as keyvalues, and firing `Display` with a player as activator — with the
+"All Players" spawnflag clear — shows it to that player alone.
+
+**When it fires.** Once per round per player, at most, and only while the mechanic itself is on. The
+check is distance to a live cloud rather than line of sight: it is one check per player per sweep
+either way, and standing beside a cloud you *cannot* see is exactly the case where the mechanic
+surprises people. It reuses the `g_aSmokes` list the suppression pass already maintains, so no extra
+tracking and no extra timer.
+
+**How often, ever.** `sm_bot_smoke_suppress_warn_max` (10) caps how many times a player is ever
+shown it, persisted per steam id in `smoke_warning_seen`. A player whose last warning is older than
+`sm_bot_smoke_suppress_warn_forget_days` (90) is treated as new and starts counting again, so
+someone returning after a long break gets the explanation once more. The row is not deleted when it
+ages out — the window is applied at read and write time instead, which keeps `first_shown_at` as
+history.
+
+The count is recomputed from the stored row on write rather than pushed from memory, so two servers
+warning the same player cannot lose an increment.
+
+| convar | default | |
+| --- | --- | --- |
+| `sm_bot_smoke_suppress_warn` | 1 | master switch for the warning |
+| `sm_bot_smoke_suppress_warn_radius` | 400 | how close to a cloud to trigger |
+| `sm_bot_smoke_suppress_warn_max` | 10 | lifetime cap per player; 0 = unlimited |
+| `sm_bot_smoke_suppress_warn_forget_days` | 90 | treat a player as new after this long; 0 = never |
+| `sm_bot_smoke_suppress_warn_text` | | the message |
+| `sm_bot_smoke_suppress_warn_hold` | 5.0 | seconds on screen |
+| `sm_bot_smoke_suppress_warn_x` / `_y` | -1 / 0.65 | screen position, 0..1; -1 centres |
+| `sm_bot_smoke_suppress_warn_color` | `255 200 60 255` | R G B A |
+
+**If the database is unavailable** the cap cannot be enforced, so the warning degrades to once per
+round with no lifetime limit and logs once. That is deliberate: noisy for regulars beats never
+explaining the mechanic to anyone. Worth knowing given this server's stats Postgres drops idle
+connections.
+
+**Not yet tested in game.** The SQL was exercised against a throwaway Postgres — three warnings
+count to 3, a row aged past 90 days reads as 0 and the next warning restarts it at 1 with
+`first_shown_at` intact — but nothing has rendered a `game_text` on this server yet, so the position
+and colour defaults are guesses worth looking at once.
