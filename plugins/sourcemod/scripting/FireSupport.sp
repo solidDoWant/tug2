@@ -90,6 +90,7 @@ ConVar      gCvarClass;
 ConVar      gCvarEnableCmd;
 ConVar      gCvarEnableWeapon;
 ConVar      gCvarTeamDamageScale;
+ConVar      gCvarSpectatorMessages;
 
 bool        IsEnabled[MAXPLAYERS + 1];
 bool        IsEnabledTeam[4][MAX_SUPPORT_TYPES];            // [team][supportType] - per-type cooldown tracking
@@ -152,6 +153,7 @@ public void OnPluginStart()
     gCvarEnableCmd    = CreateConVar("sm_firesupport_enable_cmd", "0", "Player can call fire support using sm_firesupport_call.", FCVAR_PROTECTED);
     gCvarEnableWeapon = CreateConVar("sm_firesupport_enable_weapon", "1", "Player can call fire support using weapon.", FCVAR_PROTECTED);
     gCvarTeamDamageScale = CreateConVar("sm_firesupport_team_damage_scale", "0.5", "Multiplier applied to fire support damage dealt to the caller's own team. 1.0 = no reduction.", FCVAR_PROTECTED, true, 0.0, true, 1.0);
+    gCvarSpectatorMessages = CreateConVar("sm_firesupport_spectator_messages", "1", "Spectators also see fire support messages, whichever team called it. Off restores the strictly team-only behaviour.", FCVAR_PROTECTED, true, 0.0, true, 1.0);
 
     AutoExecConfig(true, "firesupport");
 
@@ -929,16 +931,24 @@ void PlaySoundToTeam(int team, const char[] sound)
     }
 }
 
+// Spectators are included as well as the named team. Somebody watching has no side and no way to
+// call fire support themselves, so hiding the strike announcements from them just makes the round
+// harder to follow - and on coop the "other team" is bots, so there is nothing to leak. Turn
+// sm_firesupport_spectator_messages off to restore strictly team-only delivery.
 void PrintMessageToTeam(int team, const char[] message)
 {
     if (StrEqual(message, "")) return;
 
+    bool toSpectators = (gCvarSpectatorMessages == null) || gCvarSpectatorMessages.BoolValue;
+
     for (int i = 1; i <= MaxClients; i++)
     {
-        if (IsClientInGame(i) && GetClientTeam(i) == team)
-        {
-            CPrintToChat(i, message);
-        }
+        if (!IsClientInGame(i)) continue;
+
+        int clientTeam = GetClientTeam(i);
+        if (clientTeam != team && !(toSpectators && clientTeam == TEAM_SPECTATE)) continue;
+
+        CPrintToChat(i, message);
     }
 }
 
