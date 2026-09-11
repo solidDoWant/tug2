@@ -24,7 +24,19 @@
 // both array lengths from the send table rather than a #define. Every item a player is holding is
 // saved whatever slot the theater invented for it.
 //
-// See LoadoutSaverSlots.md for the storage format and the one thing that is still unverified.
+// STORAGE
+//
+// Items are stored by NAME, not by the theater's id. Theater ids are assigned at parse time and
+// shift whenever the theater is edited, so a stored id keeps resolving after a theater change - to
+// a different item. gg2_theater_items turns names back into ids for whatever theater is loaded.
+// An item the theater no longer defines resolves to nothing, is skipped, and starts working again
+// if it ever comes back.
+//
+// The schema is normalised into loadouts_slots (the set), loadout_items (one row per item) and
+// theater_items (the names). See loadout_saver_slots.sql for why - it is integrity and
+// queryability, not space.
+//
+// See LoadoutSaverSlots.md for the rest.
 
 #pragma semicolon 1
 #pragma newdecls required
@@ -32,6 +44,7 @@
 #include <sourcemod>
 #include <sdktools>
 #include <morecolors>
+#include <theateritems>
 
 #define PLUGIN_VERSION "2.0.0"
 
@@ -104,11 +117,21 @@ ConVar   g_CvarSupplyTokenBase;
 #define SAVE_COOLDOWN       3.0
 #define LOAD_COOLDOWN       0.1
 
-// Buffer sizes. One item encodes as "slot:def,up,up,..." - at most 3 + 4 + 16*4 = ~71 characters,
-// and MAX_WEAPON_ITEMS of those plus separators is comfortably under the weapons buffer.
-#define LOADOUT_BUFFER_SIZE 256
-#define WEAPONS_BUFFER_SIZE 2048
-#define ITEM_STRING_SIZE    128
+#define ITEM_NAME_SIZE      64
+
+// One saved item. slot is the weapon slot for weapons and -1 for everything else; parent is the
+// ordinal of the weapon an upgrade belongs to, and -1 otherwise.
+//
+// Position in the array IS the ordinal, and it is load-bearing rather than cosmetic: the apply path
+// buys in this order and reads each weapon's purchase index back afterwards, so two grenades sharing
+// a slot have to go back in the order they were saved.
+enum struct LoadoutItem
+{
+    int  category;              // TheaterCategory
+    char name[ITEM_NAME_SIZE];
+    int  slot;
+    int  parent;
+}
 
 // Named loadouts. The name is what the player types, so it is kept short enough to stay readable
 // in chat and to fit the VARCHAR(64) column with room to spare.
@@ -122,6 +145,9 @@ ConVar   g_CvarSupplyTokenBase;
 #define MAX_WEAPON_UPGRADES 16    // send table has 10
 #define MAX_WEAPON_ITEMS    16    // m_WeaponPurchases holds 12; m_hMyWeapons is 48 but most are empty
 #define MAX_LOADOUT_ITEMS   (MAX_WEAPON_UPGRADES + 1)    // 1 weapon + its upgrades
+
+// Every weapon with a full set of upgrades, plus every gear slot.
+#define MAX_ITEMS           (MAX_WEAPON_ITEMS * (MAX_WEAPON_UPGRADES + 1) + MAX_GEAR_SLOTS)
 
 // =====================================================
 // Plugin Lifecycle
@@ -636,38 +662,6 @@ public Action Command_InventoryReset(int client, int args)
 // Entity Inspection - Read Loadout from Player
 // =====================================================
 
-// Writes one weapon as "defindex,upgrade,upgrade,..." and returns its definition index, or 0 if
-// the entity is not a weapon this plugin can store.
-//
-// The upgrade count comes from the send table rather than a constant. The original hardcoded 8;
-// the game networks 10, so the last two upgrades on every weapon were being dropped on save.
-int ExtractWeaponData(int weapon, char[] buffer, int maxlen)
-{
-    buffer[0] = '\0';
-
-    if (weapon <= 0 || !IsValidEntity(weapon)) return 0;
-    if (!HasEntProp(weapon, Prop_Send, "m_hWeaponDefinitionHandle")) return 0;
-
-    int weaponID = GetEntProp(weapon, Prop_Send, "m_hWeaponDefinitionHandle");
-    if (weaponID <= 0) return 0;
-
-    Format(buffer, maxlen, "%d", weaponID);
-
-    if (!HasEntProp(weapon, Prop_Send, "m_upgradeSlots")) return weaponID;
-
-    int upgradeCount = GetEntPropArraySize(weapon, Prop_Send, "m_upgradeSlots");
-    if (upgradeCount > MAX_WEAPON_UPGRADES) upgradeCount = MAX_WEAPON_UPGRADES;
-
-    for (int i = 0; i < upgradeCount; i++)
-    {
-        int upgradeID = GetEntProp(weapon, Prop_Send, "m_upgradeSlots", 4, i);
-        if (upgradeID > 0)
-            Format(buffer, maxlen, "%s,%d", buffer, upgradeID);
-    }
-
-    return weaponID;
-}
-
 bool ValidateSupplyPoints(int client)
 {
     if (g_CvarSupplyTokenBase == null) return true;    // Skip validation if convar not found
@@ -724,87 +718,120 @@ int GetWeaponSlot(int weapon)
     return SDKCall(g_hGetSlot, weapon);
 }
 
-// Reads every gear item the player has equipped into "id;id;id".
+// Collects everything the player is carrying into the item list that gets stored.
 //
-// The slot count comes from the send table. The original hardcoded 6 and the game networks 7, so
-// whatever sits in the last slot was being dropped - which is precisely where a theater-added slot
-// such as this repo's night-vision "misc1" ends up.
-void ExtractGear(int client, char[] buffer, int maxlen)
+// Names, not ids: gg2_theater_items turns each runtime id back into the theater name. An item the
+// lookup cannot name is dropped with a log line rather than stored as a number that will mean
+// something else after the next theater edit.
+int CollectItems(int client, LoadoutItem[] items, int maxItems)
 {
-    buffer[0] = '\0';
+    int count = 0;
 
-    if (!HasEntProp(client, Prop_Send, "m_EquippedGear")) return;
-
-    int gearCount = GetEntPropArraySize(client, Prop_Send, "m_EquippedGear");
-    if (gearCount > MAX_GEAR_SLOTS) gearCount = MAX_GEAR_SLOTS;
-
-    for (int i = 0; i < gearCount; i++)
+    // Gear first in the list because it is applied first - weapon slot capacity is computed from
+    // the gear currently worn, so the rig and slings have to be back on before the extra weapons
+    // are bought. The count comes from the send table, not a constant: the game networks 7 slots
+    // and the original plugin read 6.
+    if (HasEntProp(client, Prop_Send, "m_EquippedGear"))
     {
-        int gearID = GetEntProp(client, Prop_Send, "m_EquippedGear", 4, i);
-        if (gearID <= 0) continue;
+        int gearCount = GetEntPropArraySize(client, Prop_Send, "m_EquippedGear");
 
-        if (buffer[0] != '\0')
-            Format(buffer, maxlen, "%s;%d", buffer, gearID);
-        else
-            Format(buffer, maxlen, "%d", gearID);
+        for (int i = 0; i < gearCount && count < maxItems; i++)
+        {
+            int gearId = GetEntProp(client, Prop_Send, "m_EquippedGear", 4, i);
+            if (gearId <= 0) continue;
+
+            LoadoutItem item;
+            if (!TheaterItem_Name(TheaterCategory_Gear, gearId, item.name, sizeof(item.name)))
+            {
+                LogError("[LoadoutSaver] %L has gear id %d the theater cannot name - not saved", client, gearId);
+                continue;
+            }
+
+            item.category = view_as<int>(TheaterCategory_Gear);
+            item.slot     = -1;
+            item.parent   = -1;
+            items[count++] = item;
+        }
     }
-}
 
-// Reads every weapon the player is carrying into "slot:def,up,up;slot:def,up;...", ordered by slot.
-//
-// Walking m_hMyWeapons is the whole difference from the original. GetPlayerWeaponSlot answers with
-// the first weapon in a bucket and offers no way to ask for the second, so three calls to it can
-// only ever see three items; the backing array holds everything the player has, and GetSlot then
-// says where each one actually lives.
-//
-// Ordering by slot is not cosmetic. It is what makes the stored list start primary, secondary,
-// explosive on a stock class - the same order the original saved and bought in - so a loadout
-// applies in the order the game is used to, and the upgrade indices in ApplyLoadout line up with
-// what inventory_buy_upgrade expects. See LoadoutSaverSlots.md.
-void ExtractWeapons(int client, char[] buffer, int maxlen)
-{
-    buffer[0] = '\0';
+    // Weapons, in slot order. Walking m_hMyWeapons is what lets this see more than the three the
+    // original plugin could: GetPlayerWeaponSlot answers with the first weapon in a bucket and
+    // offers no way to ask for the second.
+    int weaponEnts[MAX_WEAPON_ITEMS];
+    int slots[MAX_WEAPON_ITEMS];
+    int weaponCount = 0;
 
-    char items[MAX_WEAPON_ITEMS][ITEM_STRING_SIZE];
-    int  slots[MAX_WEAPON_ITEMS];
-    int  count = 0;
-
-    int weaponCount = GetEntPropArraySize(client, Prop_Send, "m_hMyWeapons");
-
-    for (int i = 0; i < weaponCount && count < MAX_WEAPON_ITEMS; i++)
+    int carried = GetEntPropArraySize(client, Prop_Send, "m_hMyWeapons");
+    for (int i = 0; i < carried && weaponCount < MAX_WEAPON_ITEMS; i++)
     {
         int weapon = GetEntPropEnt(client, Prop_Send, "m_hMyWeapons", i);
-        if (weapon <= 0) continue;
-
-        char data[ITEM_STRING_SIZE];
-        if (ExtractWeaponData(weapon, data, sizeof(data)) <= 0) continue;
+        if (weapon <= 0 || !IsValidEntity(weapon)) continue;
+        if (!HasEntProp(weapon, Prop_Send, "m_hWeaponDefinitionHandle")) continue;
+        if (GetEntProp(weapon, Prop_Send, "m_hWeaponDefinitionHandle") <= 0) continue;
 
         int slot = GetWeaponSlot(weapon);
-        if (slot < 0) continue;
-        if (IsSkippedSlot(slot)) continue;
+        if (slot < 0 || IsSkippedSlot(slot)) continue;
 
-        // Insertion sort as we go: few enough items that anything cleverer is just more code, and
-        // it keeps items within a slot in the order the array gave them.
-        int at = count;
+        // Insertion sort: few enough items that anything cleverer is just more code, and it keeps
+        // weapons within a slot in the order the array gave them.
+        int at = weaponCount;
         while (at > 0 && slots[at - 1] > slot)
         {
-            slots[at] = slots[at - 1];
-            strcopy(items[at], sizeof(items[]), items[at - 1]);
+            slots[at]      = slots[at - 1];
+            weaponEnts[at] = weaponEnts[at - 1];
             at--;
         }
 
-        slots[at] = slot;
-        Format(items[at], sizeof(items[]), "%d:%s", slot, data);
-        count++;
+        slots[at]      = slot;
+        weaponEnts[at] = weapon;
+        weaponCount++;
     }
 
-    for (int i = 0; i < count; i++)
+    for (int i = 0; i < weaponCount && count < maxItems; i++)
     {
-        if (buffer[0] != '\0')
-            Format(buffer, maxlen, "%s;%s", buffer, items[i]);
-        else
-            strcopy(buffer, maxlen, items[i]);
+        int weapon   = weaponEnts[i];
+        int weaponId = GetEntProp(weapon, Prop_Send, "m_hWeaponDefinitionHandle");
+
+        LoadoutItem item;
+        if (!TheaterItem_Name(TheaterCategory_Weapon, weaponId, item.name, sizeof(item.name)))
+        {
+            LogError("[LoadoutSaver] %L has weapon id %d the theater cannot name - not saved", client, weaponId);
+            continue;
+        }
+
+        item.category = view_as<int>(TheaterCategory_Weapon);
+        item.slot     = slots[i];
+        item.parent   = -1;
+
+        int weaponOrdinal = count;
+        items[count++] = item;
+
+        if (!HasEntProp(weapon, Prop_Send, "m_upgradeSlots")) continue;
+
+        // The send table networks 10 upgrade slots; the original plugin read 8, so the last two
+        // upgrades on every weapon were being dropped.
+        int upgradeCount = GetEntPropArraySize(weapon, Prop_Send, "m_upgradeSlots");
+
+        for (int u = 0; u < upgradeCount && count < maxItems; u++)
+        {
+            int upgradeId = GetEntProp(weapon, Prop_Send, "m_upgradeSlots", 4, u);
+            if (upgradeId <= 0) continue;
+
+            LoadoutItem upgrade;
+            if (!TheaterItem_Name(TheaterCategory_Upgrade, upgradeId, upgrade.name, sizeof(upgrade.name)))
+            {
+                LogError("[LoadoutSaver] %L has upgrade id %d the theater cannot name - not saved", client, upgradeId);
+                continue;
+            }
+
+            upgrade.category = view_as<int>(TheaterCategory_Upgrade);
+            upgrade.slot     = -1;
+            upgrade.parent   = weaponOrdinal;
+            items[count++]   = upgrade;
+        }
     }
+
+    return count;
 }
 
 void SaveLoadoutFromEntity(int client, const char[] name)
@@ -815,125 +842,175 @@ void SaveLoadoutFromEntity(int client, const char[] name)
         return;
     }
 
-    // Refusing to save is the right failure here. A save with no slot information would record
-    // every weapon as slot 0, and loading that back would be worse than having no loadout at all.
+    // Refusing to save is the right failure. A save with no slot information would record every
+    // weapon as slot 0, and loading that back would be worse than having no loadout at all.
     if (!g_SlotsAvailable)
     {
         CPrintToChat(client, "{red}[Loadout]{default} Saving is unavailable on this server right now (missing gamedata). Loading still works.");
         return;
     }
 
-    // Validate supply points before saving
+    // Without the name lookup every item would have to be stored as a raw id, which is exactly the
+    // thing this schema exists to avoid.
+    if (!TheaterItem_Ready())
+    {
+        CPrintToChat(client, "{red}[Loadout]{default} Saving is unavailable right now (theater not read). Try again in a moment.");
+        return;
+    }
+
     if (!ValidateSupplyPoints(client)) return;
 
-    char gearBuffer[LOADOUT_BUFFER_SIZE];
-    char weaponsBuffer[WEAPONS_BUFFER_SIZE];
+    LoadoutItem items[MAX_ITEMS];
+    int count = CollectItems(client, items, sizeof(items));
 
-    ExtractGear(client, gearBuffer, sizeof(gearBuffer));
-    ExtractWeapons(client, weaponsBuffer, sizeof(weaponsBuffer));
-
-    // Save to database in a single query
-    SaveLoadoutToDatabase(client, gearBuffer, weaponsBuffer, name);
+    SaveLoadoutToDatabase(client, items, count, name);
 }
 
 // =====================================================
 // Save Loadout to Database
 // =====================================================
 
-void SaveLoadoutToDatabase(int client, const char[] gearBuffer, const char[] weaponsBuffer, const char[] name)
+// Four statements in one transaction:
+//   1. add any names not seen before
+//   2. upsert the set (and enforce the named cap, in the statement, so two saves racing cannot both
+//      see room)
+//   3. drop the set's existing items
+//   4. insert the new ones, joining the names back to their ids
+//
+// The set is addressed by its natural key in statement 4 rather than by an id carried between
+// statements, which keeps each one independent and avoids needing RETURNING across a transaction.
+void SaveLoadoutToDatabase(int client, LoadoutItem[] items, int count, const char[] name)
 {
     if (g_Database == null) return;
 
-    // Build NULL-safe value strings for empty buffers
-    char gearValue[LOADOUT_BUFFER_SIZE * 2 + 8];
-    if (gearBuffer[0] == '\0')
-        Format(gearValue, sizeof(gearValue), "NULL");
-    else
-        g_Database.Format(gearValue, sizeof(gearValue), "'%s'", gearBuffer);
-
-    char weaponsValue[WEAPONS_BUFFER_SIZE * 2 + 8];
-    if (weaponsBuffer[0] == '\0')
-        Format(weaponsValue, sizeof(weaponsValue), "NULL");
-    else
-        g_Database.Format(weaponsValue, sizeof(weaponsValue), "'%s'", weaponsBuffer);
-
     char query[8192];
+    char escapedName[MAX_LOADOUT_NAME * 2 + 8];
+    char nameValue[MAX_LOADOUT_NAME * 2 + 16];
 
     if (name[0] == '\0')
     {
-        // Class loadout: one row per player per class, upserted on the partial unique index that
-        // replaced the old (steam_id, class_template) primary key.
-        Format(
-            query, sizeof(query),
-            "INSERT INTO loadouts_slots (steam_id, class_template, name, gear, weapons, updated_at, update_count) VALUES (%s, '%s', NULL, %s, %s, CURRENT_TIMESTAMP, 1) ON CONFLICT (steam_id, class_template) WHERE name IS NULL DO UPDATE SET gear = EXCLUDED.gear, weapons = EXCLUDED.weapons, updated_at = CURRENT_TIMESTAMP, update_count = loadouts_slots.update_count + 1",
-            g_PlayerSteamId[client], g_PlayerCurrentClass[client], gearValue, weaponsValue);
+        strcopy(nameValue, sizeof(nameValue), "NULL");
     }
     else
     {
-        char nameValue[MAX_LOADOUT_NAME * 2 + 8];
-        g_Database.Format(nameValue, sizeof(nameValue), "'%s'", name);
+        g_Database.Escape(name, escapedName, sizeof(escapedName));
+        Format(nameValue, sizeof(nameValue), "'%s'", escapedName);
+    }
 
-        // Named loadout. The cap is enforced inside the statement rather than by a read followed
-        // by a write, so two saves racing each other cannot both see room and both insert.
-        // Overwriting a name the player already owns is always allowed, even at the cap, which is
-        // what the EXISTS arm is for. A blocked save inserts no row, which the callback detects by
-        // the affected row count.
-        Format(
-            query, sizeof(query),
-            "INSERT INTO loadouts_slots (steam_id, class_template, name, gear, weapons, updated_at, update_count) SELECT %s, '%s', %s, %s, %s, CURRENT_TIMESTAMP, 1 WHERE (SELECT COUNT(*) FROM loadouts_slots WHERE steam_id = %s AND name IS NOT NULL) < %d OR EXISTS (SELECT 1 FROM loadouts_slots WHERE steam_id = %s AND name IS NOT NULL AND lower(name) = lower(%s)) ON CONFLICT (steam_id, lower(name)) WHERE name IS NOT NULL DO UPDATE SET class_template = EXCLUDED.class_template, gear = EXCLUDED.gear, weapons = EXCLUDED.weapons, updated_at = CURRENT_TIMESTAMP, update_count = loadouts_slots.update_count + 1",
-            g_PlayerSteamId[client], g_PlayerCurrentClass[client], nameValue, gearValue, weaponsValue,
-            g_PlayerSteamId[client], g_CvarMaxNamed.IntValue,
-            g_PlayerSteamId[client], nameValue);
+    char escapedClass[256];
+    g_Database.Escape(g_PlayerCurrentClass[client], escapedClass, sizeof(escapedClass));
+
+    Transaction txn = new Transaction();
+
+    // 1. names
+    if (count > 0)
+    {
+        Format(query, sizeof(query), "INSERT INTO theater_items (category, name) VALUES ");
+        for (int i = 0; i < count; i++)
+        {
+            char escapedItem[ITEM_NAME_SIZE * 2 + 4];
+            g_Database.Escape(items[i].name, escapedItem, sizeof(escapedItem));
+            Format(query, sizeof(query), "%s%s(%d,'%s')", query, i > 0 ? "," : "", items[i].category, escapedItem);
+        }
+        StrCat(query, sizeof(query), " ON CONFLICT (category, name) DO NOTHING");
+        txn.AddQuery(query);
+    }
+
+    // 2. the set
+    if (name[0] == '\0')
+    {
+        Format(query, sizeof(query),
+               "INSERT INTO loadouts_slots (steam_id, class_template, name, updated_at, update_count) VALUES (%s, '%s', NULL, CURRENT_TIMESTAMP, 1) ON CONFLICT (steam_id, class_template) WHERE name IS NULL DO UPDATE SET updated_at = CURRENT_TIMESTAMP, update_count = loadouts_slots.update_count + 1",
+               g_PlayerSteamId[client], escapedClass);
+    }
+    else
+    {
+        Format(query, sizeof(query),
+               "INSERT INTO loadouts_slots (steam_id, class_template, name, updated_at, update_count) SELECT %s, '%s', %s, CURRENT_TIMESTAMP, 1 WHERE (SELECT COUNT(*) FROM loadouts_slots WHERE steam_id = %s AND name IS NOT NULL) < %d OR EXISTS (SELECT 1 FROM loadouts_slots WHERE steam_id = %s AND name IS NOT NULL AND lower(name) = lower(%s)) ON CONFLICT (steam_id, lower(name)) WHERE name IS NOT NULL DO UPDATE SET class_template = EXCLUDED.class_template, updated_at = CURRENT_TIMESTAMP, update_count = loadouts_slots.update_count + 1",
+               g_PlayerSteamId[client], escapedClass, nameValue,
+               g_PlayerSteamId[client], g_CvarMaxNamed.IntValue,
+               g_PlayerSteamId[client], nameValue);
+    }
+    txn.AddQuery(query);
+
+    // The set's natural key, reused by statements 3 and 4.
+    char selector[512];
+    if (name[0] == '\0')
+        Format(selector, sizeof(selector), "steam_id = %s AND class_template = '%s' AND name IS NULL",
+               g_PlayerSteamId[client], escapedClass);
+    else
+        Format(selector, sizeof(selector), "steam_id = %s AND name IS NOT NULL AND lower(name) = lower(%s)",
+               g_PlayerSteamId[client], nameValue);
+
+    // 3. clear the old items
+    Format(query, sizeof(query),
+           "DELETE FROM loadout_items WHERE loadout_id = (SELECT id FROM loadouts_slots WHERE %s)", selector);
+    txn.AddQuery(query);
+
+    // 4. the items
+    if (count > 0)
+    {
+        Format(query, sizeof(query),
+               "INSERT INTO loadout_items (loadout_id, ordinal, item_id, slot, parent_ordinal) SELECT l.id, v.ord, ti.id, v.slot, v.parent FROM loadouts_slots l CROSS JOIN (VALUES ");
+
+        for (int i = 0; i < count; i++)
+        {
+            char escapedItem[ITEM_NAME_SIZE * 2 + 4];
+            g_Database.Escape(items[i].name, escapedItem, sizeof(escapedItem));
+
+            char slotValue[16], parentValue[16];
+            if (items[i].slot < 0) strcopy(slotValue, sizeof(slotValue), "NULL");
+            else IntToString(items[i].slot, slotValue, sizeof(slotValue));
+            if (items[i].parent < 0) strcopy(parentValue, sizeof(parentValue), "NULL");
+            else IntToString(items[i].parent, parentValue, sizeof(parentValue));
+
+            // The first row carries the casts so Postgres can infer the column types; a leading
+            // NULL with no type is the one thing a VALUES list will not accept.
+            if (i == 0)
+                Format(query, sizeof(query), "%s(%d::smallint,%d::smallint,'%s',%s::smallint,%s::smallint)",
+                       query, i, items[i].category, escapedItem, slotValue, parentValue);
+            else
+                Format(query, sizeof(query), "%s,(%d,%d,'%s',%s,%s)",
+                       query, i, items[i].category, escapedItem, slotValue, parentValue);
+        }
+
+        Format(query, sizeof(query),
+               "%s) AS v(ord, cat, nm, slot, parent) JOIN theater_items ti ON ti.category = v.cat AND ti.name = v.nm WHERE %s",
+               query, selector);
+        txn.AddQuery(query);
     }
 
     DataPack pack = new DataPack();
     pack.WriteCell(GetClientUserId(client));
     pack.WriteString(name);
+    pack.WriteCell(count);
 
-    g_Database.Query(OnLoadoutSaved, query, pack);
+    g_Database.Execute(txn, OnSaveSuccess, OnSaveFailure, pack);
 }
 
-void OnLoadoutSaved(Database db, DBResultSet results, const char[] error, DataPack pack)
+public void OnSaveSuccess(Database db, DataPack pack, int numQueries, DBResultSet[] results, any[] queryData)
 {
     pack.Reset();
     int  userid = pack.ReadCell();
     char name[MAX_LOADOUT_NAME + 1];
     pack.ReadString(name, sizeof(name));
+    int count = pack.ReadCell();
     delete pack;
 
-    if (results == null)
+    int client = GetClientOfUserId(userid);
+    if (client < 1) return;
+
+    // A named save that inserted nothing was turned away by the cap check inside the statement.
+    // The set upsert is the second query when names were written and the first when they were not.
+    if (name[0] != '\0')
     {
-        LogError("Failed to save loadout: %s", error);
-        SQL_CheckError(db, results, error, 0);
-
-        int client = GetClientOfUserId(userid);
-        if (client < 1) return;
-
-        // The database enforces the cap too. Reaching it here means the statement's own check was
-        // bypassed somehow, but the player should still get the useful message rather than a
-        // generic failure.
-        if (StrContains(error, "named loadout cap", false) != -1)
+        int setIndex = (count > 0) ? 1 : 0;
+        if (setIndex < numQueries && results[setIndex] != null && results[setIndex].AffectedRows < 1)
         {
             CPrintToChat(client, "{red}[Loadout]{default} You already have %d named loadouts. Delete one with !dello <name> first.", g_CvarMaxNamed.IntValue);
             return;
         }
 
-        SendFailedMessage(client);
-        return;
-    }
-
-    int client = GetClientOfUserId(userid);
-    if (client < 1) return;
-
-    // A named save that touched no rows was turned away by the cap check in the statement.
-    if (name[0] != '\0' && results.AffectedRows < 1)
-    {
-        CPrintToChat(client, "{red}[Loadout]{default} You already have %d named loadouts. Delete one with !dello <name> first.", g_CvarMaxNamed.IntValue);
-        return;
-    }
-
-    if (name[0] != '\0')
-    {
         CPrintToChat(client, "{olivedrab}[Loadout]{default} Saved as {green}%s{default}. Load it on any class with !loadlo %s", name, name);
         return;
     }
@@ -941,6 +1018,29 @@ void OnLoadoutSaved(Database db, DBResultSet results, const char[] error, DataPa
     char message[256];
     g_CvarMsgSaved.GetString(message, sizeof(message));
     CPrintToChat(client, message);
+}
+
+public void OnSaveFailure(Database db, DataPack pack, int numQueries, const char[] error, int failIndex, any[] queryData)
+{
+    pack.Reset();
+    int  userid = pack.ReadCell();
+    char name[MAX_LOADOUT_NAME + 1];
+    pack.ReadString(name, sizeof(name));
+    delete pack;
+
+    LogError("[LoadoutSaver] Save failed at statement %d: %s", failIndex, error);
+
+    int client = GetClientOfUserId(userid);
+    if (client < 1) return;
+
+    // The trigger is the hard ceiling behind the statement's own check.
+    if (StrContains(error, "named loadout cap", false) != -1)
+    {
+        CPrintToChat(client, "{red}[Loadout]{default} You already have %d named loadouts. Delete one with !dello <name> first.", g_CvarMaxNamed.IntValue);
+        return;
+    }
+
+    SendFailedMessage(client);
 }
 
 // =====================================================
@@ -957,17 +1057,19 @@ void LoadPlayerLoadout(int client, bool showMessages, const char[] name)
         return;
     }
 
-    char query[512];
+    // LEFT JOIN so an empty set still returns its row - that is how a saved-but-empty loadout is
+    // told apart from one that does not exist.
+    char query[1024];
     if (name[0] == '\0')
     {
         g_Database.Format(query, sizeof(query),
-                          "SELECT gear, weapons, class_template FROM loadouts_slots WHERE steam_id = %s AND class_template = '%s' AND name IS NULL",
+                          "SELECT l.class_template, ti.category, ti.name, li.slot, li.parent_ordinal FROM loadouts_slots l LEFT JOIN loadout_items li ON li.loadout_id = l.id LEFT JOIN theater_items ti ON ti.id = li.item_id WHERE l.steam_id = %s AND l.class_template = '%s' AND l.name IS NULL ORDER BY li.ordinal",
                           g_PlayerSteamId[client], g_PlayerCurrentClass[client]);
     }
     else
     {
         g_Database.Format(query, sizeof(query),
-                          "SELECT gear, weapons, class_template FROM loadouts_slots WHERE steam_id = %s AND name IS NOT NULL AND lower(name) = lower('%s')",
+                          "SELECT l.class_template, ti.category, ti.name, li.slot, li.parent_ordinal FROM loadouts_slots l LEFT JOIN loadout_items li ON li.loadout_id = l.id LEFT JOIN theater_items ti ON ti.id = li.item_id WHERE l.steam_id = %s AND l.name IS NOT NULL AND lower(l.name) = lower('%s') ORDER BY li.ordinal",
                           g_PlayerSteamId[client], name);
     }
 
@@ -1001,18 +1103,15 @@ void OnLoadoutRetrieved(Database db, DBResultSet results, const char[] error, Da
 
     if (!results.FetchRow())
     {
-        // No class loadout saved is the normal case and stays silent, but a player who asked for
-        // a name by hand should hear that it does not exist.
+        // No class loadout saved is the normal case and stays silent, but a player who asked for a
+        // name by hand should hear that it does not exist.
         if (name[0] != '\0' && showMessages)
             CPrintToChat(client, "{red}[Loadout]{default} No loadout named {green}%s{default}. See !listlo", name);
         return;
     }
 
-    // The class the loadout was saved on. For a named loadout this may not be the class being
-    // played right now, which is the whole point of them, but it is also the case that needs
-    // guarding - see ApplyLoadout.
     char savedClass[128];
-    results.FetchString(2, savedClass, sizeof(savedClass));
+    results.FetchString(0, savedClass, sizeof(savedClass));
 
     if (name[0] != '\0' && !StrEqual(savedClass, g_PlayerCurrentClass[client], false) && !g_CvarNamedCrossClass.BoolValue)
     {
@@ -1021,152 +1120,114 @@ void OnLoadoutRetrieved(Database db, DBResultSet results, const char[] error, Da
         return;
     }
 
-    char gearBuffer[LOADOUT_BUFFER_SIZE];
-    char weaponsBuffer[WEAPONS_BUFFER_SIZE];
-    gearBuffer[0]    = '\0';
-    weaponsBuffer[0] = '\0';
+    LoadoutItem items[MAX_ITEMS];
+    int count = 0;
 
-    if (!results.IsFieldNull(0)) results.FetchString(0, gearBuffer, sizeof(gearBuffer));
-    if (!results.IsFieldNull(1)) results.FetchString(1, weaponsBuffer, sizeof(weaponsBuffer));
+    // The first row is already fetched, so read it before advancing.
+    do
+    {
+        if (count >= MAX_ITEMS) break;
+        if (results.IsFieldNull(2)) continue;    // the LEFT JOIN row of an empty set
 
-    ApplyLoadout(client, gearBuffer, weaponsBuffer, showMessages, name, savedClass);
+        LoadoutItem item;
+        item.category = results.FetchInt(1);
+        results.FetchString(2, item.name, sizeof(item.name));
+        item.slot   = results.IsFieldNull(3) ? -1 : results.FetchInt(3);
+        item.parent = results.IsFieldNull(4) ? -1 : results.FetchInt(4);
+
+        items[count++] = item;
+    }
+    while (results.FetchRow());
+
+    ApplyLoadout(client, items, count, showMessages, name, savedClass);
 }
 
 // =====================================================
 // Apply Loadout - Execute Buy Commands
 // =====================================================
 
-// Splits a stored weapon item - "slot:def,upgrade,upgrade" - into its slot, its definition index
-// and its upgrades. Returns false for anything that does not parse, so a corrupt or hand-edited row
-// costs one item rather than the whole loadout.
-bool ParseWeaponItem(const char[] item, int &slot, char[] defIndex, int defLen, char[][] upgrades, int maxUpgrades, int &upgradeCount)
+void ApplyLoadout(int client, LoadoutItem[] items, int count, bool showMessages, const char[] name, const char[] savedClass)
 {
-    upgradeCount = 0;
-    defIndex[0]  = '\0';
-    slot         = -1;
-
-    int colon = FindCharInString(item, ':');
-    if (colon < 1) return false;
-
-    char slotText[8];
-    int  slotLen = colon < sizeof(slotText) ? colon : sizeof(slotText) - 1;
-    strcopy(slotText, slotLen + 1, item);
-    if (!StringToIntEx(slotText, slot)) return false;
-
-    char fields[MAX_LOADOUT_ITEMS][ITEM_STRING_SIZE];
-    int  fieldCount = ExplodeString(item[colon + 1], ",", fields, MAX_LOADOUT_ITEMS, sizeof(fields[]));
-    if (fieldCount < 1 || fields[0][0] == '\0') return false;
-
-    strcopy(defIndex, defLen, fields[0]);
-
-    for (int i = 1; i < fieldCount && upgradeCount < maxUpgrades; i++)
-    {
-        if (fields[i][0] == '\0') continue;
-        strcopy(upgrades[upgradeCount++], ITEM_STRING_SIZE, fields[i]);
-    }
-
-    return true;
-}
-
-void ApplyLoadout(int client, const char[] gearBuffer, const char[] weaponsBuffer, bool showMessages, const char[] name, const char[] savedClass)
-{
-    // Validate client is in game and alive
     if (!IsClientInGame(client)) return;
     if (!IsPlayerAlive(client)) return;
 
-    // Clear current loadout
-    FakeClientCommand(client, "inventory_sell_all");
-
-    // Gear first, and that ordering is load-bearing rather than cosmetic. GetWeaponSlotCapacity is
-    // 1 + the sum of the "weapon_slots" bonuses on the gear the player has equipped RIGHT NOW, so
-    // until the rig and slings are back on, every weapon slot still has capacity 1 and the second
-    // primary or third grenade below would be refused.
-    //
-    // Within gear, order does not matter - each item names the slot it belongs to.
-    if (gearBuffer[0] != '\0')
+    if (!TheaterItem_Ready())
     {
-        char gearArray[MAX_GEAR_SLOTS][ITEM_STRING_SIZE];
-        int  gearCount = ExplodeString(gearBuffer, ";", gearArray, MAX_GEAR_SLOTS, sizeof(gearArray[]));
-
-        for (int i = 0; i < gearCount; i++)
-        {
-            if (gearArray[i][0] == '\0') continue;
-            FakeClientCommand(client, "inventory_buy_gear %s", gearArray[i]);
-        }
+        if (showMessages) CPrintToChat(client, "{red}[Loadout]{default} Loading is unavailable right now (theater not read).");
+        return;
     }
 
-    if (weaponsBuffer[0] != '\0')
+    FakeClientCommand(client, "inventory_sell_all");
+
+    // Gear before weapons, and that ordering is load-bearing. GetWeaponSlotCapacity is 1 plus the
+    // "weapon_slots" bonuses on the gear worn RIGHT NOW, so until the rig and slings are back on
+    // every slot still has capacity 1 and the second primary or third grenade is refused.
+    for (int i = 0; i < count; i++)
     {
-        char itemArray[MAX_WEAPON_ITEMS][ITEM_STRING_SIZE];
-        int  itemCount = ExplodeString(weaponsBuffer, ";", itemArray, MAX_WEAPON_ITEMS, sizeof(itemArray[]));
+        if (items[i].category != view_as<int>(TheaterCategory_Gear)) continue;
 
-        // WHY THE COMMAND HAS FOUR ARGUMENTS
-        //
-        // A bare "inventory_buy_weapon <def>" cannot buy a second primary, secondary or grenade. It
-        // is not a restriction on the player - it is the command's defaults. The handler reads
-        // args[1] as the definition, args[2] as the firemode (default -1) and args[4] as the
-        // SUB-SLOT (default 0), then calls
-        // CPlayerInventory::PurchaseWeapon(def, firemode, subSlot).
-        //
-        // Slots hold more than one item - PurchaseWeapon checks the sub-slot against
-        // GetWeaponSlotCapacity(slot) - but with the sub-slot defaulting to 0 every buy targets the
-        // same one, and PurchaseWeapon refunds whatever is already there before inserting. So each
-        // buy REPLACES the last rather than adding to it, which is exactly the "it never bought
-        // more than one" behaviour this plugin exists to fix.
-        //
-        // Passing -1 as the sub-slot makes PurchaseWeapon walk the existing purchases for that slot
-        // and take the first free sub-slot instead. args[3] is read by nothing, so it is a
-        // placeholder. Firemode -1 leaves the player's own preference alone.
-        int  weaponsBought = 0;
-        bool claimed[PURCHASE_MAX_ENTRIES];
-        for (int i = 0; i < PURCHASE_MAX_ENTRIES; i++) claimed[i] = false;
-
-        for (int i = 0; i < itemCount; i++)
+        int id = TheaterItem_Find(TheaterCategory_Gear, items[i].name);
+        if (id <= 0)
         {
-            if (itemArray[i][0] == '\0') continue;
+            LogMessage("[LoadoutSaver] %L: gear \"%s\" is not in the loaded theater - skipped", client, items[i].name);
+            continue;
+        }
 
-            int  slot;
-            int  upgradeCount;
-            char defIndex[ITEM_STRING_SIZE];
-            char upgrades[MAX_WEAPON_UPGRADES][ITEM_STRING_SIZE];
+        FakeClientCommand(client, "inventory_buy_gear %d", id);
+    }
 
-            if (!ParseWeaponItem(itemArray[i], slot, defIndex, sizeof(defIndex), upgrades, MAX_WEAPON_UPGRADES, upgradeCount))
+    // Weapons in stored order, each followed by its own upgrades.
+    int  weaponsBought = 0;
+    bool claimed[PURCHASE_MAX_ENTRIES];
+    for (int i = 0; i < PURCHASE_MAX_ENTRIES; i++) claimed[i] = false;
+
+    for (int i = 0; i < count; i++)
+    {
+        if (items[i].category != view_as<int>(TheaterCategory_Weapon)) continue;
+
+        int weaponId = TheaterItem_Find(TheaterCategory_Weapon, items[i].name);
+        if (weaponId <= 0)
+        {
+            LogMessage("[LoadoutSaver] %L: weapon \"%s\" is not in the loaded theater - skipped", client, items[i].name);
+            continue;
+        }
+
+        // Sub-slot -1 means "next free". Without it every buy targets sub-slot 0 and PurchaseWeapon
+        // refunds whatever is already there, which is why a bare inventory_buy_weapon can never hold
+        // more than one item per slot. Firemode -1 leaves the player's own preference alone, and
+        // args[3] is read by nothing.
+        FakeClientCommand(client, "inventory_buy_weapon %d -1 0 -1", weaponId);
+        weaponsBought++;
+
+        // inventory_buy_upgrade takes a position in the purchase list, bounds-checked as
+        // 0 <= index < purchase count. Not a slot, and not the order this plugin bought things in -
+        // the list already holds whatever the class template granted - so it is read back rather
+        // than counted. The buy above has already run: FakeClientCommand dispatches the ConCommand
+        // synchronously.
+        int purchaseIndex = FindPurchaseIndex(client, weaponId, claimed);
+        if (purchaseIndex < 0)
+        {
+            purchaseIndex = weaponsBought;
+            LogError("[LoadoutSaver] %L: weapon %s not found in the purchase list, falling back to positional index %d",
+                     client, items[i].name, purchaseIndex);
+        }
+
+        for (int u = 0; u < count; u++)
+        {
+            if (items[u].category != view_as<int>(TheaterCategory_Upgrade)) continue;
+            if (items[u].parent != i) continue;
+
+            int upgradeId = TheaterItem_Find(TheaterCategory_Upgrade, items[u].name);
+            if (upgradeId <= 0)
             {
-                LogError("[LoadoutSaver] %L has an unreadable loadout item \"%s\" - skipped", client, itemArray[i]);
+                LogMessage("[LoadoutSaver] %L: upgrade \"%s\" is not in the loaded theater - skipped", client, items[u].name);
                 continue;
             }
 
-            FakeClientCommand(client, "inventory_buy_weapon %s -1 0 -1", defIndex);
-            weaponsBought++;
-
-            if (upgradeCount < 1) continue;
-
-            // inventory_buy_upgrade takes a position in the purchase list, which
-            // PurchaseWeaponUpgrade bounds-checks as 0 <= index < purchase count. It is NOT a slot
-            // and NOT the order this plugin bought things in - the list already holds whatever the
-            // class template granted - so the index is read back from the list rather than counted.
-            //
-            // Reading it back is only possible because the buy above has already happened:
-            // FakeClientCommand dispatches the ConCommand synchronously, so PurchaseWeapon has run
-            // and the purchase list is up to date by the time this line executes.
-            //
-            // The fallback is the original plugin's positional guess, kept only so a layout change
-            // degrades to today's behaviour instead of putting upgrades on an arbitrary weapon. It
-            // is logged, because if it ever fires the lookup above needs fixing.
-            int purchaseIndex = FindPurchaseIndex(client, StringToInt(defIndex), claimed);
-            if (purchaseIndex < 0)
-            {
-                purchaseIndex = weaponsBought;
-                LogError("[LoadoutSaver] %L: weapon %s not found in the purchase list, falling back to positional index %d",
-                         client, defIndex, purchaseIndex);
-            }
-
-            for (int u = 0; u < upgradeCount; u++)
-                FakeClientCommand(client, "inventory_buy_upgrade %d %s", purchaseIndex, upgrades[u]);
+            FakeClientCommand(client, "inventory_buy_upgrade %d %d", purchaseIndex, upgradeId);
         }
     }
 
-    // Auto-resupply if in resupply zone
     FakeClientCommand(client, "inventory_resupply");
 
     if (showMessages)
@@ -1176,32 +1237,28 @@ void ApplyLoadout(int client, const char[] gearBuffer, const char[] weaponsBuffe
         CPrintToChat(client, message);
     }
 
-    // Nothing above decides what a player is allowed to carry. Every item is applied with the
-    // same inventory_buy_* commands the buy menu itself issues, so the game arbitrates class
-    // restrictions and supply cost exactly as it does for a manual purchase - a rifleman cannot
-    // buy the machine gunner's LMG through this path any more than through the menu.
-    //
-    // Rather than trust that silently, the result is read back: the weapons the player actually
-    // ended up holding are compared against the ones the loadout asked for. Items the game refused
-    // simply are not there, and the player is told how many were dropped instead of being left
-    // wondering. The comparison also lands in the server log.
-    //
-    // The original only did this for cross-class named loadouts. Here it runs for every load, which
-    // is deliberate: this variant stores items the original could not, and reading back what
-    // actually arrived is the only way to find out whether an unusual slot survives the round trip.
+    // Nothing above decides what a player may carry. Every item goes through the same
+    // inventory_buy_* commands the buy menu issues, so the game arbitrates class restrictions and
+    // supply cost exactly as it does for a manual purchase. Rather than trust that silently, the
+    // result is read back and the player is told how many items did not arrive.
+    char wanted[512];
+    for (int i = 0; i < count; i++)
+    {
+        if (items[i].category != view_as<int>(TheaterCategory_Weapon)) continue;
+        Format(wanted, sizeof(wanted), "%s%s%s", wanted, wanted[0] == '\0' ? "" : ",", items[i].name);
+    }
+
     DataPack pack = new DataPack();
     pack.WriteCell(GetClientUserId(client));
     pack.WriteCell(showMessages);
     pack.WriteCell(name[0] != '\0' && !StrEqual(savedClass, g_PlayerCurrentClass[client], false));
     pack.WriteString(name);
     pack.WriteString(savedClass);
-    pack.WriteString(weaponsBuffer);
+    pack.WriteString(wanted);
 
-    // Delayed on purpose, but not for the reason the original gave. FakeClientCommand is NOT
-    // queued: it goes engine->ClientCommand -> CGameClient::ExecuteStringCommand -> Cmd_Dispatch ->
-    // ConCommand::Dispatch, with no Cbuf_AddText anywhere on the path, so every buy above has fully
-    // run by now. What is deferred is the weapon ENTITIES - the purchase list is updated
-    // immediately, the items are handed out later - and ExtractWeapons reads entities.
+    // Delayed on purpose, but not because the buys are queued - FakeClientCommand dispatches them
+    // synchronously. What is deferred is the weapon ENTITIES: the purchase list updates
+    // immediately, the items are handed out later, and the check below reads entities.
     CreateTimer(0.5, Timer_VerifyLoadout, pack, TIMER_FLAG_NO_MAPCHANGE | TIMER_DATA_HNDL_CLOSE);
 }
 
@@ -1215,7 +1272,7 @@ public Action Timer_VerifyLoadout(Handle timer, DataPack pack)
 
     char name[MAX_LOADOUT_NAME + 1];
     char savedClass[128];
-    char wantedBuffer[WEAPONS_BUFFER_SIZE];
+    char wantedBuffer[512];
     pack.ReadString(name, sizeof(name));
     pack.ReadString(savedClass, sizeof(savedClass));
     pack.ReadString(wantedBuffer, sizeof(wantedBuffer));
@@ -1224,16 +1281,24 @@ public Action Timer_VerifyLoadout(Handle timer, DataPack pack)
     if (client < 1 || !IsClientInGame(client) || !IsPlayerAlive(client)) return Plugin_Handled;
     if (wantedBuffer[0] == '\0') return Plugin_Handled;
 
-    char gotBuffer[WEAPONS_BUFFER_SIZE];
-    ExtractWeapons(client, gotBuffer, sizeof(gotBuffer));
+    char wanted[MAX_WEAPON_ITEMS][ITEM_NAME_SIZE];
+    int  wantedCount = ExplodeString(wantedBuffer, ",", wanted, sizeof(wanted), sizeof(wanted[]));
 
-    // Compare on definition index alone. An upgrade cannot be held without its weapon, and an
-    // upgrade the class may not buy is refused individually, so counting missing weapons is the
-    // signal that matters to the player.
-    char wanted[MAX_WEAPON_ITEMS][ITEM_STRING_SIZE];
-    char got[MAX_WEAPON_ITEMS][ITEM_STRING_SIZE];
-    int  wantedCount = ExplodeString(wantedBuffer, ";", wanted, MAX_WEAPON_ITEMS, sizeof(wanted[]));
-    int  gotCount    = ExplodeString(gotBuffer, ";", got, MAX_WEAPON_ITEMS, sizeof(got[]));
+    // What the player actually ended up holding, by name.
+    char got[MAX_WEAPON_ITEMS][ITEM_NAME_SIZE];
+    int  gotCount = 0;
+
+    int carried = GetEntPropArraySize(client, Prop_Send, "m_hMyWeapons");
+    for (int i = 0; i < carried && gotCount < MAX_WEAPON_ITEMS; i++)
+    {
+        int weapon = GetEntPropEnt(client, Prop_Send, "m_hMyWeapons", i);
+        if (weapon <= 0 || !IsValidEntity(weapon)) continue;
+        if (!HasEntProp(weapon, Prop_Send, "m_hWeaponDefinitionHandle")) continue;
+
+        int id = GetEntProp(weapon, Prop_Send, "m_hWeaponDefinitionHandle");
+        if (id <= 0) continue;
+        if (TheaterItem_Name(TheaterCategory_Weapon, id, got[gotCount], sizeof(got[]))) gotCount++;
+    }
 
     bool matched[MAX_WEAPON_ITEMS];
     for (int i = 0; i < MAX_WEAPON_ITEMS; i++) matched[i] = false;
@@ -1241,18 +1306,12 @@ public Action Timer_VerifyLoadout(Handle timer, DataPack pack)
 
     for (int i = 0; i < wantedCount; i++)
     {
-        char wantDef[ITEM_STRING_SIZE];
-        if (!ItemDefIndex(wanted[i], wantDef, sizeof(wantDef))) continue;
+        if (wanted[i][0] == '\0') continue;
 
         bool found = false;
         for (int j = 0; j < gotCount && !found; j++)
         {
-            if (matched[j]) continue;
-
-            char gotDef[ITEM_STRING_SIZE];
-            if (!ItemDefIndex(got[j], gotDef, sizeof(gotDef))) continue;
-            if (!StrEqual(gotDef, wantDef)) continue;
-
+            if (matched[j] || !StrEqual(got[j], wanted[i], false)) continue;
             matched[j] = true;
             found      = true;
         }
@@ -1262,9 +1321,9 @@ public Action Timer_VerifyLoadout(Handle timer, DataPack pack)
 
     if (dropped > 0 || crossClass)
     {
-        LogMessage("[LoadoutSaver] %L loaded \"%s\" (saved on %s) while playing %s: wanted [%s], got [%s], %d missing",
-                   client, name[0] == '\0' ? "<class loadout>" : name, savedClass, g_PlayerCurrentClass[client],
-                   wantedBuffer, gotBuffer, dropped);
+        LogMessage("[LoadoutSaver] %L loaded \"%s\" (saved on %s) while playing %s: wanted [%s], %d missing",
+                   client, name[0] == '\0' ? "<class loadout>" : name, savedClass,
+                   g_PlayerCurrentClass[client], wantedBuffer, dropped);
     }
 
     if (dropped > 0 && showMessages)
@@ -1276,22 +1335,6 @@ public Action Timer_VerifyLoadout(Handle timer, DataPack pack)
     }
 
     return Plugin_Handled;
-}
-
-// Pulls the definition index out of a stored "slot:def,upgrade,..." item.
-bool ItemDefIndex(const char[] item, char[] buffer, int maxlen)
-{
-    buffer[0] = '\0';
-
-    int colon = FindCharInString(item, ':');
-    if (colon < 0) return false;
-
-    strcopy(buffer, maxlen, item[colon + 1]);
-
-    int comma = FindCharInString(buffer, ',');
-    if (comma != -1) buffer[comma] = '\0';
-
-    return buffer[0] != '\0';
 }
 
 // =====================================================
