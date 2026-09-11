@@ -545,6 +545,16 @@ RUN --mount=type=bind,source=./plugins/sourcemod,target=/plugin-source \
     find /insurgency -type d -exec chmod 755 {} \; && \
     find /insurgency -type f -exec chmod 644 {} \;
 
+FROM sourcemod-plugins-base AS sourcemod-plugins-gg2-spectalk
+
+# Build the gg2_spectalk plugin
+COPY plugins/sourcemod/gamedata/ /insurgency/addons/sourcemod/gamedata/
+RUN --mount=type=bind,source=./plugins/sourcemod/scripting,target=/plugin-source/scripting \
+    /sourcemod/addons/sourcemod/scripting/spcomp --include=/plugin-source/scripting/include  /plugin-source/scripting/gg2_spectalk.sp -o /insurgency/addons/sourcemod/plugins/gg2_spectalk.smx && \
+    # Fixup file permissions
+    find /insurgency -type d -exec chmod 755 {} \; && \
+    find /insurgency -type f -exec chmod 644 {} \;
+
 FROM sourcemod-plugins-base AS sourcemod-plugins-gg2-spectator
 
 # Build the gg2_spectator plugin
@@ -821,6 +831,7 @@ COPY --from=sourcemod-plugins-gg2-mstats2 --chown=0:0 /insurgency /opt/insurgenc
 # This seems unnecessary for now
 # COPY --from=sourcemod-plugins-gg2-playlist-hax --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
 COPY --from=sourcemod-plugins-gg2-show-health-simp --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
+COPY --from=sourcemod-plugins-gg2-spectalk --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
 COPY --from=sourcemod-plugins-gg2-spectator --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
 COPY --from=sourcemod-plugins-gg2-strip-entities --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
 COPY --from=sourcemod-plugins-gg2-supply --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
