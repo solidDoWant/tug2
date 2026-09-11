@@ -31,6 +31,21 @@ bool       InCounterAttack()
     return view_as<bool>(GameRules_GetProp("m_bCounterAttack"));
 }
 
+// Counterattacks - cap a point, then hold it while the enemy pushes back - are a checkpoint
+// mechanic, but m_bCounterAttack is not checkpoint-only. Hunt raises it when a cache goes up, which
+// is what mp_hunt_counterattack_distance steers the bots by, and hunt has no point to defend and no
+// counter to outlast: you win it by clearing the map. Both messages below are wrong there, so gate
+// them on the mode rather than on the flag alone. Same idiom as bm2_respawn's g_bCheckpointManaged.
+bool HasCounterAttacks()
+{
+    ConVar cvGamemode = FindConVar("mp_gamemode");
+    if (cvGamemode == null) return true;
+
+    char sGamemode[32];
+    cvGamemode.GetString(sGamemode, sizeof(sGamemode));
+    return StrEqual(sGamemode, "checkpoint", false);
+}
+
 public Plugin myinfo =
 {
     name        = "[GG2 Messages] MESSAGES plugin",
@@ -256,7 +271,7 @@ public bool is_translatable(char[] phrase)
 
 public Action Timer_CheckInCounter(Handle timer)
 {
-    if (!InCounterAttack()) return Plugin_Continue;
+    if (!HasCounterAttacks() || !InCounterAttack()) return Plugin_Continue;
 
     if (g_is_last_cap_cache)
     {
