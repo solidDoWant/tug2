@@ -521,7 +521,7 @@ FROM sourcemod-plugins-base AS sourcemod-plugins-gg2-bot-smoke-suppress
 # Build the gg2_bot_smoke_suppress plugin. Needs gamedata/tug2.games.txt for the NextBot vision
 # signatures; the COPY below already brings the whole gamedata directory in.
 COPY plugins/sourcemod/gamedata/ /insurgency/addons/sourcemod/gamedata/
-RUN --mount=type=bind,source=./plugins/sourcemod/scripting,target=/plugin-source/scripting \
+RUN --mount=type=bind,source=./plugins/sourcemod,target=/plugin-source \
     /sourcemod/addons/sourcemod/scripting/spcomp --include=/plugin-source/scripting/include  /plugin-source/scripting/gg2_bot_smoke_suppress.sp -o /insurgency/addons/sourcemod/plugins/gg2_bot_smoke_suppress.smx && \
     mkdir -p /insurgency/addons/sourcemod/configs/sql-init-scripts/pgsql && \
     cp /plugin-source/configs/sql-init-scripts/pgsql/gg2_bot_smoke_suppress.sql /insurgency/addons/sourcemod/configs/sql-init-scripts/pgsql/ && \
