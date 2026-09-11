@@ -266,7 +266,8 @@
 // KEEP THESE IN STEP. If you edit anything under scripts/theaters/, republish this item with
 // `make workshop-package WORKSHOP_ITEM_ID=3796695587` before deploying, or the server will be
 // using a theater no client has and connections will start failing again.
-3796695587 // TUG 2 Test Server Custom Theaters (scripts/theaters/theater_tug_nvg_default*) 0.052 MB
+// Replaced by fastdl
+// 3796695587 // TUG 2 Test Server Custom Theaters (scripts/theaters/theater_tug_nvg_default*) 0.052 MB
 // Client-side visual and audio mods, being trialled on the test server. None of these are maps,
 // theaters, or entities the server spawns, so nothing here needs a mapcycle or theater_override
 // entry. Note that subscribing server-side may well not be enough either: per gameinfo.txt,
@@ -286,5 +287,4 @@
 // is log spam rather than missing maps - but console.log is the main diagnostic tool here.
 //378779393 // Mountain Dew Doritos Molotov 5.334 MB
 730009401 // Just do it Remix (Last man Standing) 34.619 MB
-3758847152 // Squeaky Rubber Ducky (replaces M67/F1 frag model + bounce sounds) 7.403 MB
- 
+// 3758847152 // Squeaky Rubber Ducky (replaces M67/F1 frag model + bounce sounds) 7.403 MB
