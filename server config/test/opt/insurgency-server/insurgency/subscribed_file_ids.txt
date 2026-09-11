@@ -274,10 +274,6 @@
 // cannot override a stock game file, whereas a player's own subscriptions mount from
 // insurgency/custom/* first. Every mod below works by overriding a stock file, so if it does not
 // show up in game, the fix is for players to subscribe to it themselves.
-3320528771 // VALient (Visible Aiming Lasers) - Red Edition 0.012 MB
-// Green edition of the above. Same mod, same particles/weapon_fx.pcf override, so only one of
-// the two can win. Enable this only if the red one is disabled first.
-//3320540019 // VALient (Visible Aiming Lasers) - Green Edition 0.012 MB
 3306889421 // Better NVG 0.001 MB
 2608962360 // Ultimate GGX Shader Mod (All Weapons + Accessories) 180.858 MB
 3629465190 // extra audio settings (voice_maxgain / voice_overdrive) 0.012 MB
@@ -291,3 +287,4 @@
 //378779393 // Mountain Dew Doritos Molotov 5.334 MB
 730009401 // Just do it Remix (Last man Standing) 34.619 MB
 3758847152 // Squeaky Rubber Ducky (replaces M67/F1 frag model + bounce sounds) 7.403 MB
+ 
