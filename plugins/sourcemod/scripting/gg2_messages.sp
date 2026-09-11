@@ -67,13 +67,31 @@ public void OnPluginStart()
 
     Database.Connect(OnDatabaseConnected, "insurgency-stats");
 
-    // Registered as "help" rather than "sm_help" on purpose. SourceMod resolves a chat trigger by
-    // looking up the typed word as a command first, and only prepends "sm_" if that finds nothing,
-    // so "!help" lands here instead of on SourceMod's adminhelp - which answers "see console for
-    // output" and then dumps every registered command, admin ones included, into the console.
+    // SourceMod resolves a chat trigger by looking up the typed word as a command first and only
+    // prepending "sm_" if that finds nothing - so a bare registration is the right way to own a
+    // chat trigger, and it is what SourceMod's own basetriggers does for "timeleft", "ff" and
+    // "motd".
+    //
+    // It does NOT work for "help", because the engine already has a "help" ConCommand (it looks up
+    // convars). RegConsoleCmd on a name the engine owns HOOKS the existing command rather than
+    // creating a SourceMod one, and the chat-trigger lookup only searches SourceMod's own dispatch
+    // table - so "!help" misses, falls through to "sm_help", and lands on SourceMod's adminhelp,
+    // which answers "see console for output" and dumps every registered command there.
+    //
+    // Confirmed on the live server with "find": "help" reports the ENGINE's description, while
+    // "cmds" and "commands" report this plugin's - the two that SourceMod actually created.
+    //
+    // So "help" is still registered, because it is what answers "help" typed in a client's own
+    // console, but the chat trigger is caught by the sm_help listener below instead.
     RegConsoleCmd("help", Cmd_Help, "List the chat commands available to players");
     RegConsoleCmd("commands", Cmd_Help, "List the chat commands available to players");
     RegConsoleCmd("cmds", Cmd_Help, "List the chat commands available to players");
+
+    // A command listener runs BEFORE the command's own hooks, so returning Plugin_Handled here
+    // stops adminhelp ever running for an in-game player. Console callers fall through untouched,
+    // which keeps sm_help and sm_searchcmd working at the server console and for an admin who
+    // types them in their own console.
+    AddCommandListener(Listener_Help, "sm_help");
 
     LoadTranslations("tug.phrases");
 }
@@ -152,6 +170,21 @@ public Action Cmd_Help(int client, int args)
     // in-game players and let console callers fall through.
     if (!IsValidPlayer(client)) return Plugin_Continue;
 
+    PrintHelp(client);
+    return Plugin_Handled;
+}
+
+// Catches "!help" and "/help". See the registration block for why the bare "help" command cannot.
+public Action Listener_Help(int client, const char[] command, int argc)
+{
+    if (!IsValidPlayer(client)) return Plugin_Continue;
+
+    PrintHelp(client);
+    return Plugin_Handled;
+}
+
+void PrintHelp(int client)
+{
     CPrintToChat(client, "%T", "help_header", client);
 
     for (int i = 0; i < sizeof(g_HelpPhrases); i++)
@@ -178,8 +211,6 @@ public Action Cmd_Help(int client, int args)
 
         CPrintToChat(client, "%T", g_AdminHelpPhrases[i], client);
     }
-
-    return Plugin_Handled;
 }
 
 public Action Event_ControlPointCaptured(Event event, const char[] name, bool dontBroadcast)
