@@ -707,9 +707,16 @@ public Action Event_PlayerDeath(Event event, const char[] name, bool dontBroadca
         Format(amnesty_attacker, sizeof(amnesty_attacker), "%N", attacker);
         CPrintToChat(victim, "%T", "teamkiller_has_amnesty", victim, amnesty_attacker);
 
-        // 36 chars for the raw message + 64 for the attacker name + 1 for null termination char = 101, with 91 left over for weapon name
+        // The VICTIM goes in the message, not the attacker. send_to_discord already prefixes the
+        // line with the name of the client passed as its first argument - "<attacker>: <message>" -
+        // so naming the attacker again here printed them on both sides of the TK:
+        //     pl0x: TK'd pl0x (p90) (AMNESTY GRANTED)
+        // amnesty_attacker stays for the chat line above, where naming the attacker IS the point:
+        // that one tells the victim who killed them.
+        //
+        // 36 chars for the raw message + 64 for the victim name + 1 for null termination char = 101, with 91 left over for weapon name
         char d_message[192];
-        Format(d_message, sizeof(d_message), "__***TK'd***__ %s (%s) (AMNESTY GRANTED)", amnesty_attacker, weapon);
+        Format(d_message, sizeof(d_message), "__***TK'd***__ %N (%s) (AMNESTY GRANTED)", victim, weapon);
         send_to_discord(attacker, d_message);
 
         return Plugin_Continue;
