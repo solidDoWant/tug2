@@ -12,25 +12,30 @@ hold a byte-identical copy of the theater the server is using is refused at conn
 server is enforcing consistency for this file: scripts/theaters/<name>.theater
 ```
 
-Files baked into the server image cannot reach a client by any route (`sv_downloadurl` is empty, so
-there is no FastDL either). The Workshop item is what actually delivers them.
+Files baked into the server image cannot reach a client by any route on their own. They are
+delivered over fastdl (`sv_downloadurl`), from the content image built by the `fastdl-*` stages in
+the Dockerfile.
+
+These used to ship as a Steam Workshop item. They no longer do, because that path cannot update an
+item a client already has: `CWorkshopItem::CheckForUpdate` has exactly one caller and it is gated on
+the item containing the map being loaded, so a scripts-only item is frozen at whatever version a
+client first downloaded. That is what produced the `SERVER IS ENFORCING CONSISTENCY FOR THIS FILE`
+kicks.
 
 ## The rule
 
-**Any edit to a file in this directory must be republished before it is deployed:**
+**Any edit to a file in this directory has to reach clients before the server that enforces it.**
 
 ```sh
-make workshop-package WORKSHOP_ITEM_ID=3796695587
-steamcmd +login <account> +workshop_build_item "<printed vdf path>" +quit
+make server-image-test      # builds the game server AND its fastdl content image
 ```
 
-Deploy the new image and the republished item together. If the loose copy here differs from the
-published item by even one byte, the server will be running a theater no client has, and joins
-start failing again with the message above. That failure looks like a server outage rather than a
-content mismatch, so it is worth being careful about.
+Publish the content image and deploy the server together, content first. If what is served differs
+from what the server enforces by even one byte, joins fail with the message above — and that failure
+looks like a server outage rather than a content mismatch, so it is worth being careful about.
 
-This README is not packaged — `make workshop-package` only picks up `*.theater` — so editing it
-does not require a republish.
+This README is not served — the content image takes only `*.theater` from this directory and strips
+documentation — so editing it changes nothing for clients.
 
 ## Why these files exist at all
 

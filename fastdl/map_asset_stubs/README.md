@@ -28,17 +28,20 @@ python3 tools/bspaudit/audit.py \
     --maps-dir <steam workshop content dir> \
     --content-index tools/bspaudit/content_index.txt \
     --strip-config plugins/sourcemod/configs/gg2_strip_entities.cfg \
-    --stub-dir workshop/map_asset_stubs/materials
+    --stub-dir fastdl/map_asset_stubs/materials
 ```
 
-Then:
+Nothing else to do. These are picked up automatically by the fastdl content image
+(`make fastdl-image-test`, or `make server-image-test` which builds both), added to the generated
+`downloadables.txt`, and advertised to clients by `gg2_fastdl` on every map start.
 
-```
-make workshop-package-stubs WORKSHOP_STUBS_ITEM_ID=<id>
-```
+They are shared rather than per-server: a stub exists because a map references a material that is in
+nobody's content, and both servers run the affected maps. Only servers listed in `FASTDL_SERVERS`
+actually ship them today.
 
-A first publish uses `0`, which creates the item; put the resulting ID in the Makefile and in the
-servers' `subscribed_file_ids.txt`, or clients will never receive it.
+These used to be a Steam Workshop item, and were never published. That is just as well — the
+workshop path cannot update an item a client already has unless the item contains the map being
+loaded, so a materials-only item would have been frozen at its first version forever.
 
 ## The one unverified assumption
 
