@@ -222,29 +222,41 @@ bool g_preRoundInitial = false,
      isStuck[MAXPLAYERS + 1],
      g_playersReady         = false;
 
-// This plugin's bot reinforcement system is checkpoint-only: it drives respawns off
-// mp_checkpoint_counterattack_* and the checkpoint objective flow, and it puts bots back by
-// calling the game's own ForceRespawn. Every other coop mode spawns its enemies itself (hunt
-// spawns off the navmesh via mp_hunt_nav_spawning; survival/conquer/outpost use wave spawns), so
-// there are no team-3 spawn points for ForceRespawn to pick and each call fails with
-// "Unable to find a spawn point for team 3, collected: 0 , type: 3". RespawnBot rate-limits
-// itself to one respawn per wall-clock second, so the failures arrive at a steady 1/sec for the
-// whole map.
-//
-// The counterattack half is checkpoint-only for the same reason: it forces the checkpoint-specific
-// mp_checkpoint_counterattack_disable/_always cvars on, suicides the insurgent team on the final
-// point and respawns security, all keyed off control-point captures and cache destruction. Modes
-// like conquer and outpost still fire controlpoint_captured, so without a gate the plugin would
-// stage checkpoint counterattacks in modes that have no concept of them.
+// This plugin's main bot reinforcement system is checkpoint-only: it drives respawns off
+// mp_checkpoint_counterattack_* and the checkpoint objective flow, keyed off control-point
+// captures and cache destruction. The counterattack half is checkpoint-only for the same reason:
+// it forces the checkpoint-specific mp_checkpoint_counterattack_disable/_always cvars on, suicides
+// the insurgent team on the final point and respawns security. Modes like conquer and outpost
+// still fire controlpoint_captured, so without a gate the plugin would stage checkpoint
+// counterattacks in modes that have no concept of them.
 //
 // Gate both halves on checkpoint; revive/medic/fatal-wound handling is mode-independent and stays
 // on everywhere.
 bool g_bCheckpointManaged = true;
 
+// Hunt gets its own, much smaller reinforcement system - see HuntBotKilled. The mode spawns one
+// fixed pool of enemies (ins_bot_count_hunt_min..max, scaled by player count) and ends the round
+// when the last one dies, so the pool does not grow with the player count the way a checkpoint
+// counterattack does and a couple of players clear a map in under a minute. This refills that pool
+// as it is killed until a per-round quota is spent, which scales the number of enemies a round is
+// worth without touching how many are alive at once.
+//
+// Note that ForceRespawn does work on hunt maps - it logs "Unable to find a spawn point for team 3"
+// and revives the bot anyway, at the team's one spawn entity. That single doorstep is why
+// reinforcements are teleported onto the opening wave's positions instead.
+bool  g_bHuntManaged    = false;
+int   g_iHuntQuota      = 0;    // enemy lives still owed this round
+int   g_iHuntSpawnCount = 0;
+float g_fHuntSpawns[MAXPLAYERS + 1][3];
+
 bool   g_should_ask_to_heal = true;
 int    g_iBonusPoint[MAXPLAYERS + 1];
 
-ConVar g_cvDelayTeamIns                 = null,
+ConVar g_cvHuntBotsPerPlayer            = null,
+       g_cvHuntBotsTotalMax             = null,
+       g_cvHuntRespawnDelay             = null,
+       g_cvHuntSpawnMinDistance         = null,
+       g_cvDelayTeamIns                 = null,
        g_cvDelayTeamInsSpecial          = null,
        g_cvLivesTeamInsPlayerMultiplier = null,
        g_cvCounterattackType            = null,
@@ -514,6 +526,12 @@ public void OnPluginStart()
     g_cvReinforceMltiplierBase = CreateConVar("sm_respawn_reinforce_multiplier_base", "18", "This is the base int number added to the division multiplier, so (10 * reinforce_mult + base_mult)");
     g_iReinforceMltiplierBase  = g_cvReinforceMltiplierBase.IntValue;
     g_cvReinforceMltiplierBase.AddChangeHook(OnConVarChanged);
+
+    // Hunt reinforcements - see g_bHuntManaged
+    g_cvHuntBotsPerPlayer = CreateConVar("sm_hunt_bots_per_player", "20", "Hunt only: enemies a round is worth per player on the server, refilled as they are killed. 0 disables hunt reinforcement");
+    g_cvHuntBotsTotalMax  = CreateConVar("sm_hunt_bots_total_max", "0", "Hunt only: hard ceiling on enemies per round regardless of player count (0: no ceiling)");
+    g_cvHuntRespawnDelay  = CreateConVar("sm_hunt_respawn_delay", "8.0", "Hunt only: seconds before a killed enemy is replaced");
+    g_cvHuntSpawnMinDistance = CreateConVar("sm_hunt_spawn_min_distance", "1500", "Hunt only: keep reinforcements at least this far from any living player when a position that far out exists");
 
     // Control static enemy
     g_cvCheckStaticEnemy = CreateConVar("sm_respawn_check_static_enemy", "25", "Seconds amount to check if an AI has moved probably stuck");
@@ -847,14 +865,15 @@ Action Timer_should_ask_to_heal(Handle timer)
     return Plugin_Continue;
 }
 
-// Refresh g_bCheckpointManaged from mp_gamemode. Same idiom as gg2_playlist_hax, but null-safe:
-// FindConVar returns null if the game has not registered mp_gamemode yet.
+// Refresh g_bCheckpointManaged and g_bHuntManaged from mp_gamemode. Same idiom as gg2_playlist_hax,
+// but null-safe: FindConVar returns null if the game has not registered mp_gamemode yet.
 void UpdateCheckpointManaged()
 {
     ConVar cvGamemode = FindConVar("mp_gamemode");
     if (cvGamemode == null)
     {
         g_bCheckpointManaged = true;
+        g_bHuntManaged       = false;
         LogMessage("[BM2 RESPAWN] mp_gamemode not found, leaving bot respawns enabled");
         return;
     }
@@ -862,10 +881,16 @@ void UpdateCheckpointManaged()
     char sGamemode[32];
     cvGamemode.GetString(sGamemode, sizeof(sGamemode));
     g_bCheckpointManaged = StrEqual(sGamemode, "checkpoint", false);
+    g_bHuntManaged       = StrEqual(sGamemode, "hunt", false);
 
-    if (!g_bCheckpointManaged)
+    if (g_bHuntManaged)
     {
-        LogMessage("[BM2 RESPAWN] gamemode is \"%s\", not checkpoint - bot reinforcement disabled", sGamemode);
+        LogMessage("[BM2 RESPAWN] gamemode is \"hunt\" - hunt reinforcement enabled (%d enemies per player)",
+            g_cvHuntBotsPerPlayer.IntValue);
+    }
+    else if (!g_bCheckpointManaged)
+    {
+        LogMessage("[BM2 RESPAWN] gamemode is \"%s\", not checkpoint or hunt - bot reinforcement disabled", sGamemode);
     }
 }
 
@@ -1800,6 +1825,8 @@ public Action Event_RoundStart(Event event, const char[] name, bool dontBroadcas
     ClearArray(ga_hFinalBotSpawns);
     g_iPushSpawnStatus              = -1;
     g_iNextSpawnStatus              = -1;
+    g_iHuntQuota                    = 0;
+    g_iHuntSpawnCount               = 0;
     g_fSecCounterRespawnPosition[0] = 0.0;
     g_fSecCounterRespawnPosition[1] = 0.0;
     g_fSecCounterRespawnPosition[2] = 0.0;
@@ -1849,6 +1876,9 @@ Action BotsReady_Timer(Handle timer)
     if (g_TeamSecCount > 0)
     {    // Must check it because a player can glitch it by joining the spectator team.
         g_botsReady = 1;
+        // The opening wave is on the ground by now, which is the only chance to see where hunt
+        // decided to put it.
+        if (g_bHuntManaged) CreateTimer(2.0, Timer_HuntRoundSetup);
     }
     else {
         g_iRoundStatus = 0;
@@ -2377,6 +2407,12 @@ public Action Event_PlayerDeath(Event event, const char[] name, bool dontBroadca
 #endif
     if (team == TEAM_2_INS)
     {
+        if (g_bHuntManaged)
+        {
+            HuntBotKilled(victim);
+            return Plugin_Continue;
+        }
+
         bool finalPoint   = g_iACP == g_iNCP;
         bool infiniteBots = (finalPoint && g_iFinalCounterattackType == 2) || (!finalPoint && g_iCounterattackType == 2);
         // LogMessage("[BM2 RESPAWN] got infinitebots: %i",infiniteBots);
@@ -2554,6 +2590,151 @@ void CreateReviveTimer(int client)
     CreateTimer(0.0, RespawnPlayerRevive, client);
 }
 #endif
+
+/*
+#####################################################################
+# HUNT REINFORCEMENT - see g_bHuntManaged ###########################
+#####################################################################
+*/
+
+// Works out how many enemies this hunt round is worth and remembers where the opening wave landed.
+Action Timer_HuntRoundSetup(Handle timer)
+{
+    if (!g_bHuntManaged || !g_iRoundStatus) return Plugin_Stop;
+
+    int perPlayer = g_cvHuntBotsPerPlayer.IntValue;
+    if (perPlayer <= 0)
+    {
+        LogMessage("[BM2 RESPAWN] hunt reinforcement off (sm_hunt_bots_per_player is 0)");
+        return Plugin_Stop;
+    }
+
+    // Hunt scatters the opening wave across the map for us. Those positions are the only source of
+    // sane, map-appropriate spawns available without reading the navmesh, so bank them.
+    g_iHuntSpawnCount = 0;
+    int humans        = 0;
+    for (int i = 1; i <= MaxClients; i++)
+    {
+        if (!IsClientInGame(i)) continue;
+
+        int team = GetClientTeam(i);
+        if (team == TEAM_1_SEC && !IsFakeClient(i))
+        {
+            humans++;
+        }
+        else if (team == TEAM_2_INS && IsPlayerAlive(i) && g_iHuntSpawnCount < sizeof(g_fHuntSpawns))
+        {
+            GetClientAbsOrigin(i, g_fHuntSpawns[g_iHuntSpawnCount]);
+            g_iHuntSpawnCount++;
+        }
+    }
+
+    int target  = perPlayer * humans;
+    int ceiling = g_cvHuntBotsTotalMax.IntValue;
+    if (ceiling > 0 && target > ceiling) target = ceiling;
+
+    // The wave already on the map counts towards the round's total; only the shortfall gets
+    // reinforced. That leaves a single player with exactly the vanilla round they have today.
+    g_iHuntQuota = target - g_iHuntSpawnCount;
+    if (g_iHuntQuota < 0) g_iHuntQuota = 0;
+
+    LogMessage("[BM2 RESPAWN] hunt round: %d player(s), %d enemies on the map, %d reinforcement(s) to come",
+        humans, g_iHuntSpawnCount, g_iHuntQuota);
+    return Plugin_Stop;
+}
+
+// Spends one of the round's remaining enemy lives on the bot that just died.
+void HuntBotKilled(int victim)
+{
+    if (!g_iRoundStatus || g_iHuntQuota <= 0) return;
+
+    g_iHuntQuota--;
+
+    // Hunt ends the round the instant the last enemy dies, so once the pool is down to the last one
+    // the replacement cannot wait behind a timer - by the time it fired the round would be over.
+    // Everything above that is staggered so reinforcements trickle in rather than arriving as a
+    // block. IsPlayerAlive is already false for the victim here, so this is the count left behind.
+    if (CountAliveInsurgents() > 1)
+    {
+        CreateTimer(g_cvHuntRespawnDelay.FloatValue + GetURandomFloat(), Timer_HuntRespawn, GetClientUserId(victim));
+    }
+    else
+    {
+        HuntRespawn(victim);
+    }
+}
+
+Action Timer_HuntRespawn(Handle timer, int userid)
+{
+    int client = GetClientOfUserId(userid);
+    if (client > 0) HuntRespawn(client);
+    return Plugin_Stop;
+}
+
+void HuntRespawn(int client)
+{
+    if (!g_bHuntManaged || !g_iRoundStatus) return;
+    if (!IsClientInGame(client) || IsPlayerAlive(client) || GetClientTeam(client) != TEAM_2_INS) return;
+
+    SDKCall(g_hForceRespawn, client);
+    if (!IsPlayerAlive(client)) return;
+
+    // ForceRespawn puts every reinforcement on the team's one spawn entity, which on most hunt maps
+    // is a single doorway. Move them onto the opening wave's positions instead.
+    int spawn = PickHuntSpawn();
+    if (spawn >= 0) TeleportEntity(client, g_fHuntSpawns[spawn], NULL_VECTOR, NULL_VECTOR);
+}
+
+// Picks one of the banked positions at random from those far enough from every living player,
+// falling back to whichever is furthest out when the players have the map surrounded.
+int PickHuntSpawn()
+{
+    if (g_iHuntSpawnCount <= 0) return -1;
+
+    float minDistance = g_cvHuntSpawnMinDistance.FloatValue;
+    int   candidates[MAXPLAYERS + 1];
+    int   numCandidates = 0;
+    int   furthest      = 0;
+    float furthestDist  = -1.0;
+
+    for (int i = 0; i < g_iHuntSpawnCount; i++)
+    {
+        float nearest = NearestLivingPlayerDistance(g_fHuntSpawns[i]);
+        if (nearest > furthestDist)
+        {
+            furthestDist = nearest;
+            furthest     = i;
+        }
+        if (nearest >= minDistance) candidates[numCandidates++] = i;
+    }
+
+    return numCandidates > 0 ? candidates[GetRandomInt(0, numCandidates - 1)] : furthest;
+}
+
+float NearestLivingPlayerDistance(const float position[3])
+{
+    float nearest = 999999.0;
+    for (int i = 1; i <= MaxClients; i++)
+    {
+        if (!IsClientInGame(i) || !IsPlayerAlive(i) || GetClientTeam(i) != TEAM_1_SEC) continue;
+
+        float origin[3];
+        GetClientAbsOrigin(i, origin);
+        float distance = GetVectorDistance(position, origin);
+        if (distance < nearest) nearest = distance;
+    }
+    return nearest;
+}
+
+int CountAliveInsurgents()
+{
+    int alive = 0;
+    for (int i = 1; i <= MaxClients; i++)
+    {
+        if (IsClientInGame(i) && IsPlayerAlive(i) && GetClientTeam(i) == TEAM_2_INS) alive++;
+    }
+    return alive;
+}
 
 // Respawn bot
 void CreateBotRespawnTimer(int client)
