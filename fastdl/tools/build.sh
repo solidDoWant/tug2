@@ -133,18 +133,32 @@ fi
 
 
 # ---------------------------------------------------------------- 6. localisation
-# CLocalize globs "<dir>*.txt" and AddFile's every match, non-recursively, so these must sit directly
-# in resource/ui/ - which means the hash goes in the FILENAME rather than a directory. That glob is
-# also why a hashed name still gets loaded: nothing references the file by name.
+# Shipped to BOTH resource/ and resource/ui/, because which one the engine reads is unresolved:
 #
-# Copied byte-for-byte, never templated: Source localisation files are UTF-16LE.
+#   * No game binary contains the string "resource/ui" anywhere, the stock VPKs hold no
+#     resource/ui/*.txt, and the engine's own loader uses resource/%s_%language%.txt with %s taken
+#     from the game directory - all of which says resource/ui/ is never read.
+#   * But 4 of the 5 distinct localisation files across the subscribed workshop items sit in
+#     resource/ui/, so either that convention works by a route not yet found, or those mods are
+#     equally broken.
+#
+# The file is ~1KB, so shipping both costs nothing next to guessing wrong. If tokens render, the
+# location that works can become the only one. If NEITHER renders, the mechanism is a fixed filename
+# (resource/<gamedir>_english.txt), which fastdl cannot deliver at all: that path exists in a stock
+# VPK, and insurgency/download is searched last, so a copy there would always be shadowed.
+#
+# CLocalize globs "<dir>*.txt" non-recursively and AddFile's every match, which is why a hashed name
+# is still found - nothing references these by name. Copied byte-for-byte, never templated: Source
+# localisation files are UTF-16LE.
 if [ -d "$SRC/localization" ] && [ -n "$(find "$SRC/localization" -name '*.txt' -print -quit 2>/dev/null)" ]; then
   say "localisation"
-  mkdir -p "$OUT/resource/ui"
+  mkdir -p "$OUT/resource/ui" "$OUT/resource"
   for f in "$SRC"/localization/*.txt; do
     stem=$(basename "$f" .txt)
     lhash=$(sha256sum "$f" | cut -c1-12)
+    cp -a "$f" "$OUT/resource/${stem}_${lhash}.txt"
     cp -a "$f" "$OUT/resource/ui/${stem}_${lhash}.txt"
+    echo "   -> resource/${stem}_${lhash}.txt"
     echo "   -> resource/ui/${stem}_${lhash}.txt"
   done
 fi
