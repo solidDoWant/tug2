@@ -46,9 +46,10 @@ fastdl-images: $(addprefix fastdl-image-,$(FASTDL_SERVERS))	## Build every fast-
 
 .PHONY: server-image-%
 server-image-%: base-image Dockerfile	## Build the container image for the specified server. Usage: make server-image-SERVER_NAME
-	@# The two have to be built together. The game server advertises exactly what this image serves,
-	@# from a list generated inside it, so shipping one without the other means clients are told to
-	@# fetch files that are not being served - or are served files nobody asks for.
+	@# Built together for convenience, not because they are coupled. The server reads the file list
+	@# and the theater name out of manifest.json on the fastdl host at map start, so the content image
+	@# can be rebuilt and republished on its own - `make fastdl-image-test` - and a running server
+	@# picks the change up on its next map change without a rebuild or a redeploy.
 	$(if $(filter $*,$(FASTDL_SERVERS)),$(MAKE) fastdl-image-$*,@echo "  $* does not use fastdl, skipping its content image")
 	docker build --target gameserver-$* -t "$(CONTAINER_REPOSITORY)-$*:$(VERSION)" $(PUSH_ARG) --load $(DOCKER_ARGS) $(EXTRA_DOCKER_ARGS) "$(PROJECT_DIR)"
 

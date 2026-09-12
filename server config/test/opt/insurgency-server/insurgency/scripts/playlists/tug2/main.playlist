@@ -192,9 +192,14 @@
 	
 	"forced_cvars"
 	{
-		// Base name only. The engine loads <this>.theater and <this>_<gamemode>.theater, so a
-		// value with "_checkpoint" baked in would look for ..._checkpoint_checkpoint.theater.
-		"mp_theater_override"			"theater_tug_nvg_default"
+		// mp_theater_override is NOT forced here. gg2_fastdl repoints it at the content-hashed
+		// theater name published by the fastdl host, and forced_cvars are re-applied on every
+		// playlist load - which is every map change - so forcing it would undo the plugin before
+		// the theater loads. The boot fallback comes from the command line (THEATER_NAME).
+		//
+		// Base name only, if it is ever put back: the engine loads <this>.theater and
+		// <this>_<gamemode>.theater, so a value with "_checkpoint" baked in would look for
+		// ..._checkpoint_checkpoint.theater.
 		"mp_minteamplayers"			"1"	// min players on each team to start the match
 		"sv_nwi_banlist"			"1"	// global ban list
 		"host_timescale"			"1.0"
