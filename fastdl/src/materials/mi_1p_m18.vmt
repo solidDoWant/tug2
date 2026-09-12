@@ -1,0 +1,29 @@
+// WP marker can - material.
+//
+// The name matters: studiomdl takes the material NAME from the SMD's per-triangle material lines
+// (MI_1P_M18) and the DIRECTORY from $cdmaterials, so this file has to keep this basename for the
+// compiled model to resolve it.  The directory is supplied by the build.
+//
+// Only $basetexture is shipped.  The normal, gloss and envmap are referenced in place out of
+// workshop item 2744181131, which every client already has via the server's subscription list -
+// shipping copies would add ~5MB of identical bytes to every download for no visual difference,
+// and re-encoding an unedited DXT1 normal map measurably degrades it (mean 1.4/255, worst case
+// far higher at sharp normal discontinuities).
+//
+// There is deliberately no $srgbtint here.  The previous version multiplied the whole diffuse to
+// fake a yellow can, which tinted the entire body rather than the label.  The yellow now lives in
+// the texture itself, where it can be painted exactly where it belongs.
+"SurfaceGGX"
+{
+	"$basetexture"          "@@MATPATH(tex,t_1p_m18_d)@@"
+	"$bumpmap"              "models\tug\m18\T_1P_M18_N"
+	"$phongexponenttexture" "models\tug\m18\T_1P_M18_M"
+
+	"$metal"                "1"
+	"$roughnessmultiplier"  ".75"
+
+	"$fuzz"                 "1"
+	"$fuzzmultiplier"       ".2"
+
+	"$envmap"               "models\tug\envmap_unfuck"
+}

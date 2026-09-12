@@ -37,9 +37,13 @@ base-image: server-runner-image Dockerfile
 # other server runs stock content and needs neither the image nor the advertising plugin.
 FASTDL_SERVERS ?= test
 
+# The fast-download content image is its own project (fastdl/Makefile, fastdl/Dockerfile), built
+# and published independently - see fastdl/README.md. These targets just delegate so the top-level
+# entry points keep working.
 .PHONY: fastdl-image-%
-fastdl-image-%:	Dockerfile ## Build the fast-download content image for a server. Usage: make fastdl-image-SERVER_NAME
-	docker build --target fastdl-$* --build-arg FASTDL_SERVER=$* -t "$(CONTAINER_REPOSITORY)-$*-fastdl:$(VERSION)" $(PUSH_ARG) --load $(DOCKER_ARGS) $(EXTRA_DOCKER_ARGS) "$(PROJECT_DIR)"
+fastdl-image-%:	## Build the fast-download content image for a server. Usage: make fastdl-image-SERVER_NAME
+	$(MAKE) -C "$(PROJECT_DIR)/fastdl" content SERVER=$* VERSION=$(VERSION) \
+	  CONTAINER_REGISTRY=$(CONTAINER_REGISTRY) EXTRA_DOCKER_ARGS="$(PUSH_ARG) $(EXTRA_DOCKER_ARGS)"
 
 .PHONY: fastdl-images
 fastdl-images: $(addprefix fastdl-image-,$(FASTDL_SERVERS))	## Build every fast-download content image.

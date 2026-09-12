@@ -32,12 +32,27 @@ python3 tools/bspaudit/audit.py \
 ```
 
 Nothing else to do. These are picked up automatically by the fastdl content image
-(`make fastdl-image-test`, or `make server-image-test` which builds both), added to the generated
-`downloadables.txt`, and advertised to clients by `gg2_fastdl` on every map start.
+(`make -C fastdl content`, or `make fastdl-image-test` from the repo root), listed in the generated
+`manifest.json`, and advertised to clients by `gg2_fastdl`, which fetches that manifest over HTTP on
+every map start. Adding a stub therefore needs the content image rebuilt and republished, but **not**
+the game server image — a running server picks the new list up on its next map change.
 
-They are shared rather than per-server: a stub exists because a map references a material that is in
-nobody's content, and both servers run the affected maps. Only servers listed in `FASTDL_SERVERS`
-actually ship them today.
+## Why these are the one group that is not content-hashed
+
+Everything else in the fastdl payload — textures, materials, models, theaters — is published under a
+directory name carrying a hash of its contents, so changing a file changes its path and no client can
+be left holding a stale copy. See `fastdl/tools/build.sh`.
+
+These cannot do that. The paths are hardcoded in each map's BSP, so they have to resolve at exactly
+the name the map asks for. That collides with an engine limitation: a client re-downloads a file it
+already has only if it is a `.theater` whose CRC differs, and skips every other existing file
+outright. **So a change to a stub's contents will never reach a client that already has the old one.**
+
+In practice that does not matter, which is why there is no build-time guard for it: a stub only has to
+*exist* for the client's VMT lookup to succeed and the retry storm to stop. An old placeholder does
+that exactly as well as a new one. Adding new stubs is always fine — a new path is never a problem.
+If you ever need a stub change to actually reach clients, give it a new path and update whatever
+references it.
 
 These used to be a Steam Workshop item, and were never published. That is just as well — the
 workshop path cannot update an item a client already has unless the item contains the map being

@@ -1,0 +1,7 @@
+// Diffuse for the WP marker can.  Settings match the green original this was decoded from, so a
+// rebuild produces a structurally identical VTF - see fastdl/README.md.
+//
+// EDIT t_1p_m18_d.png FREELY.  It is the source of truth; the .vtf is a build artifact.
+"format"    "DXT5"
+"version"   "7.2"
+"bumpscale" "1"

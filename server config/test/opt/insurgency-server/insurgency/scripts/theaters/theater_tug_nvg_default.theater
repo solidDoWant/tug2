@@ -1440,17 +1440,17 @@
 			"print_name"				"#weapon_m18_wp_us"
 			"print_desc"				"#weapon_m18_wp_us_desc"
 
-			// models/twp/ is this repo's own yellow can: the green marker's geometry from workshop
-			// item 2744181131 with its $cdmaterials repointed from models\tug\ to models\twp\ by a
-			// same-length byte edit, so it picks up materials/models/twp/mi_1p_m18.vmt instead.
+			// Built from source by the fastdl project: the green marker's geometry (workshop item
+			// 2744181131) recompiled with $cdmaterials pointed at this repo's own material. The
+			// paths below are content-hashed and filled in at build time - see fastdl/README.md.
 			// That material tints in place and references the ORIGINAL textures, so no texture or
 			// model art is duplicated - see the VMT for the tint and its caveat.
 			//
 			// Only the $cdmaterials path and the .mdl's own internal name were changed, and both
 			// replacements are byte-for-byte the same length. A .mdl addresses most of its strings
 			// by offset, so a length change there corrupts the file silently.
-			"view_model"				"models/twp/v_m18.mdl"
-			"world_model"				"models/twp/w_m18.mdl"
+			"view_model"				"@@PATH(mdl,v_m18.mdl)@@"
+			"world_model"				"@@PATH(mdl,w_m18.mdl)@@"
 			"weapon_slot"				"explosive"
 			"weapon_max_subslot"		"2"
 			"act_table"					"grenade"
@@ -1544,7 +1544,7 @@
 		{
 			"import"					"baseGrenade"
 			"entity_class"				"grenade_smoke"
-			"Model"						"models/twp/w_m18.mdl"
+			"Model"						"@@PATH(mdl,w_m18.mdl)@@"
 			"FuseTime"					"3.5"
 			"RocketStartSpeed"			"2500"
 

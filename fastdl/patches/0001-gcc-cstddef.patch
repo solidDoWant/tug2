@@ -1,0 +1,13 @@
+diff --git a/libs/minicollision/convexhull.cpp b/libs/minicollision/convexhull.cpp
+index 70f8034..8ecc523 100644
+--- a/libs/minicollision/convexhull.cpp
++++ b/libs/minicollision/convexhull.cpp
+@@ -8,6 +8,8 @@
+ // handles that cloud shape cleanly, so it does the work and this file only
+ // adapts the types.
+ 
++#include <cstddef>
++
+ #include "convexhull.h"
+ #include "vhacd_hull.h"
+ #include "pulselimits.h"

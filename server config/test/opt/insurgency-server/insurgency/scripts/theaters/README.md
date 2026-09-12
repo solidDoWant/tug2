@@ -45,5 +45,27 @@ survival had nothing to load and fell back to stock team composition — no TUG 
 custom weapons. These files supply those modes, and add night vision as a buyable accessory plus
 the bot loadout variants.
 
-`mp_theater_override` is set to `theater_tug_nvg_default` in `cfg/server.cfg` and in the playlist's
-`forced_cvars`. Both must agree, and both must be the **base** name with no mode suffix.
+`mp_theater_override` is **not** set in `cfg/server.cfg` or the playlist's `forced_cvars` any more.
+Both of those are re-applied on every map change, before the theater loads, and `gg2_fastdl` needs to
+be able to repoint the cvar at the content-hashed theater name the fastdl host is serving — a value
+in either file would win every time and the plugin could never take effect.
+
+Instead:
+
+* The **boot fallback** is a command-line arg, applied once at startup: `THEATER_NAME` in the
+  Dockerfile (`theater_tug_nvg_default` for test), passed as `+mp_theater_override`.
+* The **running value** is owned by `gg2_fastdl`. The fastdl image publishes each theater under a
+  name carrying a hash of its contents, plus the unhashed originals; the plugin downloads whichever
+  hashed set the manifest names and points the cvar at it. Because the cvar is only read at map load,
+  the plugin then ends the map itself so the new theater actually loads — otherwise the server would
+  keep enforcing a hash the fastdl host no longer serves and nobody could join until the next map.
+  `sm_fastdl_theater_changelevel` controls that: `0` never, `1` only when no humans are connected
+  (default), `2` always. On a populated server with the default, the change waits for the next
+  natural map change.
+
+Whatever sets it, it must be the **base** name with no mode suffix.
+
+The hashing is what fixes the long-standing "consistency error on first join, works the second time"
+bug: theater files are CRC-enforced by the engine, and a client that already has a stale copy at the
+same path fails the check before its re-download lands. A content-hashed name is a path no client has
+ever seen, so there is nothing stale to invalidate. See `plugins/sourcemod/scripting/gg2_fastdl.sp`.

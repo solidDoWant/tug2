@@ -1,0 +1,38 @@
+// Buy-menu icon render. See fastdl/tools/render_icon.py.
+//
+// Tuned against the shipped green icon: an upright canister, centred horizontally, filling ~90% of
+// the canvas height (subject bbox x[420-609] y[24-487] at 1024x512).
+//
+// yaw 90 puts the camera on +X. At yaw 0 it sits on -Y, which showed the wrong face of the can.
+//
+// Material values come from the VMT and the ORM map: $roughnessmultiplier .75 scales roughness,
+// which is the G channel read directly. R is ambient occlusion, B is metalness.
+// Both bodygroups, as the QC defines them: the can plus the spoon and pin assembly.
+"model"                "SKM_1P_M18_World.smd"
+"model"                "SKM_1P_M18_World_Spoon.smd"
+"texture"              "t_1p_m18_d.png"
+"normal"               "t_1p_m18_n.png"
+"orm"                  "t_1p_m18_m.png"
+"rough_channel"        "G"
+"invert_rough"         "0"   // G is roughness, not gloss: inverting it gives ~0.2 and looks like foil
+"metal_channel"        "B"   // paint vs bare metal; a constant 1.0 made every surface a mirror
+"metallic"             "1.0" // fallback only, used when metal_channel is blank
+"roughness_multiplier" "0.75"
+"width"                "1024"
+"height"               "512"
+"samples"              "160"
+"yaw"                  "90"
+"pitch"                "0"
+"margin"               "1.11"
+"fov"                  "32"
+"projection"           "ORTHO"   // the original is orthographic: parallel rays, no perspective distortion
+"flip_v"               "0"
+"key_energy"           "3200"
+"fill_energy"          "500"
+"world_strength"       "0.5"
+// envmap_unfuck (what the VMT uses) decodes to peak 0.107 - effectively black, so it contributes
+// nothing. The _bright variant from the same workshop item peaks at 1.87 and is what gives a metal
+// something to reflect. This is a RENDER choice only; the shipped VMT is unchanged.
+"envmap"               "envmap_unfuck_bright.hdr"
+"envmap_strength"      "9.0"   // the map is dark overall (mean 0.046) despite peaking at 1.87, so it needs scaling up for fill
+"envmap_rotation"      "0"

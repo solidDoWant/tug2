@@ -1,0 +1,7 @@
+// Buy-menu icon texture. Settings match the green original this was decoded from.
+//
+// EDIT weapon_m18_wp_us.png to match the can. It starts as a decode of the green marker's icon
+// (workshop item 2744181131) because that is what the WP icon used to reference in place.
+"format"    "DXT5"
+"version"   "7.2"
+"bumpscale" "1"
