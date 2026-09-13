@@ -669,11 +669,24 @@ public Action Timer_FindThrownGrenade(Handle timer, DataPack pack)
     int team          = pack.ReadCell();
     int supportType   = pack.ReadCell();
 
-    // Search for the most recent grenade entity owned by this client
+    // Find the grenade THIS throw created: the highest-index grenade owned by this client that does
+    // not already have fire support pending.
+    //
+    // This used to scan ascending and take the first match, on the assumption that a client only ever
+    // has one grenade in flight. With two - which a player carrying an HE and a WP marker can easily
+    // manage - the lowest index is the OLDER grenade, so the support got registered against the wrong
+    // one: the throw that was just made detonated with nothing attached, and the earlier grenade's
+    // pending handle was overwritten and leaked.
+    //
+    // Entity indices are handed out ascending, so the newest live entity has the highest index.
+    // Skipping entities that already have a pending entry keeps a second throw from stealing the
+    // first one's registration when indices are reused.
     int grenadeEntity = -1;
     int maxEntities   = GetMaxEntities();
+    if (maxEntities > sizeof(gPendingFireSupport))
+        maxEntities = sizeof(gPendingFireSupport);
 
-    for (int entity = MaxClients + 1; entity < maxEntities; entity++)
+    for (int entity = maxEntities - 1; entity > MaxClients; entity--)
     {
         if (!IsValidEntity(entity))
             continue;
@@ -690,9 +703,12 @@ public Action Timer_FindThrownGrenade(Handle timer, DataPack pack)
         if (owner != client)
             continue;
 
-        // Found a grenade owned by this client
+        // Already claimed by an earlier throw, so it is not the one we are looking for.
+        if (gPendingFireSupport[entity] != null)
+            continue;
+
         grenadeEntity = entity;
-        break;    // Use the first one we find (most likely the one just thrown)
+        break;
     }
 
     if (grenadeEntity == -1)
@@ -709,6 +725,13 @@ public Action Timer_FindThrownGrenade(Handle timer, DataPack pack)
     grenadeData.WriteCell(client);
     grenadeData.WriteCell(team);
     grenadeData.WriteCell(supportType);
+
+    // Guard the assignment: overwriting a live handle leaks it. The scan above should make this
+    // unreachable, but the array is indexed by entity id and those get reused.
+    if (gPendingFireSupport[grenadeEntity] != null)
+    {
+        delete gPendingFireSupport[grenadeEntity];
+    }
 
     gPendingFireSupport[grenadeEntity] = view_as<Handle>(grenadeData);
 
