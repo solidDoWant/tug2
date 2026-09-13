@@ -109,6 +109,70 @@ public void OnPluginStart()
 
     if (g_cvDownloadUrl == null) LogError("sv_downloadurl not found - cannot locate the manifest");
     if (g_cvTheater == null)     LogError("mp_theater_override not found - the theater cannot be kept in step");
+
+    ApplyDownloadUrl();
+}
+
+/* Builds sv_downloadurl from the -fastdl_host command-line parameter.
+ *
+ * WHY THE HOST ARRIVES WITHOUT A SCHEME. "+sv_downloadurl <url>" cannot work: the engine builds a
+ * console command out of each "+cvar value" pair, and "//" in an UNQUOTED console token is a
+ * comment, so an https:// URL is stored as just "https:". Quoting it in the ENTRYPOINT does not help
+ * either - the engine strips the quotes off the argv element before building the command. Measured
+ * all three ways:
+ *
+ *   argv  +sv_downloadurl https://host/path     -> "https:"
+ *   argv  +sv_downloadurl "https://host/path"   -> "https:"
+ *   ConVar.SetString("https://host/path")       -> "https://host/path"
+ *
+ * So the scheme is added here instead, where SetString bypasses the console entirely. -fastdl_host
+ * carries host plus optional path and nothing the tokenizer can eat. It is a command-line parameter
+ * rather than a cvar because a SourceMod cvar does not exist yet when the engine processes "+"
+ * arguments, and a parameter rather than a cfg line because the host name is a secret and must not
+ * be committed.
+ *
+ * https is hard-coded: the engine downloads through ISteamHTTP, so it inherits Steam's TLS.
+ */
+static void ApplyDownloadUrl()
+{
+    if (g_cvDownloadUrl == null) return;
+
+    char host[PLATFORM_MAX_PATH];
+    GetCommandLineParam("-fastdl_host", host, sizeof(host), "");
+    TrimString(host);
+
+    // Absent: leave whatever is already set, so the cvar can still be driven by hand when testing.
+    if (host[0] == '\0') return;
+
+    /* An EMPTY value collapses on the command line - the engine joins the arguments into one string,
+     * so "-fastdl_host" followed by "" is indistinguishable from "-fastdl_host" followed by the next
+     * argument, and that argument is what lands here. (The same thing is already visible with an
+     * unset GSLT: "+sv_setsteamaccount  +rcon_password ...".) Anything starting with - or + is that
+     * case, not a host name. */
+    if (host[0] == '-' || host[0] == '+')
+    {
+        LogMessage("-fastdl_host is empty - no fast download configured");
+        return;
+    }
+
+    // A scheme here means someone passed a full URL, which cannot have survived the command line -
+    // so the value is already damaged and prepending to it would produce nonsense. Only "//"
+    // disqualifies: a ":" is legitimate in host:port.
+    if (StrContains(host, "//") != -1)
+    {
+        LogError("-fastdl_host must be a host with no scheme (got \"%s\") - pass e.g. host.example/test, not https://host.example/test", host);
+        return;
+    }
+
+    int len = strlen(host);
+    while (len > 0 && host[len - 1] == '/') host[--len] = '\0';
+    if (len == 0) return;
+
+    char url[PLATFORM_MAX_PATH];
+    Format(url, sizeof(url), "https://%s", host);
+    g_cvDownloadUrl.SetString(url);
+
+    LogMessage("sv_downloadurl set from -fastdl_host: %s", url);
 }
 
 public void OnMapStart()
@@ -116,6 +180,12 @@ public void OnMapStart()
     g_iGeneration++;
 
     if (!g_cvEnabled.BoolValue) return;
+
+    /* Re-applied every map, not just at load, because server.cfg is re-executed on EVERY map change
+     * and a bare "sv_downloadurl" line in it would otherwise blank the value for the rest of the
+     * server's life. Same trap that keeps mp_theater_override out of server.cfg. Idempotent: it sets
+     * the cvar to the string it already holds. */
+    ApplyDownloadUrl();
 
     ApplyCachedList();
     FetchManifest();
@@ -177,8 +247,8 @@ static bool GetBaseUrl(char[] buffer, int maxlen)
             strcopy(g_sWarnedUrl, sizeof(g_sWarnedUrl), buffer);
             LogError("sv_downloadurl is \"%s\" - the \"//\" has been stripped, so no content can be \
 downloaded and the theater cannot be switched. An unquoted // is a console comment: pass the value \
-already quoted (see DOWNLOAD_URL in the Dockerfile) or set it with ConVar.SetString, which does not \
-go through the console.", buffer);
+from a cfg file with the value quoted (see sv_downloadurl in cfg/server.cfg) - the command line \
+cannot carry it, the engine strips the quotes off an argv element and then truncates.", buffer);
         }
         return false;
     }

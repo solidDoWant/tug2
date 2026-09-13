@@ -55,30 +55,64 @@
 static const char *g_extra_excl[MAX_EXTRA_EXCLUDES];
 static int         g_n_extra_excl = 0;
 
-/* Writable/mutable subtrees: never indexed, always passthrough to libc with original path.
+/* True if the path under GAME_ROOT begins with the directory `excl`, on a component boundary.
  *
- * Matching is a plain substring test on the absolute path, so "/insurgency/scripts/theaters"
- * covers that directory and everything under it without also matching a workshop item's own
- * scripts/theaters (those paths sit under /steamapps/, not /insurgency/).
+ * ANCHORED, not a substring test, which is what the built-in list below uses. Two reasons: an
+ * ops-supplied entry should mean "this directory of the game tree" and not accidentally match the
+ * same name nested somewhere else (a workshop item is free to contain its own
+ * insurgency/scripts/theaters), and these exclusions are a security boundary, not just a cache
+ * policy - see the note on is_excluded - so the looser the matcher, the more paths can reach
+ * passthrough. */
+static int under_dir(const char *p, const char *excl) {
+    size_t rootlen = sizeof(GAME_ROOT) - 1;
+    if (strncmp(p, GAME_ROOT, rootlen) != 0) return 0;
+
+    const char *rel = p + rootlen;
+    size_t n = strlen(excl);
+    if (strncmp(rel, excl, n) != 0) return 0;
+
+    return rel[n] == '\0' || rel[n] == '/';        /* component boundary, not a name prefix */
+}
+
+/* Writable/mutable subtrees: never indexed, always passthrough to libc with original path.
  *
  * ANYTHING WRITTEN AT RUNTIME AND READ BACK BY THE SERVER BELONGS HERE. The dirty set below
  * catches most of that, but only for the exact path a write syscall named: a file that appears
  * under a NEW name - rename(2) is not interposed - is in neither the index nor the dirty set, and
  * the authoritative-miss check then reports it as nonexistent even though it is on disk. That is
  * not theoretical: gg2_fastdl downloads a theater to "<name>.theater.part" and renames it into
- * place, and the server could not see the result until scripts/theaters was excluded here. */
+ * place, and the server could not see the result until scripts/theaters was excluded here.
+ *
+ * BUT KEEP THE LIST AS SHORT AS IT CAN BE, because it is load-bearing for security and not only
+ * for correctness. The frozen index is also a write-execute barrier: a file that appears under the
+ * game tree after startup is invisible to the server, so an arbitrary-write bug in a plugin cannot
+ * drop an .smx into addons/sourcemod/plugins and have it load, or plant a config that is read back
+ * in the same session. addons/sourcemod/{plugins,configs} are therefore deliberately NOT excluded,
+ * and must stay that way; the cost is that side-loading either needs a container restart.
+ *
+ * KNOWN GAP: no exclusion survives "..", built-in or configured, because matching happens on the
+ * path as given. Any path that reaches an excluded directory and then walks back out is passthrough,
+ * so addons/sourcemod/logs/../plugins/<new>.smx is visible while
+ * addons/sourcemod/plugins/<new>.smx is not. Measured, both with and without CASECACHE_EXCLUDE set,
+ * so it predates the env var and anchoring does not help - an anchored prefix still matches a path
+ * that starts inside the directory before backtracking. The fix is to normalise "." / ".." / "//"
+ * away before matching AND before the index lookup, which is sound here because the tree holds no
+ * symlinked directories (the only symlink under GAME_ROOT is insurgency/console.log, itself
+ * excluded) so lexical and kernel resolution agree. Until then the barrier holds only for paths that
+ * do not backtrack. */
 static int is_excluded(const char *p) {
     for (int i = 0; i < g_n_extra_excl; i++)
-        if (strstr(p, g_extra_excl[i])) return 1;
+        if (under_dir(p, g_extra_excl[i])) return 1;
 
     return strstr(p, "/download") || strstr(p, "/logs") || strstr(p, "/cfg/")
         || strstr(p, "/addons/sourcemod/data") || strstr(p, "/addons/sourcemod/logs")
         || strstr(p, "console.log");
 }
 
-/* CASECACHE_EXCLUDE: colon-separated list of path substrings to add to is_excluded, for subtrees
- * the server writes and reads back at runtime. Set it in the image rather than editing the list
- * above, so a new writable directory does not need a shim rebuild.
+/* CASECACHE_EXCLUDE: colon-separated list of directories, each relative to GAME_ROOT and matched
+ * as an anchored path prefix (see under_dir), for subtrees the server writes and reads back at
+ * runtime. Set it in the image rather than editing the list above, so a new writable directory does
+ * not need a shim rebuild. Read the security note on is_excluded before adding one.
  *
  * Parsed ONCE from do_init before the index is built, and never written again, so every later
  * reader sees a complete list without locking - the same discipline the index itself follows.

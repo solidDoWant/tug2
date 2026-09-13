@@ -736,30 +736,36 @@ ENV MAX_PLAYERS=49
 ENV STARTING_MAP=embassy_coop
 ENV PORT=27015
 
-# Base URL for downloadable content - scheme and host only, no path and no trailing slash, e.g.
-#   DOWNLOAD_URL=https://fastdl.example.com
+# Fast download host: host name plus optional path, WITH NO SCHEME and no trailing slash, e.g.
+#   FASTDL_HOST=fastdl.example.com/test
 #
+# gg2_fastdl reads this off the command line, prepends https:// and sets sv_downloadurl at runtime.
 # The client appends the game-relative path itself, and the fastdl image puts its content at the
 # image root, so serving that image as the document root is all that is needed:
-#   scripts/theaters/x.theater  ->  https://fastdl.example.com/scripts/theaters/x.theater
+#   scripts/theaters/x.theater  ->  https://fastdl.example.com/test/scripts/theaters/x.theater
 #
-# Empty is the engine default and means "no fast download" - clients then pull over the game channel
-# or not at all - so leaving this unset degrades to current behaviour rather than breaking startup.
+# Empty means "no fast download" - clients then pull over the game channel or not at all - so leaving
+# this unset degrades to current behaviour rather than breaking startup.
 #
-# https is fine: the engine downloads through ISteamHTTP (STEAMHTTP_INTERFACE_VERSION002) rather
-# than its own TLS, so it inherits Steam's.
+# WHY THE SCHEME IS NOT HERE, and must not be added. "+sv_downloadurl <url>" does not survive: the
+# engine builds a console command out of each "+cvar value" pair, and "//" in an UNQUOTED console
+# token is a comment, so an https:// URL is stored as just "https:". Quoting the value in the
+# ENTRYPOINT does not help - the engine strips the quotes off the argv element first. Measured all
+# three ways on the test server:
 #
-# THE ENTRYPOINT WRAPS THIS VALUE IN LITERAL QUOTES, and it has to stay that way. The engine turns
-# each "+cvar value" pair into a console command, and "//" in an UNQUOTED console token is a
-# comment - so an unquoted https:// URL is stored as just "https:". Measured both ways over RCON:
-#   sv_downloadurl "https://host/path"   ->  https://host/path
-#   sv_downloadurl https://host/path     ->  https:
-# The truncation is silent, and it disables fast download completely: gg2_fastdl then requests
-# "https:/manifest.json", gets HTTP 0, and never repoints mp_theater_override at the hashed theater
-# name, so every client fails the theater consistency check. server-runner substitutes per argv
-# element with envsubst, which leaves the surrounding quotes alone, and an empty value still
-# produces a correct sv_downloadurl "".
-ENV DOWNLOAD_URL=
+#   argv  +sv_downloadurl https://host/path     -> cvar "https:"
+#   argv  +sv_downloadurl "https://host/path"   -> cvar "https:"   (quotes stripped, then truncated)
+#   ConVar.SetString("https://host/path")       -> cvar "https://host/path"   <- what the plugin does
+#
+# A scheme-less host has nothing in it for the tokenizer to eat, so it arrives intact and the plugin
+# supplies the rest. It is passed as a plain "-" parameter rather than a cvar because a SourceMod
+# cvar does not exist yet when the engine processes "+" arguments, and rather than a cfg line because
+# THE HOST NAME IS A SECRET - it must stay in the environment and never be committed.
+#
+# The old failure mode, for whoever hits it next: gg2_fastdl requests "https:/manifest.json", gets
+# HTTP 0, never repoints mp_theater_override at the content-hashed theater, and every client then
+# fails the theater consistency check. The plugin logs a loud error if it ever sees that state.
+ENV FASTDL_HOST=
 
 # Boot fallback for mp_theater_override: the theater the server's OWN image ships, used until
 # gg2_fastdl has read the fastdl manifest and repointed the cvar at the content-hashed name the
@@ -794,12 +800,12 @@ ENTRYPOINT [    \
     "-strictportbind",  \
     "-port", "${PORT}", \
     "-nohltv", \
+    "-fastdl_host", "${FASTDL_HOST}", \
     "+sv_setsteamaccount", "${GAME_SERVER_LOGIN_TOKEN}",   \
     "+rcon_password", "${RCON_PASSWORD}",   \
     "+servercfgfile", "${SERVER_CONFIG_FILE_PATH}",    \
     "+map", "${STARTING_MAP}",  \
     "+sv_allowdownload", "1", \
-    "+sv_downloadurl", "\"${DOWNLOAD_URL}\"",  \
     "+mp_theater_override", "${THEATER_NAME}", \
     "+sv_pure", "0" \
 ]
@@ -893,7 +899,7 @@ ENV LD_PRELOAD=/opt/insurgency-server/casecache.so
 # startup index. Colon-separated substrings of the absolute path.
 #
 # scripts/theaters is here because gg2_fastdl downloads the content-hashed theater to
-# "<name>.theater.ztmp" and renames it into place. The shim's dirty set only records the path a
+# "<name>.theater.part" and renames it into place. The shim's dirty set only records the path a
 # write syscall named, and rename(2) is not interposed, so the final name was in neither the index
 # nor the dirty set: the server downloaded all six theater files correctly and then could not open
 # its own download ("... is missing after download - not switching the theater"), which left
@@ -986,7 +992,7 @@ ENV LD_PRELOAD=/opt/insurgency-server/casecache.so
 # startup index. Colon-separated substrings of the absolute path.
 #
 # scripts/theaters is here because gg2_fastdl downloads the content-hashed theater to
-# "<name>.theater.ztmp" and renames it into place. The shim's dirty set only records the path a
+# "<name>.theater.part" and renames it into place. The shim's dirty set only records the path a
 # write syscall named, and rename(2) is not interposed, so the final name was in neither the index
 # nor the dirty set: the server downloaded all six theater files correctly and then could not open
 # its own download ("... is missing after download - not switching the theater"), which left
