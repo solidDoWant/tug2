@@ -833,6 +833,17 @@
     "pt_p"      "{green}!fatal{common} - Morra imediatamente em vez de esperar ser reanimado"
     "tr"        "{green}!fatal{common} - Diriltilmeyi beklemeden hemen öl"
   }
+  "help_lives"
+  {
+    "en"        "{green}!lives{common} - How many extra lives you have left this round"
+    "ua"        "{green}!lives{common} - Скільки додаткових життів у вас залишилось цього раунду"
+    "jp"        "{green}!lives{common} - このラウンドで残っている追加ライフの数"
+    "chi"       "{green}!lives{common} - 你本回合还剩多少额外生命"
+    "ru"        "{green}!lives{common} - Сколько дополнительных жизней у вас осталось в этом раунде"
+    "es"        "{green}!lives{common} - Cuántas vidas extra te quedan en esta ronda"
+    "pt_p"      "{green}!lives{common} - Quantas vidas extra te restam nesta ronda"
+    "tr"        "{green}!lives{common} - Bu turda kaç ekstra canınız kaldığı"
+  }
   "help_lastmaps"
   {
     "en"        "{green}!lastmaps{common} - Recently played maps, excluded from the next vote"
@@ -975,5 +986,16 @@
     "es"        "{green}!totalb{common} - Número de enemigos aún vivos"
     "pt_p"      "{green}!totalb{common} - Número de inimigos ainda vivos"
     "tr"        "{green}!totalb{common} - Hâlâ hayatta olan düşman sayısı"
+  }
+  "help_admin_lives"
+  {
+    "en"        "{green}!lives <name|all>{common} - Extra lives left for another player"
+    "ua"        "{green}!lives <name|all>{common} - Скільки додаткових життів залишилось в іншого гравця"
+    "jp"        "{green}!lives <name|all>{common} - 他のプレイヤーの残り追加ライフ"
+    "chi"       "{green}!lives <name|all>{common} - 查看其他玩家剩余的额外生命"
+    "ru"        "{green}!lives <name|all>{common} - Сколько дополнительных жизней осталось у другого игрока"
+    "es"        "{green}!lives <name|all>{common} - Vidas extra que le quedan a otro jugador"
+    "pt_p"      "{green}!lives <name|all>{common} - Vidas extra que restam a outro jogador"
+    "tr"        "{green}!lives <name|all>{common} - Başka bir oyuncunun kalan ekstra canı"
   }
 }

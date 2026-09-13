@@ -344,6 +344,13 @@ public void OnPluginStart()
 #if DOCTOR
     RegConsoleCmd("fatal", fatal_cmd, "Set your death to fatal");
 
+    // Remaining auto-respawn lives. Registered under both spellings: sm_lives is what SourceMod's
+    // chat triggers resolve !lives and /lives to, and the bare name matches the console-only style
+    // of the other commands in this plugin. Both are gated on DOCTOR because the spend site in
+    // Event_PlayerDeath is, so with DOCTOR off the counter never moves and the number would lie.
+    RegConsoleCmd("sm_lives", Command_Lives, "sm_lives [#userid|name|all] - show remaining extra lives");
+    RegConsoleCmd("lives", Command_Lives, "lives [#userid|name|all] - show remaining extra lives");
+
     // TUG medic_tracker
     MedicRevivedForward = new GlobalForward("Medic_Revived", ET_Event, Param_Cell, Param_Cell);
     MedicHealedForward  = new GlobalForward("Medic_Healed", ET_Event, Param_Cell, Param_Cell);
@@ -5073,3 +5080,98 @@ void medic_bonus_life_check(int client)
         PrintToChat(client, "%s", reward_text);
     }
 }
+
+#if DOCTOR
+// Reports one player's remaining auto-respawn lives to caller.
+static void ReportFreeLives(int caller, int target)
+{
+    // Free lives are a security-team mechanic: Event_PlayerDeath only spends one when the victim is
+    // TEAM_1_SEC, and Event_RoundEnd_Pre only resets them for that team. The counter is therefore
+    // meaningless for anybody else, and reporting a number would imply it does something.
+    if (GetClientTeam(target) != TEAM_1_SEC)
+    {
+        if (target == caller)
+        {
+            ReplyToCommand(caller, "You are not on security, so extra lives do not apply to you.");
+        }
+        else {
+            ReplyToCommand(caller, "%N is not on security, so extra lives do not apply.", target);
+        }
+        return;
+    }
+
+    char word[8];
+    if (g_iFreeLives[target] == 1)
+    {
+        word = "life";
+    }
+    else {
+        word = "lives";
+    }
+
+    if (target == caller)
+    {
+        ReplyToCommand(caller, "You have %i extra %s left this round.", g_iFreeLives[target], word);
+    }
+    else {
+        ReplyToCommand(caller, "%N has %i extra %s left this round.", target, g_iFreeLives[target], word);
+    }
+}
+
+public Action Command_Lives(int client, int args)
+{
+    // No argument: the caller's own count. Open to every player.
+    if (args < 1)
+    {
+        if (client < 1)
+        {
+            ReplyToCommand(client, "[SM] Usage from the server console: sm_lives <#userid|name|all>");
+            return Plugin_Handled;
+        }
+        ReportFreeLives(client, client);
+        return Plugin_Handled;
+    }
+
+    // Naming somebody else reads another player's state, so it follows medic_stats rather than
+    // being open. Drop this block to let players check each other.
+    if (!CheckCommandAccess(client, "bm2_respawn_lives_target", ADMFLAG_BAN))
+    {
+        ReplyToCommand(client, "[SM] You can only check your own lives - use sm_lives with no argument.");
+        return Plugin_Handled;
+    }
+
+    char arg[65];
+    GetCmdArg(1, arg, sizeof(arg));
+
+    // Accept a bare "all" as a convenience spelling of SourceMod's "@all" target.
+    if (StrEqual(arg, "all", false))
+    {
+        strcopy(arg, sizeof(arg), "@all");
+    }
+
+    char target_name[MAX_TARGET_LENGTH];
+    int  target_list[MAXPLAYERS], target_count;
+    bool tn_is_ml;
+    // NO_BOTS because the insurgent team is bots and they never hold a free life.
+    target_count = ProcessTargetString(
+        arg,
+        client,
+        target_list,
+        sizeof(target_list),
+        COMMAND_FILTER_NO_BOTS,
+        target_name,
+        sizeof(target_name),
+        tn_is_ml);
+    if (target_count <= COMMAND_TARGET_NONE)
+    {
+        ReplyToTargetError(client, target_count);
+        return Plugin_Handled;
+    }
+
+    for (int i = 0; i < target_count; i++)
+    {
+        ReportFreeLives(client, target_list[i]);
+    }
+    return Plugin_Handled;
+}
+#endif

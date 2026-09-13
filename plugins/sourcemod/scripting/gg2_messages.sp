@@ -120,6 +120,7 @@ char g_HelpPhrases[][] = {
     "help_loadout_named",
     "help_afk",
     "help_fatal",
+    "help_lives",
     "help_lastmaps",
     "help_stock",
     "help_autoreconnect"
@@ -137,6 +138,7 @@ char g_HelpGateCommands[][] = {
     "",
     "",
     "",
+    "sm_lives",    // help_lives - bm2_respawn only registers it when built with DOCTOR
     "",
     "",
     "sm_autoreconnect"
@@ -155,7 +157,8 @@ char g_AdminHelpPhrases[][] = {
     "help_admin_medic",
     "help_admin_respawn",
     "help_admin_medicstats",
-    "help_admin_enemies"
+    "help_admin_enemies",
+    "help_admin_lives"
 };
 char g_AdminHelpCommands[][] = {
     "sm_admin",
@@ -165,7 +168,10 @@ char g_AdminHelpCommands[][] = {
     "sm_ban_medic",
     "sm_respawn",
     "medic_stats2",
-    "totalb"
+    "totalb",
+    // Matches the override name Command_Lives passes to CheckCommandAccess, so this line appears
+    // for exactly the people who can actually name a target.
+    "bm2_respawn_lives_target"
 };
 int  g_AdminHelpFlags[] = {
     ADMFLAG_GENERIC,
@@ -175,6 +181,7 @@ int  g_AdminHelpFlags[] = {
     ADMFLAG_BAN,
     ADMFLAG_SLAY,
     ADMFLAG_GENERIC,
+    ADMFLAG_BAN,
     ADMFLAG_BAN
 };
 
