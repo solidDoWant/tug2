@@ -433,6 +433,7 @@ RUN --mount=type=bind,source=./plugins/sourcemod,target=/plugin-source \
     /sourcemod/addons/sourcemod/scripting/spcomp --include=/plugin-source/scripting/include --include=/ripext-include /plugin-source/scripting/gg2_discord.sp -o /insurgency/addons/sourcemod/plugins/gg2_discord.smx && \
     mkdir -p /insurgency/addons/sourcemod/configs && \
     cp /plugin-source/configs/discord.cfg /insurgency/addons/sourcemod/configs/ && \
+    cp /plugin-source/configs/mapnames.cfg /insurgency/addons/sourcemod/configs/ && \
     # Fixup file permissions
     find /insurgency -type d -exec chmod 755 {} \; && \
     find /insurgency -type f -exec chmod 644 {} \;

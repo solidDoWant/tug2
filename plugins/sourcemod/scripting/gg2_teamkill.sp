@@ -4,6 +4,7 @@
 #include <sdkhooks>
 #include <sdktools>
 #include <discord>
+#include <weaponnames>
 #include <morecolors>
 #include <dbi>
 
@@ -56,6 +57,10 @@ public void OnPluginStart()
     g_cvarAmnestyTimeCutoff   = CreateConVar("tk_amnesty_time_cutoff", "7776000", "Amnesty time cutoff in seconds (default: 90 days)", FCVAR_PROTECTED);
     HookEvent("round_start", Event_RoundStart);
     HookEvent("player_death", Event_PlayerDeath);
+
+    // Localisation files are mounted by the engine and do not change between maps, so once is enough.
+    WeaponNames_Load();
+
     RegConsoleCmd("forgive", Cmd_Forgive, "Forgive your attacker TK");
     RegConsoleCmd("пробачити", Cmd_Forgive, "Forgive in ukr");
     RegConsoleCmd("許す", Cmd_Forgive, "Forgive in ukr");
@@ -700,6 +705,20 @@ public Action Event_PlayerDeath(Event event, const char[] name, bool dontBroadca
     // Record the teamkill to database
     RecordTKToDatabase(attacker, victim, weapon);
 
+    // Both Discord lines below name the victim and the weapon, so build them once here.
+    //
+    // The victim's name is linked the same way send_to_discord links the attacker's, so both sides
+    // of the TK are clickable rather than just the killer. discord_player_link only fails for a
+    // client who is not in game, which is already ruled out above; the fallback is there so a future
+    // change to that contract degrades to a plain name instead of an uninitialised buffer.
+    char victim_link[192];
+    if (!discord_player_link(victim, victim_link, sizeof(victim_link)))
+        Format(victim_link, sizeof(victim_link), "%N", victim);
+
+    // The display name, not the classname: "M67" rather than "grenade_m67". See weaponnames.inc.
+    char weapon_name[64];
+    WeaponNames_Get(weapon, weapon_name, sizeof(weapon_name));
+
     if (PlayerHasAmnesty(attacker))
     {
         // Steam name can be a max of 32 chars. Double it to account for in-game name changes, like `[ADMIN]` and `[MEDIC]` prefixes.
@@ -713,17 +732,15 @@ public Action Event_PlayerDeath(Event event, const char[] name, bool dontBroadca
         //     pl0x: TK'd pl0x (p90) (AMNESTY GRANTED)
         // amnesty_attacker stays for the chat line above, where naming the attacker IS the point:
         // that one tells the victim who killed them.
-        //
-        // 36 chars for the raw message + 64 for the victim name + 1 for null termination char = 101, with 91 left over for weapon name
-        char d_message[192];
-        Format(d_message, sizeof(d_message), "__***TK'd***__ %N (%s) (AMNESTY GRANTED)", victim, weapon);
+        char d_message[512];
+        Format(d_message, sizeof(d_message), "__***TK'd***__ %s (%s) (AMNESTY GRANTED)", victim_link, weapon_name);
         send_to_discord(attacker, d_message);
 
         return Plugin_Continue;
     }
 
-    char d_message[192];
-    Format(d_message, sizeof(d_message), "__***TK'd***__ %N (%s)", victim, weapon);
+    char d_message[512];
+    Format(d_message, sizeof(d_message), "__***TK'd***__ %s (%s)", victim_link, weapon_name);
     send_to_discord(attacker, d_message);
 
     RecordTeamKill(attacker, victim);

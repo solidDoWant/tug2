@@ -2,6 +2,7 @@
 #include <sdktools>
 #include <sdkhooks>
 #include <discord>
+#include <weaponnames>
 
 #pragma newdecls required
 
@@ -54,6 +55,10 @@ public void OnPluginStart()
 {
     HookEvent("player_disconnect", Event_PlayerDisconnect);
     HookEvent("player_pick_squad", Event_PlayerPickSquad);
+
+    // Localisation files are mounted by the engine and do not change between maps, so once is enough.
+    WeaponNames_Load();
+
     gg_bomber_headshot_multiplier = CreateConVar("gg_bomber_headshot_multiplier", "500.0", "Multiply headshot on bombers by this much");
     gg_bomber_nonheadshot_value   = CreateConVar("gg_bomber_nonheadshot_value", "35.0", "Non-Headshots on bombers give this much damage");
     gg_notification_cooldown      = CreateConVar("gg_bomber_notification_cooldown", "3.0", "Cooldown time in seconds for bomber hit notifications");
@@ -195,8 +200,18 @@ public Action OnTakeDamage(int victim, int& attacker, int& inflictor, float& dam
             PrintHintText(attacker, "");
             PrintHintText(attacker, "Check your fire, you are shooting teammates");
 
+            // The victim's name is linked the same way send_to_discord links the attacker's, so
+            // both sides of the incident are clickable rather than just the one who fired. The
+            // weapon is the display name, not the classname - see weaponnames.inc.
+            char victim_link[192];
+            if (!discord_player_link(victim, victim_link, sizeof(victim_link)))
+                Format(victim_link, sizeof(victim_link), "%N", victim);
+
+            char weapon_name[64];
+            WeaponNames_Get(weapon, weapon_name, sizeof(weapon_name));
+
             char d_message[512];
-            Format(d_message, sizeof(d_message), "__***Attacked Teammate***__ %N (%s)", victim, weapon);
+            Format(d_message, sizeof(d_message), "__***Attacked Teammate***__ %s (%s)", victim_link, weapon_name);
             send_to_discord(attacker, d_message);
 
             g_playerGaveTeamDamageCooldown[attacker] = gg_notification_cooldown.IntValue;

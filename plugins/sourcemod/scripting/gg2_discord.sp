@@ -1,5 +1,7 @@
 #include <sourcemod>
 #include <ripext>
+#include <mapnames>
+#include <workshopmaps>
 // #include <sourcebanspp>  // SourceBansPP is not currently in use
 #pragma newdecls required
 #define TEAM_SPEC                1
@@ -130,6 +132,14 @@ public void OnPluginStart()
     if (g_cvMaxRounds == null)
         LogError("[DISCORD] mp_maxrounds not found - round end will report the round limit as ?");
 
+    // Display names for the map. configs/mapnames.cfg is only the exceptions - see mapnames.inc for
+    // why almost every name has to be derived from the filename rather than looked up.
+    MapNames_Load();
+
+    // Which workshop item each map came from, so the map change message can link it. Built from the
+    // workshop directory once; see workshopmaps.inc.
+    WorkshopMaps_Load();
+
     HookEvent("server_addban", Event_ServerAddBan);
     HookEvent("vote_started", Event_VoteStarted);
     HookEvent("player_team", Event_PlayerTeam, EventHookMode_Pre);
@@ -173,10 +183,10 @@ void HandleObjectiveProgress(const char[] actionLabel)
 {
     char cap = 'A' + g_cps_capped;
 
-    char mapname[64];
-    GetCurrentMap(mapname, sizeof(mapname));
+    char mapname[128];
+    MapNames_GetCurrent(mapname, sizeof(mapname));
 
-    char message[128];
+    char message[192];
     Format(message, sizeof(message), "**%s:** %c (%s)", actionLabel, cap, mapname);
     send_discord(message, sizeof(message));
 
@@ -321,8 +331,8 @@ public Action Event_RoundEnd(Event event, const char[] name, bool dontBroadcast)
         winning_team = "Security";
     }
 
-    char mapname[32];
-    GetCurrentMap(mapname, sizeof(mapname));
+    char mapname[128];
+    MapNames_GetCurrent(mapname, sizeof(mapname));
 
     // mp_maxrounds 0 means "no limit", so print the count on its own rather than "4/0".
     int max_rounds = (g_cvMaxRounds != null) ? g_cvMaxRounds.IntValue : -1;
@@ -386,11 +396,22 @@ public void OnMapStart()
 {
     g_rounds_played = 0;
 
-    char mapname[32];
-    GetCurrentMap(mapname, sizeof(mapname));
+    // The only message that carries the filename as well as the display name: this is the one an
+    // admin reads to find out what to type into changelevel or a vote, and "District Night" is not
+    // that. It is also where the workshop link belongs - the filename is what identifies the item,
+    // and linking it answers "which item is this" without repeating a URL every round. The messages
+    // that recur - round end, captures - print the display name alone.
+    char mapfile[128], mapname[128];
+    GetCurrentMap(mapfile, sizeof(mapfile));
+    MapNames_Get(mapfile, mapname, sizeof(mapname));
+
+    char url[192];
+    bool linked = WorkshopMaps_GetUrl(mapfile, url, sizeof(url));
 
     char strMsg[1024];
-    Format(strMsg, 1024, "**Map Change:** __%s__", mapname);
+    if (linked) Format(strMsg, 1024, "**Map Change:** __%s__ ([%s](%s))", mapname, mapfile, url);
+    else if (!StrEqual(mapname, mapfile)) Format(strMsg, 1024, "**Map Change:** __%s__ (%s)", mapname, mapfile);
+    else Format(strMsg, 1024, "**Map Change:** __%s__", mapname);
     send_discord(strMsg, sizeof(strMsg));
 }
 

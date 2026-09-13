@@ -48,6 +48,7 @@
 #include <sdktools>
 #include <morecolors>
 #include <theateritems>
+#include <weaponnames>
 
 #define PLUGIN_VERSION "2.0.0"
 
@@ -280,13 +281,13 @@ public void OnPluginStart()
     RegConsoleCmd("sm_loadlo", Command_LoadLoadout, "Load this class's saved loadout, or a named one: sm_loadlo <name>");
     RegConsoleCmd("inventory_reset", Command_InventoryReset, "Hook reset button to load saved loadout");
 
+    // Localisation files are mounted by the engine and do not change between maps, so once is enough.
+    WeaponNames_Load();
+
     // TEMPORARY DIAGNOSTIC - why does the Benelli M4 (weapon_m1014) spawn with no reserve shells
     // when its theater clip_default is 18? Reads the real numbers off every carried weapon so the
     // question can be answered from observation instead of from theater arithmetic. Remove once
     // answered.
-    // Localisation files are mounted by the engine and do not change between maps, so once is enough.
-    LoadWeaponNames();
-
     RegServerCmd("ammo_probe", Command_AmmoProbe, "TEMPORARY: dump clip/reserve ammo for every player's weapons");
 
     RegAdminCmd("sm_loadout_dumppurchases", Command_DumpPurchases, ADMFLAG_CONFIG,
@@ -2167,141 +2168,8 @@ void OnAllLoadoutsCleared(Database db, DBResultSet results, const char[] error, 
 // Weapon display names
 // ---------------------------------------------------------------------------------------------
 // theater_items stores entity classnames ("weapon_m4a1sopmod"), which is right for lookups and
-// unreadable in chat. The theater already knows the pretty name - every weapon carries
-// "print_name" "#<classname>" - and those tokens resolve in the game's localisation files. The
-// server has both, through the engine's filesystem rather than the real one: the stock file lives
-// inside insurgency_misc_dir.vpk and TUG's inside the workshop VPK, so OpenFile is called with
-// use_valve_fs so it searches mounted VPKs.
-//
-// ENCODING IS THE AWKWARD PART. These files are UTF-16LE, so every ASCII character is a byte
-// followed by a zero. ReadFileLine would stop dead at the first of those zeros, and KeyValues
-// cannot parse the file at all - hence the byte-level read and the hand-rolled scan below. Only
-// keys beginning with "weapon_" are kept, which is a few hundred entries rather than the whole
-// several-thousand-line file.
-StringMap g_WeaponNames = null;
-
-void LoadWeaponNames()
-{
-    delete g_WeaponNames;
-    g_WeaponNames = new StringMap();
-
-    // Stock first, TUG second: TUG renames some stock weapons and the later load must win.
-    int n = ParseLocalisation("resource/insurgency_english.txt");
-    n += ParseLocalisation("resource/ui/tug_english_modern.txt");
-
-    // Four weapons name a token that is NOT their classname, so the convention the lookup relies on
-    // does not hold for them and they would fall back to a bare classname. Checked across the whole
-    // set: 118 of 122 use "#<classname>" and need nothing, these four are the exceptions, and each
-    // token below is the print_name the theater actually declares for that weapon.
-    AliasWeaponName("weapon_M107", "weapon_m107barrett");
-    AliasWeaponName("weapon_m16a4", "weapon_m16");
-    AliasWeaponName("weapon_g33", "weapon_g3a3");
-    AliasWeaponName("weapon_c4_clicker", "weapon_c4");
-
-    char sample[64];
-    if (!g_WeaponNames.GetString("weapon_m4a1sopmod", sample, sizeof(sample)))
-        strcopy(sample, sizeof(sample), "<not found>");
-
-    char sample2[64];
-    if (!g_WeaponNames.GetString("weapon_M107", sample2, sizeof(sample2)))
-        strcopy(sample2, sizeof(sample2), "<not found>");
-    LogMessage("[LoadoutSaver] %d weapon display names loaded (weapon_m4a1sopmod -> %s, weapon_M107 -> %s)",
-               n, sample, sample2);
-}
-
-// Points a classname at a token that differs from it, but only if that token actually resolved -
-// a missing one leaves the classname fallback in place rather than storing an empty name.
-void AliasWeaponName(const char[] classname, const char[] token)
-{
-    char value[64];
-    if (g_WeaponNames.GetString(token, value, sizeof(value)))
-        g_WeaponNames.SetString(classname, value, true);
-}
-
-// Returns how many "weapon_*" tokens were added. Tolerates a missing file - a server without TUG
-// mounted simply gets fewer names and falls back to classnames.
-int ParseLocalisation(const char[] path)
-{
-    File f = OpenFile(path, "rb", true, "GAME");
-    if (f == null) return 0;
-
-    int added = 0;
-    int bytes[1024];
-    char line[512];
-    int  len = 0;
-
-    while (!f.EndOfFile())
-    {
-        int got = f.Read(bytes, sizeof(bytes), 1);
-        if (got <= 0) break;
-
-        for (int i = 0; i < got; i++)
-        {
-            int b = bytes[i] & 0xFF;
-
-            // The zero half of each UTF-16LE code unit, and the BOM, carry nothing for us.
-            if (b == 0 || b == 0xFF || b == 0xFE) continue;
-
-            if (b == '\n' || b == '\r')
-            {
-                if (len > 0)
-                {
-                    line[len] = '\0';
-                    if (StoreLocalisedName(line)) added++;
-                    len = 0;
-                }
-                continue;
-            }
-
-            if (len < sizeof(line) - 1) line[len++] = b;
-        }
-    }
-    delete f;
-
-    if (len > 0)
-    {
-        line[len] = '\0';
-        if (StoreLocalisedName(line)) added++;
-    }
-    return added;
-}
-
-// One line of the Tokens block is  "key"  "value"  - take the first two quoted runs and keep the
-// pair only when the key names a weapon.
-bool StoreLocalisedName(const char[] line)
-{
-    int start = StrContains(line, "\"");
-    if (start == -1) return false;
-
-    int keyEnd = StrContains(line[start + 1], "\"");
-    if (keyEnd == -1) return false;
-    keyEnd += start + 1;
-
-    char key[64];
-    int  keyLen = keyEnd - start - 1;
-    if (keyLen < 1 || keyLen >= sizeof(key)) return false;
-    strcopy(key, keyLen + 1, line[start + 1]);
-
-    // Descriptions share the prefix and would otherwise overwrite the name with a sentence.
-    if (StrContains(key, "weapon_") != 0) return false;
-    if (StrContains(key, "_desc") != -1) return false;
-
-    int valStart = StrContains(line[keyEnd + 1], "\"");
-    if (valStart == -1) return false;
-    valStart += keyEnd + 1;
-
-    int valEnd = StrContains(line[valStart + 1], "\"");
-    if (valEnd == -1) return false;
-    valEnd += valStart + 1;
-
-    char value[64];
-    int  valLen = valEnd - valStart - 1;
-    if (valLen < 1 || valLen >= sizeof(value)) return false;
-    strcopy(value, valLen + 1, line[valStart + 1]);
-
-    g_WeaponNames.SetString(key, value, true);
-    return true;
-}
+// unreadable in chat. weaponnames.inc turns one into the name the buy menu shows; see the notes
+// there for where those names come from. All that is left here is the chat formatting.
 
 // Turns "weapon_m4a1sopmod, weapon_m1014" into "M4A1 SOPMOD, Benelli M4", falling back to the
 // classname with its "weapon_" prefix trimmed when a token has no localised name.
@@ -2316,11 +2184,7 @@ void PrettifyWeaponList(char[] buffer, int maxlen)
     for (int i = 0; i < count; i++)
     {
         char pretty[64];
-        if (g_WeaponNames == null || !g_WeaponNames.GetString(parts[i], pretty, sizeof(pretty)))
-        {
-            strcopy(pretty, sizeof(pretty), parts[i]);
-            if (StrContains(pretty, "weapon_") == 0) strcopy(pretty, sizeof(pretty), pretty[7]);
-        }
+        WeaponNames_Get(parts[i], pretty, sizeof(pretty));
 
         if (i > 0) StrCat(buffer, maxlen, "{default}, ");
         StrCat(buffer, maxlen, pretty);

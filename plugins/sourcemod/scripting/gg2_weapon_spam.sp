@@ -4,6 +4,7 @@
 #include <sdktools>
 #include <morecolors>
 #include <discord>
+#include <weaponnames>
 
 public Plugin myinfo =
 {
@@ -54,6 +55,9 @@ public void OnPluginStart()
     HookEvent("player_disconnect", Event_PlayerDisconnect);
 
     LoadTranslations("tug.phrases.txt");
+
+    // Localisation files are mounted by the engine and do not change between maps, so once is enough.
+    WeaponNames_Load();
 }
 
 public Action Event_PlayerDisconnect(Event event, const char[] name, bool dontBroadcast)
@@ -182,8 +186,16 @@ public Action Timer_WeaponDurationCounter(Handle timer)
             CPrintToChatAll("{common}MG SPAM ACTION: %t", "mg_spam_action_all", spammer_name);
             PrintHintText(client, "%T", "weapon_too_hot", client);
 
+            // send_to_discord already opens the line with this client's linked name, so naming them
+            // again here printed them twice. The weapon is the display name rather than the
+            // classname - see weaponnames.inc - and the duration says how long they held the
+            // trigger, which is the thing being measured.
+            char weapon_name[64];
+            WeaponNames_Get(current_weapon, weapon_name, sizeof(weapon_name));
+
             char d_message[512];
-            Format(d_message, sizeof(d_message), "weapon_spam dropped %N weapon (%s)", client, current_weapon);
+            Format(d_message, sizeof(d_message), "__***MG Spam***__ %s dropped (%i sec of sustained fire)",
+                   weapon_name, current_firing_duration[client] / 10);
             send_to_discord(client, d_message);
 
             LogMessage("[GG2 Weapon Spam] over max, %N weapon drop triggered", client);
@@ -206,8 +218,12 @@ public Action Timer_WeaponDurationCounter(Handle timer)
         char current_weapon[64];
         GetClientWeapon(client, current_weapon, sizeof(current_weapon));
 
+        char weapon_name[64];
+        WeaponNames_Get(current_weapon, weapon_name, sizeof(weapon_name));
+
         char d_message[512];
-        Format(d_message, sizeof(d_message), "weapon_spam warned (duration: %i sec) (weapon_name: %s)", current_duration_seconds, current_weapon);
+        Format(d_message, sizeof(d_message), "__***MG Spam Warned***__ %s (%i sec of sustained fire)",
+               weapon_name, current_duration_seconds);
         send_to_discord(client, d_message);
     }
 
