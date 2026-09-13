@@ -44,11 +44,40 @@ are eliminated.
   not indexed (e.g. a build gap), the call falls through to a real libc call. A failed/empty
   build therefore degrades to a **pure passthrough**, never to false `ENOENT`.
 * **Files the srcds process creates at runtime** are tracked in a small dirty-set so later reads
-  of them fall through to libc.
+  of them fall through to libc. **This covers only the exact path a write syscall named.**
+  `rename(2)` is *not* interposed, so a file that appears under a new name is in neither the index
+  nor the dirty-set, and the authoritative-`ENOENT` check then reports it as missing even though it
+  is on disk. Anything written under one name and read under another needs `CASECACHE_EXCLUDE`.
 * **Kill switch:** set `CASECACHE_DISABLE=1` to make the shim a pure passthrough without a
   rebuild.
 * On startup it logs one line to stderr: `[casecache] active: indexed <N> nodes under …` (or
-  nothing in the disabled case) — use it to confirm the shim is live.
+  nothing in the disabled case) — use it to confirm the shim is live, plus one
+  `[casecache] excluding (CASECACHE_EXCLUDE): …` line per configured exclusion.
+
+### `CASECACHE_EXCLUDE`
+
+Colon-separated list of path substrings to add to the built-in writable-subtree list, for anything
+the server writes and then reads back at runtime. Matching is a plain substring test against the
+absolute path, so `/insurgency/scripts/theaters` covers that directory and everything under it —
+and deliberately does *not* match a workshop item's own `scripts/theaters`, which lives under
+`/steamapps/` and should stay indexed. Parsed once before the index is built, so an exclusion keeps
+the subtree out of the index as well as out of every lookup. At most 32 entries; extras are dropped
+with a warning on stderr rather than silently, because a dropped exclusion looks exactly like a
+missing file.
+
+The image sets it (see the `ENV CASECACHE_EXCLUDE` line in the root `Dockerfile`). The case that
+forced it: `gg2_fastdl` downloads the content-hashed theater to `<name>.theater.part` and renames
+it into place. All six files landed correctly and the server then could not open its own download
+(`... is missing after download - not switching the theater`), so `mp_theater_override` stayed on
+the unhashed name and every client failed the theater consistency check.
+
+To reproduce the failure and confirm a fix, build the shim for the host architecture against a
+throwaway tree — `GAME_ROOT` is overridable for exactly this:
+
+```sh
+gcc -shared -fPIC -O2 -DGAME_ROOT="\"$PWD/root\"" -o cc.so casecache.c -ldl -lpthread
+# create root/, write a file, rename it, then stat the new name with and without the env var
+```
 
 ### Assumption
 

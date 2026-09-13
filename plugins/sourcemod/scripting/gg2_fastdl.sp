@@ -150,6 +150,10 @@ static void ApplyCachedList()
     if (added > 0) LogMessage("Advertised %d file(s) from the cached manifest", added);
 }
 
+/* Remembers the value already complained about, so a permanently broken URL costs one line rather
+ * than one per map change. */
+static char g_sWarnedUrl[PLATFORM_MAX_PATH];
+
 static bool GetBaseUrl(char[] buffer, int maxlen)
 {
     if (g_cvDownloadUrl == null) return false;
@@ -157,6 +161,29 @@ static bool GetBaseUrl(char[] buffer, int maxlen)
     g_cvDownloadUrl.GetString(buffer, maxlen);
     TrimString(buffer);
     if (buffer[0] == '\0') return false;
+
+    /* A URL with a scheme and nothing after it is not a typo, it is the engine eating the value.
+     * "//" in an UNQUOTED console token is a comment, and "+cvar value" from the command line is
+     * unquoted, so "+sv_downloadurl https://host/path" stores "https:" - silently, and with it
+     * every download and the hashed theater name this plugin exists to apply. Worth a loud line:
+     * the symptom otherwise surfaces as clients failing theater consistency, several layers away.
+     *
+     * Detected as "no // anywhere" rather than by matching schemes, so it also catches whatever
+     * else strips it. A real URL always has one; a bare host with no scheme is not valid here. */
+    if (StrContains(buffer, "//") == -1)
+    {
+        if (!StrEqual(g_sWarnedUrl, buffer))
+        {
+            strcopy(g_sWarnedUrl, sizeof(g_sWarnedUrl), buffer);
+            LogError("sv_downloadurl is \"%s\" - the \"//\" has been stripped, so no content can be \
+downloaded and the theater cannot be switched. An unquoted // is a console comment: pass the value \
+already quoted (see DOWNLOAD_URL in the Dockerfile) or set it with ConVar.SetString, which does not \
+go through the console.", buffer);
+        }
+        return false;
+    }
+
+    g_sWarnedUrl[0] = '\0';
 
     // A trailing slash would produce "...//manifest.json". Harmless on most servers, a 404 on some.
     int len = strlen(buffer);

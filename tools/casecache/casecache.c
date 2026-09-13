@@ -40,17 +40,70 @@
 #include <limits.h>
 #include <ctype.h>
 
+/* Overridable only so the shim can be exercised against a throwaway tree in a test; the image
+ * never sets it. */
+#ifndef GAME_ROOT
 #define GAME_ROOT   "/opt/insurgency-server"
+#endif
 #define NBUCKETS    (1u << 19)          /* 524288 buckets */
 #ifndef _STAT_VER
 #define _STAT_VER   3
 #endif
 
-/* Writable/mutable subtrees: never indexed, always passthrough to libc with original path. */
+/* Extra exclusions from CASECACHE_EXCLUDE, parsed once during init. See parse_extra_excludes. */
+#define MAX_EXTRA_EXCLUDES 32
+static const char *g_extra_excl[MAX_EXTRA_EXCLUDES];
+static int         g_n_extra_excl = 0;
+
+/* Writable/mutable subtrees: never indexed, always passthrough to libc with original path.
+ *
+ * Matching is a plain substring test on the absolute path, so "/insurgency/scripts/theaters"
+ * covers that directory and everything under it without also matching a workshop item's own
+ * scripts/theaters (those paths sit under /steamapps/, not /insurgency/).
+ *
+ * ANYTHING WRITTEN AT RUNTIME AND READ BACK BY THE SERVER BELONGS HERE. The dirty set below
+ * catches most of that, but only for the exact path a write syscall named: a file that appears
+ * under a NEW name - rename(2) is not interposed - is in neither the index nor the dirty set, and
+ * the authoritative-miss check then reports it as nonexistent even though it is on disk. That is
+ * not theoretical: gg2_fastdl downloads a theater to "<name>.theater.part" and renames it into
+ * place, and the server could not see the result until scripts/theaters was excluded here. */
 static int is_excluded(const char *p) {
+    for (int i = 0; i < g_n_extra_excl; i++)
+        if (strstr(p, g_extra_excl[i])) return 1;
+
     return strstr(p, "/download") || strstr(p, "/logs") || strstr(p, "/cfg/")
         || strstr(p, "/addons/sourcemod/data") || strstr(p, "/addons/sourcemod/logs")
         || strstr(p, "console.log");
+}
+
+/* CASECACHE_EXCLUDE: colon-separated list of path substrings to add to is_excluded, for subtrees
+ * the server writes and reads back at runtime. Set it in the image rather than editing the list
+ * above, so a new writable directory does not need a shim rebuild.
+ *
+ * Parsed ONCE from do_init before the index is built, and never written again, so every later
+ * reader sees a complete list without locking - the same discipline the index itself follows.
+ * Empty entries are skipped; entries past MAX_EXTRA_EXCLUDES are dropped with a warning rather
+ * than silently, because a dropped exclusion looks exactly like a missing file. */
+static void parse_extra_excludes(void) {
+    const char *v = getenv("CASECACHE_EXCLUDE");
+    if (!v || !*v) return;
+
+    char *copy = strdup(v);          /* never freed: the entries are referenced for process life */
+    if (!copy) return;
+
+    int dropped = 0;
+    for (char *tok = strtok(copy, ":"); tok; tok = strtok(NULL, ":")) {
+        if (!*tok) continue;
+        if (g_n_extra_excl >= MAX_EXTRA_EXCLUDES) { dropped++; continue; }
+        g_extra_excl[g_n_extra_excl++] = tok;
+    }
+
+    if (dropped) {
+        char m[128];
+        int len = snprintf(m, sizeof m, "[casecache] CASECACHE_EXCLUDE: %d entry/entries past the "
+                                        "limit of %d were IGNORED\n", dropped, MAX_EXTRA_EXCLUDES);
+        (void)!write(2, m, len);
+    }
 }
 
 /* ---- real libc symbols ---- */
@@ -192,6 +245,8 @@ static void do_init(void) {
     /* Fail-safe kill switch: with CASECACHE_DISABLE set, the shim is a pure passthrough
      * (every interposed call forwards to libc unchanged). Lets ops disable it without a rebuild. */
     if (getenv("CASECACHE_DISABLE")) { g_enabled = 0; idx_ready = 1; return; }
+    /* Before build_walk: the exclusion list decides what gets indexed, not just what is read. */
+    parse_extra_excludes();
     idx = calloc(NBUCKETS, sizeof(*idx));
     index_one("/");      /* ancestors of GAME_ROOT: the descent walks case-insensitively from "/" */
     index_one("/opt");
@@ -204,9 +259,13 @@ static void do_init(void) {
     build_walk(GAME_ROOT);
     __sync_synchronize();
     idx_ready = 1;
-    char m[160];
+    char m[1024];
     int len = snprintf(m, sizeof m, "[casecache] active: indexed %lu nodes under %s\n", g_nodes, GAME_ROOT);
     (void)!write(2, m, len);   /* raw write, not stdio, to avoid reentrancy during init */
+    for (int i = 0; i < g_n_extra_excl; i++) {
+        len = snprintf(m, sizeof m, "[casecache] excluding (CASECACHE_EXCLUDE): %s\n", g_extra_excl[i]);
+        (void)!write(2, m, len);
+    }
 }
 static inline void init(void) { pthread_once(&once, do_init); }
 

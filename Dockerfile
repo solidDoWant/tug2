@@ -748,6 +748,17 @@ ENV PORT=27015
 #
 # https is fine: the engine downloads through ISteamHTTP (STEAMHTTP_INTERFACE_VERSION002) rather
 # than its own TLS, so it inherits Steam's.
+#
+# THE ENTRYPOINT WRAPS THIS VALUE IN LITERAL QUOTES, and it has to stay that way. The engine turns
+# each "+cvar value" pair into a console command, and "//" in an UNQUOTED console token is a
+# comment - so an unquoted https:// URL is stored as just "https:". Measured both ways over RCON:
+#   sv_downloadurl "https://host/path"   ->  https://host/path
+#   sv_downloadurl https://host/path     ->  https:
+# The truncation is silent, and it disables fast download completely: gg2_fastdl then requests
+# "https:/manifest.json", gets HTTP 0, and never repoints mp_theater_override at the hashed theater
+# name, so every client fails the theater consistency check. server-runner substitutes per argv
+# element with envsubst, which leaves the surrounding quotes alone, and an empty value still
+# produces a correct sv_downloadurl "".
 ENV DOWNLOAD_URL=
 
 # Boot fallback for mp_theater_override: the theater the server's OWN image ships, used until
@@ -788,7 +799,7 @@ ENTRYPOINT [    \
     "+servercfgfile", "${SERVER_CONFIG_FILE_PATH}",    \
     "+map", "${STARTING_MAP}",  \
     "+sv_allowdownload", "1", \
-    "+sv_downloadurl", "${DOWNLOAD_URL}",  \
+    "+sv_downloadurl", "\"${DOWNLOAD_URL}\"",  \
     "+mp_theater_override", "${THEATER_NAME}", \
     "+sv_pure", "0" \
 ]
@@ -878,6 +889,19 @@ COPY ["server config/main/", "/"]
 # shim at runtime without a rebuild, set CASECACHE_DISABLE=1 (it becomes a pure passthrough).
 COPY --from=casecache-builder /casecache.so /opt/insurgency-server/casecache.so
 ENV LD_PRELOAD=/opt/insurgency-server/casecache.so
+# Subtrees the server WRITES and then READS BACK at runtime, which the shim must not answer from its
+# startup index. Colon-separated substrings of the absolute path.
+#
+# scripts/theaters is here because gg2_fastdl downloads the content-hashed theater to
+# "<name>.theater.ztmp" and renames it into place. The shim's dirty set only records the path a
+# write syscall named, and rename(2) is not interposed, so the final name was in neither the index
+# nor the dirty set: the server downloaded all six theater files correctly and then could not open
+# its own download ("... is missing after download - not switching the theater"), which left
+# mp_theater_override on the unhashed name and every client failing the consistency check.
+#
+# Note this does NOT match a workshop item's own scripts/theaters - those live under /steamapps/ -
+# so the hot path for the case-insensitive descent stays indexed.
+ENV CASECACHE_EXCLUDE=/insurgency/scripts/theaters
 
 
 FROM gameserver AS gameserver-test
@@ -958,6 +982,19 @@ COPY ["server config/test/", "/"]
 # shim at runtime without a rebuild, set CASECACHE_DISABLE=1 (it becomes a pure passthrough).
 COPY --from=casecache-builder /casecache.so /opt/insurgency-server/casecache.so
 ENV LD_PRELOAD=/opt/insurgency-server/casecache.so
+# Subtrees the server WRITES and then READS BACK at runtime, which the shim must not answer from its
+# startup index. Colon-separated substrings of the absolute path.
+#
+# scripts/theaters is here because gg2_fastdl downloads the content-hashed theater to
+# "<name>.theater.ztmp" and renames it into place. The shim's dirty set only records the path a
+# write syscall named, and rename(2) is not interposed, so the final name was in neither the index
+# nor the dirty set: the server downloaded all six theater files correctly and then could not open
+# its own download ("... is missing after download - not switching the theater"), which left
+# mp_theater_override on the unhashed name and every client failing the consistency check.
+#
+# Note this does NOT match a workshop item's own scripts/theaters - those live under /steamapps/ -
+# so the hot path for the case-insensitive descent stays indexed.
+ENV CASECACHE_EXCLUDE=/insurgency/scripts/theaters
 
 
 # Fast download content. Only the plugin ships here - the list of files it advertises, and the name
