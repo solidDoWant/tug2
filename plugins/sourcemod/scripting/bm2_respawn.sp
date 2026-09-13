@@ -2867,6 +2867,26 @@ Action RespawnBot(Handle timer, int client)
 }
 
 #if DOCTOR
+// Discord line for a revive, with the revived player's name linked to their Steam profile.
+//
+// send_to_discord already puts a linked name in front of the message for the player who ACTED - the
+// reviver - so without this the revived player was the only name in the line that was not clickable.
+// discord_player_link builds the identical link, so both names in "X revived Y" now look the same.
+//
+// A player whose Steam id is unavailable (or who is the bot account) already comes back from
+// gg2_discord as a bare name rather than a broken link, so that case needs nothing here. The native's
+// only other failure is a client not in game, which Timer_ReviveMonitor has already ruled out before
+// it gets here - the fallback is there so a future change to that contract degrades to a plain name
+// instead of passing an uninitialised buffer to Discord.
+void FormatReviveDiscordMessage(int revived, char[] buffer, int maxlen)
+{
+    char link[192];
+    if (!discord_player_link(revived, link, sizeof(link)))
+        Format(link, sizeof(link), "%N", revived);
+
+    Format(buffer, maxlen, "revived %s", link);
+}
+
 // Handles reviving for medics and non-medics
 Action Timer_ReviveMonitor(Handle timer)
 {
@@ -2887,7 +2907,7 @@ Action Timer_ReviveMonitor(Handle timer)
     char sWeapon[32],
         sBuf[255],
         woundType[64],
-        discordString[128];
+        discordString[256];
 
     for (int alivePlayer = 1; alivePlayer <= MaxClients; alivePlayer++)
     {
@@ -2988,7 +3008,7 @@ Action Timer_ReviveMonitor(Handle timer)
                 g_revivedByMedic[deadPlayer] = true;
                 CreateReviveTimer(deadPlayer);
                 SendForwardMedicRevive(alivePlayer, deadPlayer);
-                Format(discordString, sizeof(discordString), "revived %N", deadPlayer);
+                FormatReviveDiscordMessage(deadPlayer, discordString, sizeof(discordString));
                 send_to_discord(alivePlayer, discordString);
             }
         }
@@ -3059,7 +3079,7 @@ Action Timer_ReviveMonitor(Handle timer)
                 CreateTimer(0.1, Timer_ChangeWeaponFromHK, alivePlayer, TIMER_FLAG_NO_MAPCHANGE);
                 // ChangePlayerWeaponSlot(alivePlayer, 2);
                 SendForwardMedicRevive(alivePlayer, deadPlayer);
-                Format(discordString, sizeof(discordString), "revived %N", deadPlayer);
+                FormatReviveDiscordMessage(deadPlayer, discordString, sizeof(discordString));
                 send_to_discord(alivePlayer, discordString);
             }
         }
