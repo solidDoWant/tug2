@@ -67,6 +67,28 @@ Database g_Database = null;
 char     g_PlayerSteamId[MAXPLAYERS + 1][32];
 char     g_PlayerCurrentClass[MAXPLAYERS + 1][128];
 
+// Both of these are filled in by an event - OnClientAuthorized for the id, player_pick_squad for
+// the class - so a plugin that was not loaded when they fired (a hot reload, or a late load) has
+// neither for anyone already in game. An empty id builds "WHERE steam_id =  AND ..." and Postgres
+// rejects the statement; an empty class makes every command answer "Select a class first!". Both
+// are recovered on demand instead of being left to the next round.
+//
+// The id is easy, GetClientAuthId works at any time. The class is not: m_nCurrentClassTemplateHandle holds
+// the class as an id, always, but nothing in the game or the support library maps that id back to a
+// name (gg2_theater_items deliberately leaves the class template table out; Ins_GetPlayerClass is
+// declared in insurgencydy.inc but never implemented).
+//
+// So the mapping is learned from the events that do carry both. One observation of a class covers
+// every other player on it, which is what gets players already in game past a reload. It is not
+// persisted - nothing here is worth a file, and after a restart every player reconnects and the
+// events fire again anyway. Handles are assigned per theater, so it is dropped on a theater change.
+StringMap g_ClassByHandle = null;
+
+// m_PlayerInventory.m_nCurrentClassTemplateHandle - 8 bits unsigned, so it must be read one byte
+// wide. Ids are 1-based like every other theater id, making 0 "none".
+#define CLASS_HANDLE_PROP   "m_nCurrentClassTemplateHandle"
+#define CLASS_HANDLE_BYTES  1
+
 // Rate limiting
 float    g_LastSaveTime[MAXPLAYERS + 1];
 float    g_LastLoadTime[MAXPLAYERS + 1];
@@ -112,6 +134,8 @@ bool     g_PurchaseListAvailable = false;
 
 // Supply point tracking
 ConVar   g_CvarSupplyTokenBase;
+ConVar   g_CvarSupplyPlayerTokens;
+bool     g_bSupplyPlayerTokensChecked = false;
 
 // Constants
 #define SAVE_COOLDOWN       3.0
@@ -141,6 +165,12 @@ enum struct LoadoutItem
 // Game limits. Upper bounds only - the real counts come from the send table at runtime
 // (GetEntPropArraySize), which is what stops this plugin inheriting the original's two short
 // bounds. These are sized above what the game networks so a future theater cannot overflow them.
+// m_EquippedGear and m_upgradeSlots are both 8-bit SendProps (verified from their registrations in
+// server.so: nbits=8), so 255 is the maximum value the field can hold and is the engine's marker for
+// an empty slot. Treating it as a real id is what produced 40+ "the theater cannot name" lines on
+// every save - one per unused gear and upgrade slot.
+#define THEATER_ID_NONE     255
+
 #define MAX_GEAR_SLOTS      16    // send table has 7
 #define MAX_WEAPON_UPGRADES 16    // send table has 10
 #define MAX_WEAPON_ITEMS    16    // m_WeaponPurchases holds 12; m_hMyWeapons is 48 but most are empty
@@ -208,6 +238,8 @@ public void OnPluginStart()
 
     // Hook events
     HookEvent("player_pick_squad", Event_PlayerPickSquad);
+
+    g_ClassByHandle = new StringMap();
 
     // Find netprop offsets
     g_EquippedGearOffset = FindSendPropInfo("CINSPlayer", "m_EquippedGear");
@@ -438,8 +470,70 @@ public Action Timer_AutoLoadLoadout(Handle timer, int userid)
     int client = GetClientOfUserId(userid);
     if (client < 1 || !IsClientInGame(client)) return Plugin_Handled;
 
+    // Deliberately here rather than in the event: the handle is read off the player, and by now the
+    // spawn the event announced has actually happened.
+    LearnPlayerClass(client);
+
     LoadPlayerLoadout(client, false, "");    // Auto-load silently, this class only
     return Plugin_Handled;
+}
+
+// =====================================================
+// Class handle <-> name
+// =====================================================
+
+// A theater change reassigns the handles, so anything learned under the old one is now wrong.
+public void TheaterItems_OnReady()
+{
+    if (g_ClassByHandle != null)
+        g_ClassByHandle.Clear();
+}
+
+int GetPlayerClassHandle(int client)
+{
+    if (!IsClientInGame(client)) return 0;
+    return GetEntProp(client, Prop_Send, CLASS_HANDLE_PROP, CLASS_HANDLE_BYTES);
+}
+
+// Record what this player's class id is called, for the benefit of a later load that only has the id.
+void LearnPlayerClass(int client)
+{
+    if (g_ClassByHandle == null || g_PlayerCurrentClass[client][0] == '\0') return;
+
+    int handle = GetPlayerClassHandle(client);
+    if (handle <= 0) return;
+
+    char key[16];
+    IntToString(handle, key, sizeof(key));
+    g_ClassByHandle.SetString(key, g_PlayerCurrentClass[client]);
+}
+
+// True if this player's Steam id is known, fetching it if the authorize event was missed.
+bool EnsureSteamId(int client)
+{
+    if (g_PlayerSteamId[client][0] != '\0') return true;
+    if (!IsClientAuthorized(client)) return false;
+
+    return GetClientAuthId(client, AuthId_SteamID64, g_PlayerSteamId[client], sizeof(g_PlayerSteamId[]));
+}
+
+// True if this player's class is known. Fills it in from the learned map when the event that would
+// normally have supplied it was missed.
+bool ResolvePlayerClass(int client)
+{
+    if (g_PlayerCurrentClass[client][0] != '\0') return true;
+    if (g_ClassByHandle == null) return false;
+
+    int handle = GetPlayerClassHandle(client);
+    if (handle <= 0) return false;
+
+    char key[16];
+    IntToString(handle, key, sizeof(key));
+
+    if (!g_ClassByHandle.GetString(key, g_PlayerCurrentClass[client], sizeof(g_PlayerCurrentClass[])))
+        return false;
+
+    return true;
 }
 
 // =====================================================
@@ -449,7 +543,13 @@ public Action Command_SaveLoadout(int client, int args)
 {
     if (client < 1 || IsFakeClient(client)) return Plugin_Handled;
 
-    if (g_PlayerCurrentClass[client][0] == '\0')
+    if (!EnsureSteamId(client))
+    {
+        SendFailedMessage(client);
+        return Plugin_Handled;
+    }
+
+    if (!ResolvePlayerClass(client))
     {
         CPrintToChat(client, "{red}[Loadout]{default} Select a class first!");
         return Plugin_Handled;
@@ -554,7 +654,13 @@ public Action Command_ClearLoadout(int client, int args)
     }
 
     // Clear current class loadout
-    if (g_PlayerCurrentClass[client][0] == '\0')
+    if (!EnsureSteamId(client))
+    {
+        SendFailedMessage(client);
+        return Plugin_Handled;
+    }
+
+    if (!ResolvePlayerClass(client))
     {
         CPrintToChat(client, "{red}[Loadout]{default} Select a class first!");
         return Plugin_Handled;
@@ -568,7 +674,13 @@ public Action Command_LoadLoadout(int client, int args)
 {
     if (client < 1 || IsFakeClient(client)) return Plugin_Handled;
 
-    if (g_PlayerCurrentClass[client][0] == '\0')
+    if (!EnsureSteamId(client))
+    {
+        SendFailedMessage(client);
+        return Plugin_Handled;
+    }
+
+    if (!ResolvePlayerClass(client))
     {
         CPrintToChat(client, "{red}[Loadout]{default} Select a class first!");
         return Plugin_Handled;
@@ -590,7 +702,7 @@ public Action Command_ListLoadouts(int client, int args)
 {
     if (client < 1 || IsFakeClient(client)) return Plugin_Handled;
 
-    if (g_Database == null)
+    if (g_Database == null || !EnsureSteamId(client))
     {
         SendFailedMessage(client);
         return Plugin_Handled;
@@ -611,6 +723,12 @@ public Action Command_ListLoadouts(int client, int args)
 public Action Command_DeleteLoadout(int client, int args)
 {
     if (client < 1 || IsFakeClient(client)) return Plugin_Handled;
+
+    if (!EnsureSteamId(client))
+    {
+        SendFailedMessage(client);
+        return Plugin_Handled;
+    }
 
     if (args < 1)
     {
@@ -662,26 +780,51 @@ public Action Command_InventoryReset(int client, int args)
 // Entity Inspection - Read Loadout from Player
 // =====================================================
 
+// What a player actually spawns with, which is not necessarily mp_supply_token_base.
+//
+// gg2_supply raises m_nRecievedTokens to sm_supply_player_tokens on spawn (100 by default, against
+// a mp_supply_token_base of 10 here), and only ever raises it, so the effective starting supply is
+// the larger of the two. Validating against the cvar alone rejected every loadout costing more than
+// 10 - which is nearly all of them - and did so invisibly, because before gg2_supply has run the
+// two values are equal and the check passes trivially.
+//
+// Looked up lazily rather than in OnPluginStart: gg2_supply may not have created its convar yet
+// when this plugin loads.
+int GetStartingSupply()
+{
+    if (!g_bSupplyPlayerTokensChecked)
+    {
+        g_CvarSupplyPlayerTokens     = FindConVar("sm_supply_player_tokens");
+        g_bSupplyPlayerTokensChecked = true;
+    }
+
+    int starting = g_CvarSupplyTokenBase.IntValue;
+    if (g_CvarSupplyPlayerTokens != null && g_CvarSupplyPlayerTokens.IntValue > starting)
+        starting = g_CvarSupplyPlayerTokens.IntValue;
+
+    return starting;
+}
+
 bool ValidateSupplyPoints(int client)
 {
     if (g_CvarSupplyTokenBase == null) return true;    // Skip validation if convar not found
 
     int availableTokens = GetEntProp(client, Prop_Send, "m_nAvailableTokens");
     int receivedTokens  = GetEntProp(client, Prop_Send, "m_nRecievedTokens");
-    int baseTokens      = g_CvarSupplyTokenBase.IntValue;
+    int startingSupply  = GetStartingSupply();
 
-    // Ensure saved loadout doesn't cost more than base starting supply
-    // If player received bonus tokens (from objectives/kills), those shouldn't be saved
-    // Check: (receivedTokens - baseTokens) represents bonus tokens
-    // If bonus tokens > available tokens, then base loadout costs too much
-    if ((receivedTokens - baseTokens) > availableTokens)
+    // Refuse a loadout the player could not have afforded at spawn - it would only fail to apply
+    // on load. What they have spent is everything received that is no longer available, so bonus
+    // supply earned during the round is what this catches.
+    int spent = receivedTokens - availableTokens;
+    if (spent > startingSupply)
     {
         char message[256];
         g_CvarMsgSupplyError.GetString(message, sizeof(message));
 
-        char baseStr[16];
-        IntToString(baseTokens, baseStr, sizeof(baseStr));
-        ReplaceString(message, sizeof(message), "{1}", baseStr);
+        char startingStr[16];
+        IntToString(startingSupply, startingStr, sizeof(startingStr));
+        ReplaceString(message, sizeof(message), "{1}", startingStr);
 
         CPrintToChat(client, message);
         return false;
@@ -738,7 +881,7 @@ int CollectItems(int client, LoadoutItem[] items, int maxItems)
         for (int i = 0; i < gearCount && count < maxItems; i++)
         {
             int gearId = GetEntProp(client, Prop_Send, "m_EquippedGear", 4, i);
-            if (gearId <= 0) continue;
+            if (gearId <= 0 || gearId == THEATER_ID_NONE) continue;
 
             LoadoutItem item;
             if (!TheaterItem_Name(TheaterCategory_Gear, gearId, item.name, sizeof(item.name)))
@@ -815,7 +958,7 @@ int CollectItems(int client, LoadoutItem[] items, int maxItems)
         for (int u = 0; u < upgradeCount && count < maxItems; u++)
         {
             int upgradeId = GetEntProp(weapon, Prop_Send, "m_upgradeSlots", 4, u);
-            if (upgradeId <= 0) continue;
+            if (upgradeId <= 0 || upgradeId == THEATER_ID_NONE) continue;
 
             LoadoutItem upgrade;
             if (!TheaterItem_Name(TheaterCategory_Upgrade, upgradeId, upgrade.name, sizeof(upgrade.name)))
@@ -934,17 +1077,22 @@ void SaveLoadoutToDatabase(int client, LoadoutItem[] items, int count, const cha
     txn.AddQuery(query);
 
     // The set's natural key, reused by statements 3 and 4.
+    //
+    // Every column is qualified with the "l." alias. Statement 4 joins theater_items, which also has
+    // a "name" column, so an unqualified reference there is ambiguous and Postgres rejects the whole
+    // statement ("column reference \"name\" is ambiguous"). Statement 3 therefore aliases
+    // loadouts_slots as l too, so one selector is valid in both.
     char selector[512];
     if (name[0] == '\0')
-        Format(selector, sizeof(selector), "steam_id = %s AND class_template = '%s' AND name IS NULL",
+        Format(selector, sizeof(selector), "l.steam_id = %s AND l.class_template = '%s' AND l.name IS NULL",
                g_PlayerSteamId[client], escapedClass);
     else
-        Format(selector, sizeof(selector), "steam_id = %s AND name IS NOT NULL AND lower(name) = lower(%s)",
+        Format(selector, sizeof(selector), "l.steam_id = %s AND l.name IS NOT NULL AND lower(l.name) = lower(%s)",
                g_PlayerSteamId[client], nameValue);
 
     // 3. clear the old items
     Format(query, sizeof(query),
-           "DELETE FROM loadout_items WHERE loadout_id = (SELECT id FROM loadouts_slots WHERE %s)", selector);
+           "DELETE FROM loadout_items WHERE loadout_id = (SELECT l.id FROM loadouts_slots l WHERE %s)", selector);
     txn.AddQuery(query);
 
     // 4. the items
@@ -1051,9 +1199,15 @@ public void OnSaveFailure(Database db, DataPack pack, int numQueries, const char
 // Otherwise the named loadout, which may have been saved on any class.
 void LoadPlayerLoadout(int client, bool showMessages, const char[] name)
 {
-    if (g_Database == null)
+    if (g_Database == null || !EnsureSteamId(client))
     {
         if (showMessages) SendFailedMessage(client);
+        return;
+    }
+
+    if (name[0] == '\0' && !ResolvePlayerClass(client))
+    {
+        if (showMessages) CPrintToChat(client, "{red}[Loadout]{default} Select a class first!");
         return;
     }
 
