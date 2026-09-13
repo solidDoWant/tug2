@@ -46,9 +46,23 @@ char   g_sBaseHostname[MAX_HOSTNAME];
 // someone else's and not treat the suffixed name as a new base.
 bool   g_bSelfWrite = false;
 
-// GameRules_GetProp errors if the gamerules entity does not exist yet, which it does not during
-// early map load. A round event having fired is proof that it does.
+// GameRules_GetProp reads through the gamerules entity, and reading before it exists is a native
+// error rather than something recoverable - hence the gate. A round event having fired proves it
+// exists, but waiting for one is not enough on its own: a plugin loaded or reloaded mid-round then
+// advertises round 1 until the round ends, which can be many minutes. RulesReady() probes for the
+// entity directly instead, so a mid-round load corrects the name immediately.
 bool   g_bRulesReady = false;
+
+// Emptying the server resets the round counter, and it does so WITHOUT firing round_start or
+// round_end - so none of the hooks below run and the browser keeps advertising whatever round was in
+// progress when the last player left. The reset also lands after the disconnect rather than during
+// it, so a single immediate update would read the old value; re-check for a few seconds instead.
+// Safe to do on a timer because sv_hibernate_when_empty is 0 here - an empty server keeps ticking.
+#define EMPTY_RECHECK_INTERVAL 1.0
+#define EMPTY_RECHECK_TICKS    6
+
+Handle g_hEmptyCheck = null;
+int    g_iEmptyTicks = 0;
 
 public Plugin myinfo =
 {
@@ -99,6 +113,11 @@ public void OnMapStart()
     // server.cfg re-execs on map change and may reset the hostname, so re-derive the base. The
     // gamerules entity is recreated too, so treat the counter as unavailable until a round event.
     g_bRulesReady = false;
+
+    // TIMER_FLAG_NO_MAPCHANGE already killed the timer; drop the handle so StopEmptyRecheck does not
+    // try to kill it again.
+    g_hEmptyCheck = null;
+
     CaptureBaseHostname();
     UpdateHostname();
 }
@@ -128,6 +147,71 @@ public void Event_Round(Event event, const char[] name, bool dontBroadcast)
 {
     g_bRulesReady = true;
     UpdateHostname();
+}
+
+public void OnClientDisconnect_Post(int client)
+{
+    // Only the transition to empty matters. _Post, so the leaver is already out of the count.
+    if (CountHumans() > 0) return;
+
+    StopEmptyRecheck();
+    g_iEmptyTicks = 0;
+    g_hEmptyCheck = CreateTimer(EMPTY_RECHECK_INTERVAL, Timer_EmptyRecheck, _,
+                                TIMER_REPEAT | TIMER_FLAG_NO_MAPCHANGE);
+}
+
+public void OnClientPutInServer(int client)
+{
+    // Somebody is back, so round events will keep the name current from here.
+    if (!IsFakeClient(client)) StopEmptyRecheck();
+}
+
+public Action Timer_EmptyRecheck(Handle timer)
+{
+    UpdateHostname();
+
+    if (++g_iEmptyTicks >= EMPTY_RECHECK_TICKS || CountHumans() > 0)
+    {
+        g_hEmptyCheck = null;
+        return Plugin_Stop;
+    }
+    return Plugin_Continue;
+}
+
+void StopEmptyRecheck()
+{
+    if (g_hEmptyCheck == null) return;
+
+    KillTimer(g_hEmptyCheck);
+    g_hEmptyCheck = null;
+}
+
+int CountHumans()
+{
+    int n = 0;
+    for (int i = 1; i <= MaxClients; i++)
+        if (IsClientInGame(i) && !IsFakeClient(i)) n++;
+    return n;
+}
+
+// A client actually IN the game is proof the map finished loading, and with it the gamerules entity
+// that GameRules_GetProp reads through. That is the whole test.
+//
+// Looking the entity up directly would be more precise and was tried first - ins_gamerules_data is
+// the only gamerules classname in server.so, and it is what the engine's "game rules entity (%s) not
+// created" message names - but FindEntityByClassname does not resolve it on this build, verified
+// live: the gate stayed shut and the hostname kept reporting round 1 with the cap suffix missing.
+//
+// Once true this stays true for the map, which is what makes the empty-server case work: by the time
+// the last player leaves, a round event or their own presence has already opened the gate, so the
+// re-check below can still read the counter with nobody connected. A fresh map with nobody on it
+// reports round 1, which is correct anyway.
+bool RulesReady()
+{
+    if (g_bRulesReady) return true;
+
+    g_bRulesReady = (GetClientCount(true) > 0);
+    return g_bRulesReady;
 }
 
 void CaptureBaseHostname()
@@ -204,7 +288,7 @@ void BuildCapSuffix(char[] buffer, int maxlen)
 {
     buffer[0] = '\0';
 
-    if (!g_cvShowCaps.BoolValue || !g_bRulesReady) return;
+    if (!g_cvShowCaps.BoolValue || !RulesReady()) return;
     if (GetFeatureStatus(FeatureType_Native, "Ins_ObjectiveResource_GetProp") != FeatureStatus_Available) return;
 
     int total = Ins_ObjectiveResource_GetProp("m_iNumControlPoints");
@@ -230,7 +314,7 @@ void UpdateHostname()
 
     // m_iRoundPlayedCount counts rounds FINISHED, so the one being played is that plus one.
     int current = 1;
-    if (g_bRulesReady)
+    if (RulesReady())
     {
         current = GameRules_GetProp("m_iRoundPlayedCount") + 1;
     }
@@ -246,6 +330,12 @@ void UpdateHostname()
     char decorated[MAX_HOSTNAME];
     if (maxRounds > 0) Format(decorated, sizeof(decorated), "%s (%d/%d)%s", g_sBaseHostname, current, maxRounds, caps);
     else               Format(decorated, sizeof(decorated), "%s (%d)%s", g_sBaseHostname, current, caps);
+
+    // Skip the write when nothing changed. The empty-server re-check calls this repeatedly, and
+    // rewriting an identical hostname is pointless churn on a replicated convar.
+    char currentName[MAX_HOSTNAME];
+    g_cvHostname.GetString(currentName, sizeof(currentName));
+    if (StrEqual(currentName, decorated)) return;
 
     g_bSelfWrite = true;
     g_cvHostname.SetString(decorated);
