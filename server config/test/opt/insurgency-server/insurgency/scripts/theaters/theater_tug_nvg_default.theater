@@ -1243,37 +1243,59 @@
 	// are each unique within their parent. Only that one field is replaced; models, fov, cost and
 	// everything else are inherited untouched.
 	// ---------------------------------------------------------------------------
-	// Night vision out of the accessory slot
+	// Slings out of the accessory slot, night vision left in it
 	// ---------------------------------------------------------------------------
-	// TUG's gear file puts sec_nightvision in "accessory", which is also where all three slings
-	// live - so buying NVGs costs a player their sling. gear slots hold exactly one item each
-	// (there is no gear equivalent of weapon_max_subslot), so the only fix is a different slot.
+	// TUG's gear file puts sec_nightvision AND all three slings in "accessory", and a gear slot
+	// holds exactly one item (there is no gear equivalent of weapon_max_subslot), so buying NVGs
+	// costs a player their sling. Something has to move.
 	//
-	// The engine's gear-slot enum has seven values - armor, vest, accessory, backpack, misc1,
-	// misc2, weapon_upgrade - read out of the server binary's string table. Nothing in any content
-	// uses the last four: not TUG, not the workshop, not Valve's own theaters.
+	// It has to be the slings. "accessory" is the only gear slot the game can activate: the client
+	// registers exactly one gear-use command, +use_accessory - "Toggle Player Accessory" - and there
+	// is no +use_misc1 or +use_misc2 anywhere in client.so. gear_misc1 and gear_misc2 exist there
+	// only as inventory UI panel names. Anything needing a keypress is unusable outside "accessory",
+	// which is what moving the NVGs out got wrong: they could be bought and never switched on.
 	//
-	// They are real all the same. The client's inventory UI defines a CInventoryGearSlot panel for
-	// each of gear_accessory (Slot 3), gear_backpack (4), gear_misc1 (5) and gear_misc2 (6), all
-	// with identical geometry and all shipping "visible" "0". accessory ships hidden too and works
-	// fine, so visibility is driven by the UI code from what the theater offers, not by that flag -
-	// which is what makes misc1 likely to behave exactly like accessory does.
+	// The slings do not care. Each one's whole effect is a weapon_slots modifier applied when it is
+	// equipped - primary 1, secondary 1, or primary -1 / secondary 2 - with no entity and nothing to
+	// toggle, so a slot with no key costs them nothing.
 	//
-	// UNVERIFIED: no localisation token for a misc1 category label was found in the game files, so
-	// the category may render unlabelled. If the slot does not appear at all, revert this block -
-	// the fallback is to stop making NVGs a purchasable item and grant them on spawn, which costs
-	// no slot at all. sec_nightvision is already gear_cost 0 / gear_weight 0, so nothing about it
-	// is meant to be a trade-off.
+	// misc1 is a real slot, not an invention. The server's gear_slot name-to-index table (7 entries at
+	// .data.rel.ro+0xbed880, read by the converter at 0x29e940) is exactly:
 	//
-	// Safe as a partial block: #base merges by child NAME, and "player_gear", "sec_nightvision"
-	// and "gear_slot" are each unique within their parent. Only that one field is replaced; the
-	// model, entity and the whole settings block are inherited untouched.
+	//     armor 0   head 1   vest 2   accessory 3   backpack 4   misc1 5   misc2 6
 	//
-	// ins_nightvision is deliberately NOT moved. It is the insurgent item, and insurgents are bots
-	// in checkpoint, so it costs a human nothing.
+	// An unrecognised name returns -1 from that converter and would be used as an array subscript, so
+	// the spelling matters; "misc1" resolves to 5. Nothing in any content uses head, backpack, misc1
+	// or misc2 - not TUG, not the workshop, not Valve's own theaters - but the client's inventory UI
+	// defines a CInventoryGearSlot panel for each, and misc1 renders: GEAR_SLOT_MISC1 in this repo's
+	// localisation is the label it asks for.
+	//
+	// The bonus applies from misc1. CPlayerInventory::GetWeaponSlotCapacity (0x2cf7b0) starts at 1 and
+	// walks m_EquippedGear[0..6] unconditionally - "cmp $0x7" is the loop bound - adding each equipped
+	// item's weaponSlotBonus[weaponSlot] from gearDef+0x49c. The gear slot is only ever an array
+	// subscript there; nothing compares it against accessory. The purchase-time check at 0x2cff3b uses
+	// it the same way, plus a per-slot lock byte at inventory+0x2c that comes from the theater's
+	// locked_gear_slots - which no theater here sets, so no slot is locked.
+	//
+	// Safe as a partial block: #base merges by child NAME, and "player_gear", each gear name and
+	// "gear_slot" are each unique within their parent. Only that one field is replaced per item;
+	// print names, costs, weights and each sling's weapon_slots block are inherited untouched.
+	//
+	// sec_nightvision is deliberately absent here - it stays where TUG puts it, in "accessory".
+	// ins_nightvision likewise: it is the insurgent item and insurgents are bots in checkpoint.
 	"player_gear"
 	{
-		"sec_nightvision"
+		"primary_sling"
+		{
+			"gear_slot"					"misc1"
+		}
+
+		"secondary_sling"
+		{
+			"gear_slot"					"misc1"
+		}
+
+		"secondary2_sling"
 		{
 			"gear_slot"					"misc1"
 		}

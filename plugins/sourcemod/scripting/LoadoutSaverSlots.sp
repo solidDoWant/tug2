@@ -16,8 +16,9 @@
 //   m_EquippedGear   7 entries, read as 6  - the 7th gear slot is dropped
 //   m_upgradeSlots  10 entries, read as 8  - the last two upgrades on every weapon are dropped
 //
-// Both counts are confirmed from the server's own send table, and the gear one matters right now:
-// the NVG "misc1" slot this repo adds is exactly the kind of item that lands past the old bound.
+// Both counts are confirmed from the server's own send table. This version takes each bound from
+// GetEntPropArraySize rather than a #define, so it covers whichever slots a theater actually uses -
+// which matters here, because this repo puts gear in "misc1", a slot no stock content touches.
 //
 // This version walks m_hMyWeapons instead, asks each weapon for its real slot through
 // CBaseCombatWeapon::GetSlot (a plain virtual, offset already in insurgency.games.txt), and takes
