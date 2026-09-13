@@ -264,6 +264,46 @@
 //2777062809 //gioconda_eron_market checkpoint 79MB
 //2886400751 //gioconda_eron_sandhill checkpoint 90.482 MB
 
+// ============================================================================
+// NEW 2026-09-13 - popular co-op workshop maps, not previously on any TUG list
+// ============================================================================
+// Found by sweeping the five co-op mode tags (checkpoint/hunt/outpost/survival/
+// conquer) on the Workshop by all-time subscribers, then diffing against every
+// subscribed_file_ids.txt in this repo by map NAME as well as by ID.
+// Mode lists are each item's own Workshop mode tags.
+// No companion asset items exist for any of these; the two shared assets they
+// use (l4d2 soundscapes 2169963412, custom-map navmesh 2327421432) are already
+// subscribed above.
+// Adds 2.58 GB of downloads.
+
+// multi-mode
+841479518 // khe_sanh checkpoint/hunt/survival/conquer 394.378 MB
+852587108 // khe_sanh_night checkpoint/hunt/survival/conquer 396.393 MB
+863961825 // hastings checkpoint/hunt/survival/conquer 231.666 MB
+878666586 // la_drang checkpoint/hunt/outpost/conquer 290.448 MB
+383525894 // khanashin_b8 checkpoint/hunt 147.201 MB
+504080476 // cargo_redux9 checkpoint/hunt 143.434 MB
+395001767 // ramadi_b5 hunt 132.714 MB
+505775175 // skyscraper_redux_v1 hunt 13.714 MB
+
+// checkpoint-only
+248148672 // anbar_coop checkpoint 54.062 MB
+1207457291 // cs_italy_coop checkpoint 167.856 MB
+599730897 // dust2_checkpoint_b8 checkpoint 117.550 MB
+498252536 // invasion_coop_ws checkpoint 89.634 MB
+1264090927 // l4d_airport_terminal_b3 checkpoint 110.064 MB
+498253639 // amber_spirits_coop checkpoint 69.215 MB
+352148389 // angle_iron_coop_ws checkpoint 47.554 MB
+// DISABLED 2026-09-13 - this is a legacy (HTTP) workshop item: steamcmd fetches it as a bare
+// 46500246299846079_legacy.bin rather than an unpacked maps/ tree. Legacy items hang the
+// server's runtime UGC downloader - it logs "legacy (HTTP) item up to date!", then polls
+// "progress: 100.00%" forever without firing the completion callback, so every item queued
+// behind it never downloads. Same failure as 378779393 below. Not subscribable here; it
+// would need repackaging as a modern item or delivery over FastDL.
+//395457916 // desert_warfare_vehicles_coop_ws checkpoint 75.878 MB
+1217898298 // l4d_mercy_hospital_b5 checkpoint 139.172 MB
+672667761 // chateau_tunnels_v3 checkpoint 22.102 MB
+
 // TEST SERVER ONLY //
 // The custom theaters, also shipped loose in this image under scripts/theaters/. Clients need
 // a byte-identical copy or they are refused at connect: theater files are covered by

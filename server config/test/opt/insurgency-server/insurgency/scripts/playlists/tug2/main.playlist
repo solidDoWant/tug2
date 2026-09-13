@@ -166,6 +166,52 @@
 		"trenches6_coop_v1_2"			"checkpoint"
 		"warehouse_coopv3b4"			"checkpoint"
 		"zagros_convoy_b5"			"checkpoint"
+
+		// ---- NEW 2026-09-13: popular co-op workshop maps (see mapcycle.txt) ----
+		// Nine of the checkpoint entries are checkpoint-only maps, added as new
+		// additions rather than multi-mode-rule exemptions.
+
+		// ---- new / checkpoint (15) ----
+		"khe_sanh"			"checkpoint"
+		"khe_sanh_night"		"checkpoint"
+		"hastings"			"checkpoint"
+		"la_drang"			"checkpoint"
+		"khanashin_b8"			"checkpoint"
+		"cargo_redux9"			"checkpoint"
+		"anbar_coop"			"checkpoint"
+		"cs_italy_coop"			"checkpoint"
+		"dust2_checkpoint_b8"		"checkpoint"
+		"invasion_coop_ws"		"checkpoint"
+		"l4d_airport_terminal_b3"	"checkpoint"
+		"amber_spirits_coop"		"checkpoint"
+		"angle_iron_coop_ws"		"checkpoint"
+		//"desert_warfare_vehicles_coop_ws"	"checkpoint"  // legacy HTTP item, cannot be subscribed
+		"l4d_mercy_hospital_b5"		"checkpoint"
+		"chateau_tunnels_v3"		"checkpoint"
+
+		// ---- new / hunt (8) ----
+		"khe_sanh"			"hunt"
+		"khe_sanh_night"		"hunt"
+		"hastings"			"hunt"
+		"la_drang"			"hunt"
+		"khanashin_b8"			"hunt"
+		"cargo_redux9"			"hunt"
+		"ramadi_b5"			"hunt"
+		"skyscraper_redux_v1"		"hunt"
+
+		// ---- new / conquer (4) ----
+		"khe_sanh"			"conquer"
+		"khe_sanh_night"		"conquer"
+		"hastings"			"conquer"
+		"la_drang"			"conquer"
+
+		// ---- new / survival (3) ----
+		"khe_sanh"			"survival"
+		"khe_sanh_night"		"survival"
+		"hastings"			"survival"
+
+		// ---- new / outpost (1) ----
+		"la_drang"			"outpost"
 	}
 	
 	"cvars"
