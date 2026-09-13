@@ -184,9 +184,11 @@ RUN \
 FROM sourcemod-plugins-base AS sourcemod-plugins-counterattack-countdown
 
 # Build the counter attack countdown plugin
-RUN --mount=type=bind,source=./plugins/sourcemod/scripting/include,target=/plugin-source/scripting/include \
-    curl -fsSL -o /plugin-source/ca_countdown.sp https://raw.githubusercontent.com/NullifidianSF/insurgency_public/e6eb683a6ba407b5bba29b74817e0c0bcb9d6a0c/addons/sourcemod/scripting/ca_countdown.sp && \
-    /sourcemod/addons/sourcemod/scripting/spcomp /plugin-source/ca_countdown.sp -i /plugin-source/scripting/include -o /insurgency/addons/sourcemod/plugins/ca_countdown.smx && \
+# Built from the VENDORED copy in this repo, not curl'd from upstream any more. Upstream had no
+# gamemode gate, so the countdown announced a checkpoint counterattack in hunt too - the file header
+# records the upstream URL and the commit it was forked at. Re-fetching would silently undo the fix.
+RUN --mount=type=bind,source=./plugins/sourcemod/scripting,target=/plugin-source/scripting \
+    /sourcemod/addons/sourcemod/scripting/spcomp /plugin-source/scripting/ca_countdown.sp -i /plugin-source/scripting/include -o /insurgency/addons/sourcemod/plugins/ca_countdown.smx && \
     # Fixup file permissions
     find /insurgency -type d -exec chmod 755 {} \;
 
