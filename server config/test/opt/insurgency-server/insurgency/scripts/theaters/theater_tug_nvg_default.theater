@@ -1418,13 +1418,107 @@
 
 	"weapons"
 	{
+		// Shared definition for the three signal/marker grenades.
+		//
+		// WHY A BASE, AND WHY FULL DEFINITIONS
+		//
+		// These cannot be written as partial overrides of TUG's. KeyValues allows duplicate keys, so
+		// after the #base above there are two children of each name - TUG's, then ours - and the
+		// parser registers each in turn with the later winning. A one-field block therefore REPLACES
+		// the definition with a stub that has no import and no ammo_type, and a weapon with no ammo
+		// type is unusable: it spawns with m_iPrimaryAmmoType 255 and ammo 0 (same as the knife), the
+		// deploy finds nothing to equip, and the player is left holding nothing. Measured on the test
+		// server: the rifle holsters, snaps back, holsters again, and no grenade ever appears.
+		// Reproduced with one marker and with two, so the count was never involved.
+		//
+		// "IsBase" "1" is what keeps a definition from being buyable - see TUG's weapon_grenade_base.
+		//
+		// weapon_max_subslot is 2 here (TUG ships 0). That is one of two gates; the other is "carry"
+		// in the "ammo" section above. Both are needed to actually hold two.
+		//
+		// Each weapon below repeats its own "explosives" and "ammo_clip" blocks in full rather than
+		// adding one key to an inherited block, because whether import merges NESTED blocks or
+		// replaces them is not established - and assuming merge semantics is exactly what caused the
+		// bug above. Everything genuinely shared lives here.
+		"weapon_m18_signal_base"
+		{
+			"IsBase"					"1"
+			"import"					"weapon_grenade_base"
+			"weapon_class"				"grenade_smoke"
+			"weapon_type"				"grenade"
+			"weapon_slot"				"explosive"
+			"weapon_max_subslot"		"2"
+			"act_table"					"grenade"
+			"weapon_weight"				"0"
+			"weapon_cost"				"1"
+			"class_restricted"			"1"
+
+			"fov"
+			{
+				"fov_wpn_default"		"65"
+			}
+
+			"sounds"
+			{
+				"special1"				"Weapon_M67.SpoonEject"
+			}
+
+			"third_person"
+			{
+				"reticle"				"ss_crosshairs/smoke_grenade"
+				"scope_first_person"	"1"
+
+				"recoil_frac_aim"		"0.08"
+				"recoil_frac_cam_pitch"	"0.04"
+				"recoil_frac_cam_yaw"	"0.06"
+
+				"spread_frac_speed"		"1.0"
+				"spread_frac_spray"		"0.2"
+			}
+		}
+
 		"weapon_m18_us"
 		{
-			"weapon_max_subslot"		"2"
+			"import"					"weapon_m18_signal_base"
+			"print_name"				"#weapon_m18_us"
+			"print_desc"				"#weapon_m18_us_desc"
+			"view_model"				"models/tug/v_m18.mdl"
+			"world_model"				"models/tug/w_m18.mdl"
+
+			"explosives"
+			{
+				"entity"				"grenade_m18_us"
+			}
+			"ammo_clip"
+			{
+				"ammo_type"				"grenade_m18_us"
+				"clip_max_rounds"		"-1"
+				"clip_default"			"1"
+			}
+
+			"team_access"				"security"
 		}
+
 		"weapon_m18_ins"
 		{
-			"weapon_max_subslot"		"2"
+			"import"					"weapon_m18_signal_base"
+			"print_name"				"#weapon_m18_ins"
+			"print_desc"				"#weapon_m18_ins_desc"
+			"view_model"				"models/tug/v_m18_ins.mdl"
+			"world_model"				"models/tug/w_m18_ins.mdl"
+
+			"explosives"
+			{
+				"entity"				"grenade_m18_ins"
+			}
+			"ammo_clip"
+			{
+				"ammo_type"				"grenade_m18_ins"
+				"clip_max_rounds"		"-1"
+				"clip_default"			"1"
+			}
+
+			"team_access"				"insurgent"
 		}
 
 		// The WP marker. FireSupport picks a support type by testing the HELD weapon's classname
@@ -1434,9 +1528,7 @@
 		// Renaming either one means rechecking that.
 		"weapon_m18_wp_us"
 		{
-			"import"					"weapon_grenade_base"
-			"weapon_class"				"grenade_smoke"
-			"weapon_type"				"grenade"
+			"import"					"weapon_m18_signal_base"
 			"print_name"				"#weapon_m18_wp_us"
 			"print_desc"				"#weapon_m18_wp_us_desc"
 
@@ -1451,17 +1543,7 @@
 			// by offset, so a length change there corrupts the file silently.
 			"view_model"				"@@PATH(mdl,v_m18.mdl)@@"
 			"world_model"				"@@PATH(mdl,w_m18.mdl)@@"
-			"weapon_slot"				"explosive"
-			"weapon_max_subslot"		"2"
-			"act_table"					"grenade"
-			"weapon_weight"				"0"
-			"weapon_cost"				"1"
-			"class_restricted"			"1"
 
-			"fov"
-			{
-				"fov_wpn_default"		"65"
-			}
 
 			"explosives"
 			{
@@ -1474,10 +1556,6 @@
 				"clip_default"			"1"
 			}
 
-			"sounds"
-			{
-				"special1"				"Weapon_M67.SpoonEject"
-			}
 
 			"team_access"				"security"
 		}
