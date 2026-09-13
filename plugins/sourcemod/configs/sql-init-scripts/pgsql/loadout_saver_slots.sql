@@ -64,14 +64,26 @@ CREATE TABLE IF NOT EXISTS loadouts_slots (
 --
 -- Sub-slot is deliberately not stored. The buy passes -1 for it, meaning "next free", so position
 -- within a slot follows from ordinal alone.
+--
+-- quantity is how many TIMES the item was bought, not how many rounds the player ended up holding.
+-- Those differ: a grenade with "clip_max_rounds" "-1" stacks into ONE weapon entity whose count
+-- lives in reserve ammo, and a single purchase can grant several rounds (weapon_m79_napalm being
+-- the obvious case). Storing purchases means the apply path just replays the buy that many times
+-- and the theater decides what each one grants - so a theater that changes clip_default does not
+-- silently change what a saved loadout restores. 1 for everything that is bought once.
 CREATE TABLE IF NOT EXISTS loadout_items (
     loadout_id BIGINT NOT NULL REFERENCES loadouts_slots(id) ON DELETE CASCADE,
     ordinal SMALLINT NOT NULL,
     item_id BIGINT NOT NULL REFERENCES theater_items(id),
     slot SMALLINT,
     parent_ordinal SMALLINT,
+    quantity SMALLINT NOT NULL DEFAULT 1,
     PRIMARY KEY (loadout_id, ordinal)
 );
+
+-- Added after the table shipped. Existing rows were all single purchases, which is what the default
+-- gives them, so no backfill is needed.
+ALTER TABLE loadout_items ADD COLUMN IF NOT EXISTS quantity SMALLINT NOT NULL DEFAULT 1;
 
 -- =====================================================
 -- Indexes

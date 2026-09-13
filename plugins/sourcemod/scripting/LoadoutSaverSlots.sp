@@ -20,10 +20,12 @@
 // GetEntPropArraySize rather than a #define, so it covers whichever slots a theater actually uses -
 // which matters here, because this repo puts gear in "misc1", a slot no stock content touches.
 //
-// This version walks m_hMyWeapons instead, asks each weapon for its real slot through
-// CBaseCombatWeapon::GetSlot (a plain virtual, offset already in insurgency.games.txt), and takes
-// both array lengths from the send table rather than a #define. Every item a player is holding is
-// saved whatever slot the theater invented for it.
+// This version reads the purchase list - m_WeaponPurchases - as its first source, and only falls back
+// to walking m_hMyWeapons when that is empty. The purchase list records one entry per buy with its
+// slot, sub-slot and upgrade ids, so it sees things the entity view cannot: a stack of grenades is one
+// entity however many are held, and entities are not handed out until the next spawn, so a save taken
+// between a buy and that spawn read the previous loadout. Array lengths come from the send table
+// rather than a #define, so every item is saved whatever slot the theater invented for it.
 //
 // STORAGE
 //
@@ -94,6 +96,7 @@ StringMap g_ClassByHandle = null;
 float    g_LastSaveTime[MAXPLAYERS + 1];
 float    g_LastLoadTime[MAXPLAYERS + 1];
 
+
 // ConVars
 ConVar   g_CvarMsgSaved;
 ConVar   g_CvarMsgCleared;
@@ -106,6 +109,7 @@ ConVar   g_CvarLoadCooldown;
 ConVar   g_CvarMaxNamed;
 ConVar   g_CvarNamedCrossClass;
 ConVar   g_CvarSkipSlots;
+ConVar   g_CvarDebug;
 
 // Netprop offsets
 int      g_EquippedGearOffset;
@@ -118,20 +122,57 @@ Handle   g_hGetSlot = null;
 // every weapon claiming slot 0 would be worse than no loadout at all, so saving is refused instead.
 bool     g_SlotsAvailable = false;
 
-// m_PlayerInventory.inventory_local.m_WeaponPurchases - the list inventory_buy_upgrade indexes into.
-// Read directly, because there is no other way to learn which index a weapon just landed at.
+// m_WeaponPurchases - one entry per weapon BOUGHT, which is the only place a stack of grenades is
+// still several things. It is a CUtlVector<CPlayerWeaponPurchase> at CPlayerInventory + 0x34, and it
+// has to be read through that vector rather than through the send table.
 //
-// Each entry is a CPlayerWeaponPurchase, 56 bytes (the stride PurchaseWeapon itself uses:
-// "imul ecx, edx, 0x38"), holding { m_hWeapon, m_hUpgrades[10], m_iSlot, m_iSubSlot }. SourceMod
-// hands back the offset of element 0's members only, so the rest is offset arithmetic - guarded by
-// a layout check in SetupPurchaseList, which disables the lookup rather than reading nonsense.
+// WHY NOT THE SEND TABLE
+//
+// Everything under m_PlayerInventory sits behind a datatable proxy, and a proxy table reports offset
+// 0, so FindSendPropInfo returns "m_PlayerInventory + local offset" for every prop nested under it
+// regardless of which proxy it belongs to. Measured on this build:
+//
+//     m_PlayerInventory   7660
+//     m_hWeapon           7664  (base +4)     m_iSlot     7708  (base +48)
+//     m_nAvailableTokens  7668  (base +8)     m_iSubSlot  7712  (base +52)
+//     m_EquippedGear      7676  (base +16)
+//
+// m_nAvailableTokens and m_EquippedGear fall inside what a 56 byte entry at 7660 would occupy, so
+// those offsets cannot all describe real memory. Walking them as an array reads the token counts and
+// the gear array and calls the result a purchase list. A delta check between the three passes anyway,
+// because they are consistent with each other - it is not evidence that the base is right.
+//
+// WHERE THE NUMBERS COME FROM
+//
+// The SendPropUtlVector registration for "m_WeaponPurchases" (0x2ccc80 in server.so) carries all
+// three as immediates:
+//
+//     movl $0x34   offset of the CUtlVector inside CPlayerInventory   = 52
+//     movl $0x38   sizeof(CPlayerWeaponPurchase)                      = 56
+//     movl $0xc    max elements                                       = 12
+//
+// The stride also matches PurchaseWeapon's own "imul ecx, edx, 0x38", which is what makes the offset
+// trustworthy. CPlayerInventory is derived from a prop whose local offset is known and cross-checked
+// against a second one - see SetupInventoryOffset.
+//
+// ENTRY LAYOUT, confirmed against a live player
+//
+// CPlayerWeaponPurchase is polymorphic, so +0 is the vtable pointer and reads as the same value in
+// every entry. +4 is named m_hWeapon but holds the weapon DEFINITION id - the same 7-bit value as
+// m_hWeaponDefinitionHandle on the entity, verified by every entry matching a carried weapon
+// (0x4c -> 76 -> weapon_m4a1sopmod). There is no entity handle in the struct.
 #define PURCHASE_STRIDE       56
 #define PURCHASE_MAX_ENTRIES  12
-#define PURCHASE_SLOT_DELTA   44    // m_iSlot    - m_hWeapon
-#define PURCHASE_SUB_DELTA    48    // m_iSubSlot - m_hWeapon
+#define INV_VECTOR_OFFSET     0x34    // CUtlVector<CPlayerWeaponPurchase> within CPlayerInventory
+#define UTLVEC_MEMORY         0x00    // T* m_Memory.m_pMemory
+#define UTLVEC_SIZE           0x0c    // int m_Size
+#define PURCHASE_WEAPON       0x04    // weapon definition id
+#define PURCHASE_UPGRADES     0x08    // int[10] upgrade ids
+#define PURCHASE_SLOT         0x30
+#define PURCHASE_SUBSLOT      0x34
+#define MIN_POINTER           0x10000
 
-int      g_PurchaseWeaponOffset  = -1;
-bool     g_PurchaseListAvailable = false;
+int      g_InventoryOffset = -1;
 
 // Supply point tracking
 ConVar   g_CvarSupplyTokenBase;
@@ -156,11 +197,22 @@ enum struct LoadoutItem
     char name[ITEM_NAME_SIZE];
     int  slot;
     int  parent;
+    // How many times this was BOUGHT, not how many rounds it yielded - see quantity in
+    // loadout_saver_slots.sql. Always 1 for gear and upgrades.
+    int  quantity;
 }
 
 // Named loadouts. The name is what the player types, so it is kept short enough to stay readable
 // in chat and to fit the VARCHAR(64) column with room to spare.
 #define MAX_LOADOUT_NAME    40
+// The last load that did not fully apply, so a save cannot quietly overwrite the set it came from.
+// Losing items on load is recoverable - the stored set is still right - but saving afterwards writes
+// the truncated result back and the original is gone. That has already happened once: a load short
+// of supply dropped two explosives, the next !savelo recorded what was left, and the set has been
+// wrong ever since.
+int      g_LastLoadDropped[MAXPLAYERS + 1];
+char     g_LastLoadName[MAXPLAYERS + 1][MAX_LOADOUT_NAME + 1];
+bool     g_OverwriteConfirmed[MAXPLAYERS + 1];
 #define NAMED_LOADOUT_CAP   15
 
 // Game limits. Upper bounds only - the real counts come from the send table at runtime
@@ -216,6 +268,10 @@ public void OnPluginStart()
     // anything else, so re-buying it is symmetric and costs what it originally cost.
     g_CvarSkipSlots       = CreateConVar("sm_loadout_skip_slots", "2", "Comma-separated weapon slots to leave out of saved loadouts. Defaults to 2 (melee), which inventory_sell_all never sells and so must not be re-bought.");
 
+    // Logs the supply and slot position of every buy the apply path makes. Off by default; the only
+    // way to tell an item refused for cost from one refused for the class is to watch it happen.
+    g_CvarDebug = CreateConVar("sm_loadout_debug", "0", "Log every purchase the apply path makes, with supply before and after.", _, true, 0.0, true, 1.0);
+
     AutoExecConfig(true, "plugin.loadoutsaverslots");
 
     // Register commands
@@ -223,6 +279,9 @@ public void OnPluginStart()
     RegConsoleCmd("sm_clearlo", Command_ClearLoadout, "Clear this class's saved loadout (use 'all' for every class)");
     RegConsoleCmd("sm_loadlo", Command_LoadLoadout, "Load this class's saved loadout, or a named one: sm_loadlo <name>");
     RegConsoleCmd("inventory_reset", Command_InventoryReset, "Hook reset button to load saved loadout");
+
+    RegAdminCmd("sm_loadout_dumppurchases", Command_DumpPurchases, ADMFLAG_CONFIG,
+                "sm_loadout_dumppurchases [#userid|name] - print the raw purchase list for a player");
 
     // Named loadout management. Several spellings each, matching how the existing commands are
     // abbreviated, so players do not have to guess which one this server uses.
@@ -248,7 +307,7 @@ public void OnPluginStart()
         SetFailState("Failed to find m_EquippedGear offset!");
 
     SetupGetSlot();
-    SetupPurchaseList();
+    SetupInventoryOffset();
 
     // Get supply token base convar
     g_CvarSupplyTokenBase = FindConVar("mp_supply_token_base");
@@ -305,46 +364,69 @@ void SetupGetSlot()
 //
 // The check is the point: if a game update moves these members, the deltas stop matching and the
 // lookup switches itself off instead of reading whatever happens to sit at those addresses.
-void SetupPurchaseList()
+// Absolute offset of m_PlayerInventory, derived twice and only accepted if both agree.
+// m_nAvailableTokens is at +8 of inventory_local and m_EquippedGear at +16, both read off the send
+// table dump, and inventory_local sits at +0 of m_PlayerInventory.
+void SetupInventoryOffset()
 {
-    g_PurchaseWeaponOffset = FindSendPropInfo("CINSPlayer", "m_hWeapon");
-    int slotOffset         = FindSendPropInfo("CINSPlayer", "m_iSlot");
-    int subSlotOffset      = FindSendPropInfo("CINSPlayer", "m_iSubSlot");
+    int fromTokens = FindSendPropInfo("CINSPlayer", "m_nAvailableTokens");
+    int fromGear   = FindSendPropInfo("CINSPlayer", "m_EquippedGear");
 
-    if (g_PurchaseWeaponOffset <= 0 || slotOffset <= 0 || subSlotOffset <= 0)
+    if (fromTokens <= 0 || fromGear <= 0)
     {
-        LogError("Weapon purchase list not found in the send table - upgrades will use positional indices");
+        LogError("[LoadoutSaver] cannot locate m_PlayerInventory - purchase list unavailable");
         return;
     }
 
-    if (slotOffset - g_PurchaseWeaponOffset != PURCHASE_SLOT_DELTA
-        || subSlotOffset - g_PurchaseWeaponOffset != PURCHASE_SUB_DELTA)
+    if (fromTokens - 8 != fromGear - 16)
     {
-        LogError("Weapon purchase list is laid out unexpectedly (slot +%d, subslot +%d) - upgrades will use positional indices",
-                 slotOffset - g_PurchaseWeaponOffset, subSlotOffset - g_PurchaseWeaponOffset);
+        LogError("[LoadoutSaver] m_PlayerInventory disagrees (%d vs %d) - purchase list unavailable",
+                 fromTokens - 8, fromGear - 16);
         return;
     }
 
-    g_PurchaseListAvailable = true;
+    g_InventoryOffset = fromTokens - 8;
+    LogMessage("[LoadoutSaver] m_PlayerInventory at +%d, purchase vector at +%d",
+               g_InventoryOffset, g_InventoryOffset + INV_VECTOR_OFFSET);
+}
+
+// The purchase list as {count, base address}, or count 0 if it cannot be read safely.
+int GetPurchaseList(int client, Address &base)
+{
+    base = Address_Null;
+    if (g_InventoryOffset < 0) return 0;
+
+    int vec = g_InventoryOffset + INV_VECTOR_OFFSET;
+    int ptr = GetEntData(client, vec + UTLVEC_MEMORY);
+    int n   = GetEntData(client, vec + UTLVEC_SIZE);
+
+    // Never dereference anything unchecked: a wrong offset here takes the server down rather than
+    // returning nonsense. A real list is a plausible pointer and at most the networked element count.
+    if (ptr < MIN_POINTER || n <= 0 || n > PURCHASE_MAX_ENTRIES) return 0;
+
+    base = view_as<Address>(ptr);
+    return n;
 }
 
 // The index inventory_buy_upgrade wants for the weapon just bought, or -1 if it cannot be found.
 //
-// Called straight after the buy, so the newest entry for this definition is the one that just
-// landed - hence the backwards scan. `claimed` rules out entries already handed to an earlier item,
-// which is what keeps two of the same weapon in different sub-slots from both resolving to one
-// entry. It cannot simply skip everything below the last index used: PurchaseWeapon inserts to keep
-// the list in slot order rather than appending, so a later buy can land at a lower index.
+// Called straight after the buy, so the newest entry for this definition is the one that just landed -
+// hence the backwards scan. `claimed` rules out entries already handed to an earlier item, which is
+// what keeps two of the same weapon in different sub-slots from both resolving to one entry. It cannot
+// simply skip everything below the last index used: PurchaseWeapon inserts to keep the list in slot
+// order rather than appending, so a later buy can land at a lower index.
 int FindPurchaseIndex(int client, int weaponDef, bool[] claimed)
 {
-    if (!g_PurchaseListAvailable) return -1;
+    Address base;
+    int count = GetPurchaseList(client, base);
+    if (count <= 0) return -1;
 
-    for (int i = PURCHASE_MAX_ENTRIES - 1; i >= 0; i--)
+    for (int i = count - 1; i >= 0; i--)
     {
         if (claimed[i]) continue;
 
-        int base = g_PurchaseWeaponOffset + i * PURCHASE_STRIDE;
-        if (GetEntData(client, base) != weaponDef) continue;
+        Address e = base + view_as<Address>(i * PURCHASE_STRIDE + PURCHASE_WEAPON);
+        if (LoadFromAddress(e, NumberType_Int32) != weaponDef) continue;
 
         claimed[i] = true;
         return i;
@@ -366,6 +448,9 @@ public void OnClientAuthorized(int client, const char[] auth)
     g_PlayerCurrentClass[client][0] = '\0';
     g_LastSaveTime[client]          = 0.0;
     g_LastLoadTime[client]          = 0.0;
+    g_LastLoadDropped[client]       = 0;
+    g_LastLoadName[client][0]       = '\0';
+    g_OverwriteConfirmed[client]    = false;
 
     // Update last_seen_at
     if (g_Database != null)
@@ -380,6 +465,9 @@ public void OnClientDisconnect(int client)
     g_PlayerCurrentClass[client][0] = '\0';
     g_LastSaveTime[client]          = 0.0;
     g_LastLoadTime[client]          = 0.0;
+    g_LastLoadDropped[client]       = 0;
+    g_LastLoadName[client][0]       = '\0';
+    g_OverwriteConfirmed[client]    = false;
 }
 
 // =====================================================
@@ -569,6 +657,25 @@ public Action Command_SaveLoadout(int client, int args)
     char name[MAX_LOADOUT_NAME + 1];
     if (!ReadLoadoutName(client, args, name, sizeof(name))) return Plugin_Handled;
 
+    // Refuse the save that would destroy the set the player just failed to load, and say why. The
+    // second attempt goes through, so this costs one extra command when overwriting really is meant
+    // and prevents silent data loss when it is not.
+    if (g_LastLoadDropped[client] > 0 && StrEqual(name, g_LastLoadName[client], false)
+        && !g_OverwriteConfirmed[client])
+    {
+        g_OverwriteConfirmed[client] = true;
+
+        if (name[0] == '\0')
+            CPrintToChat(client, "{red}[Loadout]{default} %d item(s) from your last load are missing, so saving now would lose them. Run it again to overwrite anyway.", g_LastLoadDropped[client]);
+        else
+            CPrintToChat(client, "{red}[Loadout]{default} %d item(s) from your last load of {green}%s{default} are missing, so saving now would lose them. Run it again to overwrite anyway.", g_LastLoadDropped[client], name);
+
+        return Plugin_Handled;
+    }
+
+    g_LastLoadDropped[client]    = 0;
+    g_OverwriteConfirmed[client] = false;
+
     SaveLoadoutFromEntity(client, name);
     g_LastSaveTime[client] = GetGameTime();
     return Plugin_Handled;
@@ -681,18 +788,25 @@ public Action Command_LoadLoadout(int client, int args)
         return Plugin_Handled;
     }
 
-    if (!ResolvePlayerClass(client))
-    {
-        CPrintToChat(client, "{red}[Loadout]{default} Select a class first!");
-        return Plugin_Handled;
-    }
-
     // Check cooldown
     float cooldown = g_CvarLoadCooldown.FloatValue;
     if (GetGameTime() - g_LastLoadTime[client] < cooldown) return Plugin_Handled;
 
     char name[MAX_LOADOUT_NAME + 1];
     if (!ReadLoadoutName(client, args, name, sizeof(name))) return Plugin_Handled;
+
+    // The class is only needed to pick WHICH set to load, and a name already does that. It is still
+    // required for a class loadout, and for the cross-class check when that is disabled - so the gate
+    // moves here from the top of the command rather than disappearing.
+    //
+    // Worth the distinction because the class is the one thing the plugin cannot always recover: it
+    // is learned from player_pick_squad, so a reload leaves it unknown until someone picks again, and
+    // refusing a named load for a class it does not need made every reload look like a broken load.
+    if ((name[0] == '\0' || !g_CvarNamedCrossClass.BoolValue) && !ResolvePlayerClass(client))
+    {
+        CPrintToChat(client, "{red}[Loadout]{default} Select a class first!");
+        return Plugin_Handled;
+    }
 
     LoadPlayerLoadout(client, true, name);    // Manual load with messages
     g_LastLoadTime[client] = GetGameTime();
@@ -775,6 +889,103 @@ public Action Command_InventoryReset(int client, int args)
     g_LastLoadTime[client] = GetGameTime();
 
     return Plugin_Handled;    // Block default reset behavior
+}
+
+// Prints the purchase vector next to what the player is actually carrying, which is the only way to
+// confirm that entry +0 is the weapon definition id - the 4 bytes DT_WeaponPurchases never names.
+// A command rather than a hook in the save path, because every gate on !savelo (class, cooldown, the
+// overwrite guard) runs before the collection does.
+public Action Command_DumpPurchases(int client, int args)
+{
+    char arg[MAX_NAME_LENGTH];
+    int  target = -1;
+
+    if (args >= 1)
+    {
+        GetCmdArg(1, arg, sizeof(arg));
+        target = FindTarget(client, arg, true, false);
+        if (target < 1) return Plugin_Handled;
+    }
+    else
+    {
+        for (int i = 1; i <= MaxClients && target < 1; i++)
+            if (IsClientInGame(i) && !IsFakeClient(i)) target = i;
+    }
+
+    if (target < 1)
+    {
+        ReplyToCommand(client, "[Loadout] no human player in game");
+        return Plugin_Handled;
+    }
+
+    Address base;
+    int count = GetPurchaseList(target, base);
+    ReplyToCommand(client, "[Loadout] %N: inventory +%d, vector +%d, count %d, base 0x%x",
+                   target, g_InventoryOffset, g_InventoryOffset + INV_VECTOR_OFFSET, count, base);
+
+    for (int i = 0; i < count; i++)
+    {
+        Address e = base + view_as<Address>(i * PURCHASE_STRIDE);
+        int raw   = LoadFromAddress(e + view_as<Address>(PURCHASE_WEAPON), NumberType_Int32);
+        int slot  = LoadFromAddress(e + view_as<Address>(PURCHASE_SLOT), NumberType_Int32);
+        int sub   = LoadFromAddress(e + view_as<Address>(PURCHASE_SUBSLOT), NumberType_Int32);
+
+        // A CBaseHandle is (serial << 12) | index on this build; -1 means the purchase has been made
+        // but the entity not handed out yet, which is the mid-round case.
+        int ent = (raw == -1) ? -1 : (raw & 0xFFF);
+        char nm[ITEM_NAME_SIZE];
+        strcopy(nm, sizeof(nm), "<no entity>");
+        if (ent > 0 && ent <= 2048 && IsValidEntity(ent)
+            && HasEntProp(ent, Prop_Send, "m_hWeaponDefinitionHandle"))
+        {
+            int id = GetEntProp(ent, Prop_Send, "m_hWeaponDefinitionHandle");
+            if (!TheaterItem_Name(TheaterCategory_Weapon, id, nm, sizeof(nm)))
+                Format(nm, sizeof(nm), "def%d", id);
+        }
+
+        char ups[192];
+        for (int u = 0; u < 10; u++)
+        {
+            int id = LoadFromAddress(e + view_as<Address>(PURCHASE_UPGRADES + u * 4), NumberType_Int32);
+            if (id <= 0 || id == THEATER_ID_NONE) continue;
+            char un[ITEM_NAME_SIZE];
+            if (!TheaterItem_Name(TheaterCategory_Upgrade, id, un, sizeof(un))) Format(un, sizeof(un), "id%d", id);
+            Format(ups, sizeof(ups), "%s%s%s", ups, ups[0] == '\0' ? "" : ",", un);
+        }
+        ReplyToCommand(client, "[Loadout]   [%d] def=%d slot=%d sub=%d upgrades=[%s]", i, raw, slot, sub, ups);
+    }
+
+    // The entity view, to match against.
+    int carried = GetEntPropArraySize(target, Prop_Send, "m_hMyWeapons");
+    for (int i = 0; i < carried; i++)
+    {
+        int w = GetEntPropEnt(target, Prop_Send, "m_hMyWeapons", i);
+        if (w <= 0 || !IsValidEntity(w)) continue;
+        if (!HasEntProp(w, Prop_Send, "m_hWeaponDefinitionHandle")) continue;
+
+        int id = GetEntProp(w, Prop_Send, "m_hWeaponDefinitionHandle");
+        if (id <= 0) continue;
+
+        char nm[ITEM_NAME_SIZE];
+        if (!TheaterItem_Name(TheaterCategory_Weapon, id, nm, sizeof(nm))) strcopy(nm, sizeof(nm), "?");
+
+        char ups[192];
+        if (HasEntProp(w, Prop_Send, "m_upgradeSlots"))
+        {
+            int n = GetEntPropArraySize(w, Prop_Send, "m_upgradeSlots");
+            for (int u = 0; u < n; u++)
+            {
+                int uid = GetEntProp(w, Prop_Send, "m_upgradeSlots", 4, u);
+                if (uid <= 0 || uid == THEATER_ID_NONE) continue;
+                char un[ITEM_NAME_SIZE];
+                if (!TheaterItem_Name(TheaterCategory_Upgrade, uid, un, sizeof(un))) Format(un, sizeof(un), "id%d", uid);
+                Format(ups, sizeof(ups), "%s%s%s", ups, ups[0] == '\0' ? "" : ",", un);
+            }
+        }
+        ReplyToCommand(client, "[Loadout]   entity %s slot=%d upgrades=[%s]", nm, GetWeaponSlot(w), ups);
+    }
+
+    return Plugin_Handled;
 }
 
 // =====================================================
@@ -894,13 +1105,186 @@ int CollectItems(int client, LoadoutItem[] items, int maxItems)
             item.category = view_as<int>(TheaterCategory_Gear);
             item.slot     = -1;
             item.parent   = -1;
+            item.quantity = 1;
             items[count++] = item;
         }
     }
 
-    // Weapons, in slot order. Walking m_hMyWeapons is what lets this see more than the three the
-    // original plugin could: GetPlayerWeaponSlot answers with the first weapon in a bucket and
-    // offers no way to ask for the second.
+    // Weapons: the purchase list when it has anything, the carried entities otherwise. NEITHER source
+    // is right on its own, and both failures have been seen on this server.
+    //
+    // The purchase list is one entry per buy, correct the instant the buy is made, and carries the
+    // definition id, slot, sub-slot and upgrade ids. It is the only source that can see a stack:
+    // "clip_max_rounds" "-1" collapses however many grenades a player holds into ONE weapon_m67 entity
+    // with the count in reserve ammo, so the entity view can only ever report one of them. It is also
+    // the only source that is right between a buy and the next spawn - inventory_buy_weapon records and
+    // charges immediately while the item is handed out later, so a save in that window read the
+    // PREVIOUS loadout, or nothing at all when the player was dead.
+    //
+    // But it is empty after a map change, while the player still holds everything: count 0, base
+    // 0x00000000, seven weapons in hand. Saving from it alone wrote three gear rows and no weapons.
+    //
+    // So: prefer it, fall back to walking m_hMyWeapons. The fallback cannot recover quantity - one
+    // entity is one row - which is the one thing that degrades, and it says so in the log.
+    int afterGear = count;
+
+    count = CollectWeaponsFromPurchases(client, items, maxItems, count);
+    if (count == afterGear)
+        count = CollectWeaponsFromEntities(client, items, maxItems, count);
+
+    return count;
+}
+
+// Weapons as the game recorded the buys. Returns the new item count.
+int CollectWeaponsFromPurchases(int client, LoadoutItem[] items, int maxItems, int count)
+{
+    Address base;
+    int purchases = GetPurchaseList(client, base);
+
+    // Ordered by (slot, sub-slot) so the stored order is the order the buy menu shows and the apply
+    // path re-buys in. The vector itself is in neither order - melee sits at index 0 on slot 2.
+    int order[PURCHASE_MAX_ENTRIES];
+    int ordered = 0;
+
+    for (int i = 0; i < purchases && ordered < PURCHASE_MAX_ENTRIES; i++)
+    {
+        Address e = base + view_as<Address>(i * PURCHASE_STRIDE);
+        int slot  = LoadFromAddress(e + view_as<Address>(PURCHASE_SLOT), NumberType_Int32);
+        int sub   = LoadFromAddress(e + view_as<Address>(PURCHASE_SUBSLOT), NumberType_Int32);
+
+        if (slot < 0 || IsSkippedSlot(slot)) continue;
+
+        int key = slot * 256 + sub;
+        int at  = ordered;
+        while (at > 0)
+        {
+            Address prev = base + view_as<Address>(order[at - 1] * PURCHASE_STRIDE);
+            int pslot    = LoadFromAddress(prev + view_as<Address>(PURCHASE_SLOT), NumberType_Int32);
+            int psub     = LoadFromAddress(prev + view_as<Address>(PURCHASE_SUBSLOT), NumberType_Int32);
+            if (pslot * 256 + psub <= key) break;
+
+            order[at] = order[at - 1];
+            at--;
+        }
+
+        order[at] = i;
+        ordered++;
+    }
+
+    // Every weapon row emitted so far, so a repeat buy can find its row wherever it landed. Merging
+    // only with the row just emitted is not enough: sub-slot values repeat in the vector, so the order
+    // is ambiguous and two buys of one weapon can arrive with something else between them. That wrote
+    // "m67 q2" and a second "m67 q1" into the same set, which then asked for more explosive sub-slots
+    // than the slot has and lost the tail of the loadout on every load.
+    int emittedOrdinal[MAX_WEAPON_ITEMS];
+    int emittedDef[MAX_WEAPON_ITEMS];
+    bool emittedKitted[MAX_WEAPON_ITEMS];
+    int emitted = 0;
+
+    for (int o = 0; o < ordered && count < maxItems; o++)
+    {
+        Address e = base + view_as<Address>(order[o] * PURCHASE_STRIDE);
+        int def   = LoadFromAddress(e + view_as<Address>(PURCHASE_WEAPON), NumberType_Int32);
+        int slot  = LoadFromAddress(e + view_as<Address>(PURCHASE_SLOT), NumberType_Int32);
+        int subsl = LoadFromAddress(e + view_as<Address>(PURCHASE_SUBSLOT), NumberType_Int32);
+
+        if (def <= 0 || def == THEATER_ID_NONE) continue;
+
+        // One sub-slot is one item, so two entries claiming the same (slot, sub-slot) are the same
+        // item recorded twice - not two of it. That happens because a respawn re-grants the class
+        // buy_order on top of a loadout already applied: two loaded m67 plus the class's one showed up
+        // as three entries at sub-slots 1, 1 and 2. Counting entries made the stored quantity climb on
+        // every save/load cycle until it asked for more sub-slots than the slot has and the tail of the
+        // loadout stopped arriving. Occupancy is what matters, so a repeated sub-slot is skipped.
+        bool seenSubSlot = false;
+        for (int q = 0; q < o && !seenSubSlot; q++)
+        {
+            Address prev = base + view_as<Address>(order[q] * PURCHASE_STRIDE);
+            if (LoadFromAddress(prev + view_as<Address>(PURCHASE_WEAPON), NumberType_Int32) == def
+                && LoadFromAddress(prev + view_as<Address>(PURCHASE_SLOT), NumberType_Int32) == slot
+                && LoadFromAddress(prev + view_as<Address>(PURCHASE_SUBSLOT), NumberType_Int32) == subsl)
+                seenSubSlot = true;
+        }
+        if (seenSubSlot) continue;
+
+        // Collect this entry's upgrades first, so a repeat buy can be told from a second instance that
+        // happens to carry its own attachments.
+        int  upgradeIds[MAX_WEAPON_UPGRADES];
+        int  upgradeCount = 0;
+        for (int u = 0; u < 10; u++)
+        {
+            int id = LoadFromAddress(e + view_as<Address>(PURCHASE_UPGRADES + u * 4), NumberType_Int32);
+            if (id <= 0 || id == THEATER_ID_NONE) continue;
+            upgradeIds[upgradeCount++] = id;
+        }
+
+        // A bare repeat of a weapon already emitted is another of the same stack, so it becomes
+        // quantity rather than a second row. Anything carrying upgrades stays its own row, because two
+        // instances of one weapon can be kitted differently and merging them would lose that.
+        if (upgradeCount == 0)
+        {
+            int merged = -1;
+            for (int m = 0; m < emitted && merged < 0; m++)
+                if (emittedDef[m] == def && !emittedKitted[m]) merged = emittedOrdinal[m];
+
+            if (merged >= 0)
+            {
+                items[merged].quantity++;
+                continue;
+            }
+        }
+
+        LoadoutItem item;
+        if (!TheaterItem_Name(TheaterCategory_Weapon, def, item.name, sizeof(item.name)))
+        {
+            LogError("[LoadoutSaver] %L has weapon id %d the theater cannot name - not saved", client, def);
+            continue;
+        }
+
+        item.category = view_as<int>(TheaterCategory_Weapon);
+        item.slot     = slot;
+        item.parent   = -1;
+        item.quantity = 1;
+
+        int weaponOrdinal = count;
+        items[count++]    = item;
+
+        if (emitted < MAX_WEAPON_ITEMS)
+        {
+            emittedOrdinal[emitted] = weaponOrdinal;
+            emittedDef[emitted]     = def;
+            emittedKitted[emitted]  = (upgradeCount > 0);
+            emitted++;
+        }
+
+        for (int u = 0; u < upgradeCount && count < maxItems; u++)
+        {
+            LoadoutItem upgrade;
+            if (!TheaterItem_Name(TheaterCategory_Upgrade, upgradeIds[u], upgrade.name, sizeof(upgrade.name)))
+            {
+                LogError("[LoadoutSaver] %L has upgrade id %d the theater cannot name - not saved",
+                         client, upgradeIds[u]);
+                continue;
+            }
+
+            upgrade.category = view_as<int>(TheaterCategory_Upgrade);
+            upgrade.slot     = -1;
+            upgrade.parent   = weaponOrdinal;
+            upgrade.quantity = 1;
+            items[count++]   = upgrade;
+        }
+    }
+
+    return count;
+}
+
+// Fallback for when the purchase list is empty but the player is holding weapons - after a map change,
+// where the vector is cleared and the items are not. Quantity is always 1 here: a stack is a single
+// entity, so there is nothing to count.
+int CollectWeaponsFromEntities(int client, LoadoutItem[] items, int maxItems, int count)
+{
+    if (!g_SlotsAvailable) return count;
+
     int weaponEnts[MAX_WEAPON_ITEMS];
     int slots[MAX_WEAPON_ITEMS];
     int weaponCount = 0;
@@ -916,8 +1300,6 @@ int CollectItems(int client, LoadoutItem[] items, int maxItems)
         int slot = GetWeaponSlot(weapon);
         if (slot < 0 || IsSkippedSlot(slot)) continue;
 
-        // Insertion sort: few enough items that anything cleverer is just more code, and it keeps
-        // weapons within a slot in the order the array gave them.
         int at = weaponCount;
         while (at > 0 && slots[at - 1] > slot)
         {
@@ -930,6 +1312,10 @@ int CollectItems(int client, LoadoutItem[] items, int maxItems)
         weaponEnts[at] = weapon;
         weaponCount++;
     }
+
+    if (weaponCount > 0)
+        LogMessage("[LoadoutSaver] %L: purchase list empty, saved %d weapon(s) from carried entities - stack sizes not recorded",
+                   client, weaponCount);
 
     for (int i = 0; i < weaponCount && count < maxItems; i++)
     {
@@ -946,16 +1332,14 @@ int CollectItems(int client, LoadoutItem[] items, int maxItems)
         item.category = view_as<int>(TheaterCategory_Weapon);
         item.slot     = slots[i];
         item.parent   = -1;
+        item.quantity = 1;
 
         int weaponOrdinal = count;
         items[count++] = item;
 
         if (!HasEntProp(weapon, Prop_Send, "m_upgradeSlots")) continue;
 
-        // The send table networks 10 upgrade slots; the original plugin read 8, so the last two
-        // upgrades on every weapon were being dropped.
         int upgradeCount = GetEntPropArraySize(weapon, Prop_Send, "m_upgradeSlots");
-
         for (int u = 0; u < upgradeCount && count < maxItems; u++)
         {
             int upgradeId = GetEntProp(weapon, Prop_Send, "m_upgradeSlots", 4, u);
@@ -971,6 +1355,7 @@ int CollectItems(int client, LoadoutItem[] items, int maxItems)
             upgrade.category = view_as<int>(TheaterCategory_Upgrade);
             upgrade.slot     = -1;
             upgrade.parent   = weaponOrdinal;
+            upgrade.quantity = 1;
             items[count++]   = upgrade;
         }
     }
@@ -986,13 +1371,11 @@ void SaveLoadoutFromEntity(int client, const char[] name)
         return;
     }
 
-    // Refusing to save is the right failure. A save with no slot information would record every
-    // weapon as slot 0, and loading that back would be worse than having no loadout at all.
-    if (!g_SlotsAvailable)
-    {
-        CPrintToChat(client, "{red}[Loadout]{default} Saving is unavailable on this server right now (missing gamedata). Loading still works.");
-        return;
-    }
+    // Deliberately NOT gated on g_SlotsAvailable. That guard existed because a save with no slot
+    // information would record every weapon as slot 0, which is worse than no loadout - but slots now
+    // come from the purchase entries, and only the entity fallback needs CBaseCombatWeapon::GetSlot.
+    // Refusing the whole save here would block the path that still works; the fallback checks for
+    // itself and returns nothing rather than guessing.
 
     // Without the name lookup every item would have to be stored as a raw id, which is exactly the
     // thing this schema exists to avoid.
@@ -1100,7 +1483,7 @@ void SaveLoadoutToDatabase(int client, LoadoutItem[] items, int count, const cha
     if (count > 0)
     {
         Format(query, sizeof(query),
-               "INSERT INTO loadout_items (loadout_id, ordinal, item_id, slot, parent_ordinal) SELECT l.id, v.ord, ti.id, v.slot, v.parent FROM loadouts_slots l CROSS JOIN (VALUES ");
+               "INSERT INTO loadout_items (loadout_id, ordinal, item_id, slot, parent_ordinal, quantity) SELECT l.id, v.ord, ti.id, v.slot, v.parent, v.qty FROM loadouts_slots l CROSS JOIN (VALUES ");
 
         for (int i = 0; i < count; i++)
         {
@@ -1115,16 +1498,18 @@ void SaveLoadoutToDatabase(int client, LoadoutItem[] items, int count, const cha
 
             // The first row carries the casts so Postgres can infer the column types; a leading
             // NULL with no type is the one thing a VALUES list will not accept.
+            int qty = items[i].quantity > 0 ? items[i].quantity : 1;
+
             if (i == 0)
-                Format(query, sizeof(query), "%s(%d::smallint,%d::smallint,'%s',%s::smallint,%s::smallint)",
-                       query, i, items[i].category, escapedItem, slotValue, parentValue);
+                Format(query, sizeof(query), "%s(%d::smallint,%d::smallint,'%s',%s::smallint,%s::smallint,%d::smallint)",
+                       query, i, items[i].category, escapedItem, slotValue, parentValue, qty);
             else
-                Format(query, sizeof(query), "%s,(%d,%d,'%s',%s,%s)",
-                       query, i, items[i].category, escapedItem, slotValue, parentValue);
+                Format(query, sizeof(query), "%s,(%d,%d,'%s',%s,%s,%d)",
+                       query, i, items[i].category, escapedItem, slotValue, parentValue, qty);
         }
 
         Format(query, sizeof(query),
-               "%s) AS v(ord, cat, nm, slot, parent) JOIN theater_items ti ON ti.category = v.cat AND ti.name = v.nm WHERE %s",
+               "%s) AS v(ord, cat, nm, slot, parent, qty) JOIN theater_items ti ON ti.category = v.cat AND ti.name = v.nm WHERE %s",
                query, selector);
         txn.AddQuery(query);
     }
@@ -1218,13 +1603,13 @@ void LoadPlayerLoadout(int client, bool showMessages, const char[] name)
     if (name[0] == '\0')
     {
         g_Database.Format(query, sizeof(query),
-                          "SELECT l.class_template, ti.category, ti.name, li.slot, li.parent_ordinal FROM loadouts_slots l LEFT JOIN loadout_items li ON li.loadout_id = l.id LEFT JOIN theater_items ti ON ti.id = li.item_id WHERE l.steam_id = %s AND l.class_template = '%s' AND l.name IS NULL ORDER BY li.ordinal",
+                          "SELECT l.class_template, ti.category, ti.name, li.slot, li.parent_ordinal, li.quantity FROM loadouts_slots l LEFT JOIN loadout_items li ON li.loadout_id = l.id LEFT JOIN theater_items ti ON ti.id = li.item_id WHERE l.steam_id = %s AND l.class_template = '%s' AND l.name IS NULL ORDER BY li.ordinal",
                           g_PlayerSteamId[client], g_PlayerCurrentClass[client]);
     }
     else
     {
         g_Database.Format(query, sizeof(query),
-                          "SELECT l.class_template, ti.category, ti.name, li.slot, li.parent_ordinal FROM loadouts_slots l LEFT JOIN loadout_items li ON li.loadout_id = l.id LEFT JOIN theater_items ti ON ti.id = li.item_id WHERE l.steam_id = %s AND l.name IS NOT NULL AND lower(l.name) = lower('%s') ORDER BY li.ordinal",
+                          "SELECT l.class_template, ti.category, ti.name, li.slot, li.parent_ordinal, li.quantity FROM loadouts_slots l LEFT JOIN loadout_items li ON li.loadout_id = l.id LEFT JOIN theater_items ti ON ti.id = li.item_id WHERE l.steam_id = %s AND l.name IS NOT NULL AND lower(l.name) = lower('%s') ORDER BY li.ordinal",
                           g_PlayerSteamId[client], name);
     }
 
@@ -1289,6 +1674,10 @@ void OnLoadoutRetrieved(Database db, DBResultSet results, const char[] error, Da
         results.FetchString(2, item.name, sizeof(item.name));
         item.slot   = results.IsFieldNull(3) ? -1 : results.FetchInt(3);
         item.parent = results.IsFieldNull(4) ? -1 : results.FetchInt(4);
+        // NOT NULL with a default, so a null here would mean a row written before the column
+        // existed; treat that as the single purchase it was.
+        item.quantity = results.IsFieldNull(5) ? 1 : results.FetchInt(5);
+        if (item.quantity < 1) item.quantity = 1;
 
         items[count++] = item;
     }
@@ -1314,6 +1703,14 @@ void ApplyLoadout(int client, LoadoutItem[] items, int count, bool showMessages,
 
     FakeClientCommand(client, "inventory_sell_all");
 
+    bool debug = g_CvarDebug.BoolValue;
+    if (debug)
+    {
+        LogMessage("[LoadoutSaver:debug] %L apply start: available=%d received=%d starting_supply=%d",
+                   client, GetEntProp(client, Prop_Send, "m_nAvailableTokens"),
+                   GetEntProp(client, Prop_Send, "m_nRecievedTokens"), GetStartingSupply());
+    }
+
     // Gear before weapons, and that ordering is load-bearing. GetWeaponSlotCapacity is 1 plus the
     // "weapon_slots" bonuses on the gear worn RIGHT NOW, so until the rig and slings are back on
     // every slot still has capacity 1 and the second primary or third grenade is refused.
@@ -1329,6 +1726,27 @@ void ApplyLoadout(int client, LoadoutItem[] items, int count, bool showMessages,
         }
 
         FakeClientCommand(client, "inventory_buy_gear %d", id);
+    }
+
+    // What ended up worn, by slot. sec_tactical_carrier carries "weapon_slots { explosive 3 }", so
+    // if it is not on by this point the explosive slot holds one item and the rest are refused - and
+    // gear is invisible to the verify pass, which only counts weapons.
+    if (debug && HasEntProp(client, Prop_Send, "m_EquippedGear"))
+    {
+        char worn[256];
+        int gearSlots = GetEntPropArraySize(client, Prop_Send, "m_EquippedGear");
+        for (int g = 0; g < gearSlots; g++)
+        {
+            int id = GetEntProp(client, Prop_Send, "m_EquippedGear", 4, g);
+            if (id <= 0 || id == THEATER_ID_NONE) continue;
+
+            char gname[ITEM_NAME_SIZE];
+            if (!TheaterItem_Name(TheaterCategory_Gear, id, gname, sizeof(gname)))
+                Format(gname, sizeof(gname), "id%d", id);
+
+            Format(worn, sizeof(worn), "%s%s%d:%s", worn, worn[0] == '\0' ? "" : " ", g, gname);
+        }
+        LogMessage("[LoadoutSaver:debug] %L gear after buy: [%s]", client, worn);
     }
 
     // Weapons in stored order, each followed by its own upgrades.
@@ -1351,8 +1769,25 @@ void ApplyLoadout(int client, LoadoutItem[] items, int count, bool showMessages,
         // refunds whatever is already there, which is why a bare inventory_buy_weapon can never hold
         // more than one item per slot. Firemode -1 leaves the player's own preference alone, and
         // args[3] is read by nothing.
+        int beforeWeapon = debug ? GetEntProp(client, Prop_Send, "m_nAvailableTokens") : 0;
+        int occupied     = 0;
+        if (debug)
+        {
+            int held = GetEntPropArraySize(client, Prop_Send, "m_hMyWeapons");
+            for (int h = 0; h < held; h++)
+            {
+                int w = GetEntPropEnt(client, Prop_Send, "m_hMyWeapons", h);
+                if (w > 0 && IsValidEntity(w) && GetWeaponSlot(w) == items[i].slot) occupied++;
+            }
+        }
+
         FakeClientCommand(client, "inventory_buy_weapon %d -1 0 -1", weaponId);
         weaponsBought++;
+
+        if (debug)
+            LogMessage("[LoadoutSaver:debug] %L buy weapon %s (slot %d, qty %d, slot held %d before): available %d -> %d",
+                       client, items[i].name, items[i].slot, items[i].quantity, occupied, beforeWeapon,
+                       GetEntProp(client, Prop_Send, "m_nAvailableTokens"));
 
         // inventory_buy_upgrade takes a position in the purchase list, bounds-checked as
         // 0 <= index < purchase count. Not a slot, and not the order this plugin bought things in -
@@ -1367,6 +1802,27 @@ void ApplyLoadout(int client, LoadoutItem[] items, int count, bool showMessages,
                      client, items[i].name, purchaseIndex);
         }
 
+        // The rest of a stack. Replaying the buy is what makes a round-count-per-purchase weapon
+        // like weapon_m79_napalm come back right: the theater grants whatever clip_default says on
+        // each one, so this restores purchases rather than a remembered round count.
+        //
+        // The game arbitrates as always - weapon_max_subslot, the ammo type's carry cap and supply
+        // all still apply, so a buy that cannot be honoured is simply refused, and the read-back
+        // below reports it like any other missing item. Upgrades are deliberately attached only to
+        // the first purchase: nothing that stacks takes upgrades, and the extra entries are claimed
+        // purely so a later weapon does not resolve its index to one of them.
+        for (int extra = 1; extra < items[i].quantity; extra++)
+        {
+            FakeClientCommand(client, "inventory_buy_weapon %d -1 0 -1", weaponId);
+            weaponsBought++;
+            FindPurchaseIndex(client, weaponId, claimed);
+
+            if (debug)
+                LogMessage("[LoadoutSaver:debug] %L buy weapon %s again (%d of %d): available now %d",
+                           client, items[i].name, extra + 1, items[i].quantity,
+                           GetEntProp(client, Prop_Send, "m_nAvailableTokens"));
+        }
+
         for (int u = 0; u < count; u++)
         {
             if (items[u].category != view_as<int>(TheaterCategory_Upgrade)) continue;
@@ -1379,11 +1835,33 @@ void ApplyLoadout(int client, LoadoutItem[] items, int count, bool showMessages,
                 continue;
             }
 
+            int beforeUpgrade = debug ? GetEntProp(client, Prop_Send, "m_nAvailableTokens") : 0;
+
             FakeClientCommand(client, "inventory_buy_upgrade %d %d", purchaseIndex, upgradeId);
+
+            if (debug)
+                LogMessage("[LoadoutSaver:debug] %L   upgrade %s on index %d: available %d -> %d",
+                           client, items[u].name, purchaseIndex, beforeUpgrade,
+                           GetEntProp(client, Prop_Send, "m_nAvailableTokens"));
         }
     }
 
     FakeClientCommand(client, "inventory_resupply");
+
+    // The buy PANEL is not refreshed here, and cannot be from the server. It caches its contents and
+    // does not re-read them when the server buys on a player's behalf, so after a load the list keeps
+    // showing what it last drew even though the items are in hand.
+    //
+    // The obvious lever does not work. CINSPlayer hands "changeinventory" to engine->ClientCommand
+    // (string at 0xa29342 in server.so) and client.so registers it next to the other inventory panel
+    // commands, so it looks like exactly the right thing to re-issue - but sending it changes nothing,
+    // and neither does inventory_open. The channel itself is shut: a server-sent "say" never comes back
+    // either, because a modern client only executes server stringcmds for commands carrying
+    // FCVAR_SERVER_CAN_EXECUTE, which key-bound UI commands do not. Tested, not assumed.
+    //
+    // Reopening the menu rebuilds it correctly, so this is cosmetic. Anything further would mean
+    // finding a networked value the panel watches and poking that, which trades a display quirk for a
+    // gameplay side effect.
 
     if (showMessages)
     {
@@ -1439,20 +1917,39 @@ public Action Timer_VerifyLoadout(Handle timer, DataPack pack)
     char wanted[MAX_WEAPON_ITEMS][ITEM_NAME_SIZE];
     int  wantedCount = ExplodeString(wantedBuffer, ",", wanted, sizeof(wanted), sizeof(wanted[]));
 
-    // What the player actually ended up holding, by name.
+    // What the player actually ended up with - from the PURCHASE LIST first, for the same reason the
+    // save reads it: a buy is recorded and charged immediately while the entity is handed out at the
+    // next spawn. Counting entities half a second after the buys reports every pending item as
+    // "missing", which is what produced "5 items are missing" on loads where the log shows all seven
+    // purchases succeeding and supply going 120 -> 70. The entity walk stays as the fallback for when
+    // the vector is empty, i.e. after a map change.
     char got[MAX_WEAPON_ITEMS][ITEM_NAME_SIZE];
     int  gotCount = 0;
 
-    int carried = GetEntPropArraySize(client, Prop_Send, "m_hMyWeapons");
-    for (int i = 0; i < carried && gotCount < MAX_WEAPON_ITEMS; i++)
-    {
-        int weapon = GetEntPropEnt(client, Prop_Send, "m_hMyWeapons", i);
-        if (weapon <= 0 || !IsValidEntity(weapon)) continue;
-        if (!HasEntProp(weapon, Prop_Send, "m_hWeaponDefinitionHandle")) continue;
+    Address pbase;
+    int purchases = GetPurchaseList(client, pbase);
 
-        int id = GetEntProp(weapon, Prop_Send, "m_hWeaponDefinitionHandle");
-        if (id <= 0) continue;
+    for (int i = 0; i < purchases && gotCount < MAX_WEAPON_ITEMS; i++)
+    {
+        Address e = pbase + view_as<Address>(i * PURCHASE_STRIDE + PURCHASE_WEAPON);
+        int id    = LoadFromAddress(e, NumberType_Int32);
+        if (id <= 0 || id == THEATER_ID_NONE) continue;
         if (TheaterItem_Name(TheaterCategory_Weapon, id, got[gotCount], sizeof(got[]))) gotCount++;
+    }
+
+    if (gotCount == 0)
+    {
+        int carried = GetEntPropArraySize(client, Prop_Send, "m_hMyWeapons");
+        for (int i = 0; i < carried && gotCount < MAX_WEAPON_ITEMS; i++)
+        {
+            int weapon = GetEntPropEnt(client, Prop_Send, "m_hMyWeapons", i);
+            if (weapon <= 0 || !IsValidEntity(weapon)) continue;
+            if (!HasEntProp(weapon, Prop_Send, "m_hWeaponDefinitionHandle")) continue;
+
+            int id = GetEntProp(weapon, Prop_Send, "m_hWeaponDefinitionHandle");
+            if (id <= 0) continue;
+            if (TheaterItem_Name(TheaterCategory_Weapon, id, got[gotCount], sizeof(got[]))) gotCount++;
+        }
     }
 
     bool matched[MAX_WEAPON_ITEMS];
@@ -1474,6 +1971,11 @@ public Action Timer_VerifyLoadout(Handle timer, DataPack pack)
         if (!found) dropped++;
     }
 
+    // Remembered so a following save cannot overwrite the set this came from with the short version.
+    g_LastLoadDropped[client] = dropped;
+    strcopy(g_LastLoadName[client], sizeof(g_LastLoadName[]), name);
+    g_OverwriteConfirmed[client] = false;
+
     if (dropped > 0 || crossClass)
     {
         LogMessage("[LoadoutSaver] %L loaded \"%s\" (saved on %s) while playing %s: wanted [%s], %d missing",
@@ -1483,10 +1985,12 @@ public Action Timer_VerifyLoadout(Handle timer, DataPack pack)
 
     if (dropped > 0 && showMessages)
     {
+        // Deliberately not "not available to this class": the commonest cause is running out of
+        // supply part way through, because the buys run in stored order and the explosives are last.
         if (name[0] == '\0')
-            CPrintToChat(client, "{red}[Loadout]{default} %d item(s) in your saved loadout are not available and were not equipped.", dropped);
+            CPrintToChat(client, "{red}[Loadout]{default} %d item(s) could not be equipped - not enough supply, or not allowed on this class. Your saved loadout is unchanged.", dropped);
         else
-            CPrintToChat(client, "{red}[Loadout]{default} %d item(s) in {green}%s{default} are not available to this class and were not equipped.", dropped, name);
+            CPrintToChat(client, "{red}[Loadout]{default} %d item(s) in {green}%s{default} could not be equipped - not enough supply, or not allowed on this class. The saved loadout is unchanged.", dropped, name);
     }
 
     return Plugin_Handled;
