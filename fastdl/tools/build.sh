@@ -72,13 +72,43 @@ cp -a "$WORK/mat/." "$OUT/$MATDIR/"
 echo "   -> $MATDIR"
 
 # ---------------------------------------------------------------- 3. models
+# COMPILED TWICE, ON PURPOSE. The published directory name is a hash of the compiled bytes, but the
+# QC's $modelname has to contain that same name before the compile, because the engine derives the
+# .vvd/.vtx/.phy filenames from $modelname rather than from where it found the .mdl - so a model
+# published under a hashed directory with an unhashed $modelname reads its vertices from the fixed
+# path instead, which is write-once on every client and goes stale forever. See the MDLNAME note in
+# tools/template.go for the instruction-level detail and the symptom.
+#
+# Pass 1 compiles under a fixed placeholder name purely to get a hash of the content. Pass 2 puts
+# that hash in $modelname and compiles what is actually shipped. The published bytes therefore do
+# not hash to their own directory name - the name is the hash of pass 1 - but it is still a pure
+# function of the sources and the compiler, which is all the name has to be. Pass 1 is what makes a
+# compiler change move the name too, which hashing the templated SOURCES would not.
 MDLDIR=""
 if [ "$MODEL_COMPILE" = "1" ] && [ -d "$SRC/models" ] && [ -n "$(find "$SRC/models" -name '*.qc' -print -quit 2>/dev/null)" ]; then
   say "models"
-  "$TOOL" template --lowercase-names --set "mat=$MATDIR" "$SRC/models" "$WORK/mdl_src"
-  sh "$TOOLS/compile_models.sh" "$WORK/mdl_src" "$WORK/mdl"
-  MDLNAME=$("$TOOL" hashdir twp "$WORK/mdl")
+  MDLPROBE=twp_probe
+  "$TOOL" template --lowercase-names --set "mat=$MATDIR" --set "mdl=models/$MDLPROBE" \
+          "$SRC/models" "$WORK/mdl_src_probe"
+  sh "$TOOLS/compile_models.sh" "$WORK/mdl_src_probe" "$WORK/mdl_probe" "$MDLPROBE"
+  MDLNAME=$("$TOOL" hashdir twp "$WORK/mdl_probe")
   MDLDIR="models/$MDLNAME"
+
+  echo "   recompiling with \$modelname = $MDLNAME"
+  "$TOOL" template --lowercase-names --set "mat=$MATDIR" --set "mdl=$MDLDIR" \
+          "$SRC/models" "$WORK/mdl_src"
+  sh "$TOOLS/compile_models.sh" "$WORK/mdl_src" "$WORK/mdl" "$MDLNAME"
+
+  # The whole point of the two passes: if this ever fails, the models are back to loading their
+  # vertices from a fixed path and the hashing is silently doing nothing.
+  for m in "$WORK/mdl"/*.mdl; do
+    [ -e "$m" ] || continue
+    if ! tr -d '\000' < "$m" | head -c 256 | grep -q "$MDLNAME"; then
+      echo "\$modelname in $(basename "$m") does not carry $MDLNAME - vertex files would load from a fixed path" >&2
+      exit 1
+    fi
+  done
+
   mkdir -p "$OUT/$MDLDIR"
   cp -a "$WORK/mdl/." "$OUT/$MDLDIR/"
   echo "   -> $MDLDIR"
@@ -87,16 +117,46 @@ else
   echo "   Theaters will keep whatever model path they already name."
 fi
 
-# ---------------------------------------------------------------- 4. theaters
+# ---------------------------------------------------------------- 4. localisation
+# Named by the theater, exactly like the models are - see the "localize" key in the theater's
+# core/precache block. That is the ONLY way a mod's strings reach the client: CLocalize::AddFile
+# loads localisation by exact filename (substituting "english" for %language%) and never scans a
+# directory unless the process was started with -all_languages, so a file the game has not been
+# told about is inert wherever it sits. Proven both ways on the test client: the same tokens at
+# three unreferenced names under resource/ and resource/ui/ did nothing, while a copy merged into
+# resource/insurgency_english.txt loaded. TUG reaches its own 427 strings through this key.
+#
+# Hashed as a DIRECTORY rather than by filename, so the theater can name a stable basename. This
+# has to resolve before the theaters, because the theater is what references it.
+#
+# Copied byte-for-byte, never templated: Source localisation files are UTF-16LE.
+LOCDIR=""
+if [ -d "$SRC/localization" ] && [ -n "$(find "$SRC/localization" -name '*.txt' -print -quit 2>/dev/null)" ]; then
+  say "localisation"
+  LOCNAME=$("$TOOL" hashdir twp_loc "$SRC/localization")
+  LOCDIR="resource/ui/$LOCNAME"
+  mkdir -p "$OUT/$LOCDIR"
+  cp -a "$SRC"/localization/. "$OUT/$LOCDIR/"
+  echo "   -> $LOCDIR"
+fi
+
+# ---------------------------------------------------------------- 5. theaters
 say "theaters"
 mkdir -p "$OUT/scripts/theaters"
 if [ -n "$(find "$THEATERS" -name '*.theater' -print -quit 2>/dev/null)" ]; then
   mkdir -p "$WORK/theaters_src"
   cp "$THEATERS"/*.theater "$WORK/theaters_src/"
-  if [ -n "$MDLDIR" ]; then
-    "$TOOL" template --set "mdl=$MDLDIR" "$WORK/theaters_src" "$WORK/theaters"
+  # Every group the theater can name is passed in. A theater that references a group which was
+  # skipped this build fails on the unresolved placeholder rather than shipping it, which is what
+  # keeps a half-built tree from reaching a client.
+  set -- template
+  [ -n "$MDLDIR" ] && set -- "$@" --set "mdl=$MDLDIR"
+  [ -n "$LOCDIR" ] && set -- "$@" --set "loc=$LOCDIR"
+  mkdir -p "$WORK/theaters"
+  if [ "$#" -gt 1 ]; then
+    "$TOOL" "$@" "$WORK/theaters_src" "$WORK/theaters"
   else
-    mkdir -p "$WORK/theaters"; cp "$WORK/theaters_src"/*.theater "$WORK/theaters/"
+    cp "$WORK/theaters_src"/*.theater "$WORK/theaters/"
   fi
   cp "$WORK/theaters"/*.theater "$OUT/scripts/theaters/"
 
@@ -121,7 +181,7 @@ if [ -n "$(find "$THEATERS" -name '*.theater' -print -quit 2>/dev/null)" ]; then
   cd - > /dev/null
 fi
 
-# ---------------------------------------------------------------- 5. map stubs
+# ---------------------------------------------------------------- 6. map stubs
 # Deliberately not hashed: their paths are hardcoded in each map's BSP and cannot move.
 if [ -d "$STUBS" ]; then
   say "map asset stubs"
@@ -131,37 +191,6 @@ if [ -d "$STUBS" ]; then
 fi
 
 
-
-# ---------------------------------------------------------------- 6. localisation
-# Shipped to BOTH resource/ and resource/ui/, because which one the engine reads is unresolved:
-#
-#   * No game binary contains the string "resource/ui" anywhere, the stock VPKs hold no
-#     resource/ui/*.txt, and the engine's own loader uses resource/%s_%language%.txt with %s taken
-#     from the game directory - all of which says resource/ui/ is never read.
-#   * But 4 of the 5 distinct localisation files across the subscribed workshop items sit in
-#     resource/ui/, so either that convention works by a route not yet found, or those mods are
-#     equally broken.
-#
-# The file is ~1KB, so shipping both costs nothing next to guessing wrong. If tokens render, the
-# location that works can become the only one. If NEITHER renders, the mechanism is a fixed filename
-# (resource/<gamedir>_english.txt), which fastdl cannot deliver at all: that path exists in a stock
-# VPK, and insurgency/download is searched last, so a copy there would always be shadowed.
-#
-# CLocalize globs "<dir>*.txt" non-recursively and AddFile's every match, which is why a hashed name
-# is still found - nothing references these by name. Copied byte-for-byte, never templated: Source
-# localisation files are UTF-16LE.
-if [ -d "$SRC/localization" ] && [ -n "$(find "$SRC/localization" -name '*.txt' -print -quit 2>/dev/null)" ]; then
-  say "localisation"
-  mkdir -p "$OUT/resource/ui" "$OUT/resource"
-  for f in "$SRC"/localization/*.txt; do
-    stem=$(basename "$f" .txt)
-    lhash=$(sha256sum "$f" | cut -c1-12)
-    cp -a "$f" "$OUT/resource/${stem}_${lhash}.txt"
-    cp -a "$f" "$OUT/resource/ui/${stem}_${lhash}.txt"
-    echo "   -> resource/${stem}_${lhash}.txt"
-    echo "   -> resource/ui/${stem}_${lhash}.txt"
-  done
-fi
 
 # ---------------------------------------------------------------- 7. vgui icons
 # Deliberately not hashed. The buy-menu icon is looked up as materials/vgui/inventory/<weapon>.vmt

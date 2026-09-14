@@ -2,7 +2,10 @@
 
 $include "unreal_scale.qci"
 
-$modelname "twp\v_m18.mdl"
+// $modelname is a LOOKUP PATH: the engine derives the .vvd/.vtx/.phy filenames from it,
+// not from where the .mdl was loaded. It therefore has to carry the same hash as the
+// published directory - see the MDLNAME note in fastdl/tools/template.go.
+$modelname "@@MDLNAME(mdl,v_m18.mdl)@@"
 
 $bodygroup "Weapon"
 {

@@ -2,6 +2,7 @@
 
 $include "unreal_scale.qci"
 
+// Not compiled by the build (see compile_models.sh); the name is irrelevant here.
 $modelname "twp\v_m18.mdl"
 
 $bodygroup "weapon"

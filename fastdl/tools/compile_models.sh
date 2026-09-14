@@ -7,11 +7,18 @@
 #
 # The template pre-pass has already rewritten $cdmaterials to the hashed material directory, so the compiled
 # MDL references it directly, with no byte patching of the MDL string table.
+#
+# $3 is the directory the compiler will write into, which is whatever the templated QCs set
+# $modelname to. It is passed in rather than hardcoded because that name carries the content hash -
+# see the MDLNAME note in tools/template.go for why $modelname must be hashed at all.
 set -eu
-SRC="$1"; OUT="$2"
+SRC="$1"; OUT="$2"; MDLSUBDIR="$3"
 MDLCOMPILER="${MDLCOMPILER:-mdlcompiler}"
 : "${GAME_DIR:?GAME_DIR is not set - the compiler needs a -game directory with gameinfo.txt}"
 
+# Cleared between passes: the build compiles twice (once to derive the hash, once for real) and a
+# leftover model from the first pass would otherwise be copied out alongside the second.
+rm -rf "${GAME_DIR:?}/models"
 mkdir -p "$OUT" "$GAME_DIR/models"
 found=0
 for qc in "$SRC"/*.qc; do
@@ -26,8 +33,8 @@ for qc in "$SRC"/*.qc; do
 done
 [ "$found" -gt 0 ] || { echo "compile_models: no .qc found in $SRC" >&2; exit 1; }
 
-# Output lands in <game>/models/<$modelname>, which the QCs set to twp/.
-for f in "$GAME_DIR"/models/twp/*; do
+# Output lands in <game>/models/<$modelname>, which is $MDLSUBDIR after templating.
+for f in "$GAME_DIR/models/$MDLSUBDIR"/*; do
   [ -e "$f" ] || continue
   cp "$f" "$OUT/"
 done

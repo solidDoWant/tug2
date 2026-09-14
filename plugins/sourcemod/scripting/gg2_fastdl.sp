@@ -62,6 +62,25 @@ public Plugin myinfo =
 #define THEATER_PREFIX  "scripts/theaters/"
 #define THEATER_SUFFIX  ".theater"
 
+/* Models have to exist on the SERVER too, not just on the client.
+ *
+ * Viewmodel animation is chosen server-side: CBaseCombatWeapon::SendWeaponAnim calls
+ * SelectWeightedSequence(ACT_VM_*) against the server's copy of the model and networks the sequence
+ * index it gets back. A server without the .mdl has no sequence list, so the lookup fails and the
+ * client's viewmodel holds its bind pose - while still RENDERING correctly, because the client does
+ * have the file and the model index is networked. There is no error on either side.
+ *
+ * That produced a weapon which could be bought, thrown and detonated, whose grenade flew correctly,
+ * and whose viewmodel never played a pin-pull, a throw, or even a sprint pose. It cost a long
+ * investigation because every byte of the model was verifiable as correct - the files were fine, the
+ * server just did not have them. Diagnosed by pointing the weapon at models/tug/, which the server
+ * DOES have via workshop item 2744181131: identical bytes animated there and nowhere else.
+ *
+ * Fetched to the game directory exactly like theaters, and gated the same way, so the forced map
+ * change lands after they are on disk and the map's precache sees real files.
+ */
+#define MODEL_PREFIX    "models/"
+
 // Downloads land here first and are renamed into place only on a 2xx, so an interrupted transfer
 // cannot leave a truncated file that FileExists() then reports as present forever.
 #define PART_SUFFIX     ".part"
@@ -350,44 +369,62 @@ static void ReconcileTheater(JSONObject manifest, JSONArray files)
     if (g_cvTheater == null) return;
 
     char want[PLATFORM_MAX_PATH];
-    if (!manifest.HasKey("theater") || !manifest.GetString("theater", want, sizeof(want)) || want[0] == '\0')
-    {
-        // A manifest without a theater is a content-only one. Nothing to reconcile.
-        return;
-    }
+    bool haveTheater = manifest.HasKey("theater")
+                    && manifest.GetString("theater", want, sizeof(want))
+                    && want[0] != '\0';
 
     char current[PLATFORM_MAX_PATH];
     g_cvTheater.GetString(current, sizeof(current));
 
-    if (StrEqual(current, want, false)) return;
-
-    strcopy(g_sWantTheater, sizeof(g_sWantTheater), want);
-    g_iPendingDownloads = 0;
-    g_bDownloadFailed   = false;
+    // Models are checked even when the theater name is unchanged: they are a separate group with its
+    // own hash, and a server that came up before this plugin learned to fetch them would otherwise
+    // never acquire them.
+    bool theaterChanged = haveTheater && !StrEqual(current, want, false);
 
     char base[PLATFORM_MAX_PATH];
     if (!GetBaseUrl(base, sizeof(base))) return;
 
+    g_sWantTheater[0]   = '\0';
+    if (theaterChanged) strcopy(g_sWantTheater, sizeof(g_sWantTheater), want);
+    g_iPendingDownloads = 0;
+    g_bDownloadFailed   = false;
+
     // Only the files belonging to the wanted theater: the manifest also carries the previous
     // generation and the unhashed fallback, and fetching those would be wasted transfers.
     char wantBase[PLATFORM_MAX_PATH];
-    Format(wantBase, sizeof(wantBase), "%s%s", THEATER_PREFIX, want);
+    if (theaterChanged) Format(wantBase, sizeof(wantBase), "%s%s", THEATER_PREFIX, want);
 
-    int  count = files.Length;
+    int  count     = files.Length;
+    int  theaters  = 0;
+    int  models    = 0;
     char entry[PLATFORM_MAX_PATH];
 
     for (int i = 0; i < count; i++)
     {
         if (!files.GetString(i, entry, sizeof(entry))) continue;
         TrimString(entry);
+        if (entry[0] == '\0') continue;
 
-        if (strncmp(entry, wantBase, strlen(wantBase), false) != 0) continue;
+        bool isTheater = false;
+        bool isModel   = false;
 
-        int len = strlen(entry);
-        int sufLen = strlen(THEATER_SUFFIX);
-        if (len <= sufLen || !StrEqual(entry[len - sufLen], THEATER_SUFFIX, false)) continue;
+        if (theaterChanged && strncmp(entry, wantBase, strlen(wantBase), false) == 0)
+        {
+            int len    = strlen(entry);
+            int sufLen = strlen(THEATER_SUFFIX);
+            isTheater = (len > sufLen && StrEqual(entry[len - sufLen], THEATER_SUFFIX, false));
+        }
+        else if (strncmp(entry, MODEL_PREFIX, strlen(MODEL_PREFIX), false) == 0)
+        {
+            isModel = true;
+        }
 
+        if (!isTheater && !isModel) continue;
         if (FileExists(entry)) continue;
+
+        // The hashed directory does not exist on a server that has never seen this generation, and
+        // DownloadFile will not create it.
+        if (isModel && !EnsureDirectory(entry)) { g_bDownloadFailed = true; continue; }
 
         char url[PLATFORM_MAX_PATH];
         Format(url, sizeof(url), "%s/%s", base, entry);
@@ -401,6 +438,7 @@ static void ReconcileTheater(JSONObject manifest, JSONArray files)
         pack.WriteCell(g_iGeneration);
 
         g_iPendingDownloads++;
+        if (isTheater) theaters++; else models++;
 
         HTTPRequest request = new HTTPRequest(url);
         request.DownloadFile(part, OnTheaterDownloaded, pack);
@@ -408,13 +446,49 @@ static void ReconcileTheater(JSONObject manifest, JSONArray files)
 
     if (g_iPendingDownloads == 0)
     {
-        // Already on disk - a restart, or a name we fetched on an earlier map.
-        ApplyTheaterName();
+        // Already on disk - a restart, or a generation we fetched on an earlier map.
+        if (theaterChanged) ApplyTheaterName();
     }
     else
     {
-        LogMessage("Fetching %d file(s) for theater \"%s\"", g_iPendingDownloads, want);
+        LogMessage("Fetching %d theater file(s) and %d model file(s) for \"%s\"",
+                   theaters, models, haveTheater ? want : current);
     }
+}
+
+/* Creates every missing component of a file's directory path. Returns false only if a component
+ * could not be created, which is a genuine problem worth surfacing rather than retrying silently.
+ *
+ * NOTE FOR THE CONTAINER IMAGE: anything this creates inside the game tree must also be listed in
+ * CASECACHE_EXCLUDE. The shim freezes its index at startup and answers an authoritative ENOENT for
+ * paths under an indexed ancestor that were not there at the time, so a directory created here is
+ * invisible to the engine unless it is excluded - the same reason scripts/theaters is excluded.
+ */
+static bool EnsureDirectory(const char[] file)
+{
+    char dir[PLATFORM_MAX_PATH];
+    strcopy(dir, sizeof(dir), file);
+
+    int cut = FindCharInString(dir, '/', true);
+    if (cut <= 0) return true;
+    dir[cut] = '\0';
+
+    for (int i = 0; i <= cut; i++)
+    {
+        if (dir[i] != '/' && dir[i] != '\0') continue;
+
+        char partial[PLATFORM_MAX_PATH];
+        strcopy(partial, i + 1, dir);
+
+        if (DirExists(partial)) continue;
+        if (!CreateDirectory(partial, 511))
+        {
+            LogError("Cannot create directory %s - model files cannot be stored", partial);
+            return false;
+        }
+    }
+
+    return DirExists(dir);
 }
 
 public void OnTheaterDownloaded(HTTPStatus status, any data)
@@ -456,11 +530,13 @@ public void OnTheaterDownloaded(HTTPStatus status, any data)
 
     if (g_bDownloadFailed)
     {
-        LogError("Theater \"%s\" is incomplete on disk, not switching to it", g_sWantTheater);
+        LogError("Content for \"%s\" is incomplete on disk, not switching to it", g_sWantTheater);
         return;
     }
 
-    ApplyTheaterName();
+    // Empty when only models were fetched - nothing to switch to, and the files are now in place
+    // for the next map's precache.
+    if (g_sWantTheater[0] != '\0') ApplyTheaterName();
 }
 
 static void ApplyTheaterName()

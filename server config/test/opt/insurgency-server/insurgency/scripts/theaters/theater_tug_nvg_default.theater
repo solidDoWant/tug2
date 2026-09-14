@@ -21,6 +21,54 @@
 
 "theater"
 {
+	// ---------------------------------------------------------------------------
+	// Precache list - RESTATED IN FULL from theater_tug_39_medicbomber_12p_default.theater
+	// ---------------------------------------------------------------------------
+	// The ONLY reason this block exists here is the second "localize" line at the bottom. Everything
+	// above it is TUG's, copied verbatim, and has to be: every child of "precache" is named "sounds",
+	// "localize" or "particles", so a block declaring one extra "localize" would collapse all of the
+	// inherited entries of that name onto it - the same trap documented at the top of this file for
+	// allowed_items. Declaring one "localize" alone would therefore have deleted TUG's, taking 427
+	// strings (181 of them weapon names) with it. Re-extract from the workshop VPK if TUG Scripts is
+	// updated; this is a snapshot.
+	//
+	// WHY "localize" IS THE ONLY WAY TO SHIP STRINGS. CLocalize::AddFile loads a localisation file by
+	// exact filename - it substitutes "english" for %language% and loads that one path, and only
+	// scans a directory for *.txt when the process was started with -all_languages (see the
+	// CommandLine()->FindParm gate at 0x64d2 in bin/localize.so). A file the game has not been told
+	// about is inert wherever it is placed. Measured on the test client: the same tokens at three
+	// unreferenced names under resource/ and resource/ui/ did nothing, while a copy merged into
+	// resource/insurgency_english.txt loaded. This key is how TUG's own strings get in, which is why
+	// weapon_ksg renders as "KSG" and not "#weapon_ksg".
+	//
+	// The path is content-hashed and filled in at build time, exactly like the model paths - so a
+	// changed string lands at a filename no client has ever had. That matters because the engine
+	// only downloads a file it does not already have, which makes any fixed path write-once.
+	"core"
+	{
+		"precache"
+		{
+			"sounds"			"scripts/ins_sounds_weapons.txt"
+			"sounds"			"scripts/ins_sounds_cues.txt"
+			"sounds"			"scripts/ins_sounds_voice.txt"
+			"sounds"			"scripts/ins_sounds_voice_survival.txt"
+			"sounds"			"scripts/ins_sounds_radial_security.txt"
+			"sounds"			"scripts/ins_sounds_radial_insurgent.txt"
+			"sounds"			"scripts/ins_sounds_responses_security.txt"
+			"sounds"			"scripts/ins_sounds_responses_insurgent.txt"
+			"sounds"			"scripts/ins_sounds_hq.txt"
+			"sounds"			"scripts/ins_sounds_voice_coop.txt"
+			"sounds"			"scripts/tug_modern_sounds.txt"
+
+			"localize"			"resource/ui/tug_english_modern.txt"
+			"localize"			"@@PATH(loc,tug2_english_wp.txt)@@"
+
+			"particles"			"particles/gas_grenades.pcf"
+			"particles"			"particles/blood_fx.pcf"
+			"particles"			"particles/blood_impact.pcf"
+		}
+	}
+
 	"player_templates"
 	{
 		// ---------------------------------------------------------------------------
@@ -1354,16 +1402,72 @@
 	// with "Invalid player".
 	"ammo"
 	{
-		"grenade_m18_us"
+		// ===============================================================================
+		// INDEX-0 SACRIFICE - MUST STAY THE FIRST ENTRY IN THIS SECTION
+		// ===============================================================================
+		// CAmmoDef writes the first ammo type it parses to index 0, and CAmmoDef::Index() - the
+		// only way a weapon's "ammo_type" is resolved to a number - starts its search at 1:
+		//
+		//   InstallAmmoFromKeyValues:  entry = this + 8 + count*0xBC     (count starts at 0)
+		//   Index(name):               for (i = 1; i < count; i++) ...   (never looks at 0)
+		//   ResetAllAmmo:              clears slots 1..255               (never touches 0)
+		//
+		// So the first ammo type declared is registered and then permanently unfindable by name.
+		// A weapon pointing at it gets -1, stored in a byte as m_iPrimaryAmmoType 255, which is
+		// the "rifle holsters and snaps back, no grenade ever appears" failure. Nothing is logged.
+		//
+		// #base merging puts THIS file's ammo children before the inherited ones, so the victim is
+		// always whatever we declare first - which is why the same declaration worked in one build
+		// and broke in the next, purely from what was listed above it.
+		//
+		// This entry exists to be that victim. Nothing references it. Keep it first, and never
+		// point a weapon at it.
+		"tug2_unusable_index0"
 		{
-			"carry"					"2"
+			"carry"					"1"
 		}
-		"grenade_m18_ins"
-		{
-			"carry"					"2"
-		}
+
+		// NO GRENADE AMMO TYPES ARE DECLARED HERE, AND NONE MAY BE.
+		//
+		// Declaring one - whether it duplicates a TUG name or is entirely new - makes the weapon that
+		// references it vanish the instant it is deployed: m_iPrimaryAmmoType 255, ammo 0, the rifle
+		// holsters and snaps back, no grenade ever appears. Measured repeatedly on the test server,
+		// and it is what the "Fix HE smokes not working" commit was really chasing:
+		//
+		//   ammo declared here for m18_us/_ins/_wp_us  -> WP worked, green and pink vanished
+		//   only grenade_m18_wp_us declared here       -> green and pink worked, WP vanished
+		//   none declared here                         -> all three work
+		//
+		// The mechanism is not understood. What IS established is that pointing ammo_clip at an ammo
+		// type TUG already declares works every time, and costs nothing - so that is what the three
+		// markers do. It also gets the carry counts for free, which is what the removed blocks were
+		// trying to buy: TUG declares these well above 1, and raising "carry" ourselves was never
+		// going to work.
+		//
+		// The three below are chosen because no weapon reachable on this server uses them, so the
+		// pools cannot be shared with something a player might also be carrying. Verified against
+		// every weapon in TUG Scripts 3.9 with an ammo_type, cross-referenced with the allowed_items
+		// in this file:
+		//
+		//   weapon_m18_us   -> grenade_stingball  carry 4  (no weapon anywhere uses it)
+		//   weapon_m18_ins  -> grenade_smoke      carry 3  (no weapon anywhere uses it)
+		//   weapon_m18_wp_us-> grenade_m18        carry 4  (weapon_m18 exists but is not buyable here)
+		//
+		// If one of those ever becomes reachable, move the marker to another unused type rather than
+		// declaring a fresh one here.
 		// Same pair of gates as above - this one was introduced with the same mistake, since it was
 		// copied from the green marker before the cause was understood.
+		// The three markers' own ammo types. Safe to declare here now that index 0 is spoken for -
+		// and this is what lets the carry counts be ours rather than whatever TUG happens to ship.
+		// TUG gives its own grenade_m18_us/_ins "carry" "1"; these are 2 by choice.
+		"grenade_m18_us_x2"
+		{
+			"carry"					"2"
+		}
+		"grenade_m18_ins_x2"
+		{
+			"carry"					"2"
+		}
 		"grenade_m18_wp_us"
 		{
 			"carry"					"2"
@@ -1559,18 +1663,60 @@
 		// adding one key to an inherited block, because whether import merges NESTED blocks or
 		// replaces them is not established - and assuming merge semantics is exactly what caused the
 		// bug above. Everything genuinely shared lives here.
-		"weapon_m18_signal_base"
+		// ---------------------------------------------------------------------------
+		// The three signal/marker grenades
+		// ---------------------------------------------------------------------------
+		// WRITTEN OUT IN FULL, ONE BLOCK EACH, IMPORTING weapon_grenade_base DIRECTLY - which is
+		// exactly how TUG declares weapon_m18_us and weapon_m18_ins. There is no shared intermediate
+		// base here, and there must not be one.
+		//
+		// There was: "weapon_m18_signal_base", carrying "IsBase" "1" and the fields the three have in
+		// common. It reads better and it does not work. #base merging appends the INHERITED weapons
+		// after the ones declared here, so "weapon_m18_signal_base" lands in the merged tree BEFORE
+		// "weapon_grenade_base", and an import resolved in definition order cannot see a parent that
+		// is registered later. What the three inherited was whatever the half-built intermediate
+		// held. The visible result: a marker that could be bought and thrown, whose grenade flew and
+		// detonated correctly, but whose viewmodel played NO activity at all - no pin-pull, no throw,
+		// and the sprint pose frozen with the hand and grenade held still. A missing act_table is
+		// exactly that symptom.
+		//
+		// The viewmodel was ruled out before changing this. Our compiled v_m18.mdl was compared with
+		// TUG's workshop copy sequence by sequence: the same 15 sequences, the same activities
+		// (ACT_VM_IDLE, ACT_VM_SPRINT, ACT_VM_PULLBACK_HIGH, ACT_VM_THROW, ACT_VM_HAULBACK, ...) and
+		// all 16 animation events (Weapon_M67.PinPull, Weapon_M67.ArmThrow, AE_WPN_PULL_SPOON) are
+		// present and identical. The single difference is that the compiler folds bakethrow onto
+		// throw's animation data - 20 identical frames - which cannot stop an animation playing.
+		//
+		// So: no intermediate. The duplication across these three blocks buys an import that resolves
+		// against a parent the game has definitely already registered. Each block is TUG's field for
+		// field, with weapon_max_subslot raised and nothing else changed.
+
+		"weapon_m18_us"
 		{
-			"IsBase"					"1"
 			"import"					"weapon_grenade_base"
 			"weapon_class"				"grenade_smoke"
 			"weapon_type"				"grenade"
 			"weapon_slot"				"explosive"
-			"weapon_max_subslot"		"2"
 			"act_table"					"grenade"
 			"weapon_weight"				"0"
 			"weapon_cost"				"1"
 			"class_restricted"			"1"
+
+			// 1, which is TUG's value. Raising it to 2 - one half of the "carry two markers" change,
+			// the other half being "carry" in the "ammo" section above - is what broke the viewmodel
+			// on all three markers: no pin-pull, no throw, and the sprint pose frozen with the
+			// grenade drifting and snapping back while the hand never moved.
+			//
+			// That was established by elimination, not by guesswork. With these blocks restated in
+			// full they matched TUG's weapon_m18_us on 19 of 20 keys, and this was the twentieth.
+			// Ruled out first, each against TUG's own copy: the compiled viewmodel (identical 119
+			// bones in identical order, identical 15 sequences, identical activities, identical 16
+			// animation events, identical per-animation bone track counts), the shared intermediate
+			// base, and the third_person block.
+			//
+			// Raise it again only alongside "carry", and only with a way to test both markers - the
+			// pair never actually delivered two grenades anyway, which is what started this.
+			"weapon_max_subslot"		"1"
 
 			"fov"
 			{
@@ -1582,23 +1728,6 @@
 				"special1"				"Weapon_M67.SpoonEject"
 			}
 
-			"third_person"
-			{
-				"reticle"				"ss_crosshairs/smoke_grenade"
-				"scope_first_person"	"1"
-
-				"recoil_frac_aim"		"0.08"
-				"recoil_frac_cam_pitch"	"0.04"
-				"recoil_frac_cam_yaw"	"0.06"
-
-				"spread_frac_speed"		"1.0"
-				"spread_frac_spray"		"0.2"
-			}
-		}
-
-		"weapon_m18_us"
-		{
-			"import"					"weapon_m18_signal_base"
 			"print_name"				"#weapon_m18_us"
 			"print_desc"				"#weapon_m18_us_desc"
 			"view_model"				"models/tug/v_m18.mdl"
@@ -1610,8 +1739,8 @@
 			}
 			"ammo_clip"
 			{
-				"ammo_type"				"grenade_m18_us"
-				"clip_max_rounds"		"-1"
+				"ammo_type"				"grenade_m18_us_x2"
+				"clip_max_rounds"		"-1"	// no clips
 				"clip_default"			"1"
 			}
 
@@ -1620,7 +1749,41 @@
 
 		"weapon_m18_ins"
 		{
-			"import"					"weapon_m18_signal_base"
+			"import"					"weapon_grenade_base"
+			"weapon_class"				"grenade_smoke"
+			"weapon_type"				"grenade"
+			"weapon_slot"				"explosive"
+			"act_table"					"grenade"
+			"weapon_weight"				"0"
+			"weapon_cost"				"1"
+			"class_restricted"			"1"
+
+			// 1, which is TUG's value. Raising it to 2 - one half of the "carry two markers" change,
+			// the other half being "carry" in the "ammo" section above - is what broke the viewmodel
+			// on all three markers: no pin-pull, no throw, and the sprint pose frozen with the
+			// grenade drifting and snapping back while the hand never moved.
+			//
+			// That was established by elimination, not by guesswork. With these blocks restated in
+			// full they matched TUG's weapon_m18_us on 19 of 20 keys, and this was the twentieth.
+			// Ruled out first, each against TUG's own copy: the compiled viewmodel (identical 119
+			// bones in identical order, identical 15 sequences, identical activities, identical 16
+			// animation events, identical per-animation bone track counts), the shared intermediate
+			// base, and the third_person block.
+			//
+			// Raise it again only alongside "carry", and only with a way to test both markers - the
+			// pair never actually delivered two grenades anyway, which is what started this.
+			"weapon_max_subslot"		"1"
+
+			"fov"
+			{
+				"fov_wpn_default"		"65"
+			}
+
+			"sounds"
+			{
+				"special1"				"Weapon_M67.SpoonEject"
+			}
+
 			"print_name"				"#weapon_m18_ins"
 			"print_desc"				"#weapon_m18_ins_desc"
 			"view_model"				"models/tug/v_m18_ins.mdl"
@@ -1632,37 +1795,64 @@
 			}
 			"ammo_clip"
 			{
-				"ammo_type"				"grenade_m18_ins"
-				"clip_max_rounds"		"-1"
+				"ammo_type"				"grenade_m18_ins_x2"
+				"clip_max_rounds"		"-1"	// no clips
 				"clip_default"			"1"
 			}
 
 			"team_access"				"insurgent"
 		}
 
-		// The WP marker. FireSupport picks a support type by testing the HELD weapon's classname
-		// against the "weapon" key in configs/firesupport.cfg with StrContains, first match wins -
-		// so these two have to be distinguishable as substrings. "weapon_m18_wp_us" does not
-		// contain "m18_us" (it reads m18_wp_us), so the HE entry cannot swallow the WP throw.
-		// Renaming either one means rechecking that.
 		"weapon_m18_wp_us"
 		{
-			"import"					"weapon_m18_signal_base"
+			"import"					"weapon_grenade_base"
+			"weapon_class"				"grenade_smoke"
+			"weapon_type"				"grenade"
+			"weapon_slot"				"explosive"
+			"act_table"					"grenade"
+			"weapon_weight"				"0"
+			"weapon_cost"				"1"
+			"class_restricted"			"1"
+
+			// 1, which is TUG's value. Raising it to 2 - one half of the "carry two markers" change,
+			// the other half being "carry" in the "ammo" section above - is what broke the viewmodel
+			// on all three markers: no pin-pull, no throw, and the sprint pose frozen with the
+			// grenade drifting and snapping back while the hand never moved.
+			//
+			// That was established by elimination, not by guesswork. With these blocks restated in
+			// full they matched TUG's weapon_m18_us on 19 of 20 keys, and this was the twentieth.
+			// Ruled out first, each against TUG's own copy: the compiled viewmodel (identical 119
+			// bones in identical order, identical 15 sequences, identical activities, identical 16
+			// animation events, identical per-animation bone track counts), the shared intermediate
+			// base, and the third_person block.
+			//
+			// Raise it again only alongside "carry", and only with a way to test both markers - the
+			// pair never actually delivered two grenades anyway, which is what started this.
+			"weapon_max_subslot"		"1"
+
+			"fov"
+			{
+				"fov_wpn_default"		"65"
+			}
+
+			"sounds"
+			{
+				"special1"				"Weapon_M67.SpoonEject"
+			}
+
 			"print_name"				"#weapon_m18_wp_us"
 			"print_desc"				"#weapon_m18_wp_us_desc"
 
 			// Built from source by the fastdl project: the green marker's geometry (workshop item
-			// 2744181131) recompiled with $cdmaterials pointed at this repo's own material. The
-			// paths below are content-hashed and filled in at build time - see fastdl/README.md.
-			// That material tints in place and references the ORIGINAL textures, so no texture or
-			// model art is duplicated - see the VMT for the tint and its caveat.
+			// 2744181131) recompiled with $cdmaterials pointed at this repo's own material, and with
+			// $modelname carrying the content hash so the engine resolves the .vvd/.vtx beside the
+			// .mdl instead of at a fixed path. Both filled in at build time - see fastdl/README.md.
 			//
-			// Only the $cdmaterials path and the .mdl's own internal name were changed, and both
-			// replacements are byte-for-byte the same length. A .mdl addresses most of its strings
-			// by offset, so a length change there corrupts the file silently.
+			// FireSupport picks the mission by testing the held weapon with StrContains, first match
+			// wins, so this name must not contain "m18_us" as a substring. It reads m18_wp_us, which
+			// does not. Check that again if either marker is ever renamed.
 			"view_model"				"@@PATH(mdl,v_m18.mdl)@@"
 			"world_model"				"@@PATH(mdl,w_m18.mdl)@@"
-
 
 			"explosives"
 			{
@@ -1675,29 +1865,8 @@
 				"clip_default"			"1"
 			}
 
-
 			"team_access"				"security"
 		}
-
-		// KSG - restated IN FULL to correct clip_default, which TUG ships as 0.
-		//
-		// 0 means the weapon is handed out with a full tube and literally nothing spare, by configuration
-		// rather than by the ammo-type bug fixed in the "ammo" block above. Confirmed unintentional. The
-		// two faults are independent and the KSG had both, so it needs this as well as the magsize fix.
-		//
-		// 42 is three tube-loads, which is what every other pump in this theater is given - m590 8 -> 24,
-		// m500 8 -> 24, spas12 8 -> 24, nova 8 -> 24, toz 6 -> 18. The KSG's tube is 14, so 3 x 14 = 42,
-		// and that still fits under its own clip_max (48) and 4buckshot's carry (72).
-		//
-		// ONE THING TO WATCH: the KSG's 14-round tube is the odd one out against the shared magsize of 8
-		// that 4buckshot now declares (chosen because four of the six weapons sharing it hold 8). If the
-		// KSG specifically still misbehaves after deploying, that mismatch is the first suspect, and the
-		// remedy is its own ammo type modelled on saiga_4buckshot rather than moving the shared magsize.
-		//
-		// RESTATED IN FULL because duplicate keys do not merge here - the later definition wins outright,
-		// so a one-field block would leave a stub with no import, model or ammo_type. TUG 3.9's definition
-		// verbatim apart from clip_default; re-extract from theater_tug_39_custom_weapon.theater if TUG
-		// is updated.
 
 		"weapon_ksg"
 		{
@@ -1805,10 +1974,9 @@
 	// name; addons/sourcemod/configs/firesupport.cfg names the projectile and FireSupport.sp
 	// spawns it through CBaseRocketMissile::CreateRocketMissile.
 	//
-	// Safe as a partial block, for the same reason the "weapons" override below is: #base merges
-	// by child NAME, and "explosives" plus each shell name are unique within their parent. These
-	// are NEW names, so nothing inherited is matched or replaced - the HE rounds stay defined and
-	// can be switched back to from the plugin config alone, with no theater change.
+	// The WP round is a NEW name, so nothing inherited is matched or replaced and it is written in
+	// full below. The HE rounds are NOT new, and they may not be written as one-key overrides - see
+	// the note on them inside "explosives".
 	//
 	// The difference from HE is entity_class. grenade_frag is a blast; grenade_aoe is a persistent
 	// damage field that keeps applying after detonation, which is how the stock molotov, ANM14 and
@@ -1817,22 +1985,88 @@
 	{
 		// The HE rounds, matched to the WP round's model.
 		//
-		// These are TUG's, defined in theater_tug_39_custom_weapon.theater, and only the Model is
-		// replaced here - damage, radii, fuse, particles and sounds are all inherited untouched.
-		// Safe as a partial block for the usual reason: #base merges by child NAME, and
-		// "explosives", each shell name and "Model" are unique within their parent.
+		// RESTATED IN FULL, and they have to be. These two were a one-key "Model" override until
+		// 2026-09-14, on the assumption that #base deep-merges a partial block into the inherited
+		// definition. It does not - the same assumption produced the marker-grenade bug fixed in
+		// "Fix HE smokes not working", where a one-key weapon block replaced TUG's definition with
+		// a stub that had no import and no ammo_type. The measured rule is the one written above
+		// the "weapons" section: duplicate children do not merge, the LATER definition wins
+		// outright. A one-key block is therefore a whole new definition with one key in it.
 		//
-		// Same reasoning as the WP round: a_projectile_m203.mdl is a 40mm grenade and is close to
-		// invisible falling at RocketStartSpeed 3000. The RPG-7 projectile is the largest
-		// falling-munition model available and is the only warning a player gets that the ground is
-		// about to be hit. Stock model, so this costs nothing - the workshop item gains no files.
+		// For an explosive that means no "entity_class", and with no entity_class there is nothing
+		// for CBaseRocketMissile::CreateRocketMissile to build: FireSupport's SDKCall returns no
+		// entity, the plugin does not log it (see the rocket > 0 guard in Timer_FireShell), and the
+		// mission silently produces the radio call and then nothing at all. Which is exactly how
+		// "normal artillery doesn't work" presented. The WP mission was unaffected because
+		// grenade_m777_wp_us is a new name written out in full.
+		//
+		// Everything below is TUG's own definition from theater_tug_39_custom_weapon.theater,
+		// copied verbatim EXCEPT for "Model". Re-copy it from there if TUG Scripts is updated.
+		//
+		// Why the model differs: a_projectile_m203.mdl is a 40mm grenade and is close to invisible
+		// falling at RocketStartSpeed 3000. The RPG-7 projectile is the largest falling-munition
+		// model available and is the only warning a player gets that the ground is about to be hit.
+		// Stock model, so this costs nothing - no file is added to fastdl or to the workshop item.
 		"grenade_m777_us"
 		{
+			"import"					"baseGrenade"
+			"entity_class"				"grenade_frag"
 			"Model"						"models/weapons/w_rpg7_projectile.mdl"
+
+			"DetonateDamage"			"230"
+			"DetonatePenetrationRadius"	"200"
+			"DetonateDamageRadius"		"1000"
+
+			"FuseTime"					"0"
+			"ImpactDetonation"			"1"
+			"RocketStartSpeed"			"3000"
+
+			"Health"					"50"
+			"ReactExplosions"			"1"
+			"ReactBullets"				"1"
+
+			"Particles"
+			{
+				"DetonateParticle"			"ins_c4_explosion"
+				"DetonateWaterParticle"		"ins_water_explosion"
+			}
+
+			"Sounds"
+			{
+				"DetonateSound"				"C4.Explode"
+				"DetonateWaterSound"		"C4.ExplodeWater"
+			}
 		}
+
 		"grenade_m777_ins"
 		{
+			"import"					"baseGrenade"
+			"entity_class"				"grenade_frag"
 			"Model"						"models/weapons/w_rpg7_projectile.mdl"
+
+			"DetonateDamage"			"230"
+			"DetonatePenetrationRadius"	"200"
+			"DetonateDamageRadius"		"1000"
+
+			"FuseTime"					"0"
+			"ImpactDetonation"			"1"
+			"RocketStartSpeed"			"3000"
+
+			"Health"					"50"
+			"ReactExplosions"			"1"
+			"ReactBullets"				"1"
+
+			"Particles"
+			{
+				"DetonateParticle"			"ins_c4_explosion"
+				"DetonateWaterParticle"		"ins_water_explosion"
+			}
+
+			"Sounds"
+			{
+				"DetonateSound"				"C4.Explode"
+				"DetonateWaterSound"		"C4.ExplodeWater"
+			}
 		}
 
 		// The thrown marker that calls the WP mission. Yellow, for visibility against the dust and
@@ -1942,24 +2176,74 @@
 		// than an annoyance. Smoke has no such problem: DetonateDamage is unset, so an instant pop
 		// at point-blank range hurts nobody.
 		//
-		// Safe as a partial block for the usual reason: #base merges by child NAME and takes the
-		// FIRST match, and "explosives", each round name and "ArmDelay" are unique within their
-		// parent - everything else about these rounds is inherited untouched.
+		// RESTATED IN FULL for the same reason as the M777 rounds above: a one-key override does not
+		// merge into the inherited definition, it REPLACES it. These three were one-key "ArmDelay"
+		// blocks until 2026-09-14, which left all three underbarrel smoke rounds as stubs with no
+		// entity_class, no particle and no sound - i.e. silently dead, exactly like the HE artillery
+		// shell. Nobody reported it because underbarrel smoke is rarely bought; it was found by
+		// auditing every partial block in this file after the artillery cause was identified.
 		//
-		// grenade_gp25_smoke is defined by TUG as `"import" "grenade_m203_smoke"` plus a model swap,
-		// so it would likely pick this up on its own. Set explicitly anyway: import resolution and
-		// #base merging are separate passes and the ordering between them is not worth depending on.
+		// Bodies are TUG's, from theater_tug_39_default_weapon.theater, verbatim except ArmDelay.
+		// grenade_gp25_smoke keeps TUG's shape - "import" plus a model swap - because "import" is an
+		// explicit directive the theater parser resolves, not #base merging, and it does work.
 		"grenade_m203_smoke"
 		{
+			"import"					"baseGrenade"
+			"entity_class"				"grenade_smoke"
+			"Model"						"models/weapons/upgrades/a_projectile_m203.mdl"
+			"FuseTime"					"0"
+			"ImpactDetonation"			"1"
+			"RocketStartSpeed"			"3000"
 			"ArmDelay"					"0"
+
+			"Health"					"50"
+			"ReactExplosions"			"1"
+			"ReactBullets"				"1"
+
+			"Particles"
+			{
+				"DetonateParticle"			"m203_smokegrenade"
+				"SmokeColor"				"40 35 33 252"
+			}
+
+			"Sounds"
+			{
+				"DetonateSound"				"Weapon_m203.SmokeExplode"
+				"BounceSound"				"Weapon_M67.Bounce"
+			}
 		}
+
 		"grenade_gp25_smoke"
 		{
-			"ArmDelay"					"0"
+			"import"					"grenade_m203_smoke"
+			"Model"						"models/weapons/upgrades/a_projectile_gp25.mdl"
 		}
+
 		"grenade_m79_smoke"
 		{
+			"import"					"baseGrenade"
+			"entity_class"				"grenade_smoke"
+			"Model"						"models/weapons/upgrades/a_projectile_m203.mdl"
+			"FuseTime"					"0"
+			"ImpactDetonation"			"1"
+			"RocketStartSpeed"			"3000"
 			"ArmDelay"					"0"
+
+			"Health"					"50"
+			"ReactExplosions"			"1"
+			"ReactBullets"				"1"
+
+			"Particles"
+			{
+				"DetonateParticle"			"m203_smokegrenade"
+				"SmokeColor"				"40 35 33 252"
+			}
+
+			"Sounds"
+			{
+				"DetonateSound"				"Weapon_m203.SmokeExplode"
+				"BounceSound"				"Weapon_M67.Bounce"
+			}
 		}
 
 	}

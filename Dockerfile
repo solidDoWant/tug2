@@ -907,7 +907,15 @@ ENV LD_PRELOAD=/opt/insurgency-server/casecache.so
 #
 # Note this does NOT match a workshop item's own scripts/theaters - those live under /steamapps/ -
 # so the hot path for the case-insensitive descent stays indexed.
-ENV CASECACHE_EXCLUDE=/insurgency/scripts/theaters
+#
+# /insurgency/models is here for the same reason, and it is NOT optional. The server needs the
+# fastdl models on disk itself, not just the client: viewmodel animation is selected server-side
+# (SelectWeightedSequence against the server's copy, sequence index networked to the client), so a
+# server missing the .mdl leaves the client rendering the model perfectly and never animating it,
+# with no error on either side. gg2_fastdl now downloads them, which means it creates the directory
+# after the index is frozen - and an unexcluded path under an indexed ancestor gets an authoritative
+# ENOENT from resolve(), so the files would be written and then be invisible.
+ENV CASECACHE_EXCLUDE=/insurgency/scripts/theaters:/insurgency/models
 
 
 FROM gameserver AS gameserver-test
@@ -1000,7 +1008,15 @@ ENV LD_PRELOAD=/opt/insurgency-server/casecache.so
 #
 # Note this does NOT match a workshop item's own scripts/theaters - those live under /steamapps/ -
 # so the hot path for the case-insensitive descent stays indexed.
-ENV CASECACHE_EXCLUDE=/insurgency/scripts/theaters
+#
+# /insurgency/models is here for the same reason, and it is NOT optional. The server needs the
+# fastdl models on disk itself, not just the client: viewmodel animation is selected server-side
+# (SelectWeightedSequence against the server's copy, sequence index networked to the client), so a
+# server missing the .mdl leaves the client rendering the model perfectly and never animating it,
+# with no error on either side. gg2_fastdl now downloads them, which means it creates the directory
+# after the index is frozen - and an unexcluded path under an indexed ancestor gets an authoritative
+# ENOENT from resolve(), so the files would be written and then be invisible.
+ENV CASECACHE_EXCLUDE=/insurgency/scripts/theaters:/insurgency/models
 
 
 # Fast download content. Only the plugin ships here - the list of files it advertises, and the name

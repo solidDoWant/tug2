@@ -1,6 +1,7 @@
 // Created by Crowbar 0.55
 
-$modelname "twp\w_m18.mdl"
+// See the $modelname note in v_m18_ins2.qc.
+$modelname "@@MDLNAME(mdl,w_m18.mdl)@@"
 
 $bodygroup "m84"
 {

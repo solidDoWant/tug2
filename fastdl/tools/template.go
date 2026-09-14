@@ -12,9 +12,20 @@ package main
 //	@@MATDIR(tex)@@           models\twp_tex_ab12\             $cdmaterials
 //	@@MATPATH(tex,t_x)@@      models\twp_tex_ab12\t_x          VMT $basetexture, no extension
 //	@@PATH(mdl,v_m18.mdl)@@   models/twp_ab12/v_m18.mdl        theater view_model
+//	@@MDLNAME(mdl,v_m18.mdl)@@  twp_ab12\\v_m18.mdl              QC $modelname
 //
 // An unresolved placeholder fails the build; left in a shipped VMT it would be a missing-texture bug
 // visible only in game.
+//
+// MDLNAME EXISTS BECAUSE $modelname IS A LOOKUP PATH, NOT A LABEL. datacache.so's MakeFilename
+// builds the .vvd/.vtx/.phy filenames as "models/" + studiohdr_t::name (offset 0xc, which is
+// whatever the QC's $modelname said) + the extension - NOT from the path the .mdl was loaded from.
+// So a model published at models/twp_ab12/v_m18.mdl but compiled with $modelname "twp/v_m18.mdl"
+// loads its .mdl from the hashed directory and its vertices from models/twp/v_m18.vvd, and the
+// client refuses the pair with
+//     Error Vertex File for 'twp\\v_m18.mdl' checksum <vvd> should be <mdl>
+// once per frame, drawing nothing. Hashing the directory is worthless unless $modelname is hashed
+// with it, because models/twp/ is a fixed path and therefore write-once on every client.
 
 import (
 	"fmt"
@@ -80,6 +91,14 @@ func expand(text string, groups map[string]string, where string) (string, error)
 				return m
 			}
 			return base + "/" + args[1]
+		case "MDLNAME":
+			// $modelname is relative to models/ and uses backslashes, the same shape as
+			// $cdmaterials is relative to materials/.
+			if len(args) != 2 {
+				bad = fmt.Errorf("%s: @@MDLNAME(group,file)@@ needs two arguments", where)
+				return m
+			}
+			return strings.ReplaceAll(strings.TrimPrefix(base, "models/"), "/", `\`) + `\` + args[1]
 		}
 		bad = fmt.Errorf("%s: unknown placeholder @@%s@@", where, fn)
 		return m
