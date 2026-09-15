@@ -796,6 +796,30 @@ warning the same player cannot lose an increment.
 | `sm_bot_smoke_suppress_warn_x` / `_y` | -1 / 0.65 | screen position, 0..1; -1 centres |
 | `sm_bot_smoke_suppress_warn_color` | `255 200 60 255` | R G B A |
 
+**The instructor hint is broadcast, so the cap has to be applied on the client** (style 1, the
+default). There is no per-player instructor hint on the wire:
+`CEnvInstructorHint::InputShowHint` fires ONE `instructor_server_hint_create` game event with
+`FireEvent(event, bDontBroadcast = 0)` and no recipient filter, so every connected client gets it.
+The activator survives only as `hint_activator_userid`, taken from the input's activator. All the
+filtering is done client side by the `server_hint` lesson in `scripts/instructor_lessons.txt`, which
+has two variants:
+
+| `hint_local_player_only` | what the client does |
+| --- | --- |
+| `0` | opens on **every** client. The activator's only privilege is that `hint_activator_caption` is swapped in — and we never set it, so everyone sees the same text. |
+| `1` | gated on `"local_player is" "player entity2"`, i.e. opens only on the client whose userid is `hint_activator_userid`. |
+
+It shipped as `0`, which meant the cap decided who *triggered* a warning while the warning itself
+was painted on everyone within `hint_range` of the cloud. A player at the cap kept seeing it every
+time any uncapped player set one off, and never incremented their own count — they were not the
+activator — so their `smoke_warning_seen` row froze and the hint never stopped. Fixed 2026-09-15 by
+setting it to `1`. Styles 0 and 2 were never affected: `game_text` with the "All Players" spawnflag
+clear, and `PrintHintText`, are both genuinely per-player.
+
+`sm_bot_smoke_suppress_warnstate` (RCON only) dumps the per-player cap state — captured Steam id,
+loaded count, this round's gate, and the verdict — which is the only way to tell an enforced cap
+apart from the degraded fall-open below, since the latter writes nothing to the table.
+
 **If the database is unavailable** the cap cannot be enforced, so the warning degrades to once per
 round with no lifetime limit and logs once. That is deliberate: noisy for regulars beats never
 explaining the mechanic to anyone. Worth knowing given this server's stats Postgres drops idle

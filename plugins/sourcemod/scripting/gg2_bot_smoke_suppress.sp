@@ -653,6 +653,9 @@ public void OnPluginStart()
     RegServerCmd("sm_bot_smoke_suppress_dumpclasses", Cmd_DumpClasses,
                  "DEBUG: print each bot's active weapon and its GetWeaponClass() value");
 
+    RegServerCmd("sm_bot_smoke_suppress_warnstate", Cmd_WarnState,
+                 "DEBUG: per-player state of the warning cap - captured Steam id, loaded count, this round's gate");
+
     RestartTimer();
     LogMessage("[SMOKE SUPPRESS] Loaded. Enabled=%d interval=%.1f", g_cvEnabled.BoolValue, g_cvInterval.FloatValue);
 }
@@ -813,6 +816,40 @@ Action Cmd_Why(int args)
 // that is REMOVED from the inventory when the last one is thrown - so bots can genuinely run dry,
 // and every grenade measurement after that point silently reads zero for the wrong reason.
 // Grenade weapon classes, measured live: 2 frag, 3 molotov, 4 smoke, 7 launcher.
+// Why a player is or is not still being warned. The lifetime cap lives in g_iWarnCount, which is
+// loaded per connection from smoke_warning_seen and incremented in memory; every path that cannot
+// reach a Steam id or the database falls OPEN to 0, which means warned once per round forever and
+// nothing written back. That degraded state is invisible in the table - the player simply has no
+// row, or an old one that stops moving - so it can only be told apart from a working cap here.
+Action Cmd_WarnState(int args)
+{
+    PrintToServer("[SMOKE SUPPRESS] warn=%d cap=%d forget_days=%d db=%s",
+                  g_cvWarnEnabled.BoolValue, g_cvWarnMax.IntValue, g_cvWarnForgetDays.IntValue,
+                  g_hWarnDb == null ? "NOT CONNECTED" : "connected");
+
+    for (int c = 1; c <= MaxClients; c++)
+    {
+        if (!IsClientInGame(c) || IsFakeClient(c)) continue;
+
+        char name[MAX_NAME_LENGTH];
+        GetClientName(c, name, sizeof(name));
+
+        int  cap     = g_cvWarnMax.IntValue;
+        bool capped  = (cap > 0 && g_iWarnCount[c] >= cap);
+        bool loading = (g_iWarnCount[c] < 0);
+
+        PrintToServer("[SMOKE SUPPRESS]   %d %s: steamid=%s count=%d warned_this_round=%d -> %s",
+                      c, name,
+                      g_sWarnSteamId[c][0] == '\0' ? "<NOT CAPTURED>" : g_sWarnSteamId[c],
+                      g_iWarnCount[c], g_bWarnedThisRound[c],
+                      loading ? "skipped (still loading)"
+                              : (capped ? "capped, will not warn"
+                                        : (g_bWarnedThisRound[c] ? "eligible next round" : "eligible now")));
+    }
+
+    return Plugin_Handled;
+}
+
 Action Cmd_NadeCheck(int args)
 {
     if (g_hGetWeaponClass == null)
@@ -1575,7 +1612,25 @@ void ShowInstructorHint(int client, const char[] text, int smoke)
     DispatchKeyValue(entity, "hint_forcecaption", "1");    // show the text, not just the icon
     DispatchKeyValue(entity, "hint_nooffscreen", "0");     // keep the offscreen arrow
     DispatchKeyValue(entity, "hint_allow_nodraw_target", "1");
-    DispatchKeyValue(entity, "hint_local_player_only", "0");
+    // MUST be 1, and this is the whole reason the per-player cap appeared not to work.
+    //
+    // There is no per-player instructor hint on the wire. CEnvInstructorHint::InputShowHint fires
+    // ONE instructor_server_hint_create game event with FireEvent(event, bDontBroadcast = 0) and no
+    // recipient filter, so every connected client receives it; the activator is carried only as
+    // hint_activator_userid, read from the input's activator. All the filtering happens client side,
+    // in the "server_hint" lesson in scripts/instructor_lessons.txt, which has two variants:
+    //
+    //   hint_local_player_only 0 -> opens on EVERY client. The activator's only privilege is that
+    //                               it swaps in hint_activator_caption, which we never set - so
+    //                               everyone sees the same text.
+    //   hint_local_player_only 1 -> gated on "local_player is entity2", i.e. opens only on the
+    //                               client whose userid is hint_activator_userid.
+    //
+    // With 0, the cap decided who TRIGGERED a warning while the warning itself was painted on
+    // everyone within hint_range of the cloud. A player at the cap kept seeing it every time any
+    // uncapped player set one off, and never incremented their own count - they were not the
+    // activator - so their smoke_warning_seen row froze and the hint never stopped.
+    DispatchKeyValue(entity, "hint_local_player_only", "1");
 
     g_cvWarnIcon.GetString(buffer, sizeof(buffer));
     DispatchKeyValue(entity, "hint_icon_onscreen", buffer);
