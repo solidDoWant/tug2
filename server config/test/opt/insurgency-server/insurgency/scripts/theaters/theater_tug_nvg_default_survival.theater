@@ -123,4 +123,486 @@
 			}
 		}
 	}
+
+	// =================================================================================
+	// SURVIVAL'S SECURITY WAVES - REQUIRED, AND NOT REACHABLE ANY OTHER WAY
+	// =================================================================================
+	// Survival does NOT build its attacking waves from the "squads" above. The mode asks for a
+	// fixed set of class templates BY NAME, one pair per wave plus two specialists:
+	//
+	//     template_survival_base_01_security .. _05_security
+	//     template_survival_officer_01_security .. _05_security
+	//     template_survival_m249_security
+	//     template_survival_at4_security
+	//
+	// Those are defined in stock scripts/theaters/default_survival.theater, which is NOT in this
+	// file's ancestry - the chain is theater_tug_nvg_default -> TUG's medicbomber_12p -> ... ->
+	// default.theater, and default_survival is a SIBLING of default, not a parent. TUG ships no
+	// _survival variant either. So nothing in the loaded theater defined them, and the engine said
+	// so once per wave, all the way down:
+	//
+	//     Can't precache non-existant class template_survival_base_02_security
+	//     Failed to find template "template_survival_base_01_security" when giving items
+	//
+	// A template that cannot be found gives no items, so every Security bot spawned empty handed.
+	//
+	// The twelve names are fixed by the mode. What is IN them is not, so they are written out below
+	// rather than copied from stock - see the next block.
+	//
+	// These are NEW names in this chain, so nothing is being overridden and the partial-block rule
+	// does not apply - same reasoning as the tugvar templates in the base theater.
+	"player_templates"
+	{
+		// WHY THESE ARE NOT THE STOCK LOADOUTS. default_survival.theater arms all five waves out of the
+		// vanilla rack - m9, mp5, ump45, m16a4, m4a1 - so none of the weapons this theater actually adds
+		// ever appear on an attacker. The escalation below is the stock curve (pistol -> SMG -> rifle ->
+		// silenced/AP rifle, light armour on officers, heavy on the later grunts) rebuilt out of the
+		// modified rack instead, at the same supply cost per wave, so difficulty is unchanged and only
+		// the hardware differs.
+		//
+		// Every entry was checked programmatically against the MERGED theater before being written here:
+		// each weapon exists and has "security" in its team_access, each upgrade lists the weapon it is
+		// mounted on in its own allowed_weapons, and each gear item resolves. That check is the reason
+		// underbarrel_foregrip_scar is on the SCAR and underbarrel_foregrip_sec1 is not - the base
+		// theater's bot-variant section warns about exactly this, and the names do not tell you.
+		//
+		// Costs run 3 -> 10 supply against mp_supply_token_bot_base 20 (stock survival) and the 35 that
+		// gg2_supply tops bots up to, so every wave affords its whole kit with room to spare.
+
+		"template_survival_base_01_security"
+		{
+			"team"					"security"
+			"print_name"				"Security Force 01 Class"
+
+			"models"
+			{
+				"player"				"models/characters/security_light.mdl"
+				"viewmodel_hands"		"models/weapons/v_hands_sec_l.mdl"
+
+				"bodygroups"
+				{
+					"kit"					"0"
+					"backpack"				"0"
+				}
+			}
+
+			// 3 supply
+			"buy_order"
+			{
+				"gear"					"sec_chest_rig"
+				"weapon"				"weapon_kabar"
+				"weapon"				"weapon_glock17"
+				"weapon_upgrade"			"siderail_flashlight_pistol"
+				"weapon"				"weapon_m84"
+			}
+			"allowed_items"
+			{
+				"weapon"				"weapon_glock17"
+				"weapon"				"weapon_kabar"
+				"weapon"				"weapon_m84"
+			}
+		}
+
+		"template_survival_officer_01_security"
+		{
+			"team"					"security"
+			"print_name"				"Security Officer 01 Class"
+
+			"models"
+			{
+				"player"				"models/characters/security_light.mdl"
+				"viewmodel_hands"		"models/weapons/v_hands_sec_l.mdl"
+
+				"bodygroups"
+				{
+					"kit"					"0"
+					"backpack"				"0"
+				}
+			}
+
+			// 5 supply
+			"buy_order"
+			{
+				"gear"					"sec_chest_rig"
+				"gear"					"sec_light_armor"
+				"weapon"				"weapon_kabar"
+				"weapon"				"weapon_glock17"
+				"weapon"				"weapon_mp5a4"
+				"weapon_upgrade"			"siderail_flashlight_band"
+				"weapon"				"weapon_m18"
+			}
+			"allowed_items"
+			{
+				"weapon"				"weapon_glock17"
+				"weapon"				"weapon_kabar"
+				"weapon"				"weapon_m18"
+				"weapon"				"weapon_mp5a4"
+			}
+		}
+
+		"template_survival_base_02_security"
+		{
+			"team"					"security"
+			"print_name"				"Security Force 02 Class"
+
+			"models"
+			{
+				"player"				"models/characters/security_light.mdl"
+				"viewmodel_hands"		"models/weapons/v_hands_sec_l.mdl"
+
+				"bodygroups"
+				{
+					"kit"					"0"
+					"backpack"				"0"
+				}
+			}
+
+			// 5 supply
+			"buy_order"
+			{
+				"gear"					"sec_chest_rig"
+				"gear"					"sec_light_armor"
+				"weapon"				"weapon_kabar"
+				"weapon"				"weapon_mp7"
+				"weapon_upgrade"			"siderail_flashlight_band"
+				"weapon"				"weapon_m84"
+			}
+			"allowed_items"
+			{
+				"weapon"				"weapon_kabar"
+				"weapon"				"weapon_m84"
+				"weapon"				"weapon_mp7"
+			}
+		}
+
+		"template_survival_officer_02_security"
+		{
+			"team"					"security"
+			"print_name"				"Security Officer 02 Class"
+
+			"models"
+			{
+				"player"				"models/characters/security_light.mdl"
+				"viewmodel_hands"		"models/weapons/v_hands_sec_l.mdl"
+
+				"bodygroups"
+				{
+					"kit"					"0"
+					"backpack"				"0"
+				}
+			}
+
+			// 8 supply
+			"buy_order"
+			{
+				"gear"					"sec_chest_rig"
+				"gear"					"sec_light_armor"
+				"weapon"				"weapon_kabar"
+				"weapon"				"weapon_glock17"
+				"weapon"				"weapon_p90"
+				"weapon_upgrade"			"siderail_lasersight_band"
+				"weapon_upgrade"			"ammo_ap_p90"
+				"weapon"				"weapon_m18"
+			}
+			"allowed_items"
+			{
+				"weapon"				"weapon_glock17"
+				"weapon"				"weapon_kabar"
+				"weapon"				"weapon_m18"
+				"weapon"				"weapon_p90"
+			}
+		}
+
+		"template_survival_base_03_security"
+		{
+			"team"					"security"
+			"print_name"				"Security Force 03 Class"
+
+			"models"
+			{
+				"player"				"models/characters/security_heavy.mdl"
+				"viewmodel_hands"		"models/weapons/v_hands_sec_h.mdl"
+
+				"bodygroups"
+				{
+					"kit"					"0"
+					"backpack"				"0"
+				}
+			}
+
+			// 7 supply
+			"buy_order"
+			{
+				"gear"					"sec_chest_rig"
+				"gear"					"sec_heavy_armor"
+				"weapon"				"weapon_kabar"
+				"weapon"				"weapon_m16a1"
+				"weapon_upgrade"			"siderail_flashlight_band"
+				"weapon"				"weapon_m67"
+			}
+			"allowed_items"
+			{
+				"weapon"				"weapon_kabar"
+				"weapon"				"weapon_m16a1"
+				"weapon"				"weapon_m67"
+			}
+		}
+
+		"template_survival_officer_03_security"
+		{
+			"team"					"security"
+			"print_name"				"Security Officer 03 Class"
+
+			"models"
+			{
+				"player"				"models/characters/security_light.mdl"
+				"viewmodel_hands"		"models/weapons/v_hands_sec_l.mdl"
+
+				"bodygroups"
+				{
+					"kit"					"0"
+					"backpack"				"0"
+				}
+			}
+
+			// 10 supply
+			"buy_order"
+			{
+				"gear"					"sec_chest_rig"
+				"gear"					"sec_light_armor"
+				"weapon"				"weapon_kabar"
+				"weapon"				"weapon_glock17"
+				"weapon"				"weapon_g36c"
+				"weapon_upgrade"			"barrel_silencer_sec2"
+				"weapon_upgrade"			"siderail_lasersight_rail"
+				"weapon"				"weapon_m67"
+			}
+			"allowed_items"
+			{
+				"weapon"				"weapon_g36c"
+				"weapon"				"weapon_glock17"
+				"weapon"				"weapon_kabar"
+				"weapon"				"weapon_m67"
+			}
+		}
+
+		"template_survival_base_04_security"
+		{
+			"team"					"security"
+			"print_name"				"Security Force 04 Class"
+
+			"models"
+			{
+				"player"				"models/characters/security_heavy.mdl"
+				"viewmodel_hands"		"models/weapons/v_hands_sec_h.mdl"
+
+				"bodygroups"
+				{
+					"kit"					"0"
+					"backpack"				"0"
+				}
+			}
+
+			// 9 supply
+			"buy_order"
+			{
+				"gear"					"sec_chest_carrier"
+				"gear"					"sec_heavy_armor"
+				"weapon"				"weapon_kabar"
+				"weapon"				"weapon_scarl"
+				"weapon_upgrade"			"underbarrel_foregrip_scar"
+				"weapon_upgrade"			"siderail_lasersight_rail"
+				"weapon"				"weapon_m67"
+			}
+			"allowed_items"
+			{
+				"weapon"				"weapon_kabar"
+				"weapon"				"weapon_m67"
+				"weapon"				"weapon_scarl"
+			}
+		}
+
+		"template_survival_officer_04_security"
+		{
+			"team"					"security"
+			"print_name"				"Security Officer 04 Class"
+
+			"models"
+			{
+				"player"				"models/characters/security_light.mdl"
+				"viewmodel_hands"		"models/weapons/v_hands_sec_l.mdl"
+
+				"bodygroups"
+				{
+					"kit"					"0"
+					"backpack"				"0"
+				}
+			}
+
+			// 10 supply
+			"buy_order"
+			{
+				"gear"					"sec_chest_rig"
+				"gear"					"sec_light_armor"
+				"weapon"				"weapon_kabar"
+				"weapon"				"weapon_glock17"
+				"weapon"				"weapon_sig553"
+				"weapon_upgrade"			"barrel_silencer_ins1"
+				"weapon_upgrade"			"siderail_lasersight_band"
+				"weapon"				"weapon_m67"
+			}
+			"allowed_items"
+			{
+				"weapon"				"weapon_glock17"
+				"weapon"				"weapon_kabar"
+				"weapon"				"weapon_m67"
+				"weapon"				"weapon_sig553"
+			}
+		}
+
+		"template_survival_base_05_security"
+		{
+			"team"					"security"
+			"print_name"				"Security Force 05 Class"
+
+			"models"
+			{
+				"player"				"models/characters/security_heavy.mdl"
+				"viewmodel_hands"		"models/weapons/v_hands_sec_h.mdl"
+
+				"bodygroups"
+				{
+					"kit"					"0"
+					"backpack"				"0"
+				}
+			}
+
+			// 10 supply
+			"buy_order"
+			{
+				"gear"					"sec_chest_carrier"
+				"gear"					"sec_heavy_armor"
+				"weapon"				"weapon_kabar"
+				"weapon"				"weapon_acr"
+				"weapon_upgrade"			"optic_aimpoint"
+				"weapon_upgrade"			"ammo_ap_m4"
+				"weapon"				"weapon_m67"
+			}
+			"allowed_items"
+			{
+				"weapon"				"weapon_acr"
+				"weapon"				"weapon_kabar"
+				"weapon"				"weapon_m67"
+			}
+		}
+
+		"template_survival_officer_05_security"
+		{
+			"team"					"security"
+			"print_name"				"Security Officer 05 Class"
+
+			"models"
+			{
+				"player"				"models/characters/security_heavy.mdl"
+				"viewmodel_hands"		"models/weapons/v_hands_sec_h.mdl"
+
+				"bodygroups"
+				{
+					"kit"					"0"
+					"backpack"				"0"
+				}
+			}
+
+			// 10 supply
+			"buy_order"
+			{
+				"gear"					"sec_chest_rig"
+				"gear"					"sec_heavy_armor"
+				"weapon"				"weapon_kabar"
+				"weapon"				"weapon_glock17"
+				"weapon"				"weapon_m4a1sopmod"
+				"weapon_upgrade"			"barrel_silencer_m4sopmod"
+				"weapon_upgrade"			"ammo_ap_m4"
+				"weapon"				"weapon_m67"
+			}
+			"allowed_items"
+			{
+				"weapon"				"weapon_glock17"
+				"weapon"				"weapon_kabar"
+				"weapon"				"weapon_m4a1sopmod"
+				"weapon"				"weapon_m67"
+			}
+		}
+
+		"template_survival_m249_security"
+		{
+			"team"					"security"
+			"print_name"				"Security Machinegunner Class"
+
+			"models"
+			{
+				"player"				"models/characters/security_light.mdl"
+				"viewmodel_hands"		"models/weapons/v_hands_sec_l.mdl"
+
+				"bodygroups"
+				{
+					"kit"					"0"
+					"backpack"				"0"
+				}
+			}
+
+			// 9 supply
+			"buy_order"
+			{
+				"gear"					"sec_chest_carrier"
+				"gear"					"sec_light_armor"
+				"weapon"				"weapon_kabar"
+				"weapon"				"weapon_glock17"
+				"weapon"				"weapon_mk46"
+				"weapon_upgrade"			"optic_aimpoint"
+				"weapon"				"weapon_m67"
+			}
+			"allowed_items"
+			{
+				"weapon"				"weapon_glock17"
+				"weapon"				"weapon_kabar"
+				"weapon"				"weapon_m67"
+				"weapon"				"weapon_mk46"
+			}
+		}
+
+		"template_survival_at4_security"
+		{
+			"team"					"security"
+			"print_name"				"Security Rocketeer Class"
+
+			"models"
+			{
+				"player"				"models/characters/security_light.mdl"
+				"viewmodel_hands"		"models/weapons/v_hands_sec_l.mdl"
+
+				"bodygroups"
+				{
+					"kit"					"0"
+					"backpack"				"0"
+				}
+			}
+
+			// 6 supply
+			"buy_order"
+			{
+				"gear"					"sec_chest_carrier"
+				"gear"					"sec_light_armor"
+				"weapon"				"weapon_kabar"
+				"weapon"				"weapon_glock17"
+				"weapon"				"weapon_at4"
+			}
+			"allowed_items"
+			{
+				"weapon"				"weapon_at4"
+				"weapon"				"weapon_glock17"
+				"weapon"				"weapon_kabar"
+			}
+		}
+	}
 }
