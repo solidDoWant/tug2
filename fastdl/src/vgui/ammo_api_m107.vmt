@@ -1,0 +1,21 @@
+// Buy-menu icon for the M8 API upgrade on the M107. See ammo_mk211_m107.vmt for why the filename is
+// fixed by the upgrade's own name and cannot be hashed.
+//
+// This ships its own texture rather than pointing at stock kit_tracer. kit_tracer is the right
+// SHAPE - the same 512x256 cartridge as kit_ap_rifle - but it is a red tracer tip, and red is the
+// game's existing marking for that round; reusing it would give two different upgrades the same
+// icon. So this is kit_ap_rifle with the tip recoloured silver, which is M8 API's actual marking
+// and keeps the game's "tip colour identifies the round" convention intact.
+//
+// The recoloured region is exactly the set of pixels kit_tracer changes relative to kit_ap_rifle -
+// the tip cone and nothing else - so the jacket, cannelure and case are untouched and the icon
+// matches the stock ammo icons pixel for pixel outside the tip. Regenerate by editing the .png.
+"UnlitGeneric"
+{
+	"$translucent"		1
+	"$basetexture"		"vgui/inventory/ammo_api_m107"
+	"$vertexcolor"		1
+	"$vertexalpha"		1
+	"$no_fullbright"	1
+	"$ignorez"			1
+}

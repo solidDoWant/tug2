@@ -1,0 +1,5 @@
+// Buy-menu icon texture for the M8 API round. Settings match the stock kit_* icons this was
+// derived from.
+"format"    "DXT5"
+"version"   "7.2"
+"bumpscale" "1"

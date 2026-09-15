@@ -216,7 +216,17 @@ if [ -d "$SRC/vgui" ]; then
     elif [ -e "$SRC/vgui/$stem.vtf" ]; then
       cp -a "$SRC/vgui/$stem.vtf" "$WORK/vgui-src/"
     else
-      echo "   WARNING: $stem.vmt has no texture source" >&2
+      # Not every icon owns a texture. The ammo-upgrade icons are a one-line VMT pointing at a
+      # SHARED kit_* texture the base game already ships - which is how the stock ammo_ap_*.vmt and
+      # ammo_hp_*.vmt icons work too - so there is nothing of ours to compile for them.
+      #
+      # Only warn when the VMT names a texture with its OWN stem, because that is the case where a
+      # source file was expected and is genuinely missing.
+      ref=$(sed -n 's/.*"\$basetexture"[[:space:]]*"\([^"]*\)".*/\1/p' "$vmt" | head -1)
+      case "${ref##*/}" in
+        "$stem") echo "   WARNING: $stem.vmt names its own texture but no source exists" >&2 ;;
+        *)       echo "   $stem.vmt -> ${ref:-<no \$basetexture>} (shared texture, nothing to compile)" ;;
+      esac
     fi
   done
   # Compiled here rather than in the textures group so the .vtf lands unhashed beside the .vmt that

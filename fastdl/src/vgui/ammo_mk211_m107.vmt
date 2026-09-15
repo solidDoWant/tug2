@@ -1,0 +1,33 @@
+// Buy-menu icon for the Mk 211 HEIAP upgrade on the M107.
+//
+// The path is not ours to choose: the game builds it as materials/vgui/inventory/<name>.vmt from
+// the upgrade's own name, so this file must stay named for "ammo_mk211_m107" in the theater.
+// Without it the slot has no material at all and draws the missing-texture checkerboard.
+//
+// WHY WE SHIP A TEXTURE RATHER THAN POINTING AT A STOCK kit_* ONE. The stock ammo icons share a
+// handful of textures - kit_ap_rifle, kit_hp_rifle, kit_tracer - which are all the SAME cartridge
+// at 512x256 with a different tip colour, one subject filling the frame. That is the convention,
+// and no stock texture has a green tip.
+//
+// Not every kit_* texture is like that, though: kit_m203_he (the obvious pick for "high explosive")
+// is an ATLAS holding a 40mm round AND the launcher side by side. An ImagePanel draws the whole
+// texture, so using it put two objects in the slot - it reads as a sprite sheet, not an icon. The
+// stock VMTs that use it look identical to this one, so there is nothing in the VMT to copy that
+// would fix it; the texture itself is simply the wrong shape for a single icon.
+//
+// So this is kit_ap_rifle with the tip recoloured green - the real Mk 211 Raufoss marking, and the
+// game's own "tip colour identifies the round" convention. The recoloured region is exactly the set
+// of pixels kit_tracer changes relative to kit_ap_rifle, i.e. the tip cone the game's own artists
+// masked, so the jacket, cannelure and case are untouched and this matches the stock ammo icons
+// pixel for pixel outside the tip. ammo_api_m107 is cut from that same mask. Earlier revisions used
+// a hand-drawn mask covering the whole ogive; it bled onto the copper jacket and across the case
+// mouth with visible rectangular step edges. Regenerate by editing the .png.
+"UnlitGeneric"
+{
+	"$translucent"		1
+	"$basetexture"		"vgui/inventory/ammo_mk211_m107"
+	"$vertexcolor"		1
+	"$vertexalpha"		1
+	"$no_fullbright"	1
+	"$ignorez"			1
+}
