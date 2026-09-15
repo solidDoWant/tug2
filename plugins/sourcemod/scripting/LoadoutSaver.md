@@ -332,6 +332,15 @@ The plugin uses Insurgency's entity system to directly read loadout data:
    - **Impact**: Loadouts may cost more than starting supply points after balance changes
    - **Workaround**: Plugin will attempt to buy as much as possible with available points
 
+4. **Custom Theater Slots**: Only the stock slots (0 primary, 1 secondary, 3 explosive)
+   plus 6 gear slots are saved
+   - **Reason**: `GetPlayerWeaponSlot` returns only the first weapon in a bucket, and the
+     schema has one column per category
+   - **Impact**: Items in other slots, and second items sharing a read bucket, are
+     dropped on save and never restored
+   - **Fix**: see [LoadoutSaver-slot-support.md](LoadoutSaver-slot-support.md) for the
+     analysis and staged plan
+
 ## Troubleshooting
 
 ### Database Connection Fails

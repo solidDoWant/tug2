@@ -299,6 +299,7 @@ public void OnPluginStart()
     RegConsoleCmd("sm_listloadouts", Command_ListLoadouts, "List your named loadouts");
     RegConsoleCmd("sm_loadouts", Command_ListLoadouts, "List your named loadouts");
     RegConsoleCmd("sm_lslo", Command_ListLoadouts, "List your named loadouts");
+    RegConsoleCmd("sm_lsload", Command_ListLoadouts, "List your named loadouts");
     RegConsoleCmd("sm_lsloadout", Command_ListLoadouts, "List your named loadouts");
     RegConsoleCmd("sm_lsloadouts", Command_ListLoadouts, "List your named loadouts");
     RegConsoleCmd("sm_dello", Command_DeleteLoadout, "Delete a named loadout: sm_dello <name|all>");
