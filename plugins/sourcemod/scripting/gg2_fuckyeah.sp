@@ -1,7 +1,7 @@
 #include <sourcemod>
 #include <sdktools>
 
-#define PLUGIN_VERSION     "1.0.1"
+#define PLUGIN_VERSION     "1.0.2"
 #define PLUGIN_DESCRIPTION "Fucking fuck yeah"
 
 #pragma newdecls required
@@ -17,7 +17,16 @@ public Plugin myinfo =
 Handle g_CvarEnabled;
 Handle g_CvarYellChance;
 
+// Insurgency's team numbers. Same values gg2_heavy_ammo uses.
+#define TEAM_SPEC          1
+#define TEAM_SEC           2
+#define TEAM_INS           3
+
 // list of specific files that are decent
+//
+// EVERY ONE OF THESE IS A SECURITY LINE - see the paths. The game ships no insurgent equivalent for
+// them, so this only ever plays for the security team; see the team gate in Fuck(). If insurgent
+// lines are ever added, they need their own list and a team-indexed pick, not an append here.
 char   FuckingSounds[][] = {
     "player/voice/radial/security/leader/suppressed/target5.ogg",
     "player/voice/radial/security/subordinate/unsuppressed/enemydown_knifekill3.ogg",
@@ -100,6 +109,12 @@ public Action Fuck(int client)
     if (client == 0 || client > MaxClients) return Plugin_Continue;
     if (IsFakeClient(client)) return Plugin_Continue;
     if (!IsClientInGame(client)) return Plugin_Continue;
+
+    // Security only. Every file in FuckingSounds is a security voice line and the game ships no
+    // insurgent counterpart, so an insurgent kill used to emit a security voice out of the killer's
+    // own body - audible to everyone, and wrong for the team that made the kill. Gated here rather
+    // than at the player_death caller so the "fuckyeah" test command obeys it too.
+    if (GetClientTeam(client) != TEAM_SEC) return Plugin_Continue;
 
     int numSoundsAvailable = sizeof(FuckingSounds) - 1;    // Inclusive, starting from zero
     int lastSoundNumber    = PlayerLastSoundNumber[client];
