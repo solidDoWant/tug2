@@ -373,17 +373,32 @@ public Action Event_PlayerTeam(Event event, const char[] name, bool dontBroadcas
     int client = GetClientOfUserId(GetEventInt(event, "userid"));
     if (!IsValidPlayer(client)) return Plugin_Continue;
 
-    int team = GetEventInt(event, "team");
-    if (team == TEAM_2_INS) return Plugin_Continue;
+    // FILTER ON BOTS, NOT ON TEAM. This used to be "if (team == TEAM_2_INS) return", which is only
+    // a bot filter by coincidence: insurgents are the bots in checkpoint. Survival swaps the sides -
+    // players are insurgents, bots are security - so that line silenced every human join and let the
+    // entire bot team through instead, once per respawn wave, each one rendering as a bare
+    // " Joined Security Forces" because a bot has no Steam id and no name yet at player_team time.
+    // Event_PlayerDisconnect above already filters this way; this is the same test.
+    if (IsFakeClient(client)) return Plugin_Continue;
 
-    char joined_team[16] = "Spectators";
-    if (team == TEAM_1_SEC)
-    {
-        joined_team = "Security Forces";
-    }
+    int  team             = GetEventInt(event, "team");
+    char joined_team[20]  = "Spectators";    // "Insurgent Forces" is 16 chars, so not [16]
+    if (team == TEAM_1_SEC)      joined_team = "Security Forces";
+    else if (team == TEAM_2_INS) joined_team = "Insurgent Forces";
 
     char link[256];
     gen_tug_link(client, link, sizeof(link));
+
+    // player_team fires before the name is set on a first connect, so %N inside the link can come
+    // back empty and leave the message starting with a space. The event carries the name for exactly
+    // this reason - use it rather than posting a nameless line.
+    if (link[0] == '\0' || StrContains(link, "[]") == 0)
+    {
+        char eventName[MAX_NAME_LENGTH];
+        event.GetString("name", eventName, sizeof(eventName));
+        if (eventName[0] == '\0') return Plugin_Continue;
+        strcopy(link, sizeof(link), eventName);
+    }
 
     char message[1024];
     Format(message, sizeof(message), "%s Joined %s", link, joined_team);
