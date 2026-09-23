@@ -250,6 +250,8 @@ bool g_bCheckpointManaged = true;
 // reinforcements are teleported onto the opening wave's positions instead.
 bool  g_bHuntManaged    = false;
 int   g_iHuntQuota      = 0;    // enemy lives still owed this round
+bool  g_bHuntPending[MAXPLAYERS + 1];    // dead, with a reinforcement timer running
+bool  g_bSurvivalMode   = false;         // players are the insurgents; the bots are security
 int   g_iHuntSpawnCount = 0;
 float g_fHuntSpawns[MAXPLAYERS + 1][3];
 
@@ -914,6 +916,7 @@ void UpdateCheckpointManaged()
     cvGamemode.GetString(sGamemode, sizeof(sGamemode));
     g_bCheckpointManaged = StrEqual(sGamemode, "checkpoint", false);
     g_bHuntManaged       = StrEqual(sGamemode, "hunt", false);
+    g_bSurvivalMode      = StrEqual(sGamemode, "survival", false);
 
     if (g_bHuntManaged)
     {
@@ -1154,8 +1157,8 @@ Action Timer_Enemies_Remaining(Handle timer)
     // int starttime = GetTime();
     // int endtime = 0;
     if (!g_iRoundStatus) return Plugin_Continue;
-    int aliveInsurgents  = countAliveInsurgents();
-    g_iTotalAliveEnemies = aliveInsurgents + g_iRemaining_lives_team_ins;
+    int aliveInsurgents  = CountAliveEnemies();
+    g_iTotalAliveEnemies = aliveInsurgents + EnemyReinforcementsLeft();
     for (int client = 1; client <= MaxClients; client++)
     {
         if (!IsClientInGame(client)
@@ -1230,14 +1233,14 @@ public Action Check_Total_Enemies(int client, int args)
         ReplyToCommand(client, "Use it after round start");
         return Plugin_Handled;
     }
-    int  aliveInsurgents = countAliveInsurgents();
+    int  aliveInsurgents = CountAliveEnemies();
     char textToPrint[64];
     if (g_bCounterAttack && IsInfiniteCounterAttack())
     {
         Format(textToPrint, sizeof(textToPrint), "Enemies alive: %d | Enemy reinforcements left: Infinite", aliveInsurgents);
     }
     else {
-        Format(textToPrint, sizeof(textToPrint), "Enemies alive: %d | Enemy reinforcements left: %d", aliveInsurgents, g_iRemaining_lives_team_ins);
+        Format(textToPrint, sizeof(textToPrint), "Enemies alive: %d | Enemy reinforcements left: %d", aliveInsurgents, EnemyReinforcementsLeft());
     }
     PrintHintText(client, "%s", textToPrint);
     return Plugin_Handled;
@@ -1802,9 +1805,17 @@ void SetNextAttack(int client)
     // LogMessage("[BM2 RESPAWN] profile_clock SetNextAttack %i (%N) (START: %i) (END: %i)", client, client, starttime, endtime);
 }
 
+// A bot kicked while its hunt reinforcement was pending would otherwise stay counted as owed, and
+// hand the flag to whoever takes its slot next.
+public void OnClientDisconnect(int client)
+{
+    g_bHuntPending[client] = false;
+}
+
 public void OnClientPutInServer(int client)
 {
     g_playerPickSquad[client] = 0;
+    g_bHuntPending[client]    = false;
 #if DOCTOR
     g_iHurtFatal[client] = 0;
     ResetMedicStats(client);
@@ -1858,6 +1869,7 @@ public Action Event_RoundStart(Event event, const char[] name, bool dontBroadcas
     g_iNextSpawnStatus              = -1;
     g_iHuntQuota                    = 0;
     g_iHuntSpawnCount               = 0;
+    for (int i = 0; i <= MaxClients; i++) g_bHuntPending[i] = false;
     g_fSecCounterRespawnPosition[0] = 0.0;
     g_fSecCounterRespawnPosition[1] = 0.0;
     g_fSecCounterRespawnPosition[2] = 0.0;
@@ -2677,21 +2689,45 @@ Action Timer_HuntRoundSetup(Handle timer)
 // Spends one of the round's remaining enemy lives on the bot that just died.
 void HuntBotKilled(int victim)
 {
-    if (!g_iRoundStatus || g_iHuntQuota <= 0) return;
+    if (!g_iRoundStatus) return;
 
-    g_iHuntQuota--;
+    // Hunt ends the round the instant no enemy is alive (CINSRules_Hunt::CheckWinConditions tests
+    // GetTotalActivePlayersOnTeam on the defenders, nothing else), so once the pool is down to the
+    // last one the replacement cannot wait behind a timer - by the time it fired the round would be
+    // over. Everything above that is staggered so reinforcements trickle in rather than arriving as
+    // a block. IsPlayerAlive is already false for the victim here, so this is the count left behind.
+    int alive = CountAliveInsurgents();
 
-    // Hunt ends the round the instant the last enemy dies, so once the pool is down to the last one
-    // the replacement cannot wait behind a timer - by the time it fired the round would be over.
-    // Everything above that is staggered so reinforcements trickle in rather than arriving as a
-    // block. IsPlayerAlive is already false for the victim here, so this is the count left behind.
-    if (CountAliveInsurgents() > 1)
+    if (g_iHuntQuota > 0)
     {
-        CreateTimer(g_cvHuntRespawnDelay.FloatValue + GetURandomFloat(), Timer_HuntRespawn, GetClientUserId(victim));
+        g_iHuntQuota--;
+        if (alive > 1)
+        {
+            g_bHuntPending[victim] = true;
+            CreateTimer(g_cvHuntRespawnDelay.FloatValue + GetURandomFloat(), Timer_HuntRespawn, GetClientUserId(victim));
+        }
+        else
+        {
+            HuntRespawn(victim);
+        }
+        return;
     }
-    else
+
+    // The quota is spent, but reinforcements already owed may still be sitting on their timers.
+    // If the last living enemy just died they would be stranded - the round ends before the timers
+    // fire - and the "enemies remaining" count, which includes them, would be left above zero while
+    // the game declared every target eliminated. Bring one in now; its own timer then finds it
+    // alive and does nothing.
+    if (alive == 0)
     {
-        HuntRespawn(victim);
+        for (int i = 1; i <= MaxClients; i++)
+        {
+            if (g_bHuntPending[i] && IsClientInGame(i))
+            {
+                HuntRespawn(i);
+                if (IsPlayerAlive(i)) break;
+            }
+        }
     }
 }
 
@@ -2704,6 +2740,10 @@ Action Timer_HuntRespawn(Handle timer, int userid)
 
 void HuntRespawn(int client)
 {
+    // Whatever happens below, this reinforcement is no longer waiting: it either comes back now or
+    // (round over, bot gone, ForceRespawn failed) never will, so it must stop counting as owed.
+    g_bHuntPending[client] = false;
+
     if (!g_bHuntManaged || !g_iRoundStatus) return;
     if (!IsClientInGame(client) || IsPlayerAlive(client) || GetClientTeam(client) != TEAM_2_INS) return;
 
@@ -2765,6 +2805,35 @@ int CountAliveInsurgents()
         if (IsClientInGame(i) && IsPlayerAlive(i) && GetClientTeam(i) == TEAM_2_INS) alive++;
     }
     return alive;
+}
+
+// The bots' team, alive. Insurgents everywhere except survival, where the players are the
+// insurgents and the waves they fight are security.
+int CountAliveEnemies()
+{
+    int team  = g_bSurvivalMode ? TEAM_1_SEC : TEAM_2_INS;
+    int alive = 0;
+    for (int i = 1; i <= MaxClients; i++)
+    {
+        if (IsClientInGame(i) && IsPlayerAlive(i) && GetClientTeam(i) == team) alive++;
+    }
+    return alive;
+}
+
+// Enemy lives still to come on top of the ones alive, for the "enemies remaining" readouts. Each mode
+// keeps its own ledger, and reading the wrong one is how hunt used to report enemies left after the
+// game had already declared every target eliminated: it showed checkpoint's
+// g_iRemaining_lives_team_ins, which hunt never spends (its deaths return through HuntBotKilled
+// first), so the count could never reach zero.
+int EnemyReinforcementsLeft()
+{
+    if (g_bCheckpointManaged) return g_iRemaining_lives_team_ins;
+    if (!g_bHuntManaged) return 0;    // the plugin reinforces nothing on the other modes
+
+    int owed = g_iHuntQuota;
+    for (int i = 1; i <= MaxClients; i++)
+        if (g_bHuntPending[i]) owed++;
+    return owed;
 }
 
 // Respawn bot
@@ -4456,21 +4525,6 @@ void ResetMedicStats(int client)
     g_iStatHeals[client]   = 0;
 }
 #endif
-
-int countAliveInsurgents()
-{
-    int count = 0;
-    for (int i = 1; i <= MaxClients; i++)
-    {
-        if (IsClientInGame(i)
-            && IsPlayerAlive(i)
-            && GetClientTeam(i) == TEAM_2_INS)
-        {
-            count++;
-        }
-    }
-    return count;
-}
 
 #if DOCTOR
 void PlayVictimReviveSound(int client)
