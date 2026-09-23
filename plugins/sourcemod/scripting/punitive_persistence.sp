@@ -1,14 +1,38 @@
 #include <sourcemod>
 #include <adminmenu>
+#include <steamids>
+
+// Optional: without basecomm this plugin still persists and enforces bans; only gag/mute
+// persistence is lost.
+#undef REQUIRE_PLUGIN
+#include <basecomm>
+#define REQUIRE_PLUGIN
 
 #pragma semicolon 1
 #pragma newdecls required
 
 #define PLUGIN_VERSION    "1.0.0"
-#define MAX_REASON_LENGTH 255
+// Byte buffer for a reason. The column is varchar(255) - characters, not bytes - and basebans
+// passes up to 255 bytes, so a 255-byte buffer (254 usable) could cut the last character in half,
+// and Postgres rejects the whole INSERT on an invalid UTF-8 sequence.
+#define MAX_REASON_BYTES  512
 
 // Database handle
 Database g_Database = null;
+
+// Writes that could not be sent because the connection was down, replayed once it is back. See
+// RunWrite. Bounded so a database that never comes back cannot grow this without limit.
+#define MAX_QUERY_LENGTH      2048
+#define MAX_PENDING_WRITES    64
+ArrayList g_PendingWrites     = null;
+bool      g_bReconnecting     = false;
+
+// Gag/mute bookkeeping - see "COMMUNICATION RESTRICTIONS" below.
+bool g_bApplyingFromDb = false;              // true while re-applying stored state, so the
+                                             // basecomm forwards it triggers are not re-stored
+int  g_iCommIssuer     = -1;                 // client running a comm command right now (0 = console)
+bool g_bPendingGag[MAXPLAYERS + 1];          // stored state waiting for the client to be in game
+bool g_bPendingMute[MAXPLAYERS + 1];
 
 // Plugin info
 public Plugin myinfo =
@@ -25,18 +49,25 @@ public void OnPluginStart()
     // Create plugin version cvar
     CreateConVar("sm_punishments_version", PLUGIN_VERSION, "Persistent Punishments version", FCVAR_NOTIFY | FCVAR_DONTRECORD);
 
-    // Register admin commands
-    RegAdminCmd("sm_addban", Command_AddBan, ADMFLAG_BAN, "Ban a player by SteamID");
-    RegAdminCmd("sm_banip", Command_BanIP, ADMFLAG_BAN, "Ban a player by IP address");
-    RegAdminCmd("sm_unban", Command_Unban, ADMFLAG_UNBAN, "Unban a player by SteamID or IP");
+    // Ban commands (sm_ban, sm_addban, sm_banip, sm_unban) are deliberately NOT registered here.
+    // basebans owns them, and every ban and unban it issues reaches the database through the
+    // OnBanClient/OnBanIdentity/OnRemoveBan forwards below. This plugin used to register its own
+    // sm_addban/sm_banip/sm_unban as well; SourceMod ran BOTH handlers for each, with opposite
+    // argument formats (SteamID64 + "8h" here, STEAM_X + bare minutes in basebans), so one of the
+    // two always rejected the command and the other half-applied it. Seen on main 2026-09-23:
+    // "sm_addban 8h STEAM_1:..." cut an 8-hour engine ban to 8 minutes and wrote nothing here.
 
-    RegAdminCmd("sm_gag", Command_Gag, ADMFLAG_CHAT, "Gag a player (block voice)");
-    RegAdminCmd("sm_mute", Command_Mute, ADMFLAG_CHAT, "Mute a player (block text chat)");
-    RegAdminCmd("sm_silence", Command_Silence, ADMFLAG_CHAT, "Silence a player (block both voice and text)");
+    g_PendingWrites = new ArrayList(ByteCountToCells(MAX_QUERY_LENGTH));
 
-    RegAdminCmd("sm_ungag", Command_Ungag, ADMFLAG_CHAT, "Remove gag from a player");
-    RegAdminCmd("sm_unmute", Command_Unmute, ADMFLAG_CHAT, "Remove mute from a player");
-    RegAdminCmd("sm_unsilence", Command_Unsilence, ADMFLAG_CHAT, "Remove silence from a player");
+    // Same for the comm commands: basecomm owns sm_gag/sm_mute/sm_silence and their un- forms, and
+    // changes reach the database through its BaseComm_OnClientGag/OnClientMute forwards. This plugin
+    // used to register all six too. basecomm (loaded first) applied the gag, then this plugin's
+    // BaseComm_SetClientGag call returned false because the player was already gagged, so it
+    // replied "Failed to apply punishment" and never wrote the row - gags and mutes were never
+    // persisted. The listeners below only note who issued the command, for admin_steam_id.
+    static const char commCommands[][] = { "sm_gag", "sm_mute", "sm_silence", "sm_ungag", "sm_unmute", "sm_unsilence" };
+    for (int i = 0; i < sizeof(commCommands); i++)
+        AddCommandListener(Listener_CommCommand, commCommands[i]);
 
     // Connect to database
     Database.Connect(OnDatabaseConnected, "punitive-persistence");
@@ -53,13 +84,19 @@ public void OnDatabaseConnected(Database db, const char[] error, any data)
 
     g_Database = db;
     LogMessage("Successfully connected to database");
+    FlushPendingWrites();
 }
 
 // Attempt to reconnect to the database
 void ReconnectDatabase()
 {
+    // Several failing queries can arrive together; one reconnect is enough, and a second would
+    // leak whichever handle lost the race.
+    if (g_bReconnecting) return;
+    g_bReconnecting = true;
+
     LogMessage("Attempting to reconnect to database...");
-    g_Database = null;
+    delete g_Database;
     Database.Connect(OnDatabaseReconnected, "punitive-persistence");
 }
 
@@ -69,12 +106,15 @@ public void OnDatabaseReconnected(Database db, const char[] error, any data)
     {
         LogError("Failed to reconnect to database: %s", error);
         // Try again after a delay
+        g_bReconnecting = false;
         CreateTimer(5.0, Timer_RetryReconnect);
         return;
     }
 
-    g_Database = db;
+    g_Database      = db;
+    g_bReconnecting = false;
     LogMessage("Successfully reconnected to database");
+    FlushPendingWrites();
 }
 
 public Action Timer_RetryReconnect(Handle timer)
@@ -123,7 +163,7 @@ public Action Timer_RetryPunishmentCheck(Handle timer, DataPack pack)
 // ============================================================
 public void OnClientAuthorized(int client, const char[] auth)
 {
-    if (IsFakeClient(client) || g_Database == null) return;
+    if (IsFakeClient(client)) return;
 
     // Get client IP
     char ip[64];
@@ -134,6 +174,19 @@ public void OnClientAuthorized(int client, const char[] auth)
     if (!GetClientAuthId(client, AuthId_SteamID64, steamid64, sizeof(steamid64)))
     {
         LogError("Failed to get SteamID64 for client %d", client);
+        return;
+    }
+
+    // Mid-reconnect there is no handle. Returning here used to let a banned player straight in;
+    // instead wait for the connection and check then, the same way a failed check is retried.
+    if (g_Database == null)
+    {
+        DataPack pack = new DataPack();
+        pack.WriteCell(GetClientUserId(client));
+        pack.WriteString(steamid64);
+        pack.WriteString(ip);
+        CreateTimer(2.0, Timer_RetryPunishmentCheck, pack, TIMER_FLAG_NO_MAPCHANGE);
+        ReconnectDatabase();
         return;
     }
 
@@ -168,7 +221,7 @@ public void OnActivePunishmentsChecked(Database db, DBResultSet results, const c
     if (results == null)
     {
         // Check if the error is due to lost connection
-        if (StrContains(error, "no connection to the server", false) != -1)
+        if (IsConnectionError(error))
         {
             LogError("Lost connection to database: %s - attempting to reconnect", error);
 
@@ -214,21 +267,21 @@ public void OnActivePunishmentsChecked(Database db, DBResultSet results, const c
         else if (StrEqual(punishmentType, "gag"))
         {
             gagged = true;
-            BaseComm_SetClientGag(client, true);
         }
         else if (StrEqual(punishmentType, "mute"))
         {
             muted = true;
-            BaseComm_SetClientMute(client, true);
         }
         else if (StrEqual(punishmentType, "silence"))
         {
+            // Legacy rows from before gag and mute were stored separately.
             gagged = true;
             muted  = true;
-            BaseComm_SetClientGag(client, true);
-            BaseComm_SetClientMute(client, true);
         }
     }
+
+    if (gagged || muted)
+        ApplyStoredComm(client, gagged, muted);
 
     // Log reapplied punishments
     if (gagged || muted)
@@ -245,356 +298,212 @@ public void OnActivePunishmentsChecked(Database db, DBResultSet results, const c
 }
 
 // ============================================================
-// COMMAND: sm_addban
+// BANS FROM OTHER PLUGINS - basebans' !ban / sm_ban / sm_addban / sm_banip, and anything that
+// calls BanClient() or BanIdentity() with a command string (e.g. gg2_teamkill's auto-bans, which
+// go through sm_ban).
 // ============================================================
-public Action Command_AddBan(int client, int args)
+//
+// WHY THIS EXISTS. The engine keeps timed bans in memory only - basebans never writes them to
+// banned_user.cfg - so before this, every !ban was lost on the next restart or redeploy and only
+// this plugin's own sm_addban/sm_banip ever reached the database. Found on main on 2026-09-23: an
+// 8-hour !ban was live in `listid` but the punishments table had nothing newer than 2025-12-27.
+//
+// These forwards fire before core applies the ban. They return Plugin_Continue so the engine ban
+// still happens as normal - it takes effect immediately and handles the kick - and the database
+// row is what makes it survive a restart (OnClientAuthorized re-kicks from it).
+//
+// No double-insert with this plugin's own commands: those kick and insert directly and never call
+// BanClient/BanIdentity, so they never reach these forwards.
+
+public Action OnBanClient(int client, int time, int flags, const char[] rawReason, const char[] kick_message, const char[] command, any source)
 {
-    if (args < 2)
+    if (IsFakeClient(client)) return Plugin_Continue;
+
+    int admin = ResolveBanSource(source);
+
+    char reason[MAX_REASON_BYTES];
+    CleanBanReason(rawReason, reason, sizeof(reason));
+
+    if (flags & BANFLAG_IP)
     {
-        ReplyToCommand(client, "[SM] Usage: sm_addban <time> <steamid> [reason]");
-        return Plugin_Handled;
+        char ip[64], steamid64[32];
+        GetClientIP(client, ip, sizeof(ip));
+        if (!GetClientAuthId(client, AuthId_SteamID64, steamid64, sizeof(steamid64)))
+            steamid64[0] = '\0';
+        AddBanToDatabase(admin, steamid64, ip, reason, time * 60, "ban_ip");
+        return Plugin_Continue;
     }
 
-    char timeStr[32], steamid[32], reason[MAX_REASON_LENGTH];
-    GetCmdArg(1, timeStr, sizeof(timeStr));
-    GetCmdArg(2, steamid, sizeof(steamid));
-
-    if (args >= 3)
-        GetCmdArgString(reason, sizeof(reason));
-
-    // Remove first two arguments from reason string
-    int pos = StrContains(reason, steamid);
-    if (pos != -1)
+    char steamid64[32];
+    if (!GetClientAuthId(client, AuthId_SteamID64, steamid64, sizeof(steamid64)))
     {
-        pos += strlen(steamid);
-        while (pos < strlen(reason) && reason[pos] == ' ')
-            pos++;
-
-        strcopy(reason, sizeof(reason), reason[pos]);
-        TrimString(reason);
+        LogError("Not persisting %s ban of %N: no SteamID available", command, client);
+        return Plugin_Continue;
     }
 
-    // Parse time
-    int duration = ParseTimeString(timeStr);
-    if (duration < 0)
+    AddBanToDatabase(admin, steamid64, "", reason, time * 60, "ban_steamid");
+    return Plugin_Continue;
+}
+
+public Action OnBanIdentity(const char[] identity, int time, int flags, const char[] rawReason, const char[] command, any source)
+{
+    int admin = ResolveBanSource(source);
+
+    char reason[MAX_REASON_BYTES];
+    CleanBanReason(rawReason, reason, sizeof(reason));
+
+    if (flags & BANFLAG_IP)
     {
-        ReplyToCommand(client, "[SM] Invalid time format. Use: 0 (permanent), 30m, 2h, 5d, etc.");
-        return Plugin_Handled;
+        AddBanToDatabase(admin, "", identity, reason, time * 60, "ban_ip");
+        return Plugin_Continue;
     }
 
-    // Validate SteamID format
-    if (!IsValidSteamID(steamid))
+    char steamid64[32];
+    if (!SteamIdTo64(identity, steamid64, sizeof(steamid64)))
     {
-        ReplyToCommand(client, "[SM] Invalid SteamID format");
-        return Plugin_Handled;
+        LogError("Not persisting %s ban of \"%s\": unrecognised SteamID format", command, identity);
+        return Plugin_Continue;
     }
 
-    // Check if player is online
-    int target = FindClientBySteamID(steamid);
-    if (target > 0)
-    {
-        // Check immunity
-        if (client != 0 && !CanUserTarget(client, target))
-        {
-            ReplyToCommand(client, "[SM] You cannot target this player");
-            return Plugin_Handled;
-        }
+    AddBanToDatabase(admin, steamid64, "", reason, time * 60, "ban_steamid");
+    return Plugin_Continue;
+}
 
-        // Kick the player first
-        KickClient(target, "You have been banned from this server");
+// basebans' sm_unban. Without this, a ban persisted above would outlive an unban issued through
+// basebans: the engine would forget it, but the next connect would find the active row and kick.
+public Action OnRemoveBan(const char[] identity, int flags, const char[] command, any source)
+{
+    if (flags & BANFLAG_IP)
+    {
+        RemoveBanFromDatabase(identity, true);
+        return Plugin_Continue;
     }
 
-    // Add ban to database
-    AddBanToDatabase(client, steamid, "", reason, duration, "ban_steamid");
+    char steamid64[32];
+    if (SteamIdTo64(identity, steamid64, sizeof(steamid64)))
+        RemoveBanFromDatabase(steamid64, false);
 
-    if (duration == 0)
-        ReplyToCommand(client, "[SM] Permanently banned %s", steamid);
+    return Plugin_Continue;
+}
+
+// basebans passes the reason exactly as typed after the ban length, so a quoted reason arrives
+// WITH its quotes - `!ban name 60 "tk"` gives "\"tk\"". Strip one surrounding pair so the stored
+// reason is the text itself.
+void CleanBanReason(const char[] raw, char[] reason, int maxlen)
+{
+    strcopy(reason, maxlen, raw);
+    TrimString(reason);
+    StripQuotes(reason);
+    TrimString(reason);
+}
+
+// `source` is whatever the caller passed to BanClient/BanIdentity. basebans passes the issuing
+// admin's client index (0 for the server console); other plugins may pass anything, so only a
+// real in-game human is treated as an admin - everything else is recorded as the console.
+int ResolveBanSource(any source)
+{
+    int admin = view_as<int>(source);
+    if (admin < 1 || admin > MaxClients || !IsClientInGame(admin) || IsFakeClient(admin))
+        return 0;
+    return admin;
+}
+
+// ============================================================
+// COMMUNICATION RESTRICTIONS - basecomm's sm_gag / sm_mute / sm_silence and un- forms, the admin
+// menu, and any plugin calling BaseComm_SetClientGag/Mute
+// ============================================================
+//
+// basecomm tracks gag (text chat) and mute (voice) as two independent flags and reports every
+// change through BaseComm_OnClientGag / BaseComm_OnClientMute, so those two forwards are the
+// complete record: sm_silence arrives as a gag plus a mute, group targets like @all arrive once
+// per player. Stored as "gag" and "mute" rows. Legacy "silence" rows are still honoured.
+//
+// Comm restrictions have no duration - they last until lifted, as they always have here.
+
+public Action Listener_CommCommand(int client, const char[] command, int argc)
+{
+    // Listeners run before the command itself, so basecomm's forwards for this command see it.
+    // Cleared next frame, so a later forward from elsewhere (admin menu, another plugin) is not
+    // attributed to this admin.
+    g_iCommIssuer = client;
+    RequestFrame(Frame_ClearCommIssuer);
+    return Plugin_Continue;
+}
+
+public void Frame_ClearCommIssuer(any data)
+{
+    g_iCommIssuer = -1;
+}
+
+public void BaseComm_OnClientGag(int client, bool gagState)
+{
+    OnCommStateChanged(client, "gag", gagState);
+}
+
+public void BaseComm_OnClientMute(int client, bool muteState)
+{
+    OnCommStateChanged(client, "mute", muteState);
+}
+
+void OnCommStateChanged(int client, const char[] punishmentType, bool enabled)
+{
+    // Our own re-application on connect - already stored.
+    if (g_bApplyingFromDb) return;
+    if (client < 1 || client > MaxClients || !IsClientInGame(client) || IsFakeClient(client)) return;
+
+    char steamid64[32];
+    if (!GetClientAuthId(client, AuthId_SteamID64, steamid64, sizeof(steamid64)))
+    {
+        LogError("Not persisting %s %s of %N: no SteamID available", punishmentType, enabled ? "on" : "off", client);
+        return;
+    }
+
+    if (enabled)
+        AddCommPunishmentToDatabase(ResolveBanSource(g_iCommIssuer), steamid64, punishmentType);
     else
-        ReplyToCommand(client, "[SM] Banned %s for %s", steamid, timeStr);
-
-    return Plugin_Handled;
+        RemoveCommPunishmentFromDatabase(steamid64, punishmentType);
 }
 
-// ============================================================
-// COMMAND: sm_banip
-// ============================================================
-public Action Command_BanIP(int client, int args)
+// basecomm's natives throw unless the client is fully in game, and the punishment lookup started
+// in OnClientAuthorized usually returns before that - the player is still loading. Apply now if
+// possible, otherwise hold the state until OnClientPutInServer.
+void ApplyStoredComm(int client, bool gag, bool mute)
 {
-    if (args < 2)
+    if (!IsClientInGame(client))
     {
-        ReplyToCommand(client, "[SM] Usage: sm_banip <ip|#userid|name> <time> [reason]");
-        return Plugin_Handled;
+        g_bPendingGag[client]  = g_bPendingGag[client] || gag;
+        g_bPendingMute[client] = g_bPendingMute[client] || mute;
+        return;
     }
 
-    char targetArg[128], timeStr[32], reason[MAX_REASON_LENGTH];
-    GetCmdArg(1, targetArg, sizeof(targetArg));
-    GetCmdArg(2, timeStr, sizeof(timeStr));
-
-    if (args >= 3)
-        GetCmdArgString(reason, sizeof(reason));
-
-    // Remove first two arguments from reason string
-    int pos = StrContains(reason, timeStr);
-    if (pos != -1)
+    if (!LibraryExists("basecomm"))
     {
-        pos += strlen(timeStr);
-        while (pos < strlen(reason) && reason[pos] == ' ')
-            pos++;
-
-        strcopy(reason, sizeof(reason), reason[pos]);
-        TrimString(reason);
+        LogError("Cannot re-apply stored gag/mute to %N: basecomm is not loaded", client);
+        return;
     }
 
-    // Parse time
-    int duration = ParseTimeString(timeStr);
-    if (duration < 0)
-    {
-        ReplyToCommand(client, "[SM] Invalid time format. Use: 0 (permanent), 30m, 2h, 5d, etc.");
-        return Plugin_Handled;
-    }
-
-    char ip[64], steamid[32];
-    int  target = -1;
-
-    // Check if it's a direct IP address
-    if (IsValidIP(targetArg))
-    {
-        strcopy(ip, sizeof(ip), targetArg);
-    }
-    else
-    {
-        // Try to find player by target
-        target = FindTargetByString(targetArg);
-
-        if (target == -1)
-        {
-            ReplyToCommand(client, "[SM] Target not found");
-            return Plugin_Handled;
-        }
-
-        // Check immunity
-        if (client != 0 && !CanUserTarget(client, target))
-        {
-            ReplyToCommand(client, "[SM] You cannot target this player");
-            return Plugin_Handled;
-        }
-
-        if (!GetClientIP(target, ip, sizeof(ip)))
-        {
-            ReplyToCommand(client, "[SM] Could not retrieve IP address of target");
-            return Plugin_Handled;
-        }
-
-        if (!GetClientAuthId(target, AuthId_SteamID64, steamid, sizeof(steamid)))
-        {
-            ReplyToCommand(client, "[SM] Could not retrieve SteamID of target");
-            return Plugin_Handled;
-        }
-
-        // Kick the player
-        KickClient(target, "You have been IP banned from this server");
-    }
-
-    // Add IP ban to database
-    AddBanToDatabase(client, steamid, ip, reason, duration, "ban_ip");
-
-    if (duration == 0)
-        ReplyToCommand(client, "[SM] Permanently IP banned %s", ip);
-    else
-        ReplyToCommand(client, "[SM] IP banned %s for %s", ip, timeStr);
-
-    return Plugin_Handled;
+    g_bApplyingFromDb = true;
+    if (gag)  BaseComm_SetClientGag(client, true);
+    if (mute) BaseComm_SetClientMute(client, true);
+    g_bApplyingFromDb = false;
 }
 
-// ============================================================
-// COMMAND: sm_unban
-// ============================================================
-public Action Command_Unban(int client, int args)
+public void OnClientPutInServer(int client)
 {
-    if (args < 1)
-    {
-        ReplyToCommand(client, "[SM] Usage: sm_unban <steamid|ip>");
-        return Plugin_Handled;
-    }
+    if (!g_bPendingGag[client] && !g_bPendingMute[client]) return;
 
-    char target[128];
-    GetCmdArg(1, target, sizeof(target));
+    bool gag  = g_bPendingGag[client];
+    bool mute = g_bPendingMute[client];
+    g_bPendingGag[client]  = false;
+    g_bPendingMute[client] = false;
 
-    // Determine if it's a SteamID or IP
-    bool isIP      = IsValidIP(target);
-    bool isSteamID = IsValidSteamID(target);
-
-    if (!isIP && !isSteamID)
-    {
-        ReplyToCommand(client, "[SM] Invalid SteamID or IP format");
-        return Plugin_Handled;
-    }
-
-    // Remove ban from database
-    RemoveBanFromDatabase(target, isIP);
-
-    ReplyToCommand(client, "[SM] Unbanned %s", target);
-
-    return Plugin_Handled;
+    ApplyStoredComm(client, gag, mute);
 }
 
-// ============================================================
-// COMMANDS: Communication Restrictions
-// ============================================================
-public Action Command_Gag(int client, int args)
+public void OnClientDisconnect(int client)
 {
-    return HandleCommPunishment(client, args, "gag", "gagged");
-}
-
-public Action Command_Mute(int client, int args)
-{
-    return HandleCommPunishment(client, args, "mute", "muted");
-}
-
-public Action Command_Silence(int client, int args)
-{
-    return HandleCommPunishment(client, args, "silence", "silenced");
-}
-
-Action HandleCommPunishment(int requesterClient, int args, const char[] punishmentType, const char[] actionName)
-{
-    if (args < 1)
-    {
-        ReplyToCommand(requesterClient, "[SM] Usage: sm_%s <target>", punishmentType);
-        return Plugin_Handled;
-    }
-
-    char targetArg[128];
-    GetCmdArg(1, targetArg, sizeof(targetArg));
-
-    int targetClient = FindTargetByString(targetArg);
-
-    if (targetClient == -1)
-    {
-        ReplyToCommand(requesterClient, "[SM] Target not found");
-        return Plugin_Handled;
-    }
-
-    if (IsFakeClient(targetClient))
-    {
-        ReplyToCommand(requesterClient, "[SM] Cannot target bots");
-        return Plugin_Handled;
-    }
-
-    // Check immunity
-    if (requesterClient != 0 && !CanUserTarget(requesterClient, targetClient))
-    {
-        ReplyToCommand(requesterClient, "[SM] You cannot target this player");
-        return Plugin_Handled;
-    }
-
-    // Apply the punishment
-    bool success = false;
-
-    if (StrEqual(punishmentType, "gag"))
-    {
-        success = BaseComm_SetClientGag(targetClient, true);
-    }
-    else if (StrEqual(punishmentType, "mute"))
-    {
-        success = BaseComm_SetClientMute(targetClient, true);
-    }
-    else if (StrEqual(punishmentType, "silence"))
-    {
-        BaseComm_SetClientGag(targetClient, true);
-        BaseComm_SetClientMute(targetClient, true);
-        success = true;
-    }
-
-    if (!success)
-    {
-        ReplyToCommand(requesterClient, "[SM] Failed to apply punishment");
-        return Plugin_Handled;
-    }
-
-    // Add to database (permanent communication restrictions)
-    char targetSteamID[32];
-    if (!GetClientAuthId(targetClient, AuthId_SteamID64, targetSteamID, sizeof(targetSteamID)))
-    {
-        ReplyToCommand(requesterClient, "[SM] Could not retrieve SteamID of target");
-        return Plugin_Handled;
-    }
-
-    AddCommPunishmentToDatabase(requesterClient, targetSteamID, punishmentType);
-
-    // Log action
-    ReplyToCommand(requesterClient, "[SM] %N has been %s", targetClient, actionName);
-
-    return Plugin_Handled;
-}
-
-// ============================================================
-// COMMANDS: Remove Communication Restrictions
-// ============================================================
-public Action Command_Ungag(int client, int args)
-{
-    return HandleCommRemoval(client, args, "gag", "ungagged");
-}
-
-public Action Command_Unmute(int client, int args)
-{
-    return HandleCommRemoval(client, args, "mute", "unmuted");
-}
-
-public Action Command_Unsilence(int client, int args)
-{
-    return HandleCommRemoval(client, args, "silence", "unsilenced");
-}
-
-Action HandleCommRemoval(int requesterClient, int args, const char[] punishmentType, const char[] actionName)
-{
-    if (args < 1)
-    {
-        ReplyToCommand(requesterClient, "[SM] Usage: sm_un%s <target>", punishmentType);
-        return Plugin_Handled;
-    }
-
-    char targetArg[128];
-    GetCmdArg(1, targetArg, sizeof(targetArg));
-
-    int targetClient = FindTargetByString(targetArg);
-
-    if (targetClient == -1)
-    {
-        ReplyToCommand(requesterClient, "[SM] Target not found");
-        return Plugin_Handled;
-    }
-
-    if (IsFakeClient(targetClient))
-    {
-        ReplyToCommand(requesterClient, "[SM] Cannot target bots");
-        return Plugin_Handled;
-    }
-
-    // Remove the punishment
-    if (StrEqual(punishmentType, "gag"))
-    {
-        BaseComm_SetClientGag(targetClient, false);
-    }
-    else if (StrEqual(punishmentType, "mute"))
-    {
-        BaseComm_SetClientMute(targetClient, false);
-    }
-    else if (StrEqual(punishmentType, "silence"))
-    {
-        BaseComm_SetClientGag(targetClient, false);
-        BaseComm_SetClientMute(targetClient, false);
-    }
-
-    // Remove from database
-    char targetSteamID[32];
-    GetClientAuthId(targetClient, AuthId_SteamID64, targetSteamID, sizeof(targetSteamID));
-
-    RemoveCommPunishmentFromDatabase(targetSteamID, punishmentType);
-
-    ReplyToCommand(requesterClient, "[SM] %N has been %s", targetClient, actionName);
-
-    return Plugin_Handled;
+    g_bPendingGag[client]  = false;
+    g_bPendingMute[client] = false;
 }
 
 // ============================================================
@@ -603,27 +512,22 @@ Action HandleCommRemoval(int requesterClient, int args, const char[] punishmentT
 
 void AddBanToDatabase(int requesterClient, const char[] targetSteamID, const char[] targetIP, const char[] reason, int duration, const char[] punishmentType)
 {
-    if (g_Database == null) return;
-
-    char adminSteamID[32];
-    bool hasAdmin = (requesterClient != 0);
     bool hasIP    = (strlen(targetIP) > 0);
 
-    if (hasAdmin)
-    {
-        GetClientAuthId(requesterClient, AuthId_SteamID64, adminSteamID, sizeof(adminSteamID));
-    }
-
-    // Build dynamic parts of the query
     char adminValue[32];
-    if (hasAdmin)
-        g_Database.Format(adminValue, sizeof(adminValue), "'%s'", adminSteamID);
+    AdminSqlValue(requesterClient, adminValue, sizeof(adminValue));
+
+    // An IP ban of someone who is not connected has no SteamID. Writing the empty string into the
+    // unquoted bigint slot would be a syntax error, so it becomes NULL.
+    char steamValue[32];
+    if (strlen(targetSteamID) > 0)
+        strcopy(steamValue, sizeof(steamValue), targetSteamID);
     else
-        strcopy(adminValue, sizeof(adminValue), "NULL");
+        strcopy(steamValue, sizeof(steamValue), "NULL");
 
     char ipValue[128];
     if (hasIP)
-        g_Database.Format(ipValue, sizeof(ipValue), "'%s'", targetIP);
+        SqlQuote(targetIP, ipValue, sizeof(ipValue));
     else
         strcopy(ipValue, sizeof(ipValue), "NULL");
 
@@ -633,253 +537,205 @@ void AddBanToDatabase(int requesterClient, const char[] targetSteamID, const cha
     else
         Format(expiresValue, sizeof(expiresValue), "CURRENT_TIMESTAMP + INTERVAL '%d seconds'", duration);
 
+    char reasonValue[MAX_REASON_BYTES * 2 + 3];
+    SqlQuote(reason, reasonValue, sizeof(reasonValue));
+
     // Build query
-    char query[1024];
-    g_Database.Format(query, sizeof(query),
-                      "INSERT INTO punishments (punishment_type, target_steam_id, target_ip, admin_steam_id, reason, expires_at) VALUES ('%s', %s, %!s, %!s, '%s', %!s)",
-                      punishmentType, targetSteamID, ipValue, adminValue, reason, expiresValue);
+    char query[MAX_QUERY_LENGTH];
+    Format(query, sizeof(query),
+           "INSERT INTO punishments (punishment_type, target_steam_id, target_ip, admin_steam_id, reason, expires_at) VALUES ('%s', %s, %s, %s, %s, %s)",
+           punishmentType, steamValue, ipValue, adminValue, reasonValue, expiresValue);
 
-    g_Database.Query(OnBanAdded, query);
-}
-
-public void OnBanAdded(Database db, DBResultSet results, const char[] error, any data)
-{
-    if (results == null)
-        LogError("Failed to add ban to database: %s", error);
+    RunWrite(query);
 }
 
 void RemoveBanFromDatabase(const char[] target, bool isTargetIP)
 {
-    if (g_Database == null)
-        return;
-
-    // Build WHERE clause with proper escaping
+    // Callers pass a SteamID64 (digits only, from SteamIdTo64) or an IP, which is quoted.
     char whereClause[256];
     if (isTargetIP)
-        g_Database.Format(whereClause, sizeof(whereClause), "target_ip = '%s'", target);
+    {
+        char quoted[160];
+        SqlQuote(target, quoted, sizeof(quoted));
+        Format(whereClause, sizeof(whereClause), "target_ip = %s", quoted);
+    }
     else
-        g_Database.Format(whereClause, sizeof(whereClause), "target_steam_id = %s", target);
+        Format(whereClause, sizeof(whereClause), "target_steam_id = %s", target);
 
-    // Build query
-    char query[512];
-    g_Database.Format(query, sizeof(query),
-                      "UPDATE punishments SET is_active = FALSE WHERE %!s AND punishment_type = '%s'",
-                      whereClause, isTargetIP ? "ban_ip" : "ban_steamid");
+    char query[MAX_QUERY_LENGTH];
+    Format(query, sizeof(query),
+           "UPDATE punishments SET is_active = FALSE WHERE %s AND punishment_type = '%s'",
+           whereClause, isTargetIP ? "ban_ip" : "ban_steamid");
 
-    g_Database.Query(OnBanRemoved, query);
-}
-
-public void OnBanRemoved(Database db, DBResultSet results, const char[] error, any data)
-{
-    if (results == null)
-        LogError("Failed to remove ban from database: %s", error);
+    RunWrite(query);
 }
 
 void AddCommPunishmentToDatabase(int admin, const char[] targetSteamID, const char[] punishmentType)
 {
-    if (g_Database == null)
-        return;
-
-    char adminSteamID[32];
-    bool hasAdmin = (admin != 0);
-
-    if (hasAdmin)
-    {
-        GetClientAuthId(admin, AuthId_SteamID64, adminSteamID, sizeof(adminSteamID));
-    }
-
-    // Build dynamic parts of the query
     char adminValue[32];
-    if (hasAdmin)
-        g_Database.Format(adminValue, sizeof(adminValue), "'%s'", adminSteamID);
-    else
-        strcopy(adminValue, sizeof(adminValue), "NULL");
+    AdminSqlValue(admin, adminValue, sizeof(adminValue));
 
-    // Permanent communication punishment (no expiration)
-    char query[1024];
-    g_Database.Format(query, sizeof(query),
-                      "INSERT INTO punishments (punishment_type, target_steam_id, admin_steam_id, expires_at) VALUES ('%s', %s, %!s, NULL)",
-                      punishmentType, targetSteamID, adminValue);
+    // basecomm fires the forward again when an already-gagged player is gagged again, so only
+    // insert when there is no active row covering it yet (a legacy "silence" covers both).
+    // targetSteamID is from GetClientAuthId; punishmentType is "gag" or "mute".
+    char query[MAX_QUERY_LENGTH];
+    Format(query, sizeof(query),
+           "INSERT INTO punishments (punishment_type, target_steam_id, admin_steam_id, expires_at) SELECT '%s', %s, %s, NULL WHERE NOT EXISTS (SELECT 1 FROM punishments WHERE target_steam_id = %s AND punishment_type IN ('%s', 'silence') AND is_active)",
+           punishmentType, targetSteamID, adminValue, targetSteamID, punishmentType);
 
-    g_Database.Query(OnCommPunishmentAdded, query);
-}
-
-public void OnCommPunishmentAdded(Database db, DBResultSet results, const char[] error, any data)
-{
-    if (results == null)
-        LogError("Failed to add communication punishment to database: %s", error);
+    RunWrite(query);
 }
 
 void RemoveCommPunishmentFromDatabase(const char[] targetSteamID, const char[] punishmentType)
 {
+    // A legacy "silence" row is both a gag and a mute. Lifting one half must keep the other, so
+    // carry the other half over into its own row before the silence row is deactivated. Writes
+    // on this connection run in order, and RunWrite's retry queue preserves that order.
+    char other[8];
+    strcopy(other, sizeof(other), StrEqual(punishmentType, "gag") ? "mute" : "gag");
+
+    char query[MAX_QUERY_LENGTH];
+    Format(query, sizeof(query),
+           "INSERT INTO punishments (punishment_type, target_steam_id, admin_steam_id, reason, expires_at) SELECT '%s', target_steam_id, admin_steam_id, reason, expires_at FROM punishments WHERE target_steam_id = %s AND punishment_type = 'silence' AND is_active AND NOT EXISTS (SELECT 1 FROM punishments WHERE target_steam_id = %s AND punishment_type = '%s' AND is_active) LIMIT 1",
+           other, targetSteamID, targetSteamID, other);
+    RunWrite(query);
+
+    Format(query, sizeof(query),
+           "UPDATE punishments SET is_active = FALSE WHERE target_steam_id = %s AND punishment_type IN ('%s', 'silence') AND is_active",
+           targetSteamID, punishmentType);
+    RunWrite(query);
+}
+
+// ============================================================
+// RELIABLE WRITES
+// ============================================================
+//
+// The pooled connection to this database is dropped when it sits idle, and nothing notices until
+// the next query fails with "server closed the connection unexpectedly" (seen on main 09/20, and
+// in gg2_messages, gg2_forceretry_optout and clientprefs). Punishments are written rarely, so the
+// first ban after a quiet stretch was exactly the one most likely to hit a dead connection - and
+// with only a LogError in the callback it was silently lost, while the engine ban still applied
+// and hid the problem until the next restart.
+//
+// Every write now goes through here. A connection failure queues the query, reconnects, and
+// replays it once the connection is back. Any other failure (bad SQL, a constraint) is logged and
+// dropped - replaying those would just fail again. Each query is replayed at most once.
+
+void RunWrite(const char[] query, bool isRetry = false)
+{
     if (g_Database == null)
+    {
+        QueuePendingWrite(query, isRetry);
+        ReconnectDatabase();
         return;
+    }
 
-    char query[512];
-    g_Database.Format(query, sizeof(query),
-                      "UPDATE punishments SET is_active = FALSE WHERE target_steam_id = %s AND punishment_type = '%s'",
-                      targetSteamID, punishmentType);
-
-    g_Database.Query(OnCommPunishmentRemoved, query);
+    DataPack pack = new DataPack();
+    pack.WriteCell(isRetry);
+    pack.WriteString(query);
+    g_Database.Query(OnWriteFinished, query, pack);
 }
 
-public void OnCommPunishmentRemoved(Database db, DBResultSet results, const char[] error, any data)
+public void OnWriteFinished(Database db, DBResultSet results, const char[] error, DataPack pack)
 {
+    pack.Reset();
+    bool isRetry = pack.ReadCell();
+    char query[MAX_QUERY_LENGTH];
+    pack.ReadString(query, sizeof(query));
+    delete pack;
+
     if (results != null) return;
-    LogError("Failed to remove communication punishment from database: %s", error);
-}
 
-// ============================================================
-// UTILITY FUNCTIONS
-// ============================================================
-
-int ParseTimeString(const char[] timeStr)
-{
-    // Handle "0" as permanent
-    if (StrEqual(timeStr, "0"))
-        return 0;
-
-    int len = strlen(timeStr);
-    if (len < 2)
-        return -1;
-
-    char numStr[32];
-    strcopy(numStr, len, timeStr);
-
-    char unit       = timeStr[len - 1];
-    numStr[len - 1] = '\0';
-
-    int value       = StringToInt(numStr);
-    if (value <= 0)
-        return -1;
-
-    switch (unit)
+    if (!isRetry && IsConnectionError(error))
     {
-        case 'm', 'M': return value * 60;
-        case 'h', 'H': return value * 3600;
-        case 'd', 'D': return value * 86400;
-        case 'w', 'W': return value * 604800;
-        default: return -1;
-    }
-}
-
-bool IsValidSteamID(const char[] steamid)
-{
-    // Validate SteamID64 format (numeric string, typically 17 digits)
-    int len = strlen(steamid);
-    if (len < 10 || len > 20)
-        return false;
-
-    // Check that all characters are digits
-    for (int i = 0; i < len; i++)
-    {
-        if (!IsCharNumeric(steamid[i]))
-            return false;
+        LogMessage("Database write failed on a dead connection, will retry after reconnecting: %s", error);
+        QueuePendingWrite(query, false);
+        ReconnectDatabase();
+        return;
     }
 
-    return true;
+    LogError("Failed to write punishment to database: %s -- query: %s", error, query);
 }
 
-bool IsValidIP(const char[] ip)
+void QueuePendingWrite(const char[] query, bool isRetry)
 {
-    // Basic IP validation (simple check for dots)
-    int dotCount = 0;
-    for (int i = 0; i < strlen(ip); i++)
-        if (ip[i] == '.')
-            dotCount++;
-
-    return (dotCount == 3);
-}
-
-int FindClientBySteamID(const char[] steamid)
-{
-    char clientSteamID[32];
-
-    for (int i = 1; i <= MaxClients; i++)
+    if (isRetry)
     {
-        if (!IsClientInGame(i) || IsFakeClient(i))
-            continue;
-
-        if (!GetClientAuthId(i, AuthId_SteamID64, clientSteamID, sizeof(clientSteamID))) continue;
-
-        if (StrEqual(steamid, clientSteamID))
-            return i;
+        LogError("Dropping punishment write after its retry also found no connection -- query: %s", query);
+        return;
     }
 
-    return -1;
+    if (g_PendingWrites.Length >= MAX_PENDING_WRITES)
+    {
+        LogError("Pending punishment write queue full, dropping -- query: %s", query);
+        return;
+    }
+
+    g_PendingWrites.PushString(query);
 }
 
-int FindTargetByString(const char[] target)
+void FlushPendingWrites()
 {
-    // Handle #userid format
-    if (target[0] == '#')
-    {
-        char temp[128];
-        strcopy(temp, sizeof(temp), target[1]);
+    int count = g_PendingWrites.Length;
+    if (count == 0) return;
 
-        // Check if it's a userid
-        if (IsCharNumeric(temp[0]))
+    LogMessage("Replaying %d punishment write(s) queued while the database was unavailable", count);
+
+    char query[MAX_QUERY_LENGTH];
+    for (int i = 0; i < count; i++)
+    {
+        g_PendingWrites.GetString(i, query, sizeof(query));
+        RunWrite(query, true);
+    }
+    g_PendingWrites.Clear();
+}
+
+bool IsConnectionError(const char[] error)
+{
+    static const char markers[][] = {
+        "server closed the connection",
+        "no connection to the server",
+        "connection not open",
+        "could not send data to server",
+        "could not receive data from server",
+        "terminating connection",
+        "SSL SYSCALL error",
+    };
+
+    for (int i = 0; i < sizeof(markers); i++)
+        if (StrContains(error, markers[i], false) != -1) return true;
+
+    return false;
+}
+
+// The admin's SteamID64 as a SQL value, or NULL. NULL is also the answer when the admin has no
+// SteamID yet (not Steam-authenticated, e.g. during a Steam outage): the empty string this used to
+// write is not a valid bigint, so the whole INSERT failed and the ban was never recorded.
+void AdminSqlValue(int client, char[] out, int maxlen)
+{
+    char steamid[32];
+    if (client > 0 && GetClientAuthId(client, AuthId_SteamID64, steamid, sizeof(steamid)))
+        strcopy(out, maxlen, steamid);
+    else
+        strcopy(out, maxlen, "NULL");
+}
+
+// Quotes a string for Postgres without needing a live connection, so a query can be built while
+// the connection is down and queued. standard_conforming_strings is on (the Postgres default since
+// 9.1), so inside '...' only the single quote is special and is escaped by doubling.
+void SqlQuote(const char[] value, char[] out, int maxlen)
+{
+    int o = 0;
+    if (o < maxlen - 1) out[o++] = '\'';
+    for (int i = 0; value[i] != '\0' && o < maxlen - 2; i++)
+    {
+        if (value[i] == '\'')
         {
-            int userid = StringToInt(temp);
-            return GetClientOfUserId(userid);
+            if (o >= maxlen - 3) break;
+            out[o++] = '\'';
         }
-
-        // Check if it's a SteamID
-        if (StrContains(temp, "STEAM_", false) == 0)
-        {
-            return FindClientBySteamID(temp);
-        }
-
-        // Otherwise it's an exact name match
-        return FindClientByExactName(temp);
+        out[o++] = value[i];
     }
-
-    // Try to find by partial name
-    return FindClientByPartialName(target);
+    out[o++] = '\'';
+    out[o]   = '\0';
 }
-
-int FindClientByExactName(const char[] name)
-{
-    char clientName[MAX_NAME_LENGTH];
-
-    for (int i = 1; i <= MaxClients; i++)
-    {
-        if (!IsClientInGame(i))
-            continue;
-
-        GetClientName(i, clientName, sizeof(clientName));
-
-        if (StrEqual(name, clientName))
-            return i;
-    }
-
-    return -1;
-}
-
-int FindClientByPartialName(const char[] name)
-{
-    char clientName[MAX_NAME_LENGTH];
-    int  matches   = 0;
-    int  lastMatch = -1;
-
-    for (int i = 1; i <= MaxClients; i++)
-    {
-        if (!IsClientInGame(i))
-            continue;
-
-        GetClientName(i, clientName, sizeof(clientName));
-
-        if (StrContains(clientName, name, false) != -1)
-        {
-            matches++;
-            lastMatch = i;
-        }
-    }
-
-    // Only return if there's exactly one match
-    return (matches == 1) ? lastMatch : -1;
-}
-
-// BaseComm natives stub (these should be provided by basecomm.inc)
-native bool BaseComm_SetClientGag(int client, bool gagged);
-native bool BaseComm_SetClientMute(int client, bool muted);

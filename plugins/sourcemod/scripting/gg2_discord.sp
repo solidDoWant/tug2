@@ -2,6 +2,7 @@
 #include <ripext>
 #include <mapnames>
 #include <workshopmaps>
+#include <steamids>
 // #include <sourcebanspp>  // SourceBansPP is not currently in use
 #pragma newdecls required
 #define TEAM_SPEC                1
@@ -25,6 +26,11 @@ int   g_rounds_played  = 0;
 // Resolved once at load: mp_maxrounds is a stock cvar and always exists, so a null here means the
 // lookup itself failed, not that the server is unconfigured.
 ConVar g_cvMaxRounds = null;
+
+// SteamID64 -> GetEngineTime() of bans already posted from OnBanClient/OnBanIdentity. The engine's
+// server_addban event fires for the same ban a moment later; this is how it knows to stay quiet.
+StringMap g_RecentBans = null;
+#define BAN_DEDUPE_WINDOW 10.0
 
 // Message batching queue (circular buffer)
 char  g_MessageQueue[MAX_QUEUE_SIZE][MAX_MESSAGE_SIZE];
@@ -141,6 +147,7 @@ public void OnPluginStart()
     WorkshopMaps_Load();
 
     HookEvent("server_addban", Event_ServerAddBan);
+    g_RecentBans = new StringMap();
     HookEvent("vote_started", Event_VoteStarted);
     HookEvent("player_team", Event_PlayerTeam, EventHookMode_Pre);
     HookEvent("player_disconnect", Event_PlayerDisconnect);
@@ -274,42 +281,147 @@ public Action Event_VoteStarted(Event event, const char[] name, bool dontBroadca
     return Plugin_Continue;
 }
 
+// ---------------------------------------------------------------------------------------------
+// Bans
+// ---------------------------------------------------------------------------------------------
+//
+// Bans used to be reported only from the engine's server_addban event, and that event has no
+// player name whenever the player is kicked before the engine records the ban - which is every
+// !ban of a connected player, because core kicks first and then issues banid. Those were all
+// dropped ("Ignoring empty playername ban"), so admin bans never reached Discord; only the
+// team-kill auto-bans of players who stayed connected did. Found on main 2026-09-23.
+//
+// SourceMod's OnBanClient/OnBanIdentity fire before the kick, with the client still valid and
+// the admin and reason attached, so they are now the primary source. server_addban remains as a
+// fallback for bans SourceMod never sees - the native vote kick and a raw `banid` over RCON -
+// and is suppressed for a SteamID those forwards have just reported.
+
+public Action OnBanClient(int client, int time, int flags, const char[] reason, const char[] kick_message, const char[] command, any source)
+{
+    if (IsFakeClient(client)) return Plugin_Continue;
+
+    char target[256];
+    gen_steam_link(client, target, sizeof(target));
+
+    char steamid64[32];
+    if (GetClientAuthId(client, AuthId_SteamID64, steamid64, sizeof(steamid64)))
+        MarkBanReported(steamid64);
+
+    PostBan(target, time, reason, source, (flags & BANFLAG_IP) != 0);
+    return Plugin_Continue;
+}
+
+public Action OnBanIdentity(const char[] identity, int time, int flags, const char[] reason, const char[] command, any source)
+{
+    char target[256];
+    char steamid64[32];
+
+    if (!(flags & BANFLAG_IP) && SteamIdTo64(identity, steamid64, sizeof(steamid64)))
+    {
+        // Not connected, so there is no name to show - link the id itself to the profile.
+        Format(target, sizeof(target), "[%s](<https://steamcommunity.com/profiles/%s>)", identity, steamid64);
+        MarkBanReported(steamid64);
+    }
+    else
+    {
+        strcopy(target, sizeof(target), identity);
+    }
+
+    PostBan(target, time, reason, source, (flags & BANFLAG_IP) != 0);
+    return Plugin_Continue;
+}
+
+void PostBan(const char[] target, int minutes, const char[] reason, any source, bool byIP)
+{
+    char admin[256];
+    int  adminClient = view_as<int>(source);
+    if (adminClient >= 1 && adminClient <= MaxClients && IsClientInGame(adminClient) && !IsFakeClient(adminClient))
+        gen_steam_link(adminClient, admin, sizeof(admin));
+    else
+        strcopy(admin, sizeof(admin), "Console");
+
+    char duration[64];
+    FormatBanDuration(minutes, duration, sizeof(duration));
+
+    char message[MAX_MESSAGE_SIZE];
+    Format(message, sizeof(message), "**BAN:** %s%s banned by %s %s", target, byIP ? " (IP)" : "", admin, duration);
+
+    // basebans passes the reason as typed, so a quoted reason arrives with its quotes attached.
+    char text[512];
+    strcopy(text, sizeof(text), reason);
+    TrimString(text);
+    StripQuotes(text);
+    TrimString(text);
+
+    if (text[0] != '\0')
+        Format(message, sizeof(message), "%s - \"%s\"", message, text);
+
+    send_discord(message, sizeof(message));
+}
+
+void MarkBanReported(const char[] steamid64)
+{
+    g_RecentBans.SetValue(steamid64, GetEngineTime());
+}
+
+bool WasBanReported(const char[] steamid64)
+{
+    float when;
+    return g_RecentBans.GetValue(steamid64, when) && GetEngineTime() - when < BAN_DEDUPE_WINDOW;
+}
+
+// "for 8 hours", "for 1 day", "permanently". Exact multiples only, so 90 stays "90 minutes".
+void FormatBanDuration(int minutes, char[] buffer, int maxlen)
+{
+    if (minutes <= 0)
+    {
+        strcopy(buffer, maxlen, "permanently");
+        return;
+    }
+
+    int    amount = minutes;
+    char   unit[8] = "minute";
+    if (minutes % 1440 == 0)    { amount = minutes / 1440; unit = "day"; }
+    else if (minutes % 60 == 0) { amount = minutes / 60;   unit = "hour"; }
+
+    Format(buffer, maxlen, "for %d %s%s", amount, unit, amount == 1 ? "" : "s");
+}
+
 public Action Event_ServerAddBan(Event event, const char[] name, bool dontBroadcast)
 {
-    char discord_message[1024];
+    char networkid[64];
+    GetEventString(event, "networkid", networkid, sizeof(networkid));
+
+    char steamid64[32];
+    bool hasSteamId = SteamIdTo64(networkid, steamid64, sizeof(steamid64));
+
+    if (hasSteamId && WasBanReported(steamid64))
+        return Plugin_Continue;
 
     char playerName[128];
-    GetEventString(event, "name", playerName, 128);
+    GetEventString(event, "name", playerName, sizeof(playerName));
 
-    char networkid[128];
-    GetEventString(event, "networkid", networkid, 128, "no_networkid_registered");
-
-    if (StrEqual(playerName, ""))
-    {
-        LogMessage("[DISCORD] Ignoring empty playername ban (%s)", networkid);
-        return Plugin_Continue;
-    }
+    char target[256];
+    if (hasSteamId)
+        Format(target, sizeof(target), "[%s](<https://steamcommunity.com/profiles/%s>)",
+               playerName[0] != '\0' ? playerName : networkid, steamid64);
+    else if (playerName[0] != '\0')
+        strcopy(target, sizeof(target), playerName);
+    else
+        strcopy(target, sizeof(target), networkid);
 
     char by[128];
-    GetEventString(event, "by", by, 128, "no_by_registered");
+    GetEventString(event, "by", by, sizeof(by), "Console");
 
-    char duration[128];
-    GetEventString(event, "duration", duration, 128, "no_duration_registered");
+    // Already reads "for 60.00 minutes" / "permanently" - the old message added its own "for".
+    char duration[64];
+    GetEventString(event, "duration", duration, sizeof(duration));
 
-    Format(discord_message, sizeof(discord_message), "**BAN:** %s is banned by %s for %s", playerName, by, duration);
-    send_discord(discord_message, sizeof(discord_message));
+    char message[MAX_MESSAGE_SIZE];
+    Format(message, sizeof(message), "**BAN:** %s banned by %s %s", target, by, duration);
+    send_discord(message, sizeof(message));
 
-    char ip[128];
-    GetEventString(event, "ip", ip, 128, "no_ip_registered");
-
-    bool kicked = GetEventBool(event, "kicked");
-    if (kicked)
-    {
-        LogMessage("[DISCORD] %s banned %s (%s) at IP %s for %s (was kicked)", by, playerName, networkid, ip, duration);
-        return Plugin_Continue;
-    }
-
-    LogMessage("[DISCORD] %s banned %s (%s) at IP %s for %s (was NOT kicked)", by, playerName, networkid, ip, duration);
+    LogMessage("[DISCORD] %s banned %s (%s) %s (not seen by SourceMod)", by, playerName, networkid, duration);
     return Plugin_Continue;
 }
 
