@@ -295,6 +295,17 @@ ConVar    g_cvWarnText, g_cvWarnHold, g_cvWarnX, g_cvWarnY, g_cvWarnColor;
 ConVar    g_cvWarnStyle, g_cvWarnIcon;
 
 Database  g_hWarnDb = null;
+// The pooled connection to this database drops when it sits idle. Before this was handled, one drop
+// left g_hWarnDb dead until the next restart: every count read failed and fell open to 0, and every
+// increment was lost, so capped regulars were warned once per round again. A connection error now
+// reconnects (one attempt at a time), and increments that could not be written wait here, as Steam
+// ids, until it is back.
+#define   MAX_PENDING_WARN_RECORDS 64
+bool      g_bWarnDbConnecting = false;
+// Bumped on every successful connect and carried by each query, so a failure that belongs to an
+// already-replaced connection retries on the new one instead of tearing that down as well.
+int       g_iWarnDbGeneration = 0;
+ArrayList g_aPendingWarnRecords = null;
 bool      g_bWarnedThisRound[MAXPLAYERS + 1];
 int       g_iWarnCount[MAXPLAYERS + 1];    // -1 = not loaded yet
 char      g_sWarnSteamId[MAXPLAYERS + 1][32];
@@ -450,7 +461,8 @@ public void OnPluginStart()
         if (!GetClientAuthId(i, AuthId_SteamID64, g_sWarnSteamId[i], sizeof(g_sWarnSteamId[])))
             g_iWarnCount[i] = 0;    // no id to load or record against - fall open, as elsewhere
     }
-    Database.Connect(OnWarnDatabaseConnected, "insurgency-stats");
+    g_aPendingWarnRecords = new ArrayList(ByteCountToCells(32));
+    ConnectWarnDatabase();
 
     Handle conf = LoadGameConfigFile("tug2.games");
     if (conf == null)
@@ -1462,21 +1474,66 @@ public void OnMapEnd()
 // ---------------------------------------------------------------------------------------------
 // Player warning - see the block comment by g_cvWarnEnabled
 // ---------------------------------------------------------------------------------------------
+// Used for the first connection and every reconnect. Only one attempt runs at a time; callers that
+// hit a dead connection while one is in flight just wait for its callback.
+void ConnectWarnDatabase()
+{
+    if (g_bWarnDbConnecting) return;
+    g_bWarnDbConnecting = true;
+
+    delete g_hWarnDb;    // nulls it, so nothing queries the dead handle while we wait
+    Database.Connect(OnWarnDatabaseConnected, "insurgency-stats");
+}
+
 public void OnWarnDatabaseConnected(Database db, const char[] error, any data)
 {
+    g_bWarnDbConnecting = false;
+
     if (db == null)
     {
-        // Not fatal, and deliberately not retried on a timer. Without the table the per-player cap
-        // cannot be enforced, so the warning falls back to once per round and no lifetime limit -
-        // noisy for regulars, but better than never explaining the mechanic to anyone.
+        // Not fatal, and deliberately not retried on a timer - the next count load or warning
+        // retries it. Until then the per-player cap cannot be enforced, so the warning falls back
+        // to once per round and no lifetime limit: noisy for regulars, but better than never
+        // explaining the mechanic to anyone. Release anyone held back waiting for this attempt.
         LogError("[SMOKE SUPPRESS] No database - the warning cap cannot be enforced, warnings fall back to once per round: %s", error);
+        for (int i = 1; i <= MaxClients; i++)
+            if (g_iWarnCount[i] < 0 && IsClientInGame(i) && !IsFakeClient(i)) g_iWarnCount[i] = 0;
         return;
     }
 
     g_hWarnDb = db;
+    g_iWarnDbGeneration++;
+
+    // Writes first: queries on one connection run in order, so the counts loaded below include them.
+    char steamId[32];
+    int  pending = g_aPendingWarnRecords.Length;
+    for (int i = 0; i < pending; i++)
+    {
+        g_aPendingWarnRecords.GetString(i, steamId, sizeof(steamId));
+        RecordWarningFor(steamId, true);
+    }
+    g_aPendingWarnRecords.Clear();
 
     for (int i = 1; i <= MaxClients; i++)
         if (IsClientInGame(i) && !IsFakeClient(i) && g_sWarnSteamId[i][0] != '\0') LoadWarnCount(i);
+}
+
+bool IsConnectionError(const char[] error)
+{
+    static const char markers[][] = {
+        "server closed the connection",
+        "no connection to the server",
+        "connection not open",
+        "could not send data to server",
+        "could not receive data from server",
+        "terminating connection",
+        "SSL SYSCALL error",
+    };
+
+    for (int i = 0; i < sizeof(markers); i++)
+        if (StrContains(error, markers[i], false) != -1) return true;
+
+    return false;
 }
 
 void LoadWarnCount(int client)
@@ -1485,9 +1542,18 @@ void LoadWarnCount(int client)
     // still holding it, so returning with the sentinel intact would warn nobody at all for the life
     // of the map - the exact opposite of the degraded behaviour OnWarnDatabaseConnected documents.
     // 0 is what that fallback actually needs: warn once per round, with no lifetime cap.
-    if (g_hWarnDb == null || g_sWarnSteamId[client][0] == '\0')
+    if (g_sWarnSteamId[client][0] == '\0')
     {
         g_iWarnCount[client] = 0;
+        return;
+    }
+
+    // No live connection: fall open for now, and make sure a reconnect is on its way - its
+    // callback reloads everyone in game, which puts the real count back.
+    if (g_hWarnDb == null)
+    {
+        g_iWarnCount[client] = 0;
+        ConnectWarnDatabase();
         return;
     }
 
@@ -1504,16 +1570,34 @@ void LoadWarnCount(int client)
         g_hWarnDb.Format(query, sizeof(query),
                          "SELECT shown_count FROM smoke_warning_seen WHERE steam_id = %s", g_sWarnSteamId[client]);
 
-    g_hWarnDb.Query(OnWarnCountLoaded, query, GetClientUserId(client));
+    DataPack pack = new DataPack();
+    pack.WriteCell(GetClientUserId(client));
+    pack.WriteCell(g_iWarnDbGeneration);
+    g_hWarnDb.Query(OnWarnCountLoaded, query, pack);
 }
 
-public void OnWarnCountLoaded(Database db, DBResultSet results, const char[] error, any userid)
+public void OnWarnCountLoaded(Database db, DBResultSet results, const char[] error, DataPack pack)
 {
-    int client = GetClientOfUserId(userid);
+    pack.Reset();
+    int client     = GetClientOfUserId(pack.ReadCell());
+    int generation = pack.ReadCell();
+    delete pack;
+
     if (client < 1) return;
 
     if (results == null)
     {
+        // A dropped connection: hold this player (the -1 sentinel skips them) and reconnect. The
+        // reconnect reloads them, or releases them to 0 if it fails, so the hold is short. If the
+        // connection was already replaced since this query went out, just ask the new one.
+        if (IsConnectionError(error))
+        {
+            g_iWarnCount[client] = -1;
+            if (generation != g_iWarnDbGeneration && g_hWarnDb != null) LoadWarnCount(client);
+            else ConnectWarnDatabase();
+            return;
+        }
+
         LogError("[SMOKE SUPPRESS] Failed to read the warning count: %s", error);
         g_iWarnCount[client] = 0;    // unknown, so treat as new rather than silently never warning
         return;
@@ -1722,7 +1806,19 @@ public Action Timer_KillWarnText(Handle timer, int ref)
 
 void RecordWarning(int client)
 {
-    if (g_hWarnDb == null || g_sWarnSteamId[client][0] == '\0') return;
+    if (g_sWarnSteamId[client][0] == '\0') return;
+    RecordWarningFor(g_sWarnSteamId[client], false);
+}
+
+// By Steam id rather than client, so a queued increment still lands after the player has left.
+void RecordWarningFor(const char[] steamId, bool isRetry)
+{
+    if (g_hWarnDb == null)
+    {
+        QueueWarnRecord(steamId);
+        ConnectWarnDatabase();
+        return;
+    }
 
     // The count is recomputed from the stored row rather than written from memory, so two servers
     // warning the same player cannot lose an increment. GREATEST keeps a forgotten row from
@@ -1733,18 +1829,55 @@ void RecordWarning(int client)
     if (days > 0)
         g_hWarnDb.Format(query, sizeof(query),
                          "INSERT INTO smoke_warning_seen (steam_id, shown_count, first_shown_at, last_shown_at) VALUES (%s, 1, NOW(), NOW()) ON CONFLICT (steam_id) DO UPDATE SET shown_count = CASE WHEN smoke_warning_seen.last_shown_at < NOW() - INTERVAL '%d days' THEN 1 ELSE smoke_warning_seen.shown_count + 1 END, last_shown_at = NOW()",
-                         g_sWarnSteamId[client], days);
+                         steamId, days);
     else
         g_hWarnDb.Format(query, sizeof(query),
                          "INSERT INTO smoke_warning_seen (steam_id, shown_count, first_shown_at, last_shown_at) VALUES (%s, 1, NOW(), NOW()) ON CONFLICT (steam_id) DO UPDATE SET shown_count = smoke_warning_seen.shown_count + 1, last_shown_at = NOW()",
-                         g_sWarnSteamId[client]);
+                         steamId);
 
-    g_hWarnDb.Query(OnWarnRecorded, query);
+    DataPack pack = new DataPack();
+    pack.WriteString(steamId);
+    pack.WriteCell(isRetry);
+    pack.WriteCell(g_iWarnDbGeneration);
+    g_hWarnDb.Query(OnWarnRecorded, query, pack);
 }
 
-public void OnWarnRecorded(Database db, DBResultSet results, const char[] error, any data)
+public void OnWarnRecorded(Database db, DBResultSet results, const char[] error, DataPack pack)
 {
-    if (results == null) LogError("[SMOKE SUPPRESS] Failed to record a warning: %s", error);
+    pack.Reset();
+    char steamId[32];
+    pack.ReadString(steamId, sizeof(steamId));
+    bool isRetry    = pack.ReadCell();
+    int  generation = pack.ReadCell();
+    delete pack;
+
+    if (results != null) return;
+
+    // One retry per increment: a write that fails again after a fresh reconnect is logged, not
+    // looped on. A failure from an already-replaced connection goes straight to the new one.
+    if (!isRetry && IsConnectionError(error))
+    {
+        if (generation != g_iWarnDbGeneration && g_hWarnDb != null)
+        {
+            RecordWarningFor(steamId, true);
+            return;
+        }
+        QueueWarnRecord(steamId);
+        ConnectWarnDatabase();
+        return;
+    }
+
+    LogError("[SMOKE SUPPRESS] Failed to record a warning for %s: %s", steamId, error);
+}
+
+void QueueWarnRecord(const char[] steamId)
+{
+    if (g_aPendingWarnRecords.Length >= MAX_PENDING_WARN_RECORDS)
+    {
+        LogError("[SMOKE SUPPRESS] Warning-record queue full, dropping an increment for %s", steamId);
+        return;
+    }
+    g_aPendingWarnRecords.PushString(steamId);
 }
 
 void RestartTimer()
