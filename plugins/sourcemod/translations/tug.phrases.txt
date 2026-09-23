@@ -877,6 +877,17 @@
     "pt_p"      "{green}!autoreconnect{common} - Ative ou desative a reconexão automática para você"
     "tr"        "{green}!autoreconnect{common} - Otomatik yeniden bağlanmayı kendin için aç veya kapat"
   }
+  "help_dragmode"
+  {
+    "en"        "{green}!dragmode{common} - Switch body dragging between hold sprint and press to grab/release"
+    "ua"        "{green}!dragmode{common} - Перемкнути перетягування тіл: утримувати спринт або натиснути, щоб схопити/відпустити"
+    "jp"        "{green}!dragmode{common} - 死体の引きずり方を切り替え: ダッシュ長押し / 押して掴む・離す"
+    "chi"       "{green}!dragmode{common} - 切换拖拽尸体方式：按住冲刺键，或按一下抓取/松开"
+    "ru"        "{green}!dragmode{common} - Переключить перетаскивание тел: удерживать спринт или нажать, чтобы взять/отпустить"
+    "es"        "{green}!dragmode{common} - Cambia el arrastre de cuerpos: mantener esprint o pulsar para agarrar/soltar"
+    "pt_p"      "{green}!dragmode{common} - Alterna o arrastar de corpos: segurar corrida ou premir para agarrar/largar"
+    "tr"        "{green}!dragmode{common} - Ceset sürüklemeyi değiştir: koşu tuşunu basılı tut veya tutmak/bırakmak için bas"
+  }
   "help_footer"
   {
     "en"        "{common}More info: {blue}https://www.tug.gg"

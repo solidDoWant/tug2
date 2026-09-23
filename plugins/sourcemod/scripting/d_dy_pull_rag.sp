@@ -6,6 +6,7 @@
 #include <sourcemod>
 #undef REQUIRE_PLUGIN
 #include <sdktools>
+#include <morecolors>
 #define PLUGIN_VERSION     "0.0.1"
 #define PLUGIN_DESCRIPTION "Plugin for Pulling prop_ragdoll bodies"
 
@@ -24,6 +25,29 @@ int  g_playerCurrentRag[MAXPLAYERS + 1];
 bool g_bDragging[MAXPLAYERS + 1];
 
 ConVar g_cvToggle;
+ConVar g_cvAllowChoice;
+
+// Per-player choice between hold and toggle (!dragmode), saved in player_drag_mode in the
+// insurgency-stats database so it survives map changes and reconnects. PREF_DEFAULT means the player
+// has never chosen - or the choice has not loaded yet - and they get sm_pullrag_toggle. Only a
+// player who actually picks a mode gets a row, so changing the server default still moves everyone
+// who never cared.
+#define PREF_DEFAULT -1
+#define PREF_HOLD    0
+#define PREF_TOGGLE  1
+
+int  g_iPref[MAXPLAYERS + 1] = { PREF_DEFAULT, ... };
+// Chosen but not yet saved. A load must not overwrite it, and a reconnect writes it rather than
+// re-reading - otherwise a database hiccup would silently flip the player back to their old mode.
+bool g_bPrefDirty[MAXPLAYERS + 1];
+
+Database g_hDb = null;
+bool     g_bDbConnecting = false;
+// Bumped on every successful connect. A query that fails with a connection error on an older handle
+// is simply retried on the new one instead of starting yet another reconnect.
+int      g_iDbGeneration = 0;
+
+#define CHAT_PREFIX "{olivedrab}[Drag]{default} "
 
 // Acquisition range, unchanged from the original hold behaviour.
 #define DRAG_ACQUIRE_RANGE 80.0
@@ -48,7 +72,15 @@ public void OnPluginStart()
     g_cvToggle = CreateConVar("sm_pullrag_toggle", "0",
                               "Sprint key behaviour for dragging bodies. 0 = hold to drag (default), 1 = press once to grab and again to let go.",
                               _, true, 0.0, true, 1.0);
+    // Off by default, so main keeps one server-wide mode and never touches the database. The test
+    // server turns it on through cfg/sourcemod/d_dy_pull_rag.cfg.
+    g_cvAllowChoice = CreateConVar("sm_pullrag_allow_choice", "0",
+                                   "Let players pick hold or toggle dragging for themselves with !dragmode, saved in the insurgency-stats database. 0 = everyone uses sm_pullrag_toggle.",
+                                   _, true, 0.0, true, 1.0);
     AutoExecConfig(true, "d_dy_pull_rag");
+
+    // sm_ prefixed commands are reachable as both !name and /name.
+    RegConsoleCmd("sm_dragmode", Cmd_DragMode, "Choose how the sprint key drags bodies. Usage: !dragmode [hold|toggle]");
 
     // 0 is not a null entity reference, and FindDragTarget reads every client's slot to see who has
     // already claimed a body. Start them all genuinely empty.
@@ -58,10 +90,279 @@ public void OnPluginStart()
     HookEvent("player_disconnect", Event_PlayerDisconnect_Post, EventHookMode_Post);
 }
 
+public void OnConfigsExecuted()
+{
+    if (!g_cvAllowChoice.BoolValue) return;
+
+    // Connecting here rather than in OnPluginStart because the cvar is only known once the config
+    // has run. Also picks up players who were already connected when the plugin was (re)loaded.
+    if (g_hDb == null) ConnectDatabase();
+    else LoadAllPrefs();
+}
+
+public void OnClientPostAdminCheck(int client)
+{
+    if (IsFakeClient(client)) return;
+
+    g_iPref[client]      = PREF_DEFAULT;
+    g_bPrefDirty[client] = false;
+    LoadPref(client);
+}
+
 public void OnClientDisconnect(int client)
 {
     ReleaseDrag(client);
     g_LastButtons[client] = 0;
+    g_iPref[client]       = PREF_DEFAULT;
+    g_bPrefDirty[client]  = false;
+}
+
+// Which mode this player drags in right now.
+bool UsesToggle(int client)
+{
+    if (g_cvAllowChoice.BoolValue && g_iPref[client] != PREF_DEFAULT)
+        return g_iPref[client] == PREF_TOGGLE;
+
+    return g_cvToggle.BoolValue;
+}
+
+public Action Cmd_DragMode(int client, int args)
+{
+    if (client < 1 || !IsClientInGame(client) || IsFakeClient(client)) return Plugin_Handled;
+
+    bool current = UsesToggle(client);
+
+    if (!g_cvAllowChoice.BoolValue)
+    {
+        CPrintToChat(client, CHAT_PREFIX ... "Body dragging is fixed to {green}%s{default} on this server.", current ? "toggle" : "hold");
+        return Plugin_Handled;
+    }
+
+    bool wantToggle;
+    if (args == 0)
+    {
+        // No argument: switch to the other one.
+        wantToggle = !current;
+    }
+    else
+    {
+        char arg[16];
+        GetCmdArg(1, arg, sizeof(arg));
+        if (StrEqual(arg, "toggle", false) || StrEqual(arg, "1", false))
+            wantToggle = true;
+        else if (StrEqual(arg, "hold", false) || StrEqual(arg, "0", false))
+            wantToggle = false;
+        else
+        {
+            CPrintToChat(client, CHAT_PREFIX ... "You're on {green}%s{default}. Type {green}!dragmode hold{default} or {green}!dragmode toggle{default}, or just {green}!dragmode{default} to switch.", current ? "toggle" : "hold");
+            return Plugin_Handled;
+        }
+    }
+
+    if (wantToggle == current)
+    {
+        CPrintToChat(client, CHAT_PREFIX ... "You're already on {green}%s{default}. Type {green}!dragmode{default} to switch to %s.", current ? "toggle" : "hold", current ? "hold" : "toggle");
+        return Plugin_Handled;
+    }
+
+    // Applied straight away, before the save lands. Any body being held in the old mode is let go:
+    // a hold-mode grab left behind in toggle mode would otherwise stay latched with no press to end it.
+    ReleaseDrag(client);
+    g_iPref[client]      = wantToggle ? PREF_TOGGLE : PREF_HOLD;
+    g_bPrefDirty[client] = true;
+    SavePref(client);
+
+    // No "saved" confirmation - saving is expected. Only a failed save is reported (OnPrefSaved).
+    if (wantToggle)
+        CPrintToChat(client, CHAT_PREFIX ... "Switched to {green}toggle{default}: crouch, aim at a body and tap sprint to grab it. Tap again to let go.");
+    else
+        CPrintToChat(client, CHAT_PREFIX ... "Switched to {green}hold{default}: crouch, aim at a body and hold sprint to drag it. Let go to drop it.");
+
+    return Plugin_Handled;
+}
+
+// ---------------------------------------------------------------------------------------------
+// Database. The pooled connection to the stats database is dropped when idle, so every query
+// treats a connection error as "reconnect and try again" rather than as a real failure.
+// ---------------------------------------------------------------------------------------------
+
+void ConnectDatabase()
+{
+    if (g_bDbConnecting) return;
+
+    g_bDbConnecting = true;
+    delete g_hDb;
+    Database.Connect(OnDatabaseConnected, "insurgency-stats");
+}
+
+public void OnDatabaseConnected(Database db, const char[] error, any data)
+{
+    g_bDbConnecting = false;
+
+    if (db == null)
+    {
+        LogError("[Pull Rag] Could not connect to insurgency-stats: %s - players get the server default until it is back", error);
+        CreateTimer(30.0, Timer_RetryConnect, _, TIMER_FLAG_NO_MAPCHANGE);
+        return;
+    }
+
+    g_hDb = db;
+    g_iDbGeneration++;
+    LoadAllPrefs();
+}
+
+public Action Timer_RetryConnect(Handle timer)
+{
+    if (g_hDb == null && g_cvAllowChoice.BoolValue) ConnectDatabase();
+    return Plugin_Stop;
+}
+
+bool IsConnectionError(const char[] error)
+{
+    static const char markers[][] = {
+        "server closed the connection",
+        "no connection to the server",
+        "connection not open",
+        "could not send data to server",
+        "could not receive data from server",
+        "terminating connection",
+        "SSL SYSCALL error",
+    };
+
+    for (int i = 0; i < sizeof(markers); i++)
+        if (StrContains(error, markers[i], false) != -1) return true;
+
+    return false;
+}
+
+// A query failed with a connection error. If the handle it ran on has already been replaced, run it
+// again on the new one; otherwise this is the first to notice, so reconnect - the connect callback
+// re-runs everything that is outstanding.
+bool RetryOnNewConnection(int generation)
+{
+    if (generation != g_iDbGeneration && g_hDb != null) return true;
+
+    ConnectDatabase();
+    return false;
+}
+
+// Everyone in game: write what is unsaved, read the rest.
+void LoadAllPrefs()
+{
+    for (int i = 1; i <= MaxClients; i++)
+    {
+        if (!IsClientInGame(i) || IsFakeClient(i) || !IsClientAuthorized(i)) continue;
+
+        if (g_bPrefDirty[i]) SavePref(i);
+        else LoadPref(i);
+    }
+}
+
+void LoadPref(int client)
+{
+    if (!g_cvAllowChoice.BoolValue) return;
+    if (g_hDb == null)
+    {
+        ConnectDatabase();    // the connect callback loads everyone
+        return;
+    }
+
+    char steamId[32];
+    if (!GetClientAuthId(client, AuthId_SteamID64, steamId, sizeof(steamId))) return;
+
+    char query[256];
+    // ::int because the pgsql driver hands FetchInt a BOOLEAN's text form, which reads as 0.
+    g_hDb.Format(query, sizeof(query), "SELECT toggle_drag::int FROM player_drag_mode WHERE steam_id = %s", steamId);
+
+    DataPack pack = new DataPack();
+    pack.WriteCell(GetClientUserId(client));
+    pack.WriteCell(g_iDbGeneration);
+    g_hDb.Query(OnPrefLoaded, query, pack);
+}
+
+public void OnPrefLoaded(Database db, DBResultSet results, const char[] error, DataPack pack)
+{
+    pack.Reset();
+    int client     = GetClientOfUserId(pack.ReadCell());
+    int generation = pack.ReadCell();
+    delete pack;
+
+    if (client == 0) return;
+
+    if (results == null)
+    {
+        if (IsConnectionError(error))
+        {
+            if (RetryOnNewConnection(generation)) LoadPref(client);
+            return;
+        }
+
+        LogError("[Pull Rag] Could not load drag mode for %N: %s", client, error);
+        return;
+    }
+
+    // Chosen while this was in flight - the choice wins over what was stored before it.
+    if (g_bPrefDirty[client]) return;
+
+    if (results.FetchRow())
+        g_iPref[client] = results.FetchInt(0) ? PREF_TOGGLE : PREF_HOLD;
+    else
+        g_iPref[client] = PREF_DEFAULT;
+}
+
+void SavePref(int client)
+{
+    if (g_hDb == null)
+    {
+        ConnectDatabase();    // stays dirty; the connect callback writes it
+        return;
+    }
+
+    char steamId[32];
+    if (!GetClientAuthId(client, AuthId_SteamID64, steamId, sizeof(steamId))) return;
+
+    int  pref  = g_iPref[client];
+    char value[8];
+    strcopy(value, sizeof(value), pref == PREF_TOGGLE ? "TRUE" : "FALSE");
+
+    char query[384];
+    g_hDb.Format(query, sizeof(query),
+                 "INSERT INTO player_drag_mode (steam_id, toggle_drag) VALUES (%s, %s) ON CONFLICT (steam_id) DO UPDATE SET toggle_drag = EXCLUDED.toggle_drag, updated_at = CURRENT_TIMESTAMP",
+                 steamId, value);
+
+    DataPack pack = new DataPack();
+    pack.WriteCell(GetClientUserId(client));
+    pack.WriteCell(g_iDbGeneration);
+    pack.WriteCell(pref);
+    g_hDb.Query(OnPrefSaved, query, pack);
+}
+
+public void OnPrefSaved(Database db, DBResultSet results, const char[] error, DataPack pack)
+{
+    pack.Reset();
+    int client     = GetClientOfUserId(pack.ReadCell());
+    int generation = pack.ReadCell();
+    int pref       = pack.ReadCell();
+    delete pack;
+
+    if (client == 0) return;
+
+    if (results == null)
+    {
+        if (IsConnectionError(error))
+        {
+            if (RetryOnNewConnection(generation)) SavePref(client);
+            return;
+        }
+
+        LogError("[Pull Rag] Could not save drag mode for %N: %s", client, error);
+        CPrintToChat(client, CHAT_PREFIX ... "Couldn't save that, so it only lasts until the map changes.");
+        g_bPrefDirty[client] = false;
+        return;
+    }
+
+    // Only clean if nothing newer was chosen while this write was in flight.
+    if (g_iPref[client] == pref) g_bPrefDirty[client] = false;
 }
 
 public Action Event_PlayerDisconnect_Post(Handle event, const char[] name, bool dontBroadcast)
@@ -77,7 +378,7 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
 {
     if (IsFakeClient(client)) return Plugin_Continue;
 
-    if (g_cvToggle.BoolValue)
+    if (UsesToggle(client))
     {
         // Rising edge only. OnPlayerRunCmd runs every tick, so reacting to the bit being set would
         // flip the latch ~66 times a second and the drag would never appear to start.
@@ -223,7 +524,7 @@ void MoveRagdoll(int client, int clientTargetRagdoll, const float ragPos[3])
     TeleportEntity(clientTargetRagdoll, destination, NULL_VECTOR, _fForce);
 }
 
-// Original hold-to-drag path, kept for sm_pullrag_toggle 0 (main).
+// Original hold-to-drag path, for players in hold mode.
 Action OnButtonPress(int client, int button, int buttons)
 {
     if (button != IN_SPRINT || !DragGatesOpen(buttons)) return Plugin_Continue;

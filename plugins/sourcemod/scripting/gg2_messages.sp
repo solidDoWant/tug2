@@ -123,7 +123,8 @@ char g_HelpPhrases[][] = {
     "help_lives",
     "help_lastmaps",
     "help_stock",
-    "help_autoreconnect"
+    "help_autoreconnect",
+    "help_dragmode"
 };
 
 // Index-matched with g_HelpPhrases. An empty string means the line is always printed; otherwise
@@ -131,6 +132,11 @@ char g_HelpPhrases[][] = {
 // ships to every server, but some commands do not - !autoreconnect comes from
 // gg2_forceretry_optout, which only the test server runs - and advertising a command that does
 // nothing is worse than not mentioning it.
+//
+// A gate starting with "cvar:" names a convar instead, and the line is printed only while that
+// convar is non-zero. That is for a command every server registers but only some enable: !dragmode
+// comes from d_dy_pull_rag, which ships everywhere, but only lets players choose where
+// sm_pullrag_allow_choice is on (the test server) - elsewhere it just reports the fixed mode.
 char g_HelpGateCommands[][] = {
     "",
     "",
@@ -141,7 +147,8 @@ char g_HelpGateCommands[][] = {
     "sm_lives",    // help_lives - bm2_respawn only registers it when built with DOCTOR
     "",
     "",
-    "sm_autoreconnect"
+    "sm_autoreconnect",
+    "cvar:sm_pullrag_allow_choice"
 };
 
 // Admin commands, printed after the player list. The three arrays are index-matched: each phrase
@@ -211,7 +218,7 @@ void PrintHelp(int client)
 
     for (int i = 0; i < sizeof(g_HelpPhrases); i++)
     {
-        if (g_HelpGateCommands[i][0] != '\0' && !CommandExists(g_HelpGateCommands[i])) continue;
+        if (!HelpGateOpen(g_HelpGateCommands[i])) continue;
 
         CPrintToChat(client, "%T", g_HelpPhrases[i], client);
     }
@@ -233,6 +240,20 @@ void PrintHelp(int client)
 
         CPrintToChat(client, "%T", g_AdminHelpPhrases[i], client);
     }
+}
+
+// See g_HelpGateCommands.
+bool HelpGateOpen(const char[] gate)
+{
+    if (gate[0] == '\0') return true;
+
+    if (StrContains(gate, "cvar:") == 0)
+    {
+        ConVar cvar = FindConVar(gate[5]);
+        return cvar != null && cvar.BoolValue;
+    }
+
+    return CommandExists(gate);
 }
 
 public Action Event_ControlPointCaptured(Event event, const char[] name, bool dontBroadcast)

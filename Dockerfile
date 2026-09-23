@@ -690,6 +690,9 @@ RUN --mount=type=bind,source=./plugins/sourcemod,target=/plugin-source \
     mkdir -p /insurgency/addons/sourcemod/translations && \
     cp /plugin-source/translations/nearest_player.phrases.txt /plugin-source/translations/respawn.phrases.txt /plugin-source/translations/tug.phrases.txt /insurgency/addons/sourcemod/translations && \
     /sourcemod/addons/sourcemod/scripting/spcomp --include=/plugin-source/scripting/include  /plugin-source/scripting/d_dy_pull_rag.sp -o /insurgency/addons/sourcemod/plugins/d_dy_pull_rag.smx && \
+    # Only migrated where sm_pullrag_allow_choice is on (test); harmless elsewhere.
+    mkdir -p /insurgency/addons/sourcemod/configs/sql-init-scripts/pgsql && \
+    cp /plugin-source/configs/sql-init-scripts/pgsql/d_dy_pull_rag.sql /insurgency/addons/sourcemod/configs/sql-init-scripts/pgsql/ && \
     # Fixup file permissions
     find /insurgency -type d -exec chmod 755 {} \; && \
     find /insurgency -type f -exec chmod 644 {} \;
