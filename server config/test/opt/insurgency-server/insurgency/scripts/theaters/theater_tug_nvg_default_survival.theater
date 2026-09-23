@@ -1,7 +1,8 @@
 // TUG survival theater. Inherits theater_tug_nvg_default.theater (TUG's theater plus the
 // night vision option) and supplies this mode's squads.
 // Security squads copied from _checkpoint; insurgents (the players here) cut to 12 slots. Survival
-// starts players with minimal gear and no respawns.
+// starts players with minimal gear and no respawns. Insurgents may buy medpacks here, since
+// survival has no insurgent medic.
 // Only the 12p variant exists, because server.cfg sets the 12p override.
 
 "#base" "theater_tug_nvg_default.theater"
@@ -552,6 +553,162 @@
 				"weapon"				"weapon_at4"
 				"weapon"				"weapon_glock17"
 				"weapon"				"weapon_kabar"
+			}
+		}
+
+		// ---------------------------------------------------------------------------------------
+		// Medpacks for the players' classes
+		// ---------------------------------------------------------------------------------------
+		// Survival's insurgent squads have no medic class, so without these nobody on the players'
+		// team could heal at all. Every class may now BUY a medpack, the way security's non-medic
+		// classes can; buy_order is not declared, so nobody starts with one and default loadouts are
+		// unchanged. bm2_respawn does the healing: drop the pack, hold the knife, and it heals you up
+		// to the non-medic cap.
+		//
+		// weapon_healthkit is class_restricted, so it has to be named in each class's own
+		// allowed_items. TUG also limits it to security; theater_tug_nvg_default.theater restates
+		// its definition with insurgents allowed (a partial weapon override does not work - see
+		// the note there).
+		//
+		// Each list is RESTATED IN FULL, for the reason at the top of theater_tug_nvg_default.theater:
+		// #base merging matches children by name, so a block holding only the medpack would collapse
+		// every inherited "weapon" entry onto it and leave the class able to buy nothing else. The
+		// lists are copies of theater_tug_nvg_default.theater (the tugvar classes) and TUG's
+		// medicbomber_12p theater (template_coop_bomber) plus weapon_healthkit - if either changes,
+		// update these too. They live here rather than in the base theater because these classes are
+		// also the checkpoint insurgent bots', and only survival puts players in them.
+
+		"template_tugvar_specialist_asval"
+		{
+			"allowed_items"
+			{
+				"weapon"				"weapon_kabar"
+				"weapon"				"weapon_asval"
+				"weapon"				"weapon_anm14"
+				"weapon"				"weapon_healthkit"
+			}
+		}
+
+		"template_tugvar_fighter_stg44"
+		{
+			"allowed_items"
+			{
+				"weapon"				"weapon_kabar"
+				"weapon"				"weapon_stg44"
+				"weapon"				"weapon_makarov"
+				"weapon"				"weapon_molotov"
+				"weapon"				"weapon_healthkit"
+			}
+		}
+
+		"template_tugvar_submachinegunner_uzi"
+		{
+			"allowed_items"
+			{
+				"weapon"				"weapon_kabar"
+				"weapon"				"weapon_uzi"
+				"weapon"				"weapon_f1"
+				"weapon"				"weapon_healthkit"
+			}
+		}
+
+		"template_tugvar_machinegunner_m240"
+		{
+			"allowed_items"
+			{
+				"weapon"				"weapon_kabar"
+				"weapon"				"weapon_m240"
+				"weapon"				"weapon_healthkit"
+			}
+		}
+
+		"template_tugvar_sapper_law"
+		{
+			"allowed_items"
+			{
+				"weapon"				"weapon_kabar"
+				"weapon"				"weapon_akm"
+				"weapon"				"weapon_law"
+				"weapon"				"weapon_healthkit"
+			}
+		}
+
+		"template_coop_bomber"
+		{
+			"allowed_items"
+			{
+				"weapon"				"weapon_deagle"
+				"weapon"				"weapon_c4_ied"
+				"weapon"				"weapon_kabar"
+				"weapon"				"weapon_healthkit"
+			}
+		}
+
+		"template_tugvar_specialist_mp5"
+		{
+			"allowed_items"
+			{
+				"weapon"				"weapon_kabar"
+				"weapon"				"weapon_mp5"
+				"weapon"				"weapon_makarov"
+				"weapon"				"weapon_m18_ins"
+				"weapon"				"weapon_healthkit"
+			}
+		}
+
+		"template_tugvar_fighter_ak74"
+		{
+			"allowed_items"
+			{
+				"weapon"				"weapon_kabar"
+				"weapon"				"weapon_ak74"
+				"weapon"				"weapon_f1"
+				"weapon"				"weapon_healthkit"
+			}
+		}
+
+		"template_tugvar_submachinegunner_mac10"
+		{
+			"allowed_items"
+			{
+				"weapon"				"weapon_kabar"
+				"weapon"				"weapon_mac10"
+				"weapon"				"weapon_f1"
+				"weapon"				"weapon_healthkit"
+			}
+		}
+
+		"template_tugvar_machinegunner_pecheneg"
+		{
+			"allowed_items"
+			{
+				"weapon"				"weapon_kabar"
+				"weapon"				"weapon_pecheneg"
+				"weapon"				"weapon_f1"
+				"weapon"				"weapon_healthkit"
+			}
+		}
+
+		"template_tugvar_sapper_rpg7"
+		{
+			"allowed_items"
+			{
+				"weapon"				"weapon_kabar"
+				"weapon"				"weapon_aks74u"
+				"weapon"				"weapon_makarov"
+				"weapon"				"weapon_rpg7"
+				"weapon"				"weapon_healthkit"
+			}
+		}
+
+		"template_tugvar_sharpshooter_mosin"
+		{
+			"allowed_items"
+			{
+				"weapon"				"weapon_kabar"
+				"weapon"				"weapon_mosin"
+				"weapon"				"weapon_ots33"
+				"weapon"				"weapon_healthkit"
 			}
 		}
 	}

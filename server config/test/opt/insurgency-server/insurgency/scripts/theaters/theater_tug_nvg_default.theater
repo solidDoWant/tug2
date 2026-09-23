@@ -2113,6 +2113,55 @@
 			}
 			"team_access"				"security, insurgent"
 		}	
+
+		// Medpack, restated IN FULL from TUG's theater_tug_39_custom_weapon.theater with one change:
+		// team_access now includes insurgents (TUG: "security"). Survival puts the players on the
+		// insurgent team and has no insurgent medic, so its insurgent classes list the medpack in
+		// allowed_items (see theater_tug_nvg_default_survival.theater) - and the engine refuses a
+		// weapon to a team that team_access leaves out, whatever allowed_items says.
+		//
+		// FULL, not a one-field override, for the reason at the top of this block: a partial weapon
+		// definition replaces TUG's rather than merging with it. Tried on the test server - a block
+		// holding only team_access left a stub with no import, ammo or explosive, and the theater
+		// then loaded with 0 explosives, i.e. no grenade of any kind worked.
+		//
+		// Harmless outside survival: the medpack is class_restricted, and no other insurgent class
+		// lists it, so insurgents elsewhere still cannot buy one. Bots buy from buy_order, which
+		// never names it.
+		//
+		// The viewmodel is models/hlthkit/v_c4_sec.mdl - by its name, built with security hands.
+		// TUG ships no insurgent variant.
+		"weapon_healthkit"
+		{
+			"import"					"weapon_base"
+			"weapon_class"				"other_explosive"
+			"weapon_type"				"grenade"
+			"print_name"				"#weapon_healthkit"
+			"print_desc"				"#weapon_healthkit_desc"
+			"single_use"				"1"
+			"view_model"				"models/hlthkit/v_c4_sec.mdl"
+			"world_model"				"models/hlthkit/w_c4.mdl"
+			"weapon_slot"				"explosive"
+			"weapon_max_subslot"		"3"	// Up to 4th slot
+			"act_table"					"grenade"
+			"weapon_weight"				"0"
+			"weapon_cost"				"0"
+			"class_restricted"			"1"
+
+			"explosives"
+			{
+				"entity"				"healthkit"
+				"GrenadeRollSpeed"			"0"
+				"GrenadeThrowSpeed"			"320"
+			}
+			"ammo_clip"
+			{
+				"ammo_type"				"healthkit"
+				"clip_max_rounds"			"-1"	// no clips
+				"clip_default"				"1"
+			}
+			"team_access"				"security, insurgent"
+		}
 	}
 	// ---------------------------------------------------------------------------
 	// M777 white phosphorus - the fire-support shell
