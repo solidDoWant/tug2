@@ -1,4 +1,5 @@
 #include <sourcemod>
+#include <sdktools>
 #include <ripext>
 #include <mapnames>
 #include <workshopmaps>
@@ -18,7 +19,6 @@ char  AdminRoleID[32];
 char  BAWT_AUTH_ID[32] = "STEAM_ID_STOP_IGNORING_RETVALS";
 
 int   g_cps_capped     = 0;
-int   g_rounds_played  = 0;
 
 // mp_maxrounds, looked up rather than hard-coded. This used to be "#define max_rounds 3", which is
 // why round-end reported "(4/3 mapname)" on a server running mp_maxrounds 5 - the numerator counted
@@ -434,7 +434,13 @@ public Action Event_RoundStart(Event event, const char[] name, bool dontBroadcas
 
 public Action Event_RoundEnd(Event event, const char[] name, bool dontBroadcast)
 {
-    g_rounds_played++;
+    // The engine's own count, not one kept here. A plugin counter reset only on map change, but the
+    // game restarts WITHOUT a map change whenever the server empties: the last player leaving ends
+    // the round, and the next one to join starts a fresh game with this counter back at 0. Counting
+    // events across those restarts is how round end came to report "(12/5 Desertpass)".
+    // It is already incremented for the round that just ended when round_end fires, and the event
+    // firing proves the gamerules entity exists, so it is safe to read here.
+    int rounds_played = GameRules_GetProp("m_iRoundPlayedCount");
 
     int  winner           = GetEventInt(event, "winner");
     char winning_team[16] = "Insurgent";
@@ -448,11 +454,12 @@ public Action Event_RoundEnd(Event event, const char[] name, bool dontBroadcast)
 
     // mp_maxrounds 0 means "no limit", so print the count on its own rather than "4/0".
     int max_rounds = (g_cvMaxRounds != null) ? g_cvMaxRounds.IntValue : -1;
+    if (max_rounds > 0 && rounds_played > max_rounds) rounds_played = max_rounds;
 
     char round_progress[16];
-    if (max_rounds > 0) Format(round_progress, sizeof(round_progress), "%i/%i", g_rounds_played, max_rounds);
-    else if (max_rounds == 0) Format(round_progress, sizeof(round_progress), "%i", g_rounds_played);
-    else Format(round_progress, sizeof(round_progress), "%i/?", g_rounds_played);
+    if (max_rounds > 0) Format(round_progress, sizeof(round_progress), "%i/%i", rounds_played, max_rounds);
+    else if (max_rounds == 0) Format(round_progress, sizeof(round_progress), "%i", rounds_played);
+    else Format(round_progress, sizeof(round_progress), "%i/?", rounds_played);
 
     char round_message[1024];
     Format(round_message, sizeof(round_message), "**ROUND END:** __%s Forces WIN!__ (%s %s)", winning_team, round_progress, mapname);
@@ -521,8 +528,6 @@ public Action Event_PlayerTeam(Event event, const char[] name, bool dontBroadcas
 
 public void OnMapStart()
 {
-    g_rounds_played = 0;
-
     // The only message that carries the filename as well as the display name: this is the one an
     // admin reads to find out what to type into changelevel or a vote, and "District Night" is not
     // that. It is also where the workshop link belongs - the filename is what identifies the item,
