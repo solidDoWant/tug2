@@ -1598,6 +1598,160 @@
 			"flags_clear"			"AMMO_USE_MAGAZINES"
 		}
 
+		// ============================================================================================
+		// BOLT-ACTION RIFLES - the same missing-magsize bug as the shotguns above
+		// ============================================================================================
+		// The discriminator for this whole class of bug is "flags_clear" "AMMO_USE_MAGAZINES": an ammo
+		// type that clears it is loose-fed, counted in ROUNDS, and its "magsize" is the size of one
+		// load. Every such type therefore needs its own magsize - inheriting the 30 that the "default"
+		// ammo base declares for magazine-fed rifles is always wrong for a weapon that feeds by hand.
+		//
+		// TUG's own per-weapon escape hatch is "magsize_override" inside the weapon's ammo_clip block,
+		// and two weapons already use it: weapon_gol and weapon_remingtonmsr both declare
+		// "clip_max_rounds" "10" and "magsize_override" "10", so they are correct today. The four
+		// below declare "clip_max_rounds" "5" and no override, so they fall through to the inherited
+		// 30 - six times their actual load:
+		//
+		//     weapon_mosin    762x54mm           load 5, magsize 30
+		//     weapon_kar98    762x54mm           load 5, magsize 30
+		//     weapon_enfield  303_clip_enfield   load 5, magsize 30
+		//     weapon_m40a1    762x51mm           load 5, magsize 30
+		//
+		// Fixed at the AMMO level rather than per weapon because these types are not shared with
+		// anything that disagrees: 762x54mm is only the mosin and the kar98, 303_clip_enfield is only
+		// the enfield, and 762x51mm is the m40a1 plus the two rifles that already override to 10 -
+		// a weapon-level override beats the ammo type, so setting 5 here leaves those two alone.
+		// Doing it per weapon would mean restating three whole weapon definitions to change one key.
+		//
+		// The _ap and _hp variants are listed because they do NOT import their base type - 762x54mm_ap
+		// goes 762x54_ap -> 762x51_ap -> 762x51 -> default, never through 762x54mm - so fixing the base
+		// does nothing for the round you actually bought. Same shape as the shotgun note above.
+		//
+		// RESTATED IN FULL, as ever: duplicate keys do not merge, the later definition wins outright,
+		// so import, carry, flags_clear and every ballistics block have to be repeated or they are
+		// lost. Only magsize is new in each.
+		"762x54mm"
+		{
+			"import"				"762x54"
+			"carry"					"120"
+			"magsize"				"5"
+			"flags_clear"			"AMMO_USE_MAGAZINES"
+		}
+
+		"762x54mm_ap"
+		{
+			"import"				"762x54_ap"
+			"carry"					"120"
+			"magsize"				"5"
+			"flags_clear"			"AMMO_USE_MAGAZINES"
+		}
+
+		"762x51mm"
+		{
+			"import"				"762x51"
+			"carry"					"120"
+			"magsize"				"5"
+			"flags_clear"			"AMMO_USE_MAGAZINES"
+		}
+
+		"762x51mm_ap"
+		{
+			"import"				"762x51_ap"
+			"carry"					"120"
+			"magsize"				"5"
+			"flags_clear"			"AMMO_USE_MAGAZINES"
+		}
+
+		"303_clip_enfield"
+		{
+			"import"				"303_brit"
+			"carry"						"60"
+			"magsize"				"5"
+			"flags_clear"				"AMMO_USE_MAGAZINES"
+			"SuppressionIncrement"			"90"
+			"Damage"
+			{
+				"1"						"60"
+				"100"					"60"
+				"5000"					"32"
+			}
+			"PenetrationPower"
+			{
+				"10"					"200"
+				"8000"					"135"
+			}
+			"DamageHitgroups"
+			{
+				"HITGROUP_HEAD"				"1.00"
+				"HITGROUP_CHEST"			"0.60"
+				"HITGROUP_STOMACH"			"0.60"
+				"HITGROUP_LEFTARM"			"1.30"
+				"HITGROUP_RIGHTARM"			"1.30"
+				"HITGROUP_LEFTLEG"			"1.30"
+				"HITGROUP_RIGHTLEG"			"1.30"
+			}
+		}
+
+		"303_clip_enfield_ap"
+		{
+			"import"				"303_brit"
+			"carry"						"60"
+			"magsize"				"5"
+			"flags_clear"				"AMMO_USE_MAGAZINES"
+			"SuppressionIncrement"			"90"
+			"Damage"
+			{
+				"1"						"60"
+				"100"					"60"
+				"5000"					"32"
+			}
+			"DamageHitgroups"
+			{
+				"HITGROUP_HEAD"				"5.00"
+				"HITGROUP_CHEST"			"5.00"
+				"HITGROUP_STOMACH"			"5.00"
+				"HITGROUP_LEFTARM"			"1.30"
+				"HITGROUP_RIGHTARM"			"1.30"
+				"HITGROUP_LEFTLEG"			"1.30"
+				"HITGROUP_RIGHTLEG"			"1.30"
+			}
+			"PenetrationPower"
+			{
+				"10"					"300"
+				"8000"					"180"
+			}
+		}
+
+		"303_clip_enfield_hp"
+		{
+			"import"				"303_brit"
+			"carry"						"60"
+			"magsize"				"5"
+			"flags_clear"				"AMMO_USE_MAGAZINES"
+			"SuppressionIncrement"			"90"
+			"Damage"
+			{
+				"1"						"60"
+				"100"					"60"
+				"5000"					"32"
+			}
+			"DamageHitgroups"
+			{
+				"HITGROUP_HEAD"				"0.90"
+				"HITGROUP_CHEST"			"0.75"
+				"HITGROUP_STOMACH"			"0.80"
+				"HITGROUP_LEFTARM"			"2.00"
+				"HITGROUP_RIGHTARM"			"2.00"
+				"HITGROUP_LEFTLEG"			"3.00"
+				"HITGROUP_RIGHTLEG"			"3.00"
+			}
+			"PenetrationPower"
+			{
+				"10"					"200"
+				"8000"					"135"
+			}
+		}
+
 	}
 
 	// ================================================================================
