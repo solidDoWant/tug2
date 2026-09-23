@@ -13,11 +13,14 @@
  * mp_maxrounds is looked up rather than hard-coded. gg2_discord had exactly that bug - a
  * "#define max_rounds 3" that reported "(4/3)" on a server running 5.
  *
- * Objective progress is appended too, on modes that have control points: "(2/5) [Cap 3/8]". The
- * numbers come from gg2_insurgency's objective resource natives, the same pair bm2_respawn already
- * uses - m_iNumControlPoints for the total and m_nActivePushPointIndex (0-based, so +1) for the one
- * being fought over. Modes without control points report 0 total and the suffix is omitted rather
- * than showing "[Cap 1/0]".
+ * Objective progress is appended too, in a shape that fits the mode (see BuildObjectiveSuffix):
+ *   checkpoint         "(2/5) [Cap 3/8]"            the point being fought over, of all of them
+ *   hunt               "(2/5) [Caches 1/3]"         caches destroyed, of the ones in play
+ *   conquer            "(2/5) [Caps 1/3, Caches 0/5]"  required points taken, and caches destroyed
+ *   outpost, survival  "(2/5) [Level 6]"            the level shown on the players' HUD
+ * The objective numbers come from gg2_insurgency's objective resource natives. Only checkpoint has
+ * a meaningful m_nActivePushPointIndex - it is -1 or arbitrary everywhere else, which is why those
+ * modes used to advertise "[Cap 1/N]" for the whole round.
  *
  * THE TRAP THIS AVOIDS
  * The hostname is rewritten in place, so the base name has to be recovered rather than re-read, or
@@ -39,6 +42,7 @@ ConVar g_cvEnabled;
 ConVar g_cvShowCaps;
 ConVar g_cvHostname;
 ConVar g_cvMaxRounds;
+ConVar g_cvGamemode;
 
 char   g_sBaseHostname[MAX_HOSTNAME];
 
@@ -73,6 +77,20 @@ bool   g_bRulesReady = false;
 #define GAMESTATE_GAME_OVER 7
 #define MAP_END_SUFFIX      " (Map end)"
 
+// Objective slots in the objective resource, by m_iObjectType. Measured on convoy_pve conquer and
+// crossbow hunt, cross-checked against the map entities: -1 is a point_controlpoint with a capture
+// zone (cq_cp_a..c), 0 is a cache point that spawned an obj_weapon_cache, 1 is a cache point that
+// did not - conquer and hunt spread a random subset of caches over more cache points than they use.
+// The split is only made once the round starts; during setup every cache point reads 0.
+// m_iOwningTeam flips from 3 to 2 when security captures a point or destroys a cache.
+#define OBJTYPE_CAPTURE_POINT -1
+#define OBJTYPE_CACHE          0
+#define TEAM_SECURITY          2
+
+// States in which the objective resource describes a round actually being played.
+#define GAMESTATE_RND_RUNNING  4
+#define GAMESTATE_POSTROUND    5
+
 #define EMPTY_RECHECK_INTERVAL 1.0
 #define EMPTY_RECHECK_TICKS    6
 
@@ -97,6 +115,7 @@ public void OnPluginStart()
 
     g_cvHostname  = FindConVar("hostname");
     g_cvMaxRounds = FindConVar("mp_maxrounds");
+    g_cvGamemode  = FindConVar("mp_gamemode");
 
     if (g_cvHostname == null)
     {
@@ -115,14 +134,20 @@ public void OnPluginStart()
 
     HookEvent("round_start", Event_Round, EventHookMode_PostNoCopy);
     HookEvent("round_end", Event_Round, EventHookMode_PostNoCopy);
+    // round_start fires in preround (state 3); the round only counts as running (state 4), and the
+    // non-checkpoint objective suffixes only switch on, when the freeze ends.
+    HookEvent("round_freeze_end", Event_Round, EventHookMode_PostNoCopy);
     HookEvent("game_start", Event_Round, EventHookMode_PostNoCopy);
     HookEvent("game_end", Event_Round, EventHookMode_PostNoCopy);
 
     // A capture is the other moment the name is out of date, and it is what makes the cap number
     // worth showing at all - it is the difference between joining a round that has barely started
     // and one that is nearly over.
-    HookEvent("controlpoint_captured", Event_Round, EventHookMode_PostNoCopy);
-    HookEvent("object_destroyed", Event_Round, EventHookMode_PostNoCopy);
+    HookEvent("controlpoint_captured", Event_Objective, EventHookMode_PostNoCopy);
+    HookEvent("object_destroyed", Event_Objective, EventHookMode_PostNoCopy);
+
+    // Outpost's next wave and survival's next safehouse. Both raise the level shown on the HUD.
+    HookEvent("round_level_advanced", Event_Round, EventHookMode_PostNoCopy);
 }
 
 public void OnMapStart()
@@ -158,6 +183,20 @@ public void OnEnabledChanged(ConVar cvar, const char[] oldValue, const char[] ne
 {
     if (cvar.BoolValue) UpdateHostname();
     else                RestoreBaseHostname();
+}
+
+// The objective resource is updated AFTER these events fire - read in the handler, a destroyed
+// cache still has its old owner (verified live: "[Caches 0/5]" after a kill), and it has flipped by
+// the next frame. Checkpoint only looks at the push index, which happened to be current already.
+public void Event_Objective(Event event, const char[] name, bool dontBroadcast)
+{
+    g_bRulesReady = true;
+    RequestFrame(Frame_UpdateHostname);
+}
+
+public void Frame_UpdateHostname(any unused)
+{
+    UpdateHostname();
 }
 
 public void Event_Round(Event event, const char[] name, bool dontBroadcast)
@@ -261,14 +300,14 @@ void StripRoundSuffix(char[] buffer)
         return;
     }
 
-    StripBracketed(buffer, '[', ']', true);    // " [Cap n/m]"
+    StripBracketed(buffer, '[', ']', true);    // " [Cap n/m]", " [Level n]", ...
     StripBracketed(buffer, '(', ')', false);   // " (n/m)"
 }
 
-// Strips one trailing " <open>...<close>" group, but only when its contents are digits, one
-// optional "/", and - if requireCapPrefix - the literal "Cap ". The content check is what stops a
-// name that legitimately ends in "(hardcore)" or "[EU]" being mangled.
-static void StripBracketed(char[] buffer, char open, char close, bool requireCapPrefix)
+// Strips one trailing " <open>...<close>" group, but only when its contents are exactly what this
+// plugin writes - a count, or with objectiveTags one of the BuildObjectiveSuffix shapes. The content
+// check is what stops a name that legitimately ends in "(hardcore)" or "[EU]" being mangled.
+static void StripBracketed(char[] buffer, char open, char close, bool objectiveTags)
 {
     int len = strlen(buffer);
     if (len < 4 || buffer[len - 1] != close) return;
@@ -281,47 +320,115 @@ static void StripBracketed(char[] buffer, char open, char close, bool requireCap
     }
     if (start < 1) return;
 
-    int cursor = start + 1;
+    char content[MAX_HOSTNAME];
+    strcopy(content, sizeof(content), buffer[start + 1]);
+    content[strlen(content) - 1] = '\0';    // drop the closing bracket
 
-    if (requireCapPrefix)
-    {
-        // Exactly "Cap " - anything else in brackets is somebody's own tag, not ours.
-        if (len - 1 - cursor < 4) return;
-        if (buffer[cursor] != 'C' || buffer[cursor + 1] != 'a' ||
-            buffer[cursor + 2] != 'p' || buffer[cursor + 3] != ' ') return;
-        cursor += 4;
-    }
-
-    bool seenDigit = false, seenSlash = false;
-    for (int i = cursor; i < len - 1; i++)
-    {
-        if (buffer[i] >= '0' && buffer[i] <= '9') { seenDigit = true; continue; }
-        if (buffer[i] == '/' && seenDigit && !seenSlash) { seenSlash = true; continue; }
-        return;
-    }
-    if (!seenDigit) return;
+    if (objectiveTags ? !IsObjectiveTag(content) : !IsCount(content)) return;
 
     buffer[start - 1] = '\0';
 }
 
-// " [Cap 3/8]", or empty on a mode with no control points.
+// "n" or "n/m".
+static bool IsCount(const char[] s)
+{
+    bool seenDigit = false, seenSlash = false;
+    for (int i = 0; s[i] != '\0'; i++)
+    {
+        if (s[i] >= '0' && s[i] <= '9') { seenDigit = true; continue; }
+        if (s[i] == '/' && seenDigit && !seenSlash) { seenSlash = true; seenDigit = false; continue; }
+        return false;
+    }
+    return seenDigit;
+}
+
+// One or more ", "-separated "<Label> <count>" parts, with Label one this plugin writes. Anything
+// else in brackets is somebody's own tag, not ours.
+static bool IsObjectiveTag(const char[] s)
+{
+    static const char labels[][] = { "Cap", "Caps", "Caches", "Level" };
+
+    char parts[4][32];
+    int  n = ExplodeString(s, ", ", parts, sizeof(parts), sizeof(parts[]));
+    if (n < 1 || n > sizeof(parts)) return false;
+
+    for (int p = 0; p < n; p++)
+    {
+        int space = FindCharInString(parts[p], ' ');
+        if (space < 1) return false;
+        if (!IsCount(parts[p][space + 1])) return false;
+
+        parts[p][space] = '\0';
+        bool known = false;
+        for (int l = 0; l < sizeof(labels); l++)
+            if (StrEqual(parts[p], labels[l])) { known = true; break; }
+        if (!known) return false;
+    }
+    return true;
+}
+
+// The objective part of the name, shaped for the mode - see the table at the top. Empty when the
+// mode has nothing to count, or when the numbers would be meaningless (between games, and for the
+// non-checkpoint modes whenever a round is not actually being played: their cache split and level
+// are only set up once it starts).
 //
 // The natives live in gg2_insurgency. If that plugin is not loaded they do not exist, and calling
-// one is a runtime error rather than something that can be caught - so the feature is probed once
-// and the suffix is simply dropped if it is unavailable.
-void BuildCapSuffix(char[] buffer, int maxlen, bool pregame)
+// one is a runtime error rather than something that can be caught - so the feature is probed first
+// and the suffix is simply dropped if it is unavailable. m_iLevel is on the gamerules proxy, so
+// level modes do not need them.
+void BuildObjectiveSuffix(char[] buffer, int maxlen, int state)
 {
     buffer[0] = '\0';
 
     if (!g_cvShowCaps.BoolValue || !RulesReady()) return;
+
+    char mode[32];
+    if (g_cvGamemode != null) g_cvGamemode.GetString(mode, sizeof(mode));
+
+    bool playing = (state == GAMESTATE_RND_RUNNING || state == GAMESTATE_POSTROUND);
+
+    // Outpost counts waves, survival counts safehouses reached; both show as "Level N" on the HUD
+    // and m_iLevel is that number exactly (measured against the HUD on both).
+    if (StrEqual(mode, "outpost") || StrEqual(mode, "survival"))
+    {
+        if (!playing) return;
+        int level = GameRules_GetProp("m_iLevel");
+        if (level >= 1) Format(buffer, maxlen, " [Level %d]", level);
+        return;
+    }
+
     if (GetFeatureStatus(FeatureType_Native, "Ins_ObjectiveResource_GetProp") != FeatureStatus_Available) return;
 
     int total = Ins_ObjectiveResource_GetProp("m_iNumControlPoints");
-    if (total <= 0) return;    // survival, hunt and anything else without control points
+    if (total <= 0) return;
+
+    if (StrEqual(mode, "hunt") || StrEqual(mode, "conquer"))
+    {
+        if (!playing) return;
+
+        int points = 0, pointsTaken = 0, caches = 0, cachesDestroyed = 0;
+        for (int i = 0; i < total; i++)
+        {
+            int  type  = Ins_ObjectiveResource_GetProp("m_iObjectType", _, i);
+            bool taken = (Ins_ObjectiveResource_GetProp("m_iOwningTeam", _, i) == TEAM_SECURITY);
+
+            if (type == OBJTYPE_CAPTURE_POINT)  { points++; if (taken) pointsTaken++; }
+            else if (type == OBJTYPE_CACHE)     { caches++; if (taken) cachesDestroyed++; }
+        }
+
+        if (points > 0 && caches > 0) Format(buffer, maxlen, " [Caps %d/%d, Caches %d/%d]", pointsTaken, points, cachesDestroyed, caches);
+        else if (points > 0)          Format(buffer, maxlen, " [Caps %d/%d]", pointsTaken, points);
+        else if (caches > 0)          Format(buffer, maxlen, " [Caches %d/%d]", cachesDestroyed, caches);
+        return;
+    }
+
+    // Checkpoint (and push, its PvP twin): points are taken in order, so the interesting number is
+    // which one is being fought over. Anything else has no push order to report.
+    if (!StrEqual(mode, "checkpoint") && !StrEqual(mode, "push")) return;
 
     // m_nActivePushPointIndex is 0-based - bm2_respawn adds 1 to it for the same reason.
     // In pregame the index is left over from the abandoned game; the next one starts at the first.
-    int active = pregame ? 1 : Ins_ObjectiveResource_GetProp("m_nActivePushPointIndex") + 1;
+    int active = (state <= GAMESTATE_PREGAME) ? 1 : Ins_ObjectiveResource_GetProp("m_nActivePushPointIndex") + 1;
 
     // Between rounds, or on a map where the index has not settled, this can read outside the real
     // range. Clamping beats printing "[Cap 0/8]" or "[Cap 9/8]" into the server browser.
@@ -341,24 +448,22 @@ void UpdateHostname()
     // m_iRoundPlayedCount counts rounds FINISHED, so the one being played is that plus one.
     // Pregame means the next player to join starts a fresh game (see g_hEmptyCheck), so the
     // counter still holds the abandoned game's rounds and the honest answer is round 1.
-    int  current = 1;
-    bool pregame = true;
-    bool gameOver = false;
+    int current = 1;
+    int state   = GAMESTATE_PREGAME;
     if (RulesReady())
     {
-        int state = GameRules_GetProp("m_iGameState");
-        pregame  = (state <= GAMESTATE_PREGAME);
-        gameOver = (state == GAMESTATE_GAME_OVER);
-        if (!pregame) current = GameRules_GetProp("m_iRoundPlayedCount") + 1;
+        state = GameRules_GetProp("m_iGameState");
+        if (state > GAMESTATE_PREGAME) current = GameRules_GetProp("m_iRoundPlayedCount") + 1;
     }
+    bool gameOver = (state == GAMESTATE_GAME_OVER);
 
     // After the last round ends the counter keeps climbing until the map actually changes; showing
     // "6/5" in the browser looks broken.
     if (maxRounds > 0 && current > maxRounds) current = maxRounds;
     if (current < 1) current = 1;
 
-    char caps[24];
-    BuildCapSuffix(caps, sizeof(caps), pregame);
+    char caps[48];
+    BuildObjectiveSuffix(caps, sizeof(caps), state);
 
     // No round or cap on the vote screen: the game they describe is over, and the state holds
     // unchanged (events included) until the map changes, even with the server empty. The state
@@ -366,7 +471,7 @@ void UpdateHostname()
     char decorated[MAX_HOSTNAME];
     if (gameOver)           Format(decorated, sizeof(decorated), "%s%s", g_sBaseHostname, MAP_END_SUFFIX);
     else if (maxRounds > 0) Format(decorated, sizeof(decorated), "%s (%d/%d)%s", g_sBaseHostname, current, maxRounds, caps);
-    else               Format(decorated, sizeof(decorated), "%s (%d)%s", g_sBaseHostname, current, caps);
+    else                    Format(decorated, sizeof(decorated), "%s (%d)%s", g_sBaseHostname, current, caps);
 
     // Skip the write when nothing changed. The empty-server re-check calls this repeatedly, and
     // rewriting an identical hostname is pointless churn on a replicated convar.
