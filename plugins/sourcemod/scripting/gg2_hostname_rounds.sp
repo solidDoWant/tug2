@@ -53,11 +53,26 @@ bool   g_bSelfWrite = false;
 // entity directly instead, so a mid-round load corrects the name immediately.
 bool   g_bRulesReady = false;
 
-// Emptying the server resets the round counter, and it does so WITHOUT firing round_start or
-// round_end - so none of the hooks below run and the browser keeps advertising whatever round was in
-// progress when the last player left. The reset also lands after the disconnect rather than during
-// it, so a single immediate update would read the old value; re-check for a few seconds instead.
-// Safe to do on a timer because sv_hibernate_when_empty is 0 here - an empty server keeps ticking.
+// Emptying the server does NOT reset the round counter - measured on test: the last human leaving
+// ends the round (round_end, m_iRoundPlayedCount +1) and drops m_iGameState to GAMESTATE_PREGAME,
+// "waiting for players", and both then sit unchanged for as long as the server is empty. The reset
+// only comes when somebody joins: ~14s later game_start fires with the counter back at 0, then
+// round_start. So the empty server would advertise "(3/5)" for a game that restarts at round 1 the
+// moment anyone connects. UpdateHostname therefore shows round 1 whenever the game is in pregame.
+// The state change lands just after the round_end hook runs, so re-check for a few seconds after
+// the server empties. Safe on a timer because sv_hibernate_when_empty is 0 - an empty server ticks.
+// m_iGameState values, read off the live server rather than an SDK header: 1 while waiting for
+// players, 2 on game_start, 3 on round_start (preround), 4 once the round is running.
+#define GAMESTATE_PREGAME 1
+
+// GR_STATE_GAME_OVER, from CINSRules' state table in the binary. The game has been won (or its
+// rounds run out) and players are on the map vote screen. Measured on test: game_end fires ~5s
+// after the final round_end, and the state then stays 7 for as long as the vote screen is up - and
+// it stays up indefinitely, including after every player has left, with no further events. The
+// round counter is frozen at the finished game's value, so a round number here is meaningless.
+#define GAMESTATE_GAME_OVER 7
+#define MAP_END_SUFFIX      " (Map end)"
+
 #define EMPTY_RECHECK_INTERVAL 1.0
 #define EMPTY_RECHECK_TICKS    6
 
@@ -100,6 +115,8 @@ public void OnPluginStart()
 
     HookEvent("round_start", Event_Round, EventHookMode_PostNoCopy);
     HookEvent("round_end", Event_Round, EventHookMode_PostNoCopy);
+    HookEvent("game_start", Event_Round, EventHookMode_PostNoCopy);
+    HookEvent("game_end", Event_Round, EventHookMode_PostNoCopy);
 
     // A capture is the other moment the name is out of date, and it is what makes the cap number
     // worth showing at all - it is the difference between joining a round that has barely started
@@ -229,13 +246,21 @@ void RestoreBaseHostname()
     g_bSelfWrite = false;
 }
 
-// Removes the decorations this plugin appends, innermost last: " [Cap n/m]" then " (n/m)".
+// Removes the decorations this plugin appends, innermost last: " [Cap n/m]" then " (n/m)". The
+// vote-screen " (Map end)" replaces both rather than adding to them, so it is removed on its own.
 //
 // Without this the suffix compounds - "TUG (1/5)" becomes "TUG (1/5) (2/5)" and so on, one per
 // round, forever. The cap bracket has to be stripped FIRST: it is the outermost part, and while it
 // is present the round suffix is no longer at the end of the string where the round strip looks.
 void StripRoundSuffix(char[] buffer)
 {
+    int len = strlen(buffer), suffixLen = strlen(MAP_END_SUFFIX);
+    if (len > suffixLen && StrEqual(buffer[len - suffixLen], MAP_END_SUFFIX))
+    {
+        buffer[len - suffixLen] = '\0';
+        return;
+    }
+
     StripBracketed(buffer, '[', ']', true);    // " [Cap n/m]"
     StripBracketed(buffer, '(', ')', false);   // " (n/m)"
 }
@@ -284,7 +309,7 @@ static void StripBracketed(char[] buffer, char open, char close, bool requireCap
 // The natives live in gg2_insurgency. If that plugin is not loaded they do not exist, and calling
 // one is a runtime error rather than something that can be caught - so the feature is probed once
 // and the suffix is simply dropped if it is unavailable.
-void BuildCapSuffix(char[] buffer, int maxlen)
+void BuildCapSuffix(char[] buffer, int maxlen, bool pregame)
 {
     buffer[0] = '\0';
 
@@ -295,7 +320,8 @@ void BuildCapSuffix(char[] buffer, int maxlen)
     if (total <= 0) return;    // survival, hunt and anything else without control points
 
     // m_nActivePushPointIndex is 0-based - bm2_respawn adds 1 to it for the same reason.
-    int active = Ins_ObjectiveResource_GetProp("m_nActivePushPointIndex") + 1;
+    // In pregame the index is left over from the abandoned game; the next one starts at the first.
+    int active = pregame ? 1 : Ins_ObjectiveResource_GetProp("m_nActivePushPointIndex") + 1;
 
     // Between rounds, or on a map where the index has not settled, this can read outside the real
     // range. Clamping beats printing "[Cap 0/8]" or "[Cap 9/8]" into the server browser.
@@ -313,10 +339,17 @@ void UpdateHostname()
     int maxRounds = (g_cvMaxRounds != null) ? g_cvMaxRounds.IntValue : 0;
 
     // m_iRoundPlayedCount counts rounds FINISHED, so the one being played is that plus one.
-    int current = 1;
+    // Pregame means the next player to join starts a fresh game (see g_hEmptyCheck), so the
+    // counter still holds the abandoned game's rounds and the honest answer is round 1.
+    int  current = 1;
+    bool pregame = true;
+    bool gameOver = false;
     if (RulesReady())
     {
-        current = GameRules_GetProp("m_iRoundPlayedCount") + 1;
+        int state = GameRules_GetProp("m_iGameState");
+        pregame  = (state <= GAMESTATE_PREGAME);
+        gameOver = (state == GAMESTATE_GAME_OVER);
+        if (!pregame) current = GameRules_GetProp("m_iRoundPlayedCount") + 1;
     }
 
     // After the last round ends the counter keeps climbing until the map actually changes; showing
@@ -325,10 +358,14 @@ void UpdateHostname()
     if (current < 1) current = 1;
 
     char caps[24];
-    BuildCapSuffix(caps, sizeof(caps));
+    BuildCapSuffix(caps, sizeof(caps), pregame);
 
+    // No round or cap on the vote screen: the game they describe is over, and the state holds
+    // unchanged (events included) until the map changes, even with the server empty. The state
+    // is checked on every update, so no separate event is needed to keep this current.
     char decorated[MAX_HOSTNAME];
-    if (maxRounds > 0) Format(decorated, sizeof(decorated), "%s (%d/%d)%s", g_sBaseHostname, current, maxRounds, caps);
+    if (gameOver)           Format(decorated, sizeof(decorated), "%s%s", g_sBaseHostname, MAP_END_SUFFIX);
+    else if (maxRounds > 0) Format(decorated, sizeof(decorated), "%s (%d/%d)%s", g_sBaseHostname, current, maxRounds, caps);
     else               Format(decorated, sizeof(decorated), "%s (%d)%s", g_sBaseHostname, current, caps);
 
     // Skip the write when nothing changed. The empty-server re-check calls this repeatedly, and
