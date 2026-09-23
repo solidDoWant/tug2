@@ -220,6 +220,18 @@
 				"library"	"server"
 				"linux"		"@s_INSServerGameStats"
 			}
+
+			// Where the player's bullets actually leave from, and which way they go (gg2_heavy_ammo).
+			// CINSWeaponBallistic::FireBullet calls exactly this, then fires along the direction it
+			// returns: the muzzle position and the MUZZLE's angles, so it follows lean, sway and
+			// free aim. CINSPlayer::EyePosition - what GetClientEyePosition returns - does NOT
+			// follow lean (lean moves only the camera, in CalcPlayerView), and the eye angles
+			// ignore sway. Args: (this CINSWeapon*, Vector& pos, Vector& dir, bool useEyeData).
+			"CINSWeapon::FindMuzzle"
+			{
+				"library"	"server"
+				"linux"		"@_ZN10CINSWeapon10FindMuzzleER6VectorS1_b"
+			}
 		}
 
 		// Both of these are VIRTUAL, and must be called as such. Calling the concrete

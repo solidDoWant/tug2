@@ -94,9 +94,16 @@ bounds the worst case regardless.
 
 There is no bullet-impact game event in Insurgency — `modevents.res` has `weapon_fire` with only
 `weaponid`, `userid` and `shots` — and no projectile to follow. So the plugin traces the shot itself
-from the shooter's eye on `weapon_fire`.
+from the shooter's muzzle on `weapon_fire`.
 
-That follows the shooter's aim rather than the bullet's exact path, so it ignores spread. The M107's
+The start point and direction come from `CINSWeapon::FindMuzzle` (gamedata `tug2.games`), which is
+what `CINSWeaponBallistic::FireBullet` itself uses: the muzzle position, which follows lean, and the
+muzzle's angles, which include sway. It is **not** `GetClientEyePosition`: the eye ignores lean,
+which only moves the camera, so while peeking a corner the eye is still behind the wall. Tracing from
+it hit the corner a few units from the shooter and killed them with their own blast. If the gamedata
+entry is missing the plugin logs it and falls back to the eye.
+
+That follows the muzzle the same way the bullet does, but not the random spread added on top. The M107's
 spread is `0.04` and the effect radius is hundreds of units, so at any range where this matters the
 difference is a rounding error. The important property is that the trace hits the **world**: a round
 into a wall or a crate produces an impact point exactly as a round into a body does, which is what

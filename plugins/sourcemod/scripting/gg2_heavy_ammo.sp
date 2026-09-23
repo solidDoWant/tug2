@@ -89,6 +89,7 @@ int        g_NumRounds = 0;
 Handle g_hMyNextBotPointer   = null;
 Handle g_hGetBodyInterface   = null;
 bool   g_bSuppressionReady   = false;
+Handle g_hFindMuzzle = null;
 
 ConVar g_cvEnabled;
 ConVar g_cvFriendlyFire;
@@ -111,6 +112,7 @@ public void OnPluginStart()
     g_cvFriendlyFire = FindConVar("mp_friendlyfire");
 
     SetupSuppression();
+    SetupFindMuzzle();
     LoadRounds();
 }
 
@@ -282,6 +284,31 @@ void SetupSuppression()
         LogError("Could not prepare the nextbot calls - impacts will not suppress bots");
 }
 
+// The trace has to follow the bullet. CINSWeaponBallistic::FireBullet takes its start and direction
+// from CINSWeapon::FindMuzzle: the muzzle position, which follows the player's lean, and the
+// muzzle's angles, which include sway. GetClientEyePosition does not follow lean - lean only moves
+// the camera - so while peeking a corner the eye is still behind the wall, a trace from it hits
+// the corner a few units away, and the shooter is caught in their own blast.
+void SetupFindMuzzle()
+{
+    Handle conf = LoadGameConfigFile("tug2.games");
+    if (conf != null)
+    {
+        StartPrepSDKCall(SDKCall_Entity);
+        if (PrepSDKCall_SetFromConf(conf, SDKConf_Signature, "CINSWeapon::FindMuzzle"))
+        {
+            PrepSDKCall_AddParameter(SDKType_Vector, SDKPass_ByRef, _, VENCODE_FLAG_COPYBACK);
+            PrepSDKCall_AddParameter(SDKType_Vector, SDKPass_ByRef, _, VENCODE_FLAG_COPYBACK);
+            PrepSDKCall_AddParameter(SDKType_Bool, SDKPass_Plain);
+            g_hFindMuzzle = EndPrepSDKCall();
+        }
+        delete conf;
+    }
+
+    if (g_hFindMuzzle == null)
+        LogError("Could not prepare CINSWeapon::FindMuzzle - tracing from the eye, which ignores lean");
+}
+
 public void OnClientDisconnect(int client)
 {
     g_LastShot[client] = 0.0;
@@ -411,24 +438,33 @@ public void Event_WeaponFire(Event event, const char[] name, bool dontBroadcast)
     // Where the round landed.
     //
     // There is no bullet-impact event and no projectile to follow, so this traces the shot itself.
-    // It is the shooter's aim rather than the bullet's exact path, so it ignores spread - but the
+    // It follows the muzzle, as the bullet does, but not the random spread applied after - and the
     // effect is a radius of hundreds of units and the M107's spread is 0.04, which at any range
     // that matters is a rounding error against that. The important part is that it hits the WORLD,
     // so a round into a wall or a crate produces an impact point exactly as a round into a body
     // does. That is what makes "hit the cover, kill the man behind it" work.
     float impact[3];
-    if (!TraceShot(client, impact)) return;
+    if (!TraceShot(client, weapon, impact)) return;
 
     ApplyImpact(client, weapon, round, impact);
 }
 
-bool TraceShot(int client, float impact[3])
+bool TraceShot(int client, int weapon, float impact[3])
 {
-    float eye[3], angles[3];
-    GetClientEyePosition(client, eye);
-    GetClientEyeAngles(client, angles);
+    float start[3], angles[3];
+    if (g_hFindMuzzle != null)
+    {
+        float direction[3];
+        SDKCall(g_hFindMuzzle, weapon, start, direction, false);
+        GetVectorAngles(direction, angles);
+    }
+    else
+    {
+        GetClientEyePosition(client, start);
+        GetClientEyeAngles(client, angles);
+    }
 
-    Handle trace = TR_TraceRayFilterEx(eye, angles, MASK_SHOT, RayType_Infinite, TraceFilter_NotSelf, client);
+    Handle trace = TR_TraceRayFilterEx(start, angles, MASK_SHOT, RayType_Infinite, TraceFilter_NotSelf, client);
     if (trace == null) return false;
 
     bool hit = TR_DidHit(trace);
