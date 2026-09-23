@@ -194,6 +194,10 @@ int g_iBeaconBeam,
 Handle g_hForceRespawn = null,
        g_hGameConfig   = null;
 
+// Medic points go through the game's own scoring (see AwardMedicPoints).
+Handle  g_hIncrementPlayerScore = null;
+Address g_pGameStats            = Address_Null;
+
 char g_client_last_classstring[MAXPLAYERS + 1][64],
     g_client_org_nickname[MAXPLAYERS + 1][64];
 
@@ -250,7 +254,6 @@ int   g_iHuntSpawnCount = 0;
 float g_fHuntSpawns[MAXPLAYERS + 1][3];
 
 bool   g_should_ask_to_heal = true;
-int    g_iBonusPoint[MAXPLAYERS + 1];
 
 ConVar g_cvHuntBotsPerPlayer            = null,
        g_cvHuntBotsTotalMax             = null,
@@ -654,6 +657,8 @@ public void OnPluginStart()
     {
         SetFailState("Fatal Error: Unable to find signature for \"ForceRespawn\"!");
     }
+    PrepareIncrementPlayerScore();
+
     // Load localization file
     LoadTranslations("common.phrases");
     LoadTranslations("respawn.phrases.txt");
@@ -694,8 +699,6 @@ public void OnMapStart()
     else {
         g_bLaunchControl = false;
     }
-
-    SDKHook(GetPlayerResourceEntity(), SDKHook_ThinkPost, SHook_PlayerResourceThinkPost);
 
     ClearArray(ga_hMapSpawns);
     // Wait until players ready to enable spawn checking
@@ -844,22 +847,44 @@ public void Event_GameEnd(Event event, const char[] name, bool dontBroadcast)
     g_botsReady    = 0;
 }
 
-public void SHook_PlayerResourceThinkPost(int iEnt)
+// Medic points used to be added only to CINSPlayerResource's m_iPlayerScore on every think. That
+// is the networked copy the scoreboard draws, but the round-end MVP and end-of-game top players
+// are sorted from CINSServerGameStats' per-player stats, which never saw the bonus - so the
+// scoreboard and the MVP disagreed. Award through the same function kills use instead: it updates
+// those stats and then the player's score, and the scoreboard follows from that.
+void PrepareIncrementPlayerScore()
 {
-    int offset = FindSendPropInfo("CINSPlayerResource", "m_iPlayerScore");
-
-    int iTotalScore[MAXPLAYERS + 1];
-    GetEntDataArray(iEnt, offset, iTotalScore, MaxClients + 1);
-
-    for (int i = 1; i <= MaxClients; i++)
+    GameData conf = new GameData("tug2.games");
+    if (conf == null)
     {
-        if (!IsClientInGame(i) || IsFakeClient(i)) continue;
-        if (g_iBonusPoint[i] > 0)
-        {
-            iTotalScore[i] += g_iBonusPoint[i];
-        }
+        LogError("[BM2 RESPAWN] Missing gamedata \"tug2.games\" - medic points will not be awarded");
+        return;
     }
-    SetEntDataArray(iEnt, offset, iTotalScore, MaxClients + 1);
+
+    g_pGameStats = conf.GetAddress("INSServerGameStats");
+
+    StartPrepSDKCall(SDKCall_Raw);
+    if (PrepSDKCall_SetFromConf(conf, SDKConf_Signature, "CINSServerGameStats::IncrementPlayerScore"))
+    {
+        PrepSDKCall_AddParameter(SDKType_CBasePlayer, SDKPass_Pointer);
+        PrepSDKCall_AddParameter(SDKType_PlainOldData, SDKPass_Plain);    // player points
+        PrepSDKCall_AddParameter(SDKType_PlainOldData, SDKPass_Plain);    // team points
+        g_hIncrementPlayerScore = EndPrepSDKCall();
+    }
+    delete conf;
+
+    if (g_hIncrementPlayerScore == null || g_pGameStats == Address_Null)
+        LogError("[BM2 RESPAWN] CINSServerGameStats::IncrementPlayerScore unavailable (call %x, stats %x) - medic points will not be awarded",
+                 g_hIncrementPlayerScore, g_pGameStats);
+}
+
+void AwardMedicPoints(int client, int points)
+{
+    if (g_hIncrementPlayerScore == null || g_pGameStats == Address_Null || points <= 0) return;
+    if (!IsClientInGame(client) || IsFakeClient(client)) return;
+
+    // Team points 0: the bonus never counted toward the team score, and still does not.
+    SDKCall(g_hIncrementPlayerScore, g_pGameStats, client, points, 0);
 }
 
 Action Timer_should_ask_to_heal(Handle timer)
@@ -1780,7 +1805,6 @@ void SetNextAttack(int client)
 public void OnClientPutInServer(int client)
 {
     g_playerPickSquad[client] = 0;
-    g_iBonusPoint[client]     = 0;
 #if DOCTOR
     g_iHurtFatal[client] = 0;
     ResetMedicStats(client);
@@ -3008,7 +3032,7 @@ Action Timer_ReviveMonitor(Handle timer)
                 EmitSoundToAll("weapons/defibrillator/defibrillator_revive.wav", alivePlayer, SNDCHAN_AUTO, _, _, 0.3);
 
                 g_iStatRevives[alivePlayer]++;
-                g_iBonusPoint[alivePlayer] += revive_point_bonus.IntValue;
+                AwardMedicPoints(alivePlayer, revive_point_bonus.IntValue);
                 medic_bonus_life_check(alivePlayer);
 
                 Check_NearbyMedicsRevive(alivePlayer, deadPlayer);
@@ -3043,7 +3067,7 @@ Action Timer_ReviveMonitor(Handle timer)
 
                 PlayVictimReviveSound(deadPlayer);
                 g_iStatRevives[alivePlayer]++;
-                g_iBonusPoint[alivePlayer] += revive_point_bonus.IntValue;
+                AwardMedicPoints(alivePlayer, revive_point_bonus.IntValue);
                 medic_bonus_life_check(alivePlayer);
 
                 Check_NearbyMedicsRevive(alivePlayer, deadPlayer);
@@ -3266,7 +3290,7 @@ Action Timer_MedicMonitor(Handle timer)
                         g_iStatHeals[originatingPlayer]++;
 
                         iHealth = 100;
-                        g_iBonusPoint[originatingPlayer] += full_heal_point_bonus.IntValue;
+                        AwardMedicPoints(originatingPlayer, full_heal_point_bonus.IntValue);
                         PrintHintText(targetPlayer, "You were healed by %N (HP: %i)", originatingPlayer, iHealth);
                         Format(sBuf, sizeof(sBuf), "You fully healed %N", targetPlayer);
                         PrintHintText(originatingPlayer, "%s", sBuf);
@@ -3352,7 +3376,7 @@ Action Timer_MedicMonitor(Handle timer)
 
                         iHealth = g_iNonMedicMaxHealOther;
                         SendForwardMedicHealed(originatingPlayer, targetPlayer);
-                        g_iBonusPoint[originatingPlayer] += full_heal_point_bonus.IntValue;
+                        AwardMedicPoints(originatingPlayer, full_heal_point_bonus.IntValue);
                         PrintHintText(targetPlayer, "Non-Medic %N can only heal you for %i HP!)", originatingPlayer, iHealth);
                         Format(sBuf, sizeof(sBuf), "You max healed %N", targetPlayer);
                         PrintHintText(originatingPlayer, "%s", sBuf);

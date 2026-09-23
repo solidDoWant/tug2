@@ -200,6 +200,26 @@
 				"library"	"server"
 				"linux"		"@_ZNK11CINSNextBot17IsLineOfFireClearERK6Vector"
 			}
+
+			// Medic score (bm2_respawn). The game's own scoring entry point: kills and survival
+			// safehouse captures go through it. It adds to the per-player round and game stats -
+			// which the round-end MVP and end-of-game top players are sorted by
+			// (StatsTopPlayerRoundScoreSort / StatsTopPlayerGameScoreSort) - then SetScore()s the
+			// player, which is what the scoreboard shows. Args: (this, CINSPlayer*, int points,
+			// int teamPoints); teamPoints > 0 also goes to the player's team score.
+			"CINSServerGameStats::IncrementPlayerScore"
+			{
+				"library"	"server"
+				"linux"		"@_ZN19CINSServerGameStats20IncrementPlayerScoreEP10CINSPlayerii"
+			}
+
+			// The CINSServerGameStats singleton itself (a .bss object, not a pointer to one) -
+			// the address the MVP sort functions index into. Resolved through "Addresses" below.
+			"s_INSServerGameStats"
+			{
+				"library"	"server"
+				"linux"		"@s_INSServerGameStats"
+			}
 		}
 
 		// Both of these are VIRTUAL, and must be called as such. Calling the concrete
@@ -487,6 +507,15 @@
 						"type"	"int"
 					}
 				}
+			}
+		}
+
+		"Addresses"
+		{
+			// No "read": the symbol is the object, so its own address is the this-pointer.
+			"INSServerGameStats"
+			{
+				"signature"	"s_INSServerGameStats"
 			}
 		}
 	}
