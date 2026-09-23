@@ -252,6 +252,18 @@ bool  g_bHuntManaged    = false;
 int   g_iHuntQuota      = 0;    // enemy lives still owed this round
 bool  g_bHuntPending[MAXPLAYERS + 1];    // dead, with a reinforcement timer running
 bool  g_bSurvivalMode   = false;         // players are the insurgents; the bots are security
+
+// The team the human players are on, and the one the bots are on. Everything medic, revive and
+// wound related is about the players' team - which is Security everywhere except survival.
+int PlayerTeam()
+{
+    return g_bSurvivalMode ? TEAM_2_INS : TEAM_1_SEC;
+}
+
+int BotTeam()
+{
+    return g_bSurvivalMode ? TEAM_1_SEC : TEAM_2_INS;
+}
 int   g_iHuntSpawnCount = 0;
 float g_fHuntSpawns[MAXPLAYERS + 1][3];
 
@@ -1066,7 +1078,7 @@ public Action Command_Respawn(int client, int args)
 void RespawnPlayer(int client, int target)
 {
     int team = GetClientTeam(target);
-    if (IsClientInGame(target) && !IsClientTimingOut(target) && g_client_last_classstring[target][0] && g_playerPickSquad[target] && !IsPlayerAlive(target) && team == TEAM_1_SEC)
+    if (IsClientInGame(target) && !IsClientTimingOut(target) && g_client_last_classstring[target][0] && g_playerPickSquad[target] && !IsPlayerAlive(target) && team == PlayerTeam())
     {
         // Write a log
         LogAction(client, target, "\"%L\" respawned \"%L\"", client, target);
@@ -1111,7 +1123,7 @@ Action Timer_PlayerStatus(Handle timer)
 #if DOCTOR
         if (!g_playerPickSquad[client]
             || IsPlayerAlive(client)
-            || GetClientTeam(client) != TEAM_1_SEC
+            || GetClientTeam(client) != PlayerTeam()
             || !g_iEnableRevive
             || !g_iRoundStatus
             || ga_bPlayerSelectNewClass[client])
@@ -1227,8 +1239,10 @@ public Action get_current_medic_stats(int caller_client, int args)
 
 public Action Check_Total_Enemies(int client, int args)
 {
-    // Check round state
-    if (!g_iRoundStatus)
+    // Asks the game rather than g_iRoundStatus. That flag is only set by the round-start timers, so
+    // after the plugin is reloaded mid-round it stays 0 until the next round and this refused to
+    // answer even though a round was plainly running. The count needs nothing the plugin tracks.
+    if (GameRules_GetProp("m_iGameState") != 4)    // GAMESTATE_RND_RUNNING
     {
         ReplyToCommand(client, "Use it after round start");
         return Plugin_Handled;
@@ -1242,7 +1256,9 @@ public Action Check_Total_Enemies(int client, int args)
     else {
         Format(textToPrint, sizeof(textToPrint), "Enemies alive: %d | Enemy reinforcements left: %d", aliveInsurgents, EnemyReinforcementsLeft());
     }
-    PrintHintText(client, "%s", textToPrint);
+    // The server console and RCON have no HUD for a hint.
+    if (client == 0) ReplyToCommand(client, "%s", textToPrint);
+    else PrintHintText(client, "%s", textToPrint);
     return Plugin_Handled;
 }
 
@@ -1941,7 +1957,7 @@ public Action Event_RoundEnd_Pre(Event event, const char[] name, bool dontBroadc
     {
         if (!IsClientInGame(client)
             || IsFakeClient(client)
-            || GetClientTeam(client) != TEAM_1_SEC)
+            || GetClientTeam(client) != PlayerTeam())
         {
             continue;
         }
@@ -2188,7 +2204,7 @@ public Action Event_PlayerPickSquad_Post(Event event, const char[] name, bool do
 #if DOCTOR
     // If player changed squad and remain ragdoll
     int team = GetClientTeam(client);
-    if (!IsPlayerAlive(client) && !g_iHurtFatal[client] && team == TEAM_1_SEC)
+    if (!IsPlayerAlive(client) && !g_iHurtFatal[client] && team == PlayerTeam())
     {
         RemoveRagdoll(client);
         g_iHurtFatal[client]             = 1;
@@ -2320,7 +2336,7 @@ public Action Event_PlayerHurt_Pre(Event event, const char[] name, bool dontBroa
                 && fRandom <= g_fFatalHeadChance
                 && attacker > 0
                 && IsClientInGame(attacker)
-                && GetClientTeam(attacker) != TEAM_1_SEC)
+                && GetClientTeam(attacker) != PlayerTeam())
             {
                 g_iHurtFatal[victim] = 1;    // Hurt fatally
             }
@@ -2394,7 +2410,7 @@ public Action Event_PlayerDeath(Event event, const char[] name, bool dontBroadca
         g_playerWoundType[victim] = 0;
     }
 
-    if (g_iReviveEnabled && team == TEAM_1_SEC)
+    if (g_iReviveEnabled && team == PlayerTeam())
     {
         char sBuffer[32];
         IntToString(GetEntProp(victim, Prop_Send, "m_nBody"), sBuffer, sizeof(sBuffer));
@@ -2448,7 +2464,7 @@ public Action Event_PlayerDeath(Event event, const char[] name, bool dontBroadca
         }
     }
 #endif
-    if (team == TEAM_2_INS)
+    if (team == BotTeam())
     {
         if (g_bHuntManaged)
         {
@@ -2556,6 +2572,12 @@ Action ConvertDeleteRagdoll(Handle timer, int client)
                 {
                     SetEntityModel(tempRag, ww2_ragdoll_any);
                 }
+                else if (g_bSurvivalMode) {
+                    // The stock bodies below are Security models. Survival players are insurgents,
+                    // so their body is their own player model - which is also what m_nBody (the
+                    // "body" keyvalue below) was read from.
+                    SetEntityModel(tempRag, sBuffer);
+                }
                 else {
                     if (StrContains(g_client_last_classstring[client], "medic") != -1)
                     {
@@ -2661,11 +2683,11 @@ Action Timer_HuntRoundSetup(Handle timer)
         if (!IsClientInGame(i)) continue;
 
         int team = GetClientTeam(i);
-        if (team == TEAM_1_SEC && !IsFakeClient(i))
+        if (team == PlayerTeam() && !IsFakeClient(i))
         {
             humans++;
         }
-        else if (team == TEAM_2_INS && IsPlayerAlive(i) && g_iHuntSpawnCount < sizeof(g_fHuntSpawns))
+        else if (team == BotTeam() && IsPlayerAlive(i) && g_iHuntSpawnCount < sizeof(g_fHuntSpawns))
         {
             GetClientAbsOrigin(i, g_fHuntSpawns[g_iHuntSpawnCount]);
             g_iHuntSpawnCount++;
@@ -2787,7 +2809,7 @@ float NearestLivingPlayerDistance(const float position[3])
     float nearest = 999999.0;
     for (int i = 1; i <= MaxClients; i++)
     {
-        if (!IsClientInGame(i) || !IsPlayerAlive(i) || GetClientTeam(i) != TEAM_1_SEC) continue;
+        if (!IsClientInGame(i) || !IsPlayerAlive(i) || GetClientTeam(i) != PlayerTeam()) continue;
 
         float origin[3];
         GetClientAbsOrigin(i, origin);
@@ -2811,7 +2833,7 @@ int CountAliveInsurgents()
 // insurgents and the waves they fight are security.
 int CountAliveEnemies()
 {
-    int team  = g_bSurvivalMode ? TEAM_1_SEC : TEAM_2_INS;
+    int team  = BotTeam();
     int alive = 0;
     for (int i = 1; i <= MaxClients; i++)
     {
@@ -3012,7 +3034,7 @@ Action Timer_ReviveMonitor(Handle timer)
     for (int alivePlayer = 1; alivePlayer <= MaxClients; alivePlayer++)
     {
         if (!IsClientInGame(alivePlayer)
-            || GetClientTeam(alivePlayer) != TEAM_1_SEC
+            || GetClientTeam(alivePlayer) != PlayerTeam()
             || !IsPlayerAlive(alivePlayer))
         {
             continue;
@@ -3291,7 +3313,7 @@ Action Timer_MedicMonitor(Handle timer)
     {
         if (!IsClientInGame(originatingPlayer)
             || !IsPlayerAlive(originatingPlayer)
-            || GetClientTeam(originatingPlayer) != TEAM_1_SEC)
+            || GetClientTeam(originatingPlayer) != PlayerTeam())
         {
             continue;
         }
@@ -3332,7 +3354,7 @@ Action Timer_MedicMonitor(Handle timer)
                 && targetPlayer <= MaxClients
                 && IsClientInGame(targetPlayer)
                 && IsPlayerAlive(targetPlayer)
-                && GetClientTeam(targetPlayer) == TEAM_1_SEC)
+                && GetClientTeam(targetPlayer) == PlayerTeam())
             {
                 GetClientAbsOrigin(originatingPlayer, vecOriginatingPlayer);
                 GetClientAbsOrigin(targetPlayer, vecTargetPlayer);
@@ -3417,7 +3439,7 @@ Action Timer_MedicMonitor(Handle timer)
                 && targetPlayer <= MaxClients
                 && IsClientInGame(targetPlayer)
                 && IsPlayerAlive(targetPlayer)
-                && GetClientTeam(targetPlayer) == TEAM_1_SEC)
+                && GetClientTeam(targetPlayer) == PlayerTeam())
             {
                 GetClientAbsOrigin(originatingPlayer, vecOriginatingPlayer);
                 GetClientAbsOrigin(targetPlayer, vecTargetPlayer);
@@ -3513,7 +3535,7 @@ Action Timer_AmmoResupply(Handle timer) {
 
         if (!IsClientInGame(client)
             || !IsPlayerAlive(client)
-            || GetClientTeam(client) != TEAM_1_SEC
+            || GetClientTeam(client) != PlayerTeam()
             ) {
             continue;
         }
@@ -3676,7 +3698,7 @@ Action Timer_NearestBody(Handle timer)
     for (int alivePlayer = 1; alivePlayer <= MaxClients; alivePlayer++)
     {
         if (!IsClientInGame(alivePlayer)
-            || GetClientTeam(alivePlayer) != TEAM_1_SEC
+            || GetClientTeam(alivePlayer) != PlayerTeam()
             || !IsPlayerAlive(alivePlayer))
         {
             continue;
@@ -3880,7 +3902,7 @@ int GetTeamSecCount()
         if (IsClientInGame(i))
         {
             iTeam = GetClientTeam(i);
-            if (iTeam == TEAM_1_SEC && !IsFakeClient(i))
+            if (iTeam == PlayerTeam() && !IsFakeClient(i))
                 clients++;
         }
     }
@@ -4221,7 +4243,7 @@ Action Healthkit(Handle timer, DataPack hDatapack)
             {
                 if (!IsClientInGame(client)
                     || !IsPlayerAlive(client)
-                    || GetClientTeam(client) != TEAM_1_SEC)
+                    || GetClientTeam(client) != PlayerTeam())
                 {
                     continue;
                 }
@@ -4823,7 +4845,7 @@ bool IsSecNearObj()
         if (IsClientInGame(i)
             && IsPlayerAlive(i)
             && !IsFakeClient(i)
-            && GetClientTeam(i) == TEAM_1_SEC)
+            && GetClientTeam(i) == PlayerTeam())
         {
             GetClientAbsOrigin(i, fPlayerVec);
             if (GetDistanceToCapturePoint(fPlayerVec, g_iACP) <= g_fStopSpawnDist)
@@ -5056,7 +5078,7 @@ void respawn_sec_on_counter()
         }
         // catch those in spec
         int client_team = GetClientTeam(client);
-        if (client_team != TEAM_1_SEC)
+        if (client_team != PlayerTeam())
         {
             continue;
         }
@@ -5163,14 +5185,14 @@ void medic_bonus_life_check(int client)
 // Reports one player's remaining auto-respawn lives to caller.
 static void ReportFreeLives(int caller, int target)
 {
-    // Free lives are a security-team mechanic: Event_PlayerDeath only spends one when the victim is
-    // TEAM_1_SEC, and Event_RoundEnd_Pre only resets them for that team. The counter is therefore
+    // Free lives are a player-team mechanic: Event_PlayerDeath only spends one when the victim is on
+    // PlayerTeam(), and Event_RoundEnd_Pre only resets them for that team. The counter is therefore
     // meaningless for anybody else, and reporting a number would imply it does something.
-    if (GetClientTeam(target) != TEAM_1_SEC)
+    if (GetClientTeam(target) != PlayerTeam())
     {
         if (target == caller)
         {
-            ReplyToCommand(caller, "You are not on security, so extra lives do not apply to you.");
+            ReplyToCommand(caller, "You are not on the players' team, so extra lives do not apply to you.");
         }
         else {
             ReplyToCommand(caller, "%N is not on security, so extra lives do not apply.", target);
