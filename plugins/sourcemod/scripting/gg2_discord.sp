@@ -26,6 +26,7 @@ int   g_cps_capped     = 0;
 // Resolved once at load: mp_maxrounds is a stock cvar and always exists, so a null here means the
 // lookup itself failed, not that the server is unconfigured.
 ConVar g_cvMaxRounds = null;
+ConVar g_cvGamemode  = null;
 
 // SteamID64 -> GetEngineTime() of bans already posted from OnBanClient/OnBanIdentity. The engine's
 // server_addban event fires for the same ban a moment later; this is how it knows to stay quiet.
@@ -138,6 +139,8 @@ public void OnPluginStart()
     if (g_cvMaxRounds == null)
         LogError("[DISCORD] mp_maxrounds not found - round end will report the round limit as ?");
 
+    g_cvGamemode = FindConVar("mp_gamemode");
+
     // Display names for the map. configs/mapnames.cfg is only the exceptions - see mapnames.inc for
     // why almost every name has to be derived from the filename rather than looked up.
     MapNames_Load();
@@ -184,6 +187,16 @@ public Action Event_PlayerChangeName(Event event, const char[] name, bool dontBr
     send_discord(message, sizeof(message));
 
     return Plugin_Continue;
+}
+
+// The gamemode as it reads in a message: "checkpoint" -> "Checkpoint". Empty if mp_gamemode is
+// unavailable, so callers can leave it out rather than print a blank.
+void GetGamemodeLabel(char[] buffer, int maxlen)
+{
+    buffer[0] = '\0';
+    if (g_cvGamemode == null) return;
+    g_cvGamemode.GetString(buffer, maxlen);
+    buffer[0] = CharToUpper(buffer[0]);
 }
 
 void HandleObjectiveProgress(const char[] actionLabel)
@@ -461,8 +474,12 @@ public Action Event_RoundEnd(Event event, const char[] name, bool dontBroadcast)
     else if (max_rounds == 0) Format(round_progress, sizeof(round_progress), "%i", rounds_played);
     else Format(round_progress, sizeof(round_progress), "%i/?", rounds_played);
 
+    char gamemode[32];
+    GetGamemodeLabel(gamemode, sizeof(gamemode));
+
     char round_message[1024];
-    Format(round_message, sizeof(round_message), "**ROUND END:** __%s Forces WIN!__ (%s %s)", winning_team, round_progress, mapname);
+    if (gamemode[0]) Format(round_message, sizeof(round_message), "**ROUND END:** __%s Forces WIN!__ (%s %s, %s)", winning_team, round_progress, mapname, gamemode);
+    else Format(round_message, sizeof(round_message), "**ROUND END:** __%s Forces WIN!__ (%s %s)", winning_team, round_progress, mapname);
     send_discord(round_message, sizeof(round_message));
 
     return Plugin_Continue;
@@ -540,10 +557,15 @@ public void OnMapStart()
     char url[192];
     bool linked = WorkshopMaps_GetUrl(mapfile, url, sizeof(url));
 
+    // The mode is known by now: a changelevel sets mp_gamemode before the map loads.
+    char gamemode[32], mode[40];
+    GetGamemodeLabel(gamemode, sizeof(gamemode));
+    if (gamemode[0]) Format(mode, sizeof(mode), " - %s", gamemode);
+
     char strMsg[1024];
-    if (linked) Format(strMsg, 1024, "**Map Change:** __%s__ ([%s](%s))", mapname, mapfile, url);
-    else if (!StrEqual(mapname, mapfile)) Format(strMsg, 1024, "**Map Change:** __%s__ (%s)", mapname, mapfile);
-    else Format(strMsg, 1024, "**Map Change:** __%s__", mapname);
+    if (linked) Format(strMsg, 1024, "**Map Change:** __%s__%s ([%s](%s))", mapname, mode, mapfile, url);
+    else if (!StrEqual(mapname, mapfile)) Format(strMsg, 1024, "**Map Change:** __%s__%s (%s)", mapname, mode, mapfile);
+    else Format(strMsg, 1024, "**Map Change:** __%s__%s", mapname, mode);
     send_discord(strMsg, sizeof(strMsg));
 }
 
