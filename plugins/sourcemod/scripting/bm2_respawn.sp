@@ -267,6 +267,17 @@ int BotTeam()
 int   g_iHuntSpawnCount = 0;
 float g_fHuntSpawns[MAXPLAYERS + 1][3];
 
+// Survival difficulty ramp - see ApplySurvivalDifficulty
+ConVar g_cvSurvivalDamageStart    = null,
+       g_cvSurvivalDamageEnd      = null,
+       g_cvSurvivalDamageEndLevel = null,
+       g_cvSurvivalHardLevel      = null,
+       g_cvSurvivalImpossibleLevel = null,
+       g_cvSurvivalSmokeLevel     = null,
+       g_cvSurvivalSmokeChance    = null,
+       g_cvBotDamage              = null,
+       g_cvBotDifficulty          = null;
+
 bool   g_should_ask_to_heal = true;
 
 ConVar g_cvHuntBotsPerPlayer            = null,
@@ -557,6 +568,17 @@ public void OnPluginStart()
     g_cvHuntRespawnDelay  = CreateConVar("sm_hunt_respawn_delay", "8.0", "Hunt only: seconds before a killed enemy is replaced");
     g_cvHuntSpawnMinDistance = CreateConVar("sm_hunt_spawn_min_distance", "1500", "Hunt only: keep reinforcements at least this far from any living player when a position that far out exists");
 
+    // Survival difficulty ramp - see ApplySurvivalDifficulty
+    g_cvSurvivalDamageStart     = CreateConVar("sm_survival_bot_damage_start", "0.4", "Survival only: bot_damage at level 1");
+    g_cvSurvivalDamageEnd       = CreateConVar("sm_survival_bot_damage_end", "0.9", "Survival only: bot_damage at sm_survival_bot_damage_end_level and beyond, rising linearly from level 1");
+    g_cvSurvivalDamageEndLevel  = CreateConVar("sm_survival_bot_damage_end_level", "50", "Survival only: level at which bot_damage reaches sm_survival_bot_damage_end", _, true, 2.0);
+    g_cvSurvivalHardLevel       = CreateConVar("sm_survival_bot_hard_level", "20", "Survival only: level from which ins_bot_difficulty is 2 (hard); below it, 1 (normal). 0 disables");
+    g_cvSurvivalImpossibleLevel = CreateConVar("sm_survival_bot_impossible_level", "40", "Survival only: level from which ins_bot_difficulty is 3 (impossible). 0 disables");
+    g_cvSurvivalSmokeLevel      = CreateConVar("sm_survival_bot_smoke_level", "30", "Survival only: level from which bots may spawn carrying the M18 fire support smoke (FireSupport's security_smoke). 0 disables");
+    g_cvSurvivalSmokeChance     = CreateConVar("sm_survival_bot_smoke_chance", "0.05", "Survival only: chance per bot spawn, from sm_survival_bot_smoke_level on, of carrying the fire support smoke", _, true, 0.0, true, 1.0);
+    g_cvBotDamage               = FindConVar("bot_damage");
+    g_cvBotDifficulty           = FindConVar("ins_bot_difficulty");
+
     // Control static enemy
     g_cvCheckStaticEnemy = CreateConVar("sm_respawn_check_static_enemy", "25", "Seconds amount to check if an AI has moved probably stuck");
     g_iCheckStaticEnemy  = g_cvCheckStaticEnemy.IntValue;
@@ -640,6 +662,7 @@ public void OnPluginStart()
     HookEvent("player_disconnect", Event_PlayerDisconnect, EventHookMode_Pre);
     HookEvent("player_connect", Event_PlayerConnect);
     HookEvent("game_end", Event_GameEnd, EventHookMode_PostNoCopy);
+    HookEvent("round_level_advanced", Event_SurvivalLevelAdvanced, EventHookMode_PostNoCopy);
     CreateTimer(5.0, getDeadCounts, _, TIMER_REPEAT | TIMER_FLAG_NO_MAPCHANGE);
 #if DOCTOR
     HookEvent("grenade_thrown", Event_GrenadeThrown);
@@ -1742,6 +1765,11 @@ public Action Event_Spawn(Event event, const char[] name, bool dontBroadcast)
         return Plugin_Continue;
     }
 
+    if (g_bSurvivalMode && GetClientTeam(client) == BotTeam())
+    {
+        MaybeGiveFireSupportSmoke(client);
+    }
+
     if (g_playersReady && g_botsReady
         && GetClientTeam(client) == TEAM_2_INS)
     {
@@ -1874,6 +1902,91 @@ public Action Event_PlayerDisconnect(Event event, const char[] name, bool dontBr
 }
 
 // When round starts, intialize variables
+// SURVIVAL DIFFICULTY RAMP. The engine's own survival scaling runs out early: bot aim, reaction and
+// FOV reach their _end values at level 13 and the wave kits top out at tier _05 from level 12, so
+// after that only the bot count still grows, and it stops at ins_bot_count_survival_max. These two
+// keep the pressure rising for the rest of the run:
+//
+//   bot_damage          sm_survival_bot_damage_start at level 1 -> _end at _end_level, linearly
+//   ins_bot_difficulty  1 (normal), 2 (hard) from sm_survival_bot_hard_level,
+//                       3 (impossible) from sm_survival_bot_impossible_level
+//
+// betterbots.cfg (exec'd on every map start above) sets bot_damage for the other modes, and their
+// server_<mode>.cfg files pin ins_bot_difficulty back to 1, so neither carries out of survival.
+// ins_bot_change_difficulty 1 in betterbots.cfg is what makes a difficulty change apply to bots
+// that are already alive.
+void ApplySurvivalDifficulty()
+{
+    if (!g_bSurvivalMode || g_cvBotDamage == null || g_cvBotDifficulty == null) return;
+
+    int level = GameRules_GetProp("m_iLevel");
+    if (level < 1) level = 1;
+
+    float t = float(level - 1) / float(g_cvSurvivalDamageEndLevel.IntValue - 1);
+    if (t > 1.0) t = 1.0;
+    float start  = g_cvSurvivalDamageStart.FloatValue;
+    float damage = start + (g_cvSurvivalDamageEnd.FloatValue - start) * t;
+
+    int hard = g_cvSurvivalHardLevel.IntValue, impossible = g_cvSurvivalImpossibleLevel.IntValue;
+    int difficulty = 1;
+    if (impossible > 0 && level >= impossible) difficulty = 3;
+    else if (hard > 0 && level >= hard) difficulty = 2;
+
+    g_cvBotDamage.FloatValue   = damage;
+    g_cvBotDifficulty.IntValue = difficulty;
+    LogMessage("[BM2 RESPAWN] survival level %d: bot_damage %.2f, ins_bot_difficulty %d", level, damage, difficulty);
+}
+
+// Late survival bots may carry the green M18 smoke that calls FireSupport's security artillery,
+// the counterpart to the insurgent smoke players can buy. The wave kits cannot do this themselves:
+// the engine picks their tier by level and the last tier starts at 12, too early for this.
+void MaybeGiveFireSupportSmoke(int client)
+{
+    int level = g_cvSurvivalSmokeLevel.IntValue;
+    if (level <= 0 || GameRules_GetProp("m_iLevel") < level) return;
+    if (GetRandomFloat() >= g_cvSurvivalSmokeChance.FloatValue) return;
+
+    // After the engine has handed out the template's kit, or it would land in an empty inventory
+    CreateTimer(0.5, Timer_GiveFireSupportSmoke, GetClientUserId(client), TIMER_FLAG_NO_MAPCHANGE);
+}
+
+Action Timer_GiveFireSupportSmoke(Handle timer, int userid)
+{
+    int client = GetClientOfUserId(userid);
+    if (client < 1 || !IsClientInGame(client) || !IsPlayerAlive(client) || GetClientTeam(client) != BotTeam())
+        return Plugin_Stop;
+
+    // Tiers _03 and up fill both of the chest carrier's explosive slots with a frag and a flashbang,
+    // so the smoke replaces the flashbang rather than being refused for want of a slot.
+    for (int offset = 0; offset < 128; offset += 4)
+    {
+        int weapon = GetEntDataEnt2(client, m_hMyWeapons + offset);
+        if (weapon <= 0 || !IsValidEntity(weapon)) continue;
+
+        char classname[32];
+        GetEdictClassname(weapon, classname, sizeof(classname));
+        if (StrEqual(classname, "weapon_m84"))
+        {
+            RemovePlayerItem(client, weapon);
+            AcceptEntityInput(weapon, "Kill");
+            break;
+        }
+    }
+    GivePlayerItem(client, "weapon_m18_us");
+    return Plugin_Stop;
+}
+
+public void Event_SurvivalLevelAdvanced(Event event, const char[] name, bool dontBroadcast)
+{
+    // A frame later, so m_iLevel has certainly been networked with the new value
+    RequestFrame(Frame_ApplySurvivalDifficulty);
+}
+
+void Frame_ApplySurvivalDifficulty(any unused)
+{
+    ApplySurvivalDifficulty();
+}
+
 public Action Event_RoundStart(Event event, const char[] name, bool dontBroadcast)
 {
     g_bCounterAttack = false;
@@ -1891,6 +2004,8 @@ public Action Event_RoundStart(Event event, const char[] name, bool dontBroadcas
     g_fSecCounterRespawnPosition[2] = 0.0;
     // need some delay so we can get starting spawn of a player first
     CreateTimer(0.1, Timer_RoundStartFindBotSpawns);
+    // The level is back to 1 by now (CINSRules_Survival::OnRoundReset), so this drops the ramp too
+    ApplySurvivalDifficulty();
 
     // Respawn delay for team ins
     g_iTimerReinforceTime           = g_iReinforceTime;
