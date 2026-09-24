@@ -827,6 +827,423 @@ RUN gcc -m32 -shared -fPIC -O2 -Wall -Wno-overflow -o /casecache.so /casecache.c
     && readelf -h /casecache.so | grep -qE 'Machine:[[:space:]]+Intel 80386'
 
 # ==============================================================================================
+# Workshop content
+# ==============================================================================================
+# Every workshop item a server subscribes to, fetched at build time. This used to be a single
+# `srcds -workshop` boot per server, which had two problems.
+#
+# It was not pinned: the boot took whatever Steam happened to be serving, so two images built a week
+# apart could ship different versions of the same item with nothing recording which. And it landed
+# all ~20 GB as one layer, so changing any item made every host re-pull all of it, even though
+# consecutive versions overlap almost entirely and main and test overlap by 16 GB.
+#
+# So the set is pinned in workshop.lock.json and the download is split into buckets, each of which
+# becomes its own layer. Items are grouped by which servers subscribe to them and then bucketed by a
+# hash of their id: the grouping is what lets main and test share blobs, and the hashing is what
+# keeps adding an item from reshuffling the rest. See tools/workshop/workshop_lock.py.
+#
+# The stages below and the COPY lines in each server stage are generated from the lockfile. Do not
+# edit them by hand - run `make workshop-lock` to re-pin, `make workshop-render` to regenerate.
+#
+# One layer per item would be the ideal and is not possible: overlay2 refuses to build past 128
+# layers, a server image is already in the fifties, and there are 158 items on main.
+
+FROM ghcr.io/gameservermanagers/steamcmd:ubuntu-24.04 AS workshop-downloader
+# steamcmd rather than srcds because it can fetch one item at a time, which is what makes the
+# per-bucket layers possible. Anonymous login is enough for this app's items.
+COPY --chmod=0755 tools/workshop/fetch_items.sh /usr/local/bin/fetch-items
+
+# >>> workshop-lock: workshop stages >>>
+
+# 2 items, 72 MB
+FROM workshop-downloader AS ws-main-00
+RUN fetch-items /out \
+    292081732:790027515235326458 \
+    1905422214:5920435362875613913
+
+# 4 items, 544 MB
+FROM workshop-downloader AS ws-main-01
+RUN fetch-items /out \
+    1180002850:7214572708555651955 \
+    1189448765:4056170938766937542 \
+    2110527993:7975018087782544766 \
+    2766356125:6479463400607097273
+
+# 4 items, 560 MB
+FROM workshop-downloader AS ws-main-02
+RUN fetch-items /out \
+    346843105:4562216881517298266 \
+    1469832785:880450735653051946 \
+    2670949874:8682245896844640386 \
+    3468251942:147871810786293531
+
+# 6 items, 788 MB
+FROM workshop-downloader AS ws-main-03
+RUN fetch-items /out \
+    2168116352:1165484499061288988 \
+    2508715344:8736546735568155784 \
+    2538211718:8826513789951879794 \
+    2907513227:3136069242206699941 \
+    2910284180:4693341428547567106 \
+    2962802373:3921036225149865754
+
+# 6 items, 836 MB
+FROM workshop-downloader AS ws-main-04
+RUN fetch-items /out \
+    440046323:5416108014987172053 \
+    1482148634:2851875859647825867 \
+    2015565348:3186333443082857479 \
+    2510398645:3957374782168634407 \
+    2835956934:1898071101933825168 \
+    2927739938:4619278329072891680
+
+# 2 items, 380 MB
+FROM workshop-downloader AS ws-main-05
+RUN fetch-items /out \
+    2296749488:3207298516843637055 \
+    2966432441:9068778289622610671
+
+# 4 items, 669 MB
+FROM workshop-downloader AS ws-main-06
+RUN fetch-items /out \
+    1734873741:8337097249858118499 \
+    1989129424:5101435359388477569 \
+    2168078889:3564784398022966987 \
+    2832406643:3744120148318909398
+
+# 4 items, 288 MB
+FROM workshop-downloader AS ws-main-07
+RUN fetch-items /out \
+    2635219866:4826755711166472558 \
+    2890756233:8357478366560277008 \
+    2905676416:7990779581717180623 \
+    2980224364:8260778967173714576
+
+# 2 items, 238 MB
+FROM workshop-downloader AS ws-main-08
+RUN fetch-items /out \
+    498255733:6367257996313233069 \
+    2035514246:5053112404133028501
+
+# 6 items, 605 MB
+FROM workshop-downloader AS ws-main-09
+RUN fetch-items /out \
+    939871975:3187383115376953804 \
+    1586281667:4514965458896198226 \
+    1617934454:2640211871519254674 \
+    1963814261:6188160848502128259 \
+    1988310157:435492015601177068 \
+    2888146733:1918619030624772103
+
+# 4 items, 852 MB
+FROM workshop-downloader AS ws-main-10
+RUN fetch-items /out \
+    426742049:1989037133240651228 \
+    1574936010:5989598263981391839 \
+    2208434069:497943373325101089 \
+    2688056722:3057792891557444779
+
+# 7 items, 1198 MB
+FROM workshop-downloader AS ws-main-11
+RUN fetch-items /out \
+    939856603:3729484046250516221 \
+    1202839339:5903704349326355566 \
+    1642088392:8979859932621260656 \
+    2071869506:4447287672030291499 \
+    2240929834:6018310154481417391 \
+    2696258019:1113583986795488174 \
+    2802314613:2794686434752646909
+
+# 3 items, 189 MB
+FROM workshop-downloader AS ws-main-13
+RUN fetch-items /out \
+    1083630976:5951646364309842700 \
+    2361038040:1973991878036638558 \
+    2575300560:2581495078568696044
+
+# 5 items, 744 MB
+FROM workshop-downloader AS ws-main-14
+RUN fetch-items /out \
+    1388556079:7506328278912890784 \
+    1787552582:7701490869284518184 \
+    1908980534:9073250590849812166 \
+    2107007637:2552339605465155175 \
+    2522001554:8856847608746742759
+
+# 1 items, 782 MB
+FROM workshop-downloader AS ws-main-2521980943
+RUN fetch-items /out \
+    2521980943:3468337863009197713
+
+# 1 items, 591 MB
+FROM workshop-downloader AS ws-main-2717691676
+RUN fetch-items /out \
+    2717691676:7838671098564091444
+
+# 6 items, 611 MB
+FROM workshop-downloader AS ws-main-test-00
+RUN fetch-items /out \
+    605055192:7505879993060307010 \
+    936432939:222893917373466102 \
+    1353915069:7226709143889370349 \
+    2461902631:7918046699196433317 \
+    2744435243:2254290363765609380 \
+    2784911431:2164511124571116033
+
+# 4 items, 677 MB
+FROM workshop-downloader AS ws-main-test-01
+RUN fetch-items /out \
+    523594320:2984229718869833638 \
+    1388547184:5844965366987463791 \
+    2169963412:4483070800200134236 \
+    2599050685:8605686671660627961
+
+# 4 items, 993 MB
+FROM workshop-downloader AS ws-main-test-02
+RUN fetch-items /out \
+    501104499:2343882586547974395 \
+    2670960489:199675607531522824 \
+    2674972433:707398136148663147 \
+    2959755350:2446230438773441704
+
+# 6 items, 665 MB
+FROM workshop-downloader AS ws-main-test-03
+RUN fetch-items /out \
+    890084623:2754384783144156042 \
+    2373005014:480082728338823752 \
+    2568914411:3109603200193524535 \
+    2651481089:7302109678983218515 \
+    2767467973:9073174476896678889 \
+    3015821699:145695202577896107
+
+# 3 items, 425 MB
+FROM workshop-downloader AS ws-main-test-04
+RUN fetch-items /out \
+    2300512394:6979611064617911583 \
+    2327421432:3857808425297464168 \
+    2825248282:6241744185373130480
+
+# 6 items, 1068 MB
+FROM workshop-downloader AS ws-main-test-05
+RUN fetch-items /out \
+    650616844:5482491668660727063 \
+    1380424575:3391805046937389357 \
+    1586281347:3277382502552762367 \
+    2034193905:477550226658100409 \
+    2544674426:413339970850709637 \
+    3511353649:6083164722352236093
+
+# 5 items, 958 MB
+FROM workshop-downloader AS ws-main-test-06
+RUN fetch-items /out \
+    878171320:7507269715084438841 \
+    2010242125:5781862322255602462 \
+    2603024361:7358381616626468171 \
+    2787485611:3594300065260875076 \
+    3015826914:7613540782522342594
+
+# 5 items, 1083 MB
+FROM workshop-downloader AS ws-main-test-07
+RUN fetch-items /out \
+    1501650494:7136395718723592166 \
+    2767466217:727350829163522396 \
+    3008318690:1225988837924648363 \
+    3015824154:3603525043181699251 \
+    3510794344:7368385883894178914
+
+# 4 items, 343 MB
+FROM workshop-downloader AS ws-main-test-08
+RUN fetch-items /out \
+    795846849:3792504691054639808 \
+    1161583627:3860434989988815112 \
+    1393527442:4626838514360406962 \
+    2908499942:6106615258569841894
+
+# 6 items, 565 MB
+FROM workshop-downloader AS ws-main-test-09
+RUN fetch-items /out \
+    586951234:8473797070162260073 \
+    1457936959:1884870229540061173 \
+    1893781116:9113502856414502840 \
+    2419142919:5433957352462122060 \
+    2705735526:5380429294369615820 \
+    2834243418:113286430087135582
+
+# 5 items, 774 MB
+FROM workshop-downloader AS ws-main-test-10
+RUN fetch-items /out \
+    573278223:4525263955419968341 \
+    822609478:566036081236212778 \
+    1269418802:606946750119732106 \
+    1595712656:7745274677332251388 \
+    2574250983:7810913647217508199
+
+# 2 items, 118 MB
+FROM workshop-downloader AS ws-main-test-11
+RUN fetch-items /out \
+    2352663377:5520057850735276996 \
+    2744181131:4405808069076123380
+
+# 6 items, 664 MB
+FROM workshop-downloader AS ws-main-test-12
+RUN fetch-items /out \
+    283120201:8020516459263424907 \
+    1125220551:5506954577651112481 \
+    1989125473:5908926899969492934 \
+    2678703408:1826381388227950051 \
+    3260723441:2219198468267761202 \
+    3551935737:7641588715112482498
+
+# 4 items, 451 MB
+FROM workshop-downloader AS ws-main-test-13
+RUN fetch-items /out \
+    1163373032:3349655750213861283 \
+    2393118985:764375582873819576 \
+    2606328136:7969792235399288716 \
+    2749114575:8718220437724226601
+
+# 1 items, 95 MB
+FROM workshop-downloader AS ws-main-test-14
+RUN fetch-items /out \
+    517972533:576011176942774552
+
+# 1 items, 207 MB
+FROM workshop-downloader AS ws-main-test-15
+RUN fetch-items /out \
+    2169943977:5258205641255772385
+
+# 3 items, 205 MB
+FROM workshop-downloader AS ws-main-test-16
+RUN fetch-items /out \
+    890747795:7653388598575063635 \
+    2840759249:6355316458712729670 \
+    3041234121:1930973293962867595
+
+# 5 items, 528 MB
+FROM workshop-downloader AS ws-main-test-17
+RUN fetch-items /out \
+    939859861:6280776846420524782 \
+    2257195565:7624894621768683966 \
+    2818856572:6589725085183953568 \
+    2967215012:6970049143468764837 \
+    3015826569:7747065556920200859
+
+# 5 items, 446 MB
+FROM workshop-downloader AS ws-main-test-18
+RUN fetch-items /out \
+    492051918:5817919254734251493 \
+    939870068:725768604512976780 \
+    1100976090:8525446416856687709 \
+    1172671775:4233021842961099444 \
+    1876212727:7904518032334888280
+
+# 1 items, 55 MB
+FROM workshop-downloader AS ws-main-test-19
+RUN fetch-items /out \
+    1989124779:1383075839965324992
+
+# 3 items, 673 MB
+FROM workshop-downloader AS ws-main-test-20
+RUN fetch-items /out \
+    2010901052:3627629245881857934 \
+    2191010494:8694843794502362141 \
+    2744179612:420708957001672991
+
+# 2 items, 374 MB
+FROM workshop-downloader AS ws-main-test-21
+RUN fetch-items /out \
+    1989120573:823207703301777768 \
+    2148192104:6331431788873396653
+
+# 2 items, 263 MB
+FROM workshop-downloader AS ws-main-test-22
+RUN fetch-items /out \
+    2347162033:672385037222312732 \
+    2749105820:6636338138602338514
+
+# 3 items, 88 MB
+FROM workshop-downloader AS ws-main-test-23
+RUN fetch-items /out \
+    1379716589:4438945156617216874 \
+    2876174607:4348405390400449112 \
+    2888145663:1650843569798320655
+
+# 1 items, 778 MB
+FROM workshop-downloader AS ws-main-test-2567903738
+RUN fetch-items /out \
+    2567903738:3511136465013889764
+
+# 1 items, 710 MB
+FROM workshop-downloader AS ws-main-test-2588320140
+RUN fetch-items /out \
+    2588320140:4325154143377075846
+
+# 1 items, 671 MB
+FROM workshop-downloader AS ws-main-test-2627393585
+RUN fetch-items /out \
+    2627393585:3104467432362246609
+
+# 1 items, 653 MB
+FROM workshop-downloader AS ws-main-test-2769526047
+RUN fetch-items /out \
+    2769526047:8527433727767161765
+
+# 1 items, 1700 MB
+FROM workshop-downloader AS ws-main-test-859127166
+RUN fetch-items /out \
+    859127166:4009866035885803093
+
+# 4 items, 345 MB
+FROM workshop-downloader AS ws-test-00
+RUN fetch-items /out \
+    248148672:3283225786388242530 \
+    1264090927:3944615759119409023 \
+    2608962360:2496454655619823014 \
+    3629465190:5499744124065134872
+
+# 5 items, 806 MB
+FROM workshop-downloader AS ws-test-01
+RUN fetch-items /out \
+    498253639:609297726724840516 \
+    852587108:1633066933855324771 \
+    863961825:7189683580014268595 \
+    2575302067:7629022230891033116 \
+    3306889421:7705330428448969031
+
+# 2 items, 152 MB
+FROM workshop-downloader AS ws-test-02
+RUN fetch-items /out \
+    599730897:1253426195698944000 \
+    730009401:1138404464281547985
+
+# 7 items, 537 MB
+FROM workshop-downloader AS ws-test-03
+RUN fetch-items /out \
+    383525894:2434371308443939189 \
+    498252536:5342438127531605685 \
+    504080476:1494807837084676018 \
+    505775175:5037397020300103578 \
+    672667761:5193529174717015621 \
+    2397669169:8161425723306793127 \
+    2397670590:5399862778726293608
+
+# 5 items, 1062 MB
+FROM workshop-downloader AS ws-test-04
+RUN fetch-items /out \
+    352148389:6377875302578375420 \
+    395001767:1605140403241815329 \
+    878666586:7235141857794946932 \
+    1207457291:1348629247254926438 \
+    1743348046:2087851213989604144
+
+# 2 items, 534 MB
+FROM workshop-downloader AS ws-test-05
+RUN fetch-items /out \
+    841479518:5541635943979530922 \
+    1217898298:2668116666723008061
+# <<< workshop-lock: workshop stages <<<
+
+# ==============================================================================================
 # Server images
 # ==============================================================================================
 # One stage per server, each built independently from `gameserver`. `main` is the live public
@@ -839,14 +1256,61 @@ RUN gcc -m32 -shared -fPIC -O2 -Wall -Wno-overflow -o /casecache.so /casecache.c
 
 FROM gameserver AS gameserver-main
 
-# Start the server once to generate any missing files (like workshop items), then exit
-# Adding `+quit` to the CLI will cause the server to segfault, but this can be safely ignored.
+# The list the running server reads. Everything on it is fetched at build time by the ws-* stages
+# above, not here.
 COPY ["server config/main/opt/insurgency-server/insurgency/subscribed_file_ids.txt", "/opt/insurgency-server/insurgency/subscribed_file_ids.txt"]
 
-# Start the server once to generate any missing files (like workshop items), then exit
-# Adding `+quit` to the CLI will cause the server to segfault, but this can be safely ignored.
-# Note: Running as user 1000:1000 (inherited from base stage)
-RUN server-runner -- /opt/insurgency-server/srcds_linux -condebug -game insurgency -workshop +servercfgfile server.cfg +map embassy_coop +quit
+# The subscribed workshop items, one layer per bucket. --link keeps each layer independent of
+# everything above and below it, so a bucket whose contents did not change keeps its digest and
+# nobody re-pulls it - and a bucket both servers subscribe to is the same blob in both images.
+# --chown because the server rewrites the .acf next to these at runtime.
+# >>> workshop-lock: workshop layers: main >>>
+COPY --link --chown=1000:1000 --from=ws-main-00 /out /opt/insurgency-server/steamapps/workshop/content/222880/
+COPY --link --chown=1000:1000 --from=ws-main-01 /out /opt/insurgency-server/steamapps/workshop/content/222880/
+COPY --link --chown=1000:1000 --from=ws-main-02 /out /opt/insurgency-server/steamapps/workshop/content/222880/
+COPY --link --chown=1000:1000 --from=ws-main-03 /out /opt/insurgency-server/steamapps/workshop/content/222880/
+COPY --link --chown=1000:1000 --from=ws-main-04 /out /opt/insurgency-server/steamapps/workshop/content/222880/
+COPY --link --chown=1000:1000 --from=ws-main-05 /out /opt/insurgency-server/steamapps/workshop/content/222880/
+COPY --link --chown=1000:1000 --from=ws-main-06 /out /opt/insurgency-server/steamapps/workshop/content/222880/
+COPY --link --chown=1000:1000 --from=ws-main-07 /out /opt/insurgency-server/steamapps/workshop/content/222880/
+COPY --link --chown=1000:1000 --from=ws-main-08 /out /opt/insurgency-server/steamapps/workshop/content/222880/
+COPY --link --chown=1000:1000 --from=ws-main-09 /out /opt/insurgency-server/steamapps/workshop/content/222880/
+COPY --link --chown=1000:1000 --from=ws-main-10 /out /opt/insurgency-server/steamapps/workshop/content/222880/
+COPY --link --chown=1000:1000 --from=ws-main-11 /out /opt/insurgency-server/steamapps/workshop/content/222880/
+COPY --link --chown=1000:1000 --from=ws-main-13 /out /opt/insurgency-server/steamapps/workshop/content/222880/
+COPY --link --chown=1000:1000 --from=ws-main-14 /out /opt/insurgency-server/steamapps/workshop/content/222880/
+COPY --link --chown=1000:1000 --from=ws-main-2521980943 /out /opt/insurgency-server/steamapps/workshop/content/222880/
+COPY --link --chown=1000:1000 --from=ws-main-2717691676 /out /opt/insurgency-server/steamapps/workshop/content/222880/
+COPY --link --chown=1000:1000 --from=ws-main-test-00 /out /opt/insurgency-server/steamapps/workshop/content/222880/
+COPY --link --chown=1000:1000 --from=ws-main-test-01 /out /opt/insurgency-server/steamapps/workshop/content/222880/
+COPY --link --chown=1000:1000 --from=ws-main-test-02 /out /opt/insurgency-server/steamapps/workshop/content/222880/
+COPY --link --chown=1000:1000 --from=ws-main-test-03 /out /opt/insurgency-server/steamapps/workshop/content/222880/
+COPY --link --chown=1000:1000 --from=ws-main-test-04 /out /opt/insurgency-server/steamapps/workshop/content/222880/
+COPY --link --chown=1000:1000 --from=ws-main-test-05 /out /opt/insurgency-server/steamapps/workshop/content/222880/
+COPY --link --chown=1000:1000 --from=ws-main-test-06 /out /opt/insurgency-server/steamapps/workshop/content/222880/
+COPY --link --chown=1000:1000 --from=ws-main-test-07 /out /opt/insurgency-server/steamapps/workshop/content/222880/
+COPY --link --chown=1000:1000 --from=ws-main-test-08 /out /opt/insurgency-server/steamapps/workshop/content/222880/
+COPY --link --chown=1000:1000 --from=ws-main-test-09 /out /opt/insurgency-server/steamapps/workshop/content/222880/
+COPY --link --chown=1000:1000 --from=ws-main-test-10 /out /opt/insurgency-server/steamapps/workshop/content/222880/
+COPY --link --chown=1000:1000 --from=ws-main-test-11 /out /opt/insurgency-server/steamapps/workshop/content/222880/
+COPY --link --chown=1000:1000 --from=ws-main-test-12 /out /opt/insurgency-server/steamapps/workshop/content/222880/
+COPY --link --chown=1000:1000 --from=ws-main-test-13 /out /opt/insurgency-server/steamapps/workshop/content/222880/
+COPY --link --chown=1000:1000 --from=ws-main-test-14 /out /opt/insurgency-server/steamapps/workshop/content/222880/
+COPY --link --chown=1000:1000 --from=ws-main-test-15 /out /opt/insurgency-server/steamapps/workshop/content/222880/
+COPY --link --chown=1000:1000 --from=ws-main-test-16 /out /opt/insurgency-server/steamapps/workshop/content/222880/
+COPY --link --chown=1000:1000 --from=ws-main-test-17 /out /opt/insurgency-server/steamapps/workshop/content/222880/
+COPY --link --chown=1000:1000 --from=ws-main-test-18 /out /opt/insurgency-server/steamapps/workshop/content/222880/
+COPY --link --chown=1000:1000 --from=ws-main-test-19 /out /opt/insurgency-server/steamapps/workshop/content/222880/
+COPY --link --chown=1000:1000 --from=ws-main-test-20 /out /opt/insurgency-server/steamapps/workshop/content/222880/
+COPY --link --chown=1000:1000 --from=ws-main-test-21 /out /opt/insurgency-server/steamapps/workshop/content/222880/
+COPY --link --chown=1000:1000 --from=ws-main-test-22 /out /opt/insurgency-server/steamapps/workshop/content/222880/
+COPY --link --chown=1000:1000 --from=ws-main-test-23 /out /opt/insurgency-server/steamapps/workshop/content/222880/
+COPY --link --chown=1000:1000 --from=ws-main-test-2567903738 /out /opt/insurgency-server/steamapps/workshop/content/222880/
+COPY --link --chown=1000:1000 --from=ws-main-test-2588320140 /out /opt/insurgency-server/steamapps/workshop/content/222880/
+COPY --link --chown=1000:1000 --from=ws-main-test-2627393585 /out /opt/insurgency-server/steamapps/workshop/content/222880/
+COPY --link --chown=1000:1000 --from=ws-main-test-2769526047 /out /opt/insurgency-server/steamapps/workshop/content/222880/
+COPY --link --chown=1000:1000 --from=ws-main-test-859127166 /out /opt/insurgency-server/steamapps/workshop/content/222880/
+# <<< workshop-lock: workshop layers: main <<<
 
 # Copy in the map-specific plugins
 COPY --from=sourcemod-plugins-marquis-fix --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
@@ -890,9 +1354,15 @@ COPY --from=sourcemod-plugins-bm2-respawn --chown=0:0 /insurgency /opt/insurgenc
 # Copy in the remaining main config files
 COPY ["server config/main/", "/"]
 
+# Generated from workshop.lock.json by `make server-image-*` (not committed), and the reason the
+# server treats the items above as already installed and current instead of re-downloading all of
+# them on first boot. Copied again here only to own it: the engine rewrites it on every boot, and
+# the bulk copy above lands it as root.
+COPY --chown=1000:1000 ["server config/main/opt/insurgency-server/steamapps/workshop/appworkshop_222880.acf", "/opt/insurgency-server/steamapps/workshop/appworkshop_222880.acf"]
+
 # Install the casecache LD_PRELOAD shim and enable it for the server.
-# Done LAST, after the build-time workshop-download RUN above, so the shim is active only at
-# runtime (a half-built index during the build-time download could shadow files being fetched).
+# Set LAST so the shim is only ever active at runtime. The index it builds is frozen at process
+# start, so anything that writes to the game tree wants to have finished before it exists.
 # LD_PRELOAD via ENV also reaches the 64-bit server-runner wrapper, which logs a harmless
 # "wrong ELF class" and ignores it; only the 32-bit srcds_linux loads the shim. To disable the
 # shim at runtime without a rebuild, set CASECACHE_DISABLE=1 (it becomes a pure passthrough).
@@ -929,14 +1399,51 @@ FROM gameserver AS gameserver-test
 # clobber the plugin. See ENV THEATER_NAME in the gameserver stage.
 ENV THEATER_NAME=theater_tug_nvg_default
 
-# Start the server once to generate any missing files (like workshop items), then exit
-# Adding `+quit` to the CLI will cause the server to segfault, but this can be safely ignored.
+# The list the running server reads. Everything on it is fetched at build time by the ws-* stages
+# above, not here.
 COPY ["server config/test/opt/insurgency-server/insurgency/subscribed_file_ids.txt", "/opt/insurgency-server/insurgency/subscribed_file_ids.txt"]
 
-# Start the server once to generate any missing files (like workshop items), then exit
-# Adding `+quit` to the CLI will cause the server to segfault, but this can be safely ignored.
-# Note: Running as user 1000:1000 (inherited from base stage)
-RUN server-runner -- /opt/insurgency-server/srcds_linux -condebug -game insurgency -workshop +servercfgfile server.cfg +map embassy_coop +quit
+# The subscribed workshop items, one layer per bucket. --link keeps each layer independent of
+# everything above and below it, so a bucket whose contents did not change keeps its digest and
+# nobody re-pulls it - and a bucket both servers subscribe to is the same blob in both images.
+# --chown because the server rewrites the .acf next to these at runtime.
+# >>> workshop-lock: workshop layers: test >>>
+COPY --link --chown=1000:1000 --from=ws-main-test-00 /out /opt/insurgency-server/steamapps/workshop/content/222880/
+COPY --link --chown=1000:1000 --from=ws-main-test-01 /out /opt/insurgency-server/steamapps/workshop/content/222880/
+COPY --link --chown=1000:1000 --from=ws-main-test-02 /out /opt/insurgency-server/steamapps/workshop/content/222880/
+COPY --link --chown=1000:1000 --from=ws-main-test-03 /out /opt/insurgency-server/steamapps/workshop/content/222880/
+COPY --link --chown=1000:1000 --from=ws-main-test-04 /out /opt/insurgency-server/steamapps/workshop/content/222880/
+COPY --link --chown=1000:1000 --from=ws-main-test-05 /out /opt/insurgency-server/steamapps/workshop/content/222880/
+COPY --link --chown=1000:1000 --from=ws-main-test-06 /out /opt/insurgency-server/steamapps/workshop/content/222880/
+COPY --link --chown=1000:1000 --from=ws-main-test-07 /out /opt/insurgency-server/steamapps/workshop/content/222880/
+COPY --link --chown=1000:1000 --from=ws-main-test-08 /out /opt/insurgency-server/steamapps/workshop/content/222880/
+COPY --link --chown=1000:1000 --from=ws-main-test-09 /out /opt/insurgency-server/steamapps/workshop/content/222880/
+COPY --link --chown=1000:1000 --from=ws-main-test-10 /out /opt/insurgency-server/steamapps/workshop/content/222880/
+COPY --link --chown=1000:1000 --from=ws-main-test-11 /out /opt/insurgency-server/steamapps/workshop/content/222880/
+COPY --link --chown=1000:1000 --from=ws-main-test-12 /out /opt/insurgency-server/steamapps/workshop/content/222880/
+COPY --link --chown=1000:1000 --from=ws-main-test-13 /out /opt/insurgency-server/steamapps/workshop/content/222880/
+COPY --link --chown=1000:1000 --from=ws-main-test-14 /out /opt/insurgency-server/steamapps/workshop/content/222880/
+COPY --link --chown=1000:1000 --from=ws-main-test-15 /out /opt/insurgency-server/steamapps/workshop/content/222880/
+COPY --link --chown=1000:1000 --from=ws-main-test-16 /out /opt/insurgency-server/steamapps/workshop/content/222880/
+COPY --link --chown=1000:1000 --from=ws-main-test-17 /out /opt/insurgency-server/steamapps/workshop/content/222880/
+COPY --link --chown=1000:1000 --from=ws-main-test-18 /out /opt/insurgency-server/steamapps/workshop/content/222880/
+COPY --link --chown=1000:1000 --from=ws-main-test-19 /out /opt/insurgency-server/steamapps/workshop/content/222880/
+COPY --link --chown=1000:1000 --from=ws-main-test-20 /out /opt/insurgency-server/steamapps/workshop/content/222880/
+COPY --link --chown=1000:1000 --from=ws-main-test-21 /out /opt/insurgency-server/steamapps/workshop/content/222880/
+COPY --link --chown=1000:1000 --from=ws-main-test-22 /out /opt/insurgency-server/steamapps/workshop/content/222880/
+COPY --link --chown=1000:1000 --from=ws-main-test-23 /out /opt/insurgency-server/steamapps/workshop/content/222880/
+COPY --link --chown=1000:1000 --from=ws-main-test-2567903738 /out /opt/insurgency-server/steamapps/workshop/content/222880/
+COPY --link --chown=1000:1000 --from=ws-main-test-2588320140 /out /opt/insurgency-server/steamapps/workshop/content/222880/
+COPY --link --chown=1000:1000 --from=ws-main-test-2627393585 /out /opt/insurgency-server/steamapps/workshop/content/222880/
+COPY --link --chown=1000:1000 --from=ws-main-test-2769526047 /out /opt/insurgency-server/steamapps/workshop/content/222880/
+COPY --link --chown=1000:1000 --from=ws-main-test-859127166 /out /opt/insurgency-server/steamapps/workshop/content/222880/
+COPY --link --chown=1000:1000 --from=ws-test-00 /out /opt/insurgency-server/steamapps/workshop/content/222880/
+COPY --link --chown=1000:1000 --from=ws-test-01 /out /opt/insurgency-server/steamapps/workshop/content/222880/
+COPY --link --chown=1000:1000 --from=ws-test-02 /out /opt/insurgency-server/steamapps/workshop/content/222880/
+COPY --link --chown=1000:1000 --from=ws-test-03 /out /opt/insurgency-server/steamapps/workshop/content/222880/
+COPY --link --chown=1000:1000 --from=ws-test-04 /out /opt/insurgency-server/steamapps/workshop/content/222880/
+COPY --link --chown=1000:1000 --from=ws-test-05 /out /opt/insurgency-server/steamapps/workshop/content/222880/
+# <<< workshop-lock: workshop layers: test <<<
 
 # Copy in the map-specific plugins
 COPY --from=sourcemod-plugins-marquis-fix --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
@@ -991,9 +1498,15 @@ COPY --from=sourcemod-plugins-bm2-respawn --chown=0:0 /insurgency /opt/insurgenc
 # Copy in the remaining test config files
 COPY ["server config/test/", "/"]
 
+# Generated from workshop.lock.json by `make server-image-*` (not committed), and the reason the
+# server treats the items above as already installed and current instead of re-downloading all of
+# them on first boot. Copied again here only to own it: the engine rewrites it on every boot, and
+# the bulk copy above lands it as root.
+COPY --chown=1000:1000 ["server config/test/opt/insurgency-server/steamapps/workshop/appworkshop_222880.acf", "/opt/insurgency-server/steamapps/workshop/appworkshop_222880.acf"]
+
 # Install the casecache LD_PRELOAD shim and enable it for the server.
-# Done LAST, after the build-time workshop-download RUN above, so the shim is active only at
-# runtime (a half-built index during the build-time download could shadow files being fetched).
+# Set LAST so the shim is only ever active at runtime. The index it builds is frozen at process
+# start, so anything that writes to the game tree wants to have finished before it exists.
 # LD_PRELOAD via ENV also reaches the 64-bit server-runner wrapper, which logs a harmless
 # "wrong ELF class" and ignores it; only the 32-bit srcds_linux loads the shim. To disable the
 # shim at runtime without a rebuild, set CASECACHE_DISABLE=1 (it becomes a pure passthrough).

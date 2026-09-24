@@ -33,6 +33,23 @@ server-runner-image:
 base-image: server-runner-image Dockerfile
 	docker build --target gameserver -t "$(CONTAINER_REPOSITORY)-base:$(VERSION)" $(DOCKER_ARGS) $(EXTRA_DOCKER_ARGS) "$(PROJECT_DIR)"
 
+# The workshop items each server ships are pinned in workshop.lock.json. The Dockerfile stages that
+# fetch them are generated from it and committed; each server's appworkshop_222880.acf is generated
+# from it at build time and is not. See
+# tools/workshop/workshop_lock.py for what the buckets are for.
+.PHONY: workshop-lock
+workshop-lock:	## Re-pin every subscribed workshop item to the version Steam serves now.
+	python3 "$(PROJECT_DIR)/tools/workshop/workshop_lock.py" refresh
+	@$(MAKE) workshop-render
+
+.PHONY: workshop-render
+workshop-render:	## Regenerate the Dockerfile stages and .acf files that follow from the lockfile.
+	python3 "$(PROJECT_DIR)/tools/workshop/workshop_lock.py" render
+
+.PHONY: workshop-check
+workshop-check:	## Fail if the committed Dockerfile does not match the lockfile.
+	python3 "$(PROJECT_DIR)/tools/workshop/workshop_lock.py" check
+
 # Servers that ship player-downloadable content over fastdl. Only these get a fastdl image; every
 # other server runs stock content and needs neither the image nor the advertising plugin.
 FASTDL_SERVERS ?= test
@@ -55,6 +72,11 @@ server-image-%: base-image Dockerfile	## Build the container image for the speci
 	@# can be rebuilt and republished on its own - `make fastdl-image-test` - and a running server
 	@# picks the change up on its next map change without a rebuild or a redeploy.
 	$(if $(filter $*,$(FASTDL_SERVERS)),$(MAKE) fastdl-image-$*,@echo "  $* does not use fastdl, skipping its content image")
+	@# The workshop stages are committed in the Dockerfile, so a stale copy has to fail rather than
+	@# ship the wrong items. The .acf files are not committed - they are build output, written fresh
+	@# from the lockfile here so it stays the only source of truth.
+	@$(MAKE) workshop-check
+	@$(MAKE) workshop-render
 	docker build --target gameserver-$* -t "$(CONTAINER_REPOSITORY)-$*:$(VERSION)" $(PUSH_ARG) --load $(DOCKER_ARGS) $(EXTRA_DOCKER_ARGS) "$(PROJECT_DIR)"
 
 .PHONY: server-images
