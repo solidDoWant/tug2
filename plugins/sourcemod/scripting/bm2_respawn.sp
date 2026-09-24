@@ -1987,6 +1987,12 @@ void Frame_ApplySurvivalDifficulty(any unused)
     ApplySurvivalDifficulty();
 }
 
+Action Timer_ApplySurvivalDifficulty(Handle timer)
+{
+    ApplySurvivalDifficulty();
+    return Plugin_Stop;
+}
+
 public Action Event_RoundStart(Event event, const char[] name, bool dontBroadcast)
 {
     g_bCounterAttack = false;
@@ -2004,8 +2010,10 @@ public Action Event_RoundStart(Event event, const char[] name, bool dontBroadcas
     g_fSecCounterRespawnPosition[2] = 0.0;
     // need some delay so we can get starting spawn of a player first
     CreateTimer(0.1, Timer_RoundStartFindBotSpawns);
-    // The level is back to 1 by now (CINSRules_Survival::OnRoundReset), so this drops the ramp too
-    ApplySurvivalDifficulty();
+    // Drop the ramp back to level 1. Not directly: at round_start m_iLevel can still hold the last
+    // round's value (seen in the log as "survival level 18" at a round start), so read it a moment
+    // later, once CINSRules_Survival::OnRoundReset's SetLevel(1) has reached the gamerules proxy.
+    CreateTimer(1.0, Timer_ApplySurvivalDifficulty, _, TIMER_FLAG_NO_MAPCHANGE);
 
     // Respawn delay for team ins
     g_iTimerReinforceTime           = g_iReinforceTime;
