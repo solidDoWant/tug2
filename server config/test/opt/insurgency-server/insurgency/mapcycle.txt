@@ -331,10 +331,10 @@ khe_sanh_night conquer
 hastings conquer
 la_drang conquer
 
-// ---- survival (3) ----
+// ---- survival (2) ----
 khe_sanh survival
 khe_sanh_night survival
-hastings survival
+//hastings survival  [broken in survival: no spawn points for the players' team, round ends at once]
 
 // ---- outpost (1) ----
 la_drang outpost

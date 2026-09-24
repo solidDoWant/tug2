@@ -205,10 +205,10 @@
 		"hastings"			"conquer"
 		"la_drang"			"conquer"
 
-		// ---- new / survival (3) ----
+		// ---- new / survival (2) ----
 		"khe_sanh"			"survival"
 		"khe_sanh_night"		"survival"
-		"hastings"			"survival"
+		//"hastings"			"survival"  // broken in survival: no spawn points for the players' team
 
 		// ---- new / outpost (1) ----
 		"la_drang"			"outpost"
