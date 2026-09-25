@@ -55,6 +55,7 @@
 890084623 // nullifidian map vote ui
 2327421432 // fixed navmesh for custom maps
 2169963412 // l4d2 soundscapes
+2159576320 // csgo soundscapes (workshop dependency of a subscribed map - srcds -workshop used to pull it in implicitly)
 2825248282 // panama canal sound fix
 
 //maps
@@ -191,6 +192,7 @@
 //2670949874 // ministry_coop_oldv1 checkpoint 60MB  [checkpoint-only, removed]
 //1908980534 // ins_arcate_npb1 checkpoint 61MB  [checkpoint-only, removed]
 2010901052 // ins_tosca_nv1 checkpoint 201.712MB
+2010310686 // tosca assets (needed for ins_tosca_nv1)
 //3104109873 //gioconda_eron_mountains checkpoint 107.914 MB
 3041234121 //shop_invasion_coop_b2 29.549 MB
 //3022473579 //gioconda_eron_kordon checkpoint 367.987 MB

@@ -652,6 +652,15 @@
         "main"
       ]
     },
+    "1618602773": {
+      "title": "Glycencity content",
+      "manifest": "8680845855029608507",
+      "size": 671995,
+      "time_updated": 1610012066,
+      "servers": [
+        "main"
+      ]
+    },
     "1642088392": {
       "title": "ins_leveled",
       "manifest": "8979859932621260656",
@@ -793,6 +802,16 @@
         "test"
       ]
     },
+    "2010310686": {
+      "title": "Tosca assets",
+      "manifest": "3187403748196522130",
+      "size": 3860405,
+      "time_updated": 1583033234,
+      "servers": [
+        "main",
+        "test"
+      ]
+    },
     "2010901052": {
       "title": "ins_tosca_nv1",
       "manifest": "3627629245881857934",
@@ -863,6 +882,16 @@
       "manifest": "6331431788873396653",
       "size": 290982271,
       "time_updated": 1634713373,
+      "servers": [
+        "main",
+        "test"
+      ]
+    },
+    "2159576320": {
+      "title": "CS GO soundscapes",
+      "manifest": "3960141545891923957",
+      "size": 395601478,
+      "time_updated": 1669323717,
       "servers": [
         "main",
         "test"
