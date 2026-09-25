@@ -42,6 +42,9 @@ The configuration file uses KeyValues format and defines all fire support types 
 ```
 "FireSupport"
 {
+    // Global settings
+    "player_cooldown"         "60.0"
+
     "support_type_name"
     {
         // General settings
@@ -132,6 +135,21 @@ Messages are displayed to the entire team in team chat. Leave empty (`""`) to di
 | `projectile_message` | String | No       | Chat message displayed when each projectile is launched | When each individual shell/projectile is spawned |
 
 **Note:** The `projectile_message` is displayed once for each shell, so with `shells` set to 20, the message will appear 20 times throughout the strike. Use this sparingly or leave empty to avoid chat spam.
+
+#### Per-Player Cooldown
+
+`player_cooldown` sits at the top level of the file, beside the support types rather than inside one.
+
+| Key               | Type  | Required | Description                                                                                          |
+| ----------------- | ----- | -------- | ---------------------------------------------------------------------------------------------------- |
+| `player_cooldown` | Float | No       | Seconds a player must wait after calling any strike type before calling another. `0.0` = off. Default: `0.0` |
+
+- Shared across **all** support types: calling HE also blocks WP for that player
+- Starts when the marker is **thrown**, not when it lands, so a player cannot queue several strikes by throwing markers before the first one pops
+- Handed back if the strike fails (invalid location, grenade lost before detonating)
+- A marker thrown during the cooldown lands as a plain smoke grenade, and the player is told how long is left
+- Applies on top of the team limits below; reset at round start and map change
+- `sm_firesupport_ad_call` ignores it
 
 #### Team-Specific Limits
 

@@ -86,6 +86,12 @@ enum struct SupportType
 SupportType gSupportTypes[MAX_SUPPORT_TYPES];
 int         gNumSupportTypes;
 
+// Per-player cooldown shared by every support type ("player_cooldown" at the top of the config).
+// Unlike the per-team limits it starts when the marker is thrown, not when it lands, so one player
+// cannot get several strikes in flight by throwing markers before the first one pops.
+float       gPlayerCooldown;
+float       gPlayerNextCall[MAXPLAYERS + 1];    // GetGameTime() at which the player may call again
+
 ConVar      gCvarClass;
 ConVar      gCvarEnableCmd;
 ConVar      gCvarEnableWeapon;
@@ -231,6 +237,9 @@ public void OnMapStart()
     }
     gCurrentRound = 0;
 
+    // Game time restarts with the map, so stale deadlines would block for the rest of the new one
+    ResetPlayerCooldowns();
+
     // Clear pending fire support
     for (int i = 0; i < sizeof(gPendingFireSupport); i++)
     {
@@ -257,8 +266,10 @@ public void OnEntityDestroyed(int entity)
         if (gPendingFireSupport[entity] != null)
         {
             // Grenade destroyed before detonating (e.g., hit by explosion, removed by game)
-            // Clean up without triggering fire support
+            // Clean up without triggering fire support, and hand back the thrower's cooldown
             DataPack pack = view_as<DataPack>(gPendingFireSupport[entity]);
+            pack.Reset();
+            gPlayerNextCall[pack.ReadCell()] = 0.0;
             delete pack;
             gPendingFireSupport[entity] = null;
         }
@@ -282,7 +293,8 @@ public void OnEntityDestroyed(int entity)
 
 public void OnClientConnected(int client)
 {
-    IsEnabled[client] = false;
+    IsEnabled[client]       = false;
+    gPlayerNextCall[client] = 0.0;
 }
 
 public void OnClientPutInServer(int client)
@@ -346,6 +358,9 @@ void LoadSupportConfig()
     }
 
     gNumSupportTypes = 0;
+
+    gPlayerCooldown  = kv.GetFloat("player_cooldown", 0.0);
+    LogMessage("Per-player cooldown: %.1fs", gPlayerCooldown);
 
     if (kv.GotoFirstSubKey())
     {
@@ -561,6 +576,13 @@ public Action Event_WeaponFire(Event event, const char[] name, bool dontBroadcas
         return Plugin_Handled;
     }
 
+    // The marker still lands as a plain smoke grenade; only the strike is withheld
+    if (IsPlayerOnCooldown(client))
+    {
+        return Plugin_Handled;
+    }
+    StartPlayerCooldown(client);
+
     // Play throw sound
     PlayConfigSound(client, team, gSupportTypes[supportType].throwSound);
 
@@ -653,7 +675,8 @@ public Action Event_GrenadeDetonate(Event event, const char[] name, bool dontBro
     }
     else
     {
-        // Failure
+        // Failure - a strike that never came should not cost the caller their cooldown
+        gPlayerNextCall[storedClient] = 0.0;
         PlayConfigSound(storedClient, team, gSupportTypes[supportType].failSound);
         PrintMessageToTeam(team, gSupportTypes[supportType].failMessage);
     }
@@ -714,6 +737,7 @@ public Action Timer_FindThrownGrenade(Handle timer, DataPack pack)
     if (grenadeEntity == -1)
     {
         // Couldn't find the grenade, fire support fails
+        gPlayerNextCall[client] = 0.0;
         PlayConfigSound(client, team, gSupportTypes[supportType].failSound);
         PrintMessageToTeam(team, gSupportTypes[supportType].failMessage);
         delete pack;
@@ -746,6 +770,7 @@ public Action Event_RoundStart(Event event, const char[] name, bool dontBroadcas
 
     // Reset support counts for new round
     InitSupportCount();
+    ResetPlayerCooldowns();
 
     // Increment round number - this will cause all old timers to self-terminate
     gCurrentRound++;
@@ -885,6 +910,11 @@ Action CmdCallFS(int client, int args)
         return Plugin_Handled;
     }
 
+    if (IsPlayerOnCooldown(client))
+    {
+        return Plugin_Handled;
+    }
+
     float ground[3];
     if (GetAimGround(client, ground))
     {
@@ -893,6 +923,8 @@ Action CmdCallFS(int client, int args)
 
         if (CallFireSupport(client, ground, supportType, team))
         {
+            StartPlayerCooldown(client);
+
             if (maxCount > 0)
             {
                 CountAvailableSupport[team][supportType]--;
@@ -1109,6 +1141,30 @@ void InitSupportCount()
             IsEnabledTeam[TEAM_INSURGENT][i]         = true;
         }
     }
+}
+
+// Returns true, and tells the player how long is left, if they called fire support too recently.
+bool IsPlayerOnCooldown(int client)
+{
+    float remaining = gPlayerNextCall[client] - GetGameTime();
+    if (remaining <= 0.0)
+        return false;
+
+    CPrintToChat(client, "{olivedrab}[Fire Support]{default} You can call fire support again in %d second(s).",
+                 RoundToCeil(remaining));
+    return true;
+}
+
+void StartPlayerCooldown(int client)
+{
+    if (gPlayerCooldown > 0.0)
+        gPlayerNextCall[client] = GetGameTime() + gPlayerCooldown;
+}
+
+void ResetPlayerCooldowns()
+{
+    for (int i = 0; i <= MaxClients; i++)
+        gPlayerNextCall[i] = 0.0;
 }
 
 void ShowDelayEffect(float ground[3], float sky[3], float time)
