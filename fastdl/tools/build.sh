@@ -239,7 +239,21 @@ if [ -d "$SRC/vgui" ]; then
   echo "   -> materials/vgui/inventory/ (unhashed, path fixed by weapon name)"
 fi
 
-# ---------------------------------------------------------------- 8. packaging
+# ---------------------------------------------------------------- 8. sounds
+# Deliberately not hashed. Plugins name these paths in their source (gg2_bomber's voice lines), and
+# the server image is built separately from this one, so a hash here would have no way to reach them.
+# That makes each path write-once per client: never edit a shipped sound in place - add it under a
+# new filename and point the plugin at that. Namespaced by plugin so no workshop item can shadow them.
+#
+# Only audio is copied, so provenance notes can sit beside the files without being served.
+if [ -d "$SRC/sound" ]; then
+  say "sounds"
+  (cd "$SRC/sound" && find . -type f \( -name '*.wav' -o -name '*.ogg' -o -name '*.mp3' \) \
+    -exec sh -c 'mkdir -p "$1/$(dirname "$2")" && cp -a "$2" "$1/$2"' _ "$OUT/sound" {} \;)
+  echo "   -> sound/ (unhashed, paths fixed by plugin source)"
+fi
+
+# ---------------------------------------------------------------- 9. packaging
 # Both a plain and a .bz2 copy: the engine asks for "%s.bz2" first, and serving only one form means
 # a 404 on whichever it tries first.
 say "packaging"

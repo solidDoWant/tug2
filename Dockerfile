@@ -424,6 +424,21 @@ RUN --mount=type=bind,source=./plugins/sourcemod,target=/plugin-source \
     find /insurgency -type d -exec chmod 755 {} \; && \
     find /insurgency -type f -exec chmod 644 {} \;
 
+FROM sourcemod-plugins-base AS sourcemod-plugins-gg2-bomber
+
+# Build the gg2_bomber plugin. Its voice lines reach clients through fastdl; the server gets its own
+# copy of the same files so it can resolve the sounds it precaches.
+RUN --mount=type=bind,source=./plugins/sourcemod,target=/plugin-source \
+    --mount=type=bind,source=./fastdl/src/sound/gg2_bomber,target=/sound-source \
+    /sourcemod/addons/sourcemod/scripting/spcomp --include=/plugin-source/scripting/include  /plugin-source/scripting/gg2_bomber.sp -o /insurgency/addons/sourcemod/plugins/gg2_bomber.smx && \
+    mkdir -p /insurgency/sound/gg2_bomber && \
+    cp /sound-source/*.ogg /insurgency/sound/gg2_bomber/ && \
+    mkdir -p /insurgency/cfg/sourcemod && \
+    touch /insurgency/cfg/sourcemod/gg2_bomber.cfg && \
+    # Fixup file permissions
+    find /insurgency -type d -exec chmod 755 {} \; && \
+    find /insurgency -type f -exec chmod 644 {} \;
+
 FROM sourcemod-plugins-base AS sourcemod-plugins-gg2-discord
 
 # Build the gg2_discord plugin
@@ -1465,6 +1480,7 @@ COPY --from=sourcemod-plugins-gg2-burn --chown=0:0 /insurgency /opt/insurgency-s
 # Test server only: the M107 these rounds belong to is granted by the test theater alone.
 COPY --from=sourcemod-plugins-gg2-theater-items --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
 COPY --from=sourcemod-plugins-gg2-heavy-ammo --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
+COPY --from=sourcemod-plugins-gg2-bomber --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
 COPY --from=sourcemod-plugins-gg2-cache-protect --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
 COPY --from=sourcemod-plugins-gg2-connection-tracker --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
 COPY --from=sourcemod-plugins-gg2-damage --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
