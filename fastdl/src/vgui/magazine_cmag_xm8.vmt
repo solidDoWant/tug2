@@ -1,0 +1,15 @@
+// Buy-menu icon for the XM8's 100-round C-Mag upgrade. Upgrade icons are looked up by upgrade name,
+// so this must stay named for "magazine_cmag_xm8" in the theater.
+//
+// The stock drum's icon (magazine_drum_75rd.vmt) points at a shared kit_magazine_galil_75 texture;
+// the XM8 item replaced that texture with this C-Mag. Shipping it under the upgrade's own name gives
+// the XM8 its C-Mag icon without touching the Galil's drum icon.
+"UnlitGeneric"
+{
+	"$translucent" 1
+	"$basetexture" "vgui/inventory/magazine_cmag_xm8"
+	"$vertexcolor" 1
+	"$vertexalpha" 1
+	"$no_fullbright" 1
+	"$ignorez" 1
+}

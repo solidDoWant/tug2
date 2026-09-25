@@ -11346,6 +11346,113 @@
 			}
 			"team_access"	"security, insurgent"
 		}
+
+		// from theater_tug_nvg_default.theater
+		"weapon_xm8"
+		{
+			"import"					"ballistic_base"
+			"weapon_class"				"rifle_automatic_fire"
+			"print_name"				"#weapon_xm8"
+			"print_desc"				"#weapon_xm8_desc"
+			"view_model"				"@@PATH(mdl,v_xm8.mdl)@@"
+			"world_model"				"@@PATH(mdl,w_xm8.mdl)@@"
+			"rounds_per_minute"			"650"
+			"weapon_slot"				"primary"
+			"weapon_max_subslot"		"0"	// first slot only
+			"act_table"					"shortrifle"
+			"weapon_abilities"			"ironsight"
+			"weapon_weight"				"0"
+			"weapon_cost"				"10"
+			"barrel_length"				"0"
+			"class_restricted"			"1"
+
+			"viewmodel_attachments"
+			{
+				"standard_magazine"
+				{
+					"model"						"@@PATH(mdl,a_magazine_xm8_30.mdl)@@"
+					"fallback_for_slot"			"magazine"
+				}
+			}
+
+			"world_attachments"
+			{
+				"standard_magazine"
+				{
+					"model"						"@@PATH(mdl,w_magazine_xm8_30.mdl)@@"
+					"fallback_for_slot"			"magazine"
+				}
+			}
+
+			"fov"
+			{
+				"fov_wpn_default"			"65"
+				"fov_wpn_ironsight"			"68"
+				"fov_wpn_focus"				"73"
+				"fov_plr_ironsight"			"-25"
+				"fov_plr_focus"				"-12"
+			}
+
+			"sounds"
+			{
+				"shot_single"				"Weapon_Galil.Single"
+				"shot_single_local"			"Weapon_Galil.SingleLocal"
+				"shot_silent"				"Weapon_Galil.SingleSilenced"
+				"shot_silent_local"			"Weapon_Galil.SingleSilencedLocal"
+				"empty"						"Weapon_Galil.Empty"
+				"clipin"					"Weapon_Galil.Magin"
+				"clipout"					"Weapon_Galil.Magout"
+				"boltback"					"Weapon_Galil.Boltback"
+				"boltrelease"				"Weapon_Galil.Boltrelease"
+				"rofdown"					"Weapon_Galil.ROF"
+				"rofup"						"Weapon_Galil.ROF"
+			}
+			"particles"
+			{
+				"particle_muzzleflash_1st"		"muzzleflash_m16_1p"
+				"particle_muzzleflash_3rd"		"muzzleflash_m16_3rd"
+				"particle_tracer"				"weapon_tracers"
+			}
+			"recoil"
+			{
+				"recoil_lateral_range"			"-1 1.4"
+				"recoil_vertical_range"			"2.5 3.2"
+				"recoil_aim_punch"				"0.4 0.7"
+				"recoil_rest_rate"				"5"
+				"recoil_rest_delay"				"0.12"
+				"recoil_roll_range"				"-1.5 -1.5"
+				"recoil_roll_rest_rate"			"150"
+				"recoil_freeaim_frac"			"0.3"
+
+				"recoil_additional_rest_per_shot"	"2.5"
+				"recoil_shot_reset_time"			"0.5"
+				"recoil_shot_max_shots"				"8"
+				"recoil_punch_additive_factor"		"0.85"
+			}
+			"ballistics"
+			{
+				"spread"				"0.18 0.18 0.18"
+				"FireModes"				"semi, full"
+				"bulletcount"			"1"
+				"maxrange"				"10000"
+			}
+			"ammo_clip"
+			{
+				"ammo_type"				"556_35box"
+				"clip_max"				"12"
+				"clip_max_rounds"		"30"
+				"clip_default"			"4"
+			}
+			"attachments"
+			{
+				"attachment_addon"		"primary"
+			}
+			"kitui_offset"
+			{
+				"position"				"24 0 3"
+			}
+			"team_access"				"security, insurgent"
+		}
 	}
 
 	"weapon_upgrades"
@@ -11656,7 +11763,7 @@
 			"ammo_type_override"			"5_7x28mm_ap"
 		}
 
-		// from theater_tug_39_default_weapon_upgrades.theater
+		// from theater_tug_nvg_default.theater
 		"ammo_ap_galil"
 		{
 			"import"					"base_ammo_ap"
@@ -11664,6 +11771,7 @@
 			"allowed_weapons"
 			{
 				"weapon"				"weapon_galil_sar"
+				"weapon"				"weapon_xm8"
 			}
 			"ammo_type_override"		"556_ap_35box"
 		}
@@ -12175,7 +12283,7 @@
 			"ammo_type_override"			"5_7x28mm_hp"
 		}
 
-		// from theater_tug_39_default_weapon_upgrades.theater
+		// from theater_tug_nvg_default.theater
 		"ammo_hp_galil"
 		{
 			"import"					"base_ammo_hp"
@@ -12183,6 +12291,7 @@
 			"allowed_weapons"
 			{
 				"weapon"				"weapon_galil_sar"
+				"weapon"				"weapon_xm8"
 			}
 			"ammo_type_override"		"556_hp_35box"
 		}
@@ -12819,7 +12928,7 @@
 			"ammo_type_override"			"45acp_tracer"
 		}
 
-		// from theater_tug_39_default_weapon_upgrades.theater
+		// from theater_tug_nvg_default.theater
 		"barrel_heavybarrel"
 		{
 			"upgrade_cost"				"3"	// survival price, inherited value overridden
@@ -12867,6 +12976,7 @@
 				"weapon"				"weapon_m4a1"
 				"weapon"				"weapon_m4a1sopmod"
 				"weapon"				"weapon_galil_sar"
+				"weapon"				"weapon_xm8"
 				"weapon"				"weapon_akm"
 				"weapon"				"weapon_ak74"
 				"weapon"				"weapon_fal"
@@ -13110,7 +13220,7 @@
 			}
 		}
 
-		// from theater_tug_39_default_weapon_upgrades.theater
+		// from theater_tug_nvg_default.theater
 		"barrel_silencer_ins1"
 		{
 			"import"					"base_silencer"
@@ -13138,6 +13248,7 @@
 				"weapon"				"weapon_ak74"
 				"weapon"				"weapon_aks74u"
 				"weapon"				"weapon_galil_sar"
+				"weapon"				"weapon_xm8"
 				"weapon"				"weapon_sig553"
 				"weapon"				"weapon_ak12u"
 				"weapon"				"weapon_uzi"		
@@ -13198,6 +13309,7 @@
 						"weapon"				"weapon_mosin"
 						"weapon"				"weapon_kar98"
 						"weapon"				"weapon_galil_sar"
+						"weapon"				"weapon_xm8"
 						"weapon"				"weapon_uzi"
 					}
 				}
@@ -13499,7 +13611,7 @@
 			}
 		}
 
-		// from theater_tug_39_default_weapon_upgrades.theater
+		// from theater_tug_nvg_default.theater
 		"barrel_silencer_sec1"
 		{
 			"import"					"base_silencer"
@@ -13513,6 +13625,7 @@
 				"weapon"				"weapon_sandstorm_sig_mcx"
 				"weapon"				"weapon_sandstorm_m110"
 				"weapon"				"weapon_galil_sar"
+				"weapon"				"weapon_xm8"
 				"weapon"				"weapon_m16a4"
 				"weapon"				"weapon_scar"
 				"weapon"				"weapon_hk417"
@@ -13587,6 +13700,7 @@
 						"weapon_mosin"				"0.7"
 						"weapon_kar98"				"0.7"
 						"weapon_galil_sar"			"0.8"
+						"weapon_xm8"			"0.8"
 						"weapon_ak74"				"0.8"
 						"weapon_akm"				"0.9"
 						"weapon_m1a1"				"0.75"
@@ -13904,6 +14018,49 @@
 			}
 			
 			"team_access"				"security, insurgent"
+		}
+
+		// from theater_tug_nvg_default.theater
+		"magazine_cmag_xm8"
+		{
+			"upgrade_slot"				"magazine"
+			"upgrade_cost"				"9"
+			"class_restricted"			"1"
+			"team_access"				"security, insurgent"
+			"weight"					"0"
+
+			"print_name"				"#weapon_upgrade_magazine_cmag"
+			"print_desc"				"#weapon_upgrade_magazine_cmag_desc"
+
+			"magsize_override"			"100"
+			"maxcarry_override"			"10"
+
+			"allowed_weapons"
+			{
+				"weapon"				"weapon_xm8"
+			}
+
+			"viewmodel_attachments"
+			{
+				"magazine_cmag_xm8"
+				{
+					"ActSuffix"			"_MAG1"
+					"model"				"@@PATH(mdl,a_magazine_xm8_cmag.mdl)@@"
+					"Main"				"1"
+
+					"weapons"
+					{
+						"weapon"		"weapon_xm8"
+					}
+				}
+			}
+			"world_attachments"
+			{
+				"magazine_cmag_xm8"
+				{
+					"model"				"@@PATH(mdl,w_magazine_xm8_cmag.mdl)@@"
+				}
+			}
 		}
 
 		// from theater_tug_39_default_weapon_upgrades.theater
@@ -14702,7 +14859,7 @@
 			}
 		}
 
-		// from theater_tug_39_default_weapon_upgrades.theater
+		// from theater_tug_nvg_default.theater
 		"optic_2xaimpoint"
 		{
 			"import"					"base_optic_rail"
@@ -14743,6 +14900,7 @@
 				"weapon"				"weapon_mini14"
 				"weapon"				"weapon_m1asocom16"
 				"weapon"				"weapon_galil_sar"
+				"weapon"				"weapon_xm8"
 				"weapon"				"weapon_mp5"
 				"weapon"				"weapon_p90"	
 				"weapon"				"weapon_spectre"
@@ -15146,6 +15304,11 @@
 					"fov_wpn_ironsight"			"60"
 					"fov_wpn_focus"				"67"
 				}
+				"weapon_xm8"
+				{
+					"fov_wpn_ironsight"			"60"
+					"fov_wpn_focus"				"67"
+				}
 
 				"weapon_aks74u"
 				{
@@ -15299,7 +15462,7 @@
 			}
 		}
 
-		// from theater_tug_39_default_weapon_upgrades.theater
+		// from theater_tug_nvg_default.theater
 		"optic_acog"
 		{
 			"import"					"base_optic_rail"
@@ -15313,6 +15476,7 @@
 				// security weapons
 				"weapon"				"weapon_sandstorm_m110"
 				"weapon"				"weapon_galil_sar"
+				"weapon"				"weapon_xm8"
 				"weapon"				"weapon_m16a4"
 				"weapon"				"weapon_scar"
 				"weapon"				"weapon_hk417"
@@ -15757,6 +15921,11 @@
 					"fov_wpn_ironsight"			"52"
 					"fov_wpn_focus"				"58"
 				}
+				"weapon_xm8"
+				{
+					"fov_wpn_ironsight"			"52"
+					"fov_wpn_focus"				"58"
+				}
 				"weapon_g36c"
 				{
 					"fov_wpn_ironsight"			"70"
@@ -15804,7 +15973,7 @@
 			}
 		}
 
-		// from theater_tug_39_default_weapon_upgrades.theater
+		// from theater_tug_nvg_default.theater
 		"optic_aimpoint"
 		{
 			"import"					"base_optic_rail"
@@ -15819,6 +15988,7 @@
 				"weapon"				"weapon_sandstorm_sig_mcx"
 				"weapon"				"weapon_sandstorm_m110"
 				"weapon"				"weapon_galil_sar"
+				"weapon"				"weapon_xm8"
 				"weapon"				"weapon_l1a1"
 				"weapon"				"weapon_m16a4"
 				"weapon"				"weapon_scar"
@@ -16303,6 +16473,11 @@
 					"fov_wpn_ironsight"			"58"
 					"fov_wpn_focus"				"62"
 				}
+				"weapon_xm8"
+				{
+					"fov_wpn_ironsight"			"58"
+					"fov_wpn_focus"				"62"
+				}
 				"weapon_g36c"
 				{
 					"fov_wpn_ironsight"			"58"
@@ -16358,7 +16533,7 @@
 			}
 		}
 
-		// from theater_tug_39_default_weapon_upgrades.theater
+		// from theater_tug_nvg_default.theater
 		"optic_elcan"
 		{
 			"import"					"base_optic_rail"
@@ -16372,6 +16547,7 @@
 				// security weapons
 				"weapon"				"weapon_sandstorm_m110"
 				"weapon"				"weapon_galil_sar"
+				"weapon"				"weapon_xm8"
 				"weapon"				"weapon_m16a4"
 				"weapon"				"weapon_scar"
 				"weapon"				"weapon_hk417"
@@ -16839,6 +17015,11 @@
 					"fov_wpn_ironsight"			"52"
 					"fov_wpn_focus"				"58"
 				}
+				"weapon_xm8"
+				{
+					"fov_wpn_ironsight"			"52"
+					"fov_wpn_focus"				"58"
+				}
 				"weapon_g36c"
 				{
 					"fov_wpn_ironsight"			"70"
@@ -16886,7 +17067,7 @@
 			}
 		}
 
-		// from theater_tug_39_default_weapon_upgrades.theater
+		// from theater_tug_nvg_default.theater
 		"optic_eotech"
 		{
 			"import"					"base_optic_rail"
@@ -16901,6 +17082,7 @@
 				"weapon"				"weapon_sandstorm_sig_mcx"
 				"weapon"				"weapon_sandstorm_m110"
 				"weapon"				"weapon_galil_sar"
+				"weapon"				"weapon_xm8"
 				"weapon"				"weapon_m16a4"
 				"weapon"				"weapon_scar"
 				"weapon"				"weapon_hk417"
@@ -17456,6 +17638,11 @@
 					"fov_wpn_ironsight"			"72"
 					"fov_wpn_focus"				"80"
 				}
+				"weapon_xm8"
+				{
+					"fov_wpn_ironsight"			"72"
+					"fov_wpn_focus"				"80"
+				}
 				"weapon_g36c"
 				{
 					"fov_wpn_ironsight"			"64"
@@ -17617,7 +17804,7 @@
 			}
 		}
 
-		// from theater_tug_39_default_weapon_upgrades.theater
+		// from theater_tug_nvg_default.theater
 		"optic_kobra"
 		{
 			"import"					"base_optic_rail"
@@ -17668,6 +17855,7 @@
 				"weapon"				"weapon_sandstorm_m110"
 				"weapon"				"weapon_sandstorm_sig_mcx"
 				"weapon"				"weapon_galil_sar"
+				"weapon"				"weapon_xm8"
 				"weapon"				"weapon_m16a4"
 				"weapon"				"weapon_scar"
 				"weapon"				"weapon_hk417"
@@ -17862,6 +18050,11 @@
 				}
 
 				"weapon_galil_sar"
+				{
+					"fov_wpn_ironsight"			"65"
+					"fov_wpn_focus"				"70"
+				}
+				"weapon_xm8"
 				{
 					"fov_wpn_ironsight"			"65"
 					"fov_wpn_focus"				"70"
@@ -18248,7 +18441,7 @@
 			}
 		}
 
-		// from theater_tug_39_default_weapon_upgrades.theater
+		// from theater_tug_nvg_default.theater
 		"optic_po4x24"
 		{
 			"import"					"base_optic_rail"
@@ -18279,6 +18472,7 @@
 
 				// security weapons
 				"weapon"				"weapon_galil_sar"
+				"weapon"				"weapon_xm8"
 				"weapon"				"weapon_m16a4"
 				"weapon"				"weapon_scar"
 				"weapon"				"weapon_hk417"
@@ -18347,6 +18541,7 @@
 						"weapon"				"weapon_pecheneg"
 						"weapon"				"weapon_m240"
 						"weapon"				"weapon_galil_sar"
+						"weapon"				"weapon_xm8"
 					}
 				}
 				"POScope_Large"
@@ -18406,6 +18601,7 @@
 						"weapon"				"weapon_pecheneg"
 						"weapon"				"weapon_m240"
 						"weapon"				"weapon_galil_sar"
+						"weapon"				"weapon_xm8"
 					}
 				}
 			}
@@ -18461,6 +18657,11 @@
 				}					
 
 				"weapon_galil_sar"
+				{
+					"fov_wpn_ironsight"			"59"
+					"fov_wpn_focus"				"61"
+				}
+				"weapon_xm8"
 				{
 					"fov_wpn_ironsight"			"59"
 					"fov_wpn_focus"				"61"
@@ -19671,7 +19872,7 @@
 			"team_access"				"security, insurgent"		
 		}
 
-		// from theater_tug_39_default_weapon_upgrades.theater
+		// from theater_tug_nvg_default.theater
 		"perk_quick_reload"
 		{
 			"print_name"				"#quick_reload"
@@ -19736,6 +19937,7 @@
 				"weapon"				"weapon_m4a1"
 				"weapon"				"weapon_m4a1sopmod"
 				"weapon"				"weapon_galil_sar"
+				"weapon"				"weapon_xm8"
 				"weapon"				"weapon_akm"
 				"weapon"				"weapon_ak74"
 				"weapon"				"weapon_fal"
@@ -19866,7 +20068,7 @@
 			"team_access"				"security, insurgent"
 		}
 
-		// from theater_tug_39_default_weapon_upgrades.theater
+		// from theater_tug_nvg_default.theater
 		"perk_tactical_sling"
 		{
 			"print_name"				"#tactical_sling"
@@ -19919,6 +20121,7 @@
 				"weapon"				"weapon_m4a1"
 				"weapon"				"weapon_m4a1sopmod"
 				"weapon"				"weapon_galil_sar"
+				"weapon"				"weapon_xm8"
 				"weapon"				"weapon_akm"
 				"weapon"				"weapon_ak74"
 				"weapon"				"weapon_fal"
@@ -20144,7 +20347,7 @@
 			}
 		}
 
-		// from theater_tug_39_default_weapon_upgrades.theater
+		// from theater_tug_nvg_default.theater
 		"siderail_flashlight_band"
 		{
 			"import"					"base_flashlight"
@@ -20188,6 +20391,7 @@
 				"weapon"				"weapon_fal"
 				"weapon"				"weapon_stg44"
 				"weapon"				"weapon_galil_sar"
+				"weapon"				"weapon_xm8"
 				"weapon"				"weapon_l1a1"
 				"weapon"				"weapon_rpk"
 				"weapon"				"weapon_sterling"
@@ -20634,7 +20838,7 @@
 			}
 		}
 
-		// from theater_tug_39_default_weapon_upgrades.theater
+		// from theater_tug_nvg_default.theater
 		"siderail_lasersight_band"
 		{
 			"import"					"base_lasersight"
@@ -20644,6 +20848,7 @@
 			{
 				// security
 				"weapon"				"weapon_galil_sar"
+				"weapon"				"weapon_xm8"
 				"weapon"				"weapon_mini14"
 				"weapon"				"weapon_asval"
 				"weapon"				"weapon_m1asocom16"
@@ -21106,7 +21311,7 @@
 			}
 		}
 
-		// from theater_tug_39_default_weapon_upgrades.theater
+		// from theater_tug_nvg_default.theater
 		"stock_aftermarketstock"
 		{
 			"upgrade_cost"				"6"	// survival price, inherited value overridden
@@ -21132,6 +21337,7 @@
                 "weapon"				"weapon_g36c"   
                 "weapon"				"weapon_g33" 
                 "weapon"				"weapon_galil_sar"   
+                "weapon"				"weapon_xm8"
                 "weapon"				"weapon_honeybadger" 
                 "weapon"				"weapon_l1a1" 
                 "weapon"				"weapon_m16a1"                                  
@@ -21251,7 +21457,7 @@
 			}
 		}
 
-		// from theater_tug_39_default_weapon_upgrades.theater
+		// from theater_tug_nvg_default.theater
 		"underbarrel_bipod"
 		{
 			"import"				"base_bipod"
@@ -21278,6 +21484,7 @@
 				"weapon"				"weapon_sks"
 				"weapon"				"weapon_svd"
 				"weapon"				"weapon_galil_sar"
+				"weapon"				"weapon_xm8"
 				"weapon"				"weapon_m107"
 			}
 			
@@ -21416,6 +21623,16 @@
 						"weapon"				"weapon_galil_sar"
 					}
 				}
+
+				"Bipod_GALIL_xm8"
+				{
+					"model"					"@@PATH(mdl,a_bipod_xm8.mdl)@@"
+					
+					"weapons"
+					{
+						"weapon"				"weapon_xm8"
+					}
+				}
 								
 			}
 			"world_attachments"
@@ -21435,6 +21652,7 @@
 						"weapon"				"weapon_sks"
 						"weapon"				"weapon_svd"
 						"weapon"				"weapon_galil_sar"
+						"weapon"				"weapon_xm8"
 					}
 				}
 
@@ -21464,6 +21682,16 @@
 						"weapon"				"weapon_galil_sar"
 					}				
 				}			
+
+				"underbarrel_bipod_galil_xm8"
+				{
+					"model"					"@@PATH(mdl,w_bipod_xm8.mdl)@@"
+					
+					"weapons"
+					{
+						"weapon"				"weapon_xm8"
+					}				
+				}
 				
 			}
 		}
@@ -21631,7 +21859,7 @@
 			}
 		}
 
-		// from theater_tug_39_default_weapon_upgrades.theater
+		// from theater_tug_nvg_default.theater
 		"underbarrel_foldingforegrip_sec2"
 		{
 			"upgrade_cost"				"9"	// survival price, inherited value overridden
@@ -21648,6 +21876,7 @@
 				"weapon"				"weapon_m590"
 				"weapon"				"weapon_m500"
 				"weapon"				"weapon_galil_sar"
+				"weapon"				"weapon_xm8"
 				"weapon"				"weapon_l1a1"
 				"weapon" 				"weapon_famas"
 				"weapon"				"weapon_spas12"
@@ -21674,6 +21903,7 @@
 						"weapon_m500"				"0.55"
 						"weapon_nova"				"0.55"
 						"weapon_galil_sar"			"0.45"
+						"weapon_xm8"			"0.45"
 						"weapon_l1a1"				"0.45"
 						"weapon_famas"				"0.45"
 						"weapon_spas12"				"0.55"
@@ -21961,7 +22191,7 @@
 			}
 		}
 
-		// from theater_tug_39_default_weapon_upgrades.theater
+		// from theater_tug_nvg_default.theater
 		"underbarrel_foregrip_sec2"
 		{
 			"upgrade_cost"				"6"	// survival price, inherited value overridden
@@ -21979,6 +22209,7 @@
 				"weapon"				"weapon_m590"
 				"weapon"				"weapon_m500"
 				"weapon"				"weapon_galil_sar"
+				"weapon"				"weapon_xm8"
 				"weapon"				"weapon_l1a1"
 				"weapon" 				"weapon_famas"
 				"weapon"				"weapon_spas12"
@@ -22006,6 +22237,7 @@
 						"weapon_m500"				"0.55"
 						"weapon_nova"				"0.55"
 						"weapon_galil_sar"			"0.45"
+						"weapon_xm8"			"0.45"
 						"weapon_l1a1"				"0.45"
 						"weapon_famas"				"0.45"
 						"weapon_spas12"				"0.55"
@@ -22314,7 +22546,7 @@
 			}
 		}
 
-		// from theater_tug_39_weapon_mods.theater
+		// from theater_tug_nvg_default.theater
 		"weapon_mod_speed_reload"
 		{
         	"upgrade_slot"				"aesthetic"
@@ -23030,6 +23262,17 @@
 						"lose_rounds_reload"	"1"
 					}
 				}		
+				"weapon_xm8"
+				{
+					"ammo_clip"
+					{
+						"ammo_type"				"556_35box"
+						"clip_max"				"12"
+						"clip_max_rounds"		"30"
+						"clip_default"			"4"					
+						"lose_rounds_reload"	"1"
+					}
+				}
 				"weapon_g33"
 				{
 					"ammo_clip"
@@ -23500,6 +23743,7 @@
 				"weapon"				"weapon_m4a1"
 				"weapon"				"weapon_m4a1sopmod"
 				"weapon"				"weapon_galil_sar"
+				"weapon"				"weapon_xm8"
 				"weapon"				"weapon_akm"
 				"weapon"				"weapon_ak74"
 				"weapon"				"weapon_fal"

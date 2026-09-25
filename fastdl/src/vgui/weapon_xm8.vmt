@@ -1,0 +1,14 @@
+// Buy-menu icon for the XM8. Looked up by weapon name - materials/vgui/inventory/<weapon>.vmt - so the
+// path is fixed and not content-hashed; see fastdl/tools/build.sh.
+//
+// The texture is the XM8 item's own icon (workshop item 2019515066, where it replaced
+// weapon_galil_sar.vtf), shipped byte-for-byte under this weapon's name.
+"UnlitGeneric"
+{
+	"$translucent" 1
+	"$basetexture" "vgui/inventory/weapon_xm8"
+	"$vertexcolor" 1
+	"$vertexalpha" 1
+	"$no_fullbright" 1
+	"$ignorez" 1
+}

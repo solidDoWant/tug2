@@ -1,0 +1,11 @@
+// XM8 (workshop item 2019515066) - verbatim apart from the texture paths, which the build points at
+// the content-hashed texture directory. See fastdl/src/models/xm8/PROVENANCE.md.
+"SurfaceGGX"
+{
+	"$basetexture"               "@@MATPATH(tex,ar06_a_diff)@@"
+	"$bumpmap"                   "@@MATPATH(tex,ar06_a_ddn)@@"
+	"$phongexponenttexture"      "@@MATPATH(tex,ar06_a_spec)@@"
+	"$roughnessmultiplier"       "1"
+	"$metal"                     "1"
+	"$basemapluminancephongmask" "1"
+}

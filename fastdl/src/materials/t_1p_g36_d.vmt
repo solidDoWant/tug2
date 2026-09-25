@@ -1,0 +1,16 @@
+// XM8 30-round magazine (workshop item 2019515066). It is Sandstorm's G36 magazine and samples the G36
+// texture atlas, which the XM8's author recoloured - so the diffuse and the spec map are theirs.
+//
+// The normal map is NOT shipped. The item's copy is a 2048x2048 uncompressed downscale of the one in
+// Sandstorm Source (workshop item 1952184042, on every client via the server's subscription list):
+// same atlas, mean difference 0.13/255 once both are brought to one size. Referencing that one in
+// place saves 12.5 MB per client, and it has mipmaps, which the item's copy does not.
+"SurfaceGGX"
+{
+	"$basetexture"               "@@MATPATH(tex,t_1p_g36_d)@@"
+	"$bumpmap"                   "models\sndstrm\ins2_sandstorm\g36\T_1P_G36_N"
+	"$phongexponenttexture"      "@@MATPATH(tex,t_1p_g36_s)@@"
+	"$roughnessmultiplier"       "1"
+	"$metal"                     "1"
+	"$basemapluminancephongmask" "1"
+}

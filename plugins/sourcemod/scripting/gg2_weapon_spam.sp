@@ -34,6 +34,7 @@ char g_spammable_weapons[][]                    = {
     "weapon_sandstorm_m240",
     "weapon_sandstorm_rpk",
     "weapon_galil_sar",
+    "weapon_xm8",
     "weapon_m249",
     "weapon_mg42",
     "weapon_mk46",

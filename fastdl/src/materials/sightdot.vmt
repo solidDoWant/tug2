@@ -1,0 +1,6 @@
+// XM8 iron sight dot (workshop item 2019515066). See fastdl/src/models/xm8/PROVENANCE.md.
+"UnlitGeneric"
+{
+	"$basetexture" "@@MATPATH(tex,sightdot)@@"
+	"$selfillum"   "1"
+}

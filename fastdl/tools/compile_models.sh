@@ -21,14 +21,16 @@ MDLCOMPILER="${MDLCOMPILER:-mdlcompiler}"
 rm -rf "${GAME_DIR:?}/models"
 mkdir -p "$OUT" "$GAME_DIR/models"
 found=0
-for qc in "$SRC"/*.qc; do
-  [ -e "$qc" ] || continue
+# Recursive, so a model decompiled into its own directory (src/models/xm8/v_xm8/, with meshes/ and
+# anims/ beside its QC) keeps its relative paths - decompiled models all have an anims/idle.dmx, so
+# they cannot share one flat directory. Every model still lands in the one $modelname directory.
+for qc in $(find "$SRC" -name '*.qc' | LC_ALL=C sort); do
   # *_for_definebones.qc only exists to print a skeleton; it is not a model.
   case "$(basename "$qc")" in *_for_definebones.qc) continue ;; esac
-  echo "   mdlcompiler $(basename "$qc")"
-  # Run with the source directory as CWD and a relative script path: compilers in this family
+  echo "   mdlcompiler ${qc#"$SRC"/}"
+  # Run with the script's own directory as CWD and a relative script path: compilers in this family
   # chdir to the script's directory, which breaks relative source lookups given an absolute path.
-  ( cd "$SRC" && "$MDLCOMPILER" "$(basename "$qc")" -game "$GAME_DIR" -vtxformat 1 )
+  ( cd "$(dirname "$qc")" && "$MDLCOMPILER" "$(basename "$qc")" -game "$GAME_DIR" -vtxformat 1 )
   found=$((found + 1))
 done
 [ "$found" -gt 0 ] || { echo "compile_models: no .qc found in $SRC" >&2; exit 1; }

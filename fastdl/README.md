@@ -61,7 +61,9 @@ game.
 src/textures/    .png + .png.txt sidecar  -> compiled to VTF
                  .vtf                     -> passed through byte-for-byte
 src/materials/   .vmt                     -> templated
-src/models/      .qc/.qci/.smd            -> templated, then studiomdl
+src/models/      .qc/.qci/.smd/.dmx       -> templated, then PulseModel
+                 <dir>/<model>/<model>.qc -> the same, compiled from its own directory (decompiled
+                                             models, e.g. xm8/, each carry meshes/ and anims/)
 map_asset_stubs/                          -> copied, deliberately NOT hashed
 ```
 
@@ -106,7 +108,17 @@ between versions, and `patches/` carries a `<cstddef>` fix for a GCC build break
 
 Verified against the previously shipped models: both compile to v49 with matching bone, sequence and
 bodypart counts. **One known difference: `v_m18` produces 14 local animations where the original had
-15.** The cause is not established. Validate a compiled model in game before trusting the output.
+15.** The cause is not established, and PulseModel 0.16.0 did not change it (its M18 output is
+byte-identical to the previous pin's). Validate a compiled model in game before trusting the output.
+
+### Models with no published source
+
+PulseModel also ships `mdldecompiler`, which turns a compiled `.mdl` back into a QC plus DMX meshes
+and animations. That is how the XM8 (`src/models/xm8/`) was brought in from a workshop item that
+replaced the Galil SAR - its `PROVENANCE.md` has the exact command, the two QC lines changed, and the
+round-trip comparison that showed the recompile matches the original. Do the same comparison for any
+model brought in this way: decompile the compiled output again and diff it against the decompile of
+the original.
 
 ## Tools
 

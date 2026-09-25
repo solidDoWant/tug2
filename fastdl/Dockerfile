@@ -21,7 +21,13 @@ RUN --mount=type=bind,source=fastdl/tools,target=/src \
 # needs a Steam account that owns the game, and may not be redistributed inside an image - Docker
 # layers are immutable, so a later `rm` would not remove it.
 #
-# Pinned: this is beta software and its script vocabulary changes between versions.
+# Pinned: this is beta software and its script vocabulary changes between versions. Before moving the
+# pin, rebuild and compare: the move to 0.16.0 produced byte-identical M18 models (same hashed
+# directory), which is what showed the bump was safe.
+#
+# 0.16.0 also ships mdldecompiler, which is how the XM8 sources in src/models/xm8/ were produced;
+# see the PROVENANCE.md there. Only the compiler is installed here - the decompiler is not part of
+# the build.
 #
 # -vtxformat 1 is required. Insurgency is a CS:GO-branch build (datacache.so carries the build path
 # .../csgo/rel_pc/src/datacache/mdlcache.cpp), and format 1 is the CS:GO/SFM/ASW .vtx strip layout;
@@ -32,7 +38,7 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install --no-instal
       build-essential cmake git ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-ARG PULSEMODEL_REF=5bad75ff03d0174ed36e7b4ae357b5ca6d316f50
+ARG PULSEMODEL_REF=fb8af77ca96718f8130686f361b6d32d12629153
 
 # Upstream develops on MSVC, which includes <cstddef> transitively where GCC does not, so the build
 # fails on libs/minicollision/convexhull.cpp. Drop the patch once upstream builds clean on GCC.
