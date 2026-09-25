@@ -305,9 +305,12 @@ int NextInorder(int elements, int node)
     return -1;
 }
 
+// Addresses are unsigned but SourcePawn ints are signed, so anything at or above 0x80000000 arrives
+// negative. On this 32-bit server that is common, not exotic - mmap'd allocations land in 0xd.../0xe...
+// and the director is reallocated on every theater load - so only the null page is rejected.
 bool IsPointer(int address)
 {
-    return address >= MIN_POINTER;
+    return address < 0 || address >= MIN_POINTER;
 }
 
 bool IsNodeIndex(int index)
