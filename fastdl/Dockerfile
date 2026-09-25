@@ -69,7 +69,11 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install --no-instal
     && rm -rf /var/lib/apt/lists/*
 
 COPY fastdl/tools/render_icon.py fastdl/tools/render_icons.sh /tools/
-COPY fastdl/src /src
+# Only what render_icons.sh reads, so unrelated content (map vote images, sounds) does not re-render.
+COPY fastdl/src/vgui /src/vgui
+COPY fastdl/src/models /src/models
+COPY fastdl/src/textures /src/textures
+COPY fastdl/src/render /src/render
 RUN TOOLS=/tools sh /tools/render_icons.sh /src /out
 
 # ---------------------------------------------------------------------------- builder

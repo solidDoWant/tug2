@@ -1,0 +1,2682 @@
+{
+ "base": {
+  "images": [
+   "vgui/maps/buhriz_coop_large",
+   "vgui/maps/buhriz_large",
+   "vgui/maps/buhriz_night_large",
+   "vgui/maps/buhriz_night_small",
+   "vgui/maps/contact_coop_large",
+   "vgui/maps/contact_large",
+   "vgui/maps/contact_night_large",
+   "vgui/maps/district_coop_large",
+   "vgui/maps/district_coop_small",
+   "vgui/maps/district_large",
+   "vgui/maps/district_night_large",
+   "vgui/maps/district_small",
+   "vgui/maps/drycanal_coop_large",
+   "vgui/maps/drycanal_coop_small",
+   "vgui/maps/drycanal_large",
+   "vgui/maps/drycanal_night_large",
+   "vgui/maps/drycanal_night_small",
+   "vgui/maps/drycanal_small",
+   "vgui/maps/embassy_coop_large",
+   "vgui/maps/embassy_large",
+   "vgui/maps/embassy_night_large",
+   "vgui/maps/fallback_bright_large",
+   "vgui/maps/fallback_bright_small",
+   "vgui/maps/fallback_large",
+   "vgui/maps/fallback_small",
+   "vgui/maps/heights_coop_large",
+   "vgui/maps/heights_large",
+   "vgui/maps/heights_night_large",
+   "vgui/maps/kandagal_large",
+   "vgui/maps/kandagal_night_large",
+   "vgui/maps/kandagal_night_small",
+   "vgui/maps/kandagal_small",
+   "vgui/maps/market_coop_large",
+   "vgui/maps/market_coop_small",
+   "vgui/maps/market_large",
+   "vgui/maps/market_night_large",
+   "vgui/maps/market_night_small",
+   "vgui/maps/market_small",
+   "vgui/maps/ministry_coop_large",
+   "vgui/maps/ministry_coop_small",
+   "vgui/maps/ministry_large",
+   "vgui/maps/ministry_night_large",
+   "vgui/maps/ministry_night_small",
+   "vgui/maps/ministry_small",
+   "vgui/maps/panj_large",
+   "vgui/maps/panj_night_large",
+   "vgui/maps/peak_large",
+   "vgui/maps/peak_night_large",
+   "vgui/maps/peak_night_small",
+   "vgui/maps/peak_small",
+   "vgui/maps/revolt_coop_large",
+   "vgui/maps/revolt_coop_small",
+   "vgui/maps/revolt_large",
+   "vgui/maps/revolt_night_large",
+   "vgui/maps/revolt_night_small",
+   "vgui/maps/revolt_small",
+   "vgui/maps/siege_coop_large",
+   "vgui/maps/siege_coop_small",
+   "vgui/maps/siege_large",
+   "vgui/maps/siege_small",
+   "vgui/maps/sinjar_coop_large",
+   "vgui/maps/sinjar_coop_small",
+   "vgui/maps/sinjar_large",
+   "vgui/maps/sinjar_night_large",
+   "vgui/maps/sinjar_night_small",
+   "vgui/maps/sinjar_small",
+   "vgui/maps/station_large",
+   "vgui/maps/station_night_large",
+   "vgui/maps/station_night_small",
+   "vgui/maps/station_small",
+   "vgui/maps/tell_coop_large",
+   "vgui/maps/tell_coop_small",
+   "vgui/maps/tell_large",
+   "vgui/maps/tell_night_large",
+   "vgui/maps/tell_night_small",
+   "vgui/maps/tell_small",
+   "vgui/maps/training_large",
+   "vgui/maps/training_small",
+   "vgui/maps/uprising_large",
+   "vgui/maps/uprising_night_large",
+   "vgui/maps/uprising_night_small",
+   "vgui/maps/uprising_small",
+   "vgui/maps/verticality_coop_large",
+   "vgui/maps/verticality_coop_small",
+   "vgui/maps/verticality_large",
+   "vgui/maps/verticality_night_large",
+   "vgui/maps/verticality_night_small",
+   "vgui/maps/verticality_small"
+  ],
+  "maps": [
+   "buhriz",
+   "buhriz_coop",
+   "buhriz_night",
+   "contact",
+   "contact_coop",
+   "contact_night",
+   "district",
+   "district_coop",
+   "district_night",
+   "drycanal",
+   "drycanal_coop",
+   "drycanal_night",
+   "embassy",
+   "embassy_coop",
+   "embassy_night",
+   "heights",
+   "heights_coop",
+   "heights_night",
+   "kandagal",
+   "kandagal_night",
+   "market",
+   "market_coop",
+   "market_night",
+   "ministry",
+   "ministry_coop",
+   "ministry_night",
+   "panj",
+   "panj_night",
+   "peak",
+   "peak_night",
+   "revolt",
+   "revolt_coop",
+   "revolt_night",
+   "siege",
+   "siege_coop",
+   "sinjar",
+   "sinjar_coop",
+   "sinjar_night",
+   "station",
+   "station_night",
+   "tell",
+   "tell_coop",
+   "tell_night",
+   "training",
+   "uprising",
+   "uprising_night",
+   "verticality",
+   "verticality_coop",
+   "verticality_night"
+  ],
+  "textures": [
+   "vgui/maps/buhriz_large",
+   "vgui/maps/buhriz_night_large",
+   "vgui/maps/buhriz_night_small",
+   "vgui/maps/contact_large",
+   "vgui/maps/contact_night_large",
+   "vgui/maps/district_large",
+   "vgui/maps/district_night_large",
+   "vgui/maps/district_small",
+   "vgui/maps/drycanal_large",
+   "vgui/maps/drycanal_night_large",
+   "vgui/maps/drycanal_night_small",
+   "vgui/maps/drycanal_small",
+   "vgui/maps/embassy_large",
+   "vgui/maps/embassy_night_large",
+   "vgui/maps/fallback_bright_large",
+   "vgui/maps/fallback_bright_small",
+   "vgui/maps/fallback_large",
+   "vgui/maps/fallback_small",
+   "vgui/maps/heights_large",
+   "vgui/maps/heights_night_large",
+   "vgui/maps/kandagal_large",
+   "vgui/maps/kandagal_night_large",
+   "vgui/maps/kandagal_night_small",
+   "vgui/maps/kandagal_small",
+   "vgui/maps/market_large",
+   "vgui/maps/market_night_large",
+   "vgui/maps/market_night_small",
+   "vgui/maps/market_small",
+   "vgui/maps/ministry_large",
+   "vgui/maps/ministry_night_large",
+   "vgui/maps/ministry_night_small",
+   "vgui/maps/ministry_small",
+   "vgui/maps/panj_large",
+   "vgui/maps/panj_night_large",
+   "vgui/maps/peak_large",
+   "vgui/maps/peak_night_large",
+   "vgui/maps/peak_night_small",
+   "vgui/maps/peak_small",
+   "vgui/maps/revolt_large",
+   "vgui/maps/revolt_night_large",
+   "vgui/maps/revolt_night_small",
+   "vgui/maps/revolt_small",
+   "vgui/maps/siege_large",
+   "vgui/maps/siege_small",
+   "vgui/maps/sinjar_large",
+   "vgui/maps/sinjar_night_large",
+   "vgui/maps/sinjar_night_small",
+   "vgui/maps/sinjar_small",
+   "vgui/maps/station_large",
+   "vgui/maps/station_night_large",
+   "vgui/maps/station_night_small",
+   "vgui/maps/station_small",
+   "vgui/maps/tell_large",
+   "vgui/maps/tell_night_large",
+   "vgui/maps/tell_night_small",
+   "vgui/maps/tell_small",
+   "vgui/maps/training_large",
+   "vgui/maps/training_small",
+   "vgui/maps/uprising_large",
+   "vgui/maps/uprising_night_large",
+   "vgui/maps/uprising_night_small",
+   "vgui/maps/uprising_small",
+   "vgui/maps/verticality_large",
+   "vgui/maps/verticality_night_large",
+   "vgui/maps/verticality_night_small",
+   "vgui/maps/verticality_small"
+  ]
+ },
+ "items": {
+  "1083630976": {
+   "images": [],
+   "manifest": "5951646364309842700",
+   "maps": [
+    "winter_rescue_ws"
+   ],
+   "textures": []
+  },
+  "1100976090": {
+   "images": [],
+   "manifest": "8525446416856687709",
+   "maps": [
+    "operation_intrude_v2"
+   ],
+   "textures": []
+  },
+  "1125220551": {
+   "images": [],
+   "manifest": "5506954577651112481",
+   "maps": [
+    "caves_coop"
+   ],
+   "textures": []
+  },
+  "1161583627": {
+   "images": [],
+   "manifest": "3860434989988815112",
+   "maps": [
+    "market_night_coop"
+   ],
+   "textures": []
+  },
+  "1163373032": {
+   "images": [],
+   "manifest": "3349655750213861283",
+   "maps": [
+    "district_night_coop"
+   ],
+   "textures": []
+  },
+  "1172671775": {
+   "images": [],
+   "manifest": "4233021842961099444",
+   "maps": [
+    "warehouse_coopv3b4"
+   ],
+   "textures": []
+  },
+  "1180002850": {
+   "images": [],
+   "manifest": "7214572708555651955",
+   "maps": [
+    "nomercy_coopv1"
+   ],
+   "textures": []
+  },
+  "1189448765": {
+   "images": [],
+   "manifest": "4056170938766937542",
+   "maps": [
+    "miransh_alpha"
+   ],
+   "textures": []
+  },
+  "1202839339": {
+   "images": [],
+   "manifest": "5903704349326355566",
+   "maps": [
+    "de_vertigo_coop"
+   ],
+   "textures": []
+  },
+  "1207457291": {
+   "images": [],
+   "manifest": "1348629247254926438",
+   "maps": [
+    "cs_italy_coop"
+   ],
+   "textures": []
+  },
+  "1217898298": {
+   "images": [],
+   "manifest": "2668116666723008061",
+   "maps": [
+    "l4d_mercy_hospital_b5"
+   ],
+   "textures": []
+  },
+  "1264090927": {
+   "images": [],
+   "manifest": "3944615759119409023",
+   "maps": [
+    "l4d_airport_terminal_b3"
+   ],
+   "textures": []
+  },
+  "1269418802": {
+   "images": [],
+   "manifest": "606946750119732106",
+   "maps": [
+    "bb_desertpass_coop_ws"
+   ],
+   "textures": []
+  },
+  "1353915069": {
+   "images": [],
+   "manifest": "7226709143889370349",
+   "maps": [],
+   "textures": []
+  },
+  "1379716589": {
+   "images": [],
+   "manifest": "4438945156617216874",
+   "maps": [],
+   "textures": []
+  },
+  "1380424575": {
+   "images": [
+    "vgui/endroundlobby/maps/ins_abdallah_coop_fix"
+   ],
+   "manifest": "3391805046937389357",
+   "maps": [],
+   "textures": [
+    "vgui/endroundlobby/maps/ins_abdallah_new_coop"
+   ]
+  },
+  "1388547184": {
+   "images": [],
+   "manifest": "5844965366987463791",
+   "maps": [
+    "ikazuchi_jungle_coop_b3"
+   ],
+   "textures": []
+  },
+  "1388556079": {
+   "images": [],
+   "manifest": "7506328278912890784",
+   "maps": [
+    "ps7_co_b91"
+   ],
+   "textures": []
+  },
+  "1393527442": {
+   "images": [],
+   "manifest": "4626838514360406962",
+   "maps": [
+    "point_blank_fix"
+   ],
+   "textures": []
+  },
+  "1457936959": {
+   "images": [
+    "vgui/maps/bastion_large",
+    "vgui/maps/bastion_small"
+   ],
+   "manifest": "1884870229540061173",
+   "maps": [
+    "bastion_coop"
+   ],
+   "textures": [
+    "vgui/maps/bastion_large",
+    "vgui/maps/bastion_small"
+   ]
+  },
+  "1469832785": {
+   "images": [],
+   "manifest": "880450735653051946",
+   "maps": [
+    "cs_office_coop_b2"
+   ],
+   "textures": []
+  },
+  "1482148634": {
+   "images": [
+    "vgui/maps/facilityb2_coop_v1_1_large",
+    "vgui/maps/facilityb2_coop_v1_1_small"
+   ],
+   "manifest": "2851875859647825867",
+   "maps": [
+    "facilityb2_coop_v1_1"
+   ],
+   "textures": [
+    "vgui/maps/facilityb2_coop_v1_1_large",
+    "vgui/maps/facilityb2_coop_v1_1_small"
+   ]
+  },
+  "1501650494": {
+   "images": [],
+   "manifest": "7136395718723592166",
+   "maps": [
+    "docks_coopb2_day"
+   ],
+   "textures": []
+  },
+  "1574936010": {
+   "images": [],
+   "manifest": "5989598263981391839",
+   "maps": [
+    "cutoff4-9"
+   ],
+   "textures": []
+  },
+  "1586281347": {
+   "images": [
+    "vgui/endroundlobby/maps/dusty_anguish_coopvfix"
+   ],
+   "manifest": "3277382502552762367",
+   "maps": [
+    "dusty_anguish_coopvfix"
+   ],
+   "textures": [
+    "vgui/endroundlobby/maps/dusty_anguish_coopv1_1"
+   ]
+  },
+  "1586281667": {
+   "images": [
+    "vgui/endroundlobby/maps/jack_hammer_coopvfix"
+   ],
+   "manifest": "4514965458896198226",
+   "maps": [
+    "jack_hammer_coopvfix"
+   ],
+   "textures": [
+    "vgui/endroundlobby/maps/jack_hammer_coopv1_2"
+   ]
+  },
+  "1595712656": {
+   "images": [],
+   "manifest": "7745274677332251388",
+   "maps": [],
+   "textures": []
+  },
+  "1617934454": {
+   "images": [],
+   "manifest": "2640211871519254674",
+   "maps": [
+    "glycencity"
+   ],
+   "textures": []
+  },
+  "1642088392": {
+   "images": [],
+   "manifest": "8979859932621260656",
+   "maps": [
+    "ins_leveled"
+   ],
+   "textures": []
+  },
+  "1734873741": {
+   "images": [],
+   "manifest": "8337097249858118499",
+   "maps": [
+    "de_mirage_csco_pb4"
+   ],
+   "textures": []
+  },
+  "1743348046": {
+   "images": [],
+   "manifest": "2087851213989604144",
+   "maps": [
+    "de_train_csgo_pb2"
+   ],
+   "textures": []
+  },
+  "1787552582": {
+   "images": [],
+   "manifest": "7701490869284518184",
+   "maps": [
+    "karkand_redux_p2"
+   ],
+   "textures": []
+  },
+  "1876212727": {
+   "images": [],
+   "manifest": "7904518032334888280",
+   "maps": [],
+   "textures": []
+  },
+  "1893781116": {
+   "images": [
+    "vgui/endroundlobby/maps/badlands_b2"
+   ],
+   "manifest": "9113502856414502840",
+   "maps": [
+    "badlands_b2"
+   ],
+   "textures": [
+    "vgui/endroundlobby/maps/badlands_b2"
+   ]
+  },
+  "1905422214": {
+   "images": [],
+   "manifest": "5920435362875613913",
+   "maps": [
+    "insz_favela"
+   ],
+   "textures": []
+  },
+  "1908980534": {
+   "images": [],
+   "manifest": "9073250590849812166",
+   "maps": [
+    "ins_arcate_npb1"
+   ],
+   "textures": []
+  },
+  "1963814261": {
+   "images": [],
+   "manifest": "6188160848502128259",
+   "maps": [
+    "haditha_coop"
+   ],
+   "textures": []
+  },
+  "1988310157": {
+   "images": [],
+   "manifest": "435492015601177068",
+   "maps": [
+    "iron_express"
+   ],
+   "textures": []
+  },
+  "1989120573": {
+   "images": [
+    "vgui/maps/almaden_coop_v1_1_large",
+    "vgui/maps/almaden_coop_v1_1_small",
+    "vgui/maps/arcate_aof_large",
+    "vgui/maps/arcate_aof_small",
+    "vgui/maps/badlands_b1_large",
+    "vgui/maps/badlands_b1_small",
+    "vgui/maps/block_party_coop_ws_large",
+    "vgui/maps/block_party_coop_ws_small",
+    "vgui/maps/bunker_busting_coop_ws_large",
+    "vgui/maps/bunker_busting_coop_ws_small",
+    "vgui/maps/clean_sweep_coop_ws_large",
+    "vgui/maps/clean_sweep_coop_ws_small",
+    "vgui/maps/congress_coop_large",
+    "vgui/maps/congress_coop_small",
+    "vgui/maps/congress_large",
+    "vgui/maps/congress_small",
+    "vgui/maps/crash_course_large",
+    "vgui/maps/crash_course_small",
+    "vgui/maps/crossbow_large",
+    "vgui/maps/crossbow_small",
+    "vgui/maps/dedust1p2_aof_large",
+    "vgui/maps/dedust1p2_aof_small",
+    "vgui/maps/depot_ws_1_large",
+    "vgui/maps/depot_ws_1_small",
+    "vgui/maps/dusty_anguish_coopvfix_large",
+    "vgui/maps/dusty_anguish_coopvfix_small",
+    "vgui/maps/fortress_coop_ws_large",
+    "vgui/maps/fortress_coop_ws_small",
+    "vgui/maps/gizab_aof_large",
+    "vgui/maps/gizab_aof_small",
+    "vgui/maps/hideout_aof_large",
+    "vgui/maps/hideout_aof_small",
+    "vgui/maps/jack_hammer_coopvfix_large",
+    "vgui/maps/jack_hammer_coopvfix_small",
+    "vgui/maps/jail_break_coop_ws_large",
+    "vgui/maps/jail_break_coop_ws_small",
+    "vgui/maps/kandagal_aof_large",
+    "vgui/maps/kandagal_aof_small",
+    "vgui/maps/limansk_aof_large",
+    "vgui/maps/limansk_aof_small",
+    "vgui/maps/point_blank_large",
+    "vgui/maps/point_blank_small",
+    "vgui/maps/prophet_coop_large",
+    "vgui/maps/prophet_coop_small",
+    "vgui/maps/prophet_large",
+    "vgui/maps/prophet_small",
+    "vgui/maps/station_aof_large",
+    "vgui/maps/station_aof_small",
+    "vgui/maps/takbar_large",
+    "vgui/maps/takbar_small",
+    "vgui/maps/tet_b1_large",
+    "vgui/maps/tet_b1_small",
+    "vgui/maps/winter_rescue_ws_large",
+    "vgui/maps/winter_rescue_ws_small"
+   ],
+   "manifest": "823207703301777768",
+   "maps": [],
+   "textures": [
+    "vgui/maps/almaden_coop_v1_1_large",
+    "vgui/maps/almaden_coop_v1_1_small",
+    "vgui/maps/arcate_aof_large",
+    "vgui/maps/arcate_aof_small",
+    "vgui/maps/badlands_b1_large",
+    "vgui/maps/badlands_b1_small",
+    "vgui/maps/block_party_coop_ws_large",
+    "vgui/maps/block_party_coop_ws_small",
+    "vgui/maps/bunker_busting_coop_ws_large",
+    "vgui/maps/bunker_busting_coop_ws_small",
+    "vgui/maps/clean_sweep_coop_ws_large",
+    "vgui/maps/clean_sweep_coop_ws_small",
+    "vgui/maps/congress_coop_large",
+    "vgui/maps/congress_coop_small",
+    "vgui/maps/crash_course_large",
+    "vgui/maps/crash_course_small",
+    "vgui/maps/crossbow_large",
+    "vgui/maps/crossbow_small",
+    "vgui/maps/dedust1p2_aof_large",
+    "vgui/maps/dedust1p2_aof_small",
+    "vgui/maps/depot_ws_1_large",
+    "vgui/maps/depot_ws_1_small",
+    "vgui/maps/dusty_anguish_coopvfix_large",
+    "vgui/maps/dusty_anguish_coopvfix_small",
+    "vgui/maps/fortress_coop_ws_large",
+    "vgui/maps/fortress_coop_ws_small",
+    "vgui/maps/gizab_aof_large",
+    "vgui/maps/gizab_aof_small",
+    "vgui/maps/hideout_aof_large",
+    "vgui/maps/hideout_aof_small",
+    "vgui/maps/jack_hammer_coopvfix_large",
+    "vgui/maps/jack_hammer_coopvfix_small",
+    "vgui/maps/jail_break_coop_ws_large",
+    "vgui/maps/jail_break_coop_ws_small",
+    "vgui/maps/kandagal_aof_large",
+    "vgui/maps/kandagal_aof_small",
+    "vgui/maps/limansk_aof_large",
+    "vgui/maps/limansk_aof_small",
+    "vgui/maps/point_blank_large",
+    "vgui/maps/point_blank_small",
+    "vgui/maps/prophet_coop_large",
+    "vgui/maps/prophet_coop_small",
+    "vgui/maps/station_aof_large",
+    "vgui/maps/station_aof_small",
+    "vgui/maps/takbar_large",
+    "vgui/maps/takbar_small",
+    "vgui/maps/tet_b1_large",
+    "vgui/maps/tet_b1_small",
+    "vgui/maps/winter_rescue_ws_large",
+    "vgui/maps/winter_rescue_ws_small"
+   ]
+  },
+  "1989124779": {
+   "images": [],
+   "manifest": "1383075839965324992",
+   "maps": [
+    "arcate_aof"
+   ],
+   "textures": []
+  },
+  "1989125473": {
+   "images": [],
+   "manifest": "5908926899969492934",
+   "maps": [
+    "dedust1p2_aof"
+   ],
+   "textures": []
+  },
+  "1989129424": {
+   "images": [],
+   "manifest": "5101435359388477569",
+   "maps": [
+    "station_aof"
+   ],
+   "textures": []
+  },
+  "2010242125": {
+   "images": [],
+   "manifest": "5781862322255602462",
+   "maps": [
+    "kandagal_aof"
+   ],
+   "textures": []
+  },
+  "2010901052": {
+   "images": [],
+   "manifest": "3627629245881857934",
+   "maps": [
+    "ins_tosca_nv1"
+   ],
+   "textures": []
+  },
+  "2015565348": {
+   "images": [
+    "vgui/endroundlobby/maps/szepezd_redux_coop"
+   ],
+   "manifest": "3186333443082857479",
+   "maps": [
+    "szepezd_redux_coop"
+   ],
+   "textures": [
+    "vgui/endroundlobby/maps/szepezd_redux_coop"
+   ]
+  },
+  "2034193905": {
+   "images": [],
+   "manifest": "477550226658100409",
+   "maps": [
+    "gauntlet"
+   ],
+   "textures": []
+  },
+  "2035514246": {
+   "images": [],
+   "manifest": "5053112404133028501",
+   "maps": [
+    "pripyat"
+   ],
+   "textures": []
+  },
+  "2071869506": {
+   "images": [],
+   "manifest": "4447287672030291499",
+   "maps": [
+    "l4d2_bridge"
+   ],
+   "textures": []
+  },
+  "2107007637": {
+   "images": [],
+   "manifest": "2552339605465155175",
+   "maps": [
+    "de_breach_d"
+   ],
+   "textures": []
+  },
+  "2110527993": {
+   "images": [],
+   "manifest": "7975018087782544766",
+   "maps": [
+    "peak_coop"
+   ],
+   "textures": []
+  },
+  "2148192104": {
+   "images": [],
+   "manifest": "6331431788873396653",
+   "maps": [
+    "inferno_new_v1"
+   ],
+   "textures": []
+  },
+  "2168078889": {
+   "images": [],
+   "manifest": "3564784398022966987",
+   "maps": [
+    "de_centered_v1"
+   ],
+   "textures": []
+  },
+  "2168116352": {
+   "images": [],
+   "manifest": "1165484499061288988",
+   "maps": [],
+   "textures": []
+  },
+  "2169943977": {
+   "images": [],
+   "manifest": "5258205641255772385",
+   "maps": [
+    "fairgrounds"
+   ],
+   "textures": []
+  },
+  "2169963412": {
+   "images": [],
+   "manifest": "4483070800200134236",
+   "maps": [],
+   "textures": []
+  },
+  "2191010494": {
+   "images": [],
+   "manifest": "8694843794502362141",
+   "maps": [
+    "dust_new"
+   ],
+   "textures": []
+  },
+  "2208434069": {
+   "images": [],
+   "manifest": "497943373325101089",
+   "maps": [
+    "cobblestone"
+   ],
+   "textures": []
+  },
+  "2240929834": {
+   "images": [],
+   "manifest": "6018310154481417391",
+   "maps": [
+    "badel_coop_2020"
+   ],
+   "textures": []
+  },
+  "2257195565": {
+   "images": [],
+   "manifest": "7624894621768683966",
+   "maps": [
+    "hesitation_coop_ins"
+   ],
+   "textures": []
+  },
+  "2296749488": {
+   "images": [],
+   "manifest": "3207298516843637055",
+   "maps": [
+    "kunar"
+   ],
+   "textures": []
+  },
+  "2300512394": {
+   "images": [],
+   "manifest": "6979611064617911583",
+   "maps": [],
+   "textures": []
+  },
+  "2327421432": {
+   "images": [],
+   "manifest": "3857808425297464168",
+   "maps": [],
+   "textures": []
+  },
+  "2347162033": {
+   "images": [],
+   "manifest": "672385037222312732",
+   "maps": [
+    "bridge_coop_2021"
+   ],
+   "textures": []
+  },
+  "2352663377": {
+   "images": [],
+   "manifest": "5520057850735276996",
+   "maps": [
+    "convoy_pve"
+   ],
+   "textures": []
+  },
+  "2361038040": {
+   "images": [],
+   "manifest": "1973991878036638558",
+   "maps": [
+    "citadel_coop"
+   ],
+   "textures": []
+  },
+  "2373005014": {
+   "images": [],
+   "manifest": "480082728338823752",
+   "maps": [
+    "ins_workout"
+   ],
+   "textures": []
+  },
+  "2393118985": {
+   "images": [],
+   "manifest": "764375582873819576",
+   "maps": [],
+   "textures": []
+  },
+  "2397669169": {
+   "images": [],
+   "manifest": "8161425723306793127",
+   "maps": [
+    "buhriz_heavyrain_v1"
+   ],
+   "textures": []
+  },
+  "2397670590": {
+   "images": [],
+   "manifest": "5399862778726293608",
+   "maps": [],
+   "textures": []
+  },
+  "2419142919": {
+   "images": [],
+   "manifest": "5433957352462122060",
+   "maps": [
+    "ins_dog_red"
+   ],
+   "textures": []
+  },
+  "2461902631": {
+   "images": [],
+   "manifest": "7918046699196433317",
+   "maps": [
+    "limansk_aof"
+   ],
+   "textures": []
+  },
+  "248148672": {
+   "images": [],
+   "manifest": "3283225786388242530",
+   "maps": [
+    "anbar_coop"
+   ],
+   "textures": []
+  },
+  "2508715344": {
+   "images": [],
+   "manifest": "8736546735568155784",
+   "maps": [
+    "cementplant"
+   ],
+   "textures": []
+  },
+  "2510398645": {
+   "images": [],
+   "manifest": "3957374782168634407",
+   "maps": [
+    "crash_course"
+   ],
+   "textures": []
+  },
+  "2521980943": {
+   "images": [],
+   "manifest": "3468337863009197713",
+   "maps": [
+    "ins_saint_lo_v1"
+   ],
+   "textures": []
+  },
+  "2522001554": {
+   "images": [],
+   "manifest": "8856847608746742759",
+   "maps": [],
+   "textures": []
+  },
+  "2538211718": {
+   "images": [],
+   "manifest": "8826513789951879794",
+   "maps": [
+    "drycanal_coop_old"
+   ],
+   "textures": []
+  },
+  "2544674426": {
+   "images": [],
+   "manifest": "413339970850709637",
+   "maps": [],
+   "textures": []
+  },
+  "2567903738": {
+   "images": [],
+   "manifest": "3511136465013889764",
+   "maps": [
+    "breville_pve"
+   ],
+   "textures": []
+  },
+  "2568914411": {
+   "images": [],
+   "manifest": "3109603200193524535",
+   "maps": [],
+   "textures": []
+  },
+  "2574250983": {
+   "images": [],
+   "manifest": "7810913647217508199",
+   "maps": [
+    "prophet_coop2021"
+   ],
+   "textures": []
+  },
+  "2575300560": {
+   "images": [],
+   "manifest": "2581495078568696044",
+   "maps": [
+    "operation_metro_b_ins"
+   ],
+   "textures": []
+  },
+  "2575302067": {
+   "images": [],
+   "manifest": "7629022230891033116",
+   "maps": [
+    "pl_minecraft_redstone_f15_ins_b"
+   ],
+   "textures": []
+  },
+  "2588320140": {
+   "images": [],
+   "manifest": "4325154143377075846",
+   "maps": [
+    "ins_bastogne"
+   ],
+   "textures": []
+  },
+  "2599050685": {
+   "images": [],
+   "manifest": "8605686671660627961",
+   "maps": [
+    "hideout_aof"
+   ],
+   "textures": []
+  },
+  "2603024361": {
+   "images": [],
+   "manifest": "7358381616626468171",
+   "maps": [
+    "marquis"
+   ],
+   "textures": []
+  },
+  "2606328136": {
+   "images": [],
+   "manifest": "7969792235399288716",
+   "maps": [
+    "pow_raid_x64"
+   ],
+   "textures": []
+  },
+  "2608962360": {
+   "images": [],
+   "manifest": "2496454655619823014",
+   "maps": [],
+   "textures": []
+  },
+  "2627393585": {
+   "images": [],
+   "manifest": "3104467432362246609",
+   "maps": [
+    "crete"
+   ],
+   "textures": []
+  },
+  "2635219866": {
+   "images": [],
+   "manifest": "4826755711166472558",
+   "maps": [
+    "depot_checkpoint"
+   ],
+   "textures": []
+  },
+  "2651481089": {
+   "images": [],
+   "manifest": "7302109678983218515",
+   "maps": [],
+   "textures": []
+  },
+  "2670949874": {
+   "images": [],
+   "manifest": "8682245896844640386",
+   "maps": [
+    "ministry_coop_oldv1"
+   ],
+   "textures": []
+  },
+  "2670960489": {
+   "images": [],
+   "manifest": "199675607531522824",
+   "maps": [
+    "dusty_nights_coop"
+   ],
+   "textures": []
+  },
+  "2674972433": {
+   "images": [],
+   "manifest": "707398136148663147",
+   "maps": [
+    "doi_resistance_2021"
+   ],
+   "textures": []
+  },
+  "2678703408": {
+   "images": [],
+   "manifest": "1826381388227950051",
+   "maps": [
+    "dust_open"
+   ],
+   "textures": []
+  },
+  "2688056722": {
+   "images": [],
+   "manifest": "3057792891557444779",
+   "maps": [
+    "gizab_bm"
+   ],
+   "textures": []
+  },
+  "2696258019": {
+   "images": [],
+   "manifest": "1113583986795488174",
+   "maps": [
+    "congress_open_coop"
+   ],
+   "textures": []
+  },
+  "2705735526": {
+   "images": [],
+   "manifest": "5380429294369615820",
+   "maps": [
+    "haditha_dam_2022"
+   ],
+   "textures": []
+  },
+  "2717691676": {
+   "images": [],
+   "manifest": "7838671098564091444",
+   "maps": [
+    "flakturm"
+   ],
+   "textures": []
+  },
+  "2744179612": {
+   "images": [],
+   "manifest": "420708957001672991",
+   "maps": [],
+   "textures": []
+  },
+  "2744181131": {
+   "images": [],
+   "manifest": "4405808069076123380",
+   "maps": [],
+   "textures": []
+  },
+  "2744435243": {
+   "images": [],
+   "manifest": "2254290363765609380",
+   "maps": [],
+   "textures": []
+  },
+  "2749105820": {
+   "images": [],
+   "manifest": "6636338138602338514",
+   "maps": [],
+   "textures": []
+  },
+  "2749114575": {
+   "images": [],
+   "manifest": "8718220437724226601",
+   "maps": [],
+   "textures": []
+  },
+  "2766356125": {
+   "images": [],
+   "manifest": "6479463400607097273",
+   "maps": [
+    "sotu_keep_v1"
+   ],
+   "textures": []
+  },
+  "2767466217": {
+   "images": [],
+   "manifest": "727350829163522396",
+   "maps": [],
+   "textures": []
+  },
+  "2767467973": {
+   "images": [],
+   "manifest": "9073174476896678889",
+   "maps": [],
+   "textures": []
+  },
+  "2769526047": {
+   "images": [],
+   "manifest": "8527433727767161765",
+   "maps": [
+    "salerno_pve"
+   ],
+   "textures": []
+  },
+  "2784911431": {
+   "images": [],
+   "manifest": "2164511124571116033",
+   "maps": [
+    "tet_x64"
+   ],
+   "textures": []
+  },
+  "2787485611": {
+   "images": [],
+   "manifest": "3594300065260875076",
+   "maps": [
+    "cu_chi_tunnels_x64"
+   ],
+   "textures": []
+  },
+  "2802314613": {
+   "images": [],
+   "manifest": "2794686434752646909",
+   "maps": [
+    "hard_rain"
+   ],
+   "textures": []
+  },
+  "2818856572": {
+   "images": [],
+   "manifest": "6589725085183953568",
+   "maps": [
+    "almaden_coop"
+   ],
+   "textures": []
+  },
+  "2825248282": {
+   "images": [],
+   "manifest": "6241744185373130480",
+   "maps": [],
+   "textures": []
+  },
+  "283120201": {
+   "images": [],
+   "manifest": "8020516459263424907",
+   "maps": [
+    "bunker_busting_coop_ws"
+   ],
+   "textures": []
+  },
+  "2832406643": {
+   "images": [],
+   "manifest": "3744120148318909398",
+   "maps": [
+    "the_sacrifice"
+   ],
+   "textures": []
+  },
+  "2834243418": {
+   "images": [],
+   "manifest": "113286430087135582",
+   "maps": [],
+   "textures": []
+  },
+  "2835956934": {
+   "images": [],
+   "manifest": "1898071101933825168",
+   "maps": [
+    "laboratory"
+   ],
+   "textures": []
+  },
+  "2840759249": {
+   "images": [],
+   "manifest": "6355316458712729670",
+   "maps": [
+    "downtown_coop"
+   ],
+   "textures": []
+  },
+  "2876174607": {
+   "images": [],
+   "manifest": "4348405390400449112",
+   "maps": [
+    "fortress_coop_fixed"
+   ],
+   "textures": []
+  },
+  "2888145663": {
+   "images": [],
+   "manifest": "1650843569798320655",
+   "maps": [
+    "game_day"
+   ],
+   "textures": []
+  },
+  "2888146733": {
+   "images": [],
+   "manifest": "1918619030624772103",
+   "maps": [
+    "tunnel_rats"
+   ],
+   "textures": []
+  },
+  "2890756233": {
+   "images": [],
+   "manifest": "8357478366560277008",
+   "maps": [
+    "jail_break_fix"
+   ],
+   "textures": []
+  },
+  "2905676416": {
+   "images": [],
+   "manifest": "7990779581717180623",
+   "maps": [],
+   "textures": []
+  },
+  "2907513227": {
+   "images": [],
+   "manifest": "3136069242206699941",
+   "maps": [
+    "2022_bb_arena_1"
+   ],
+   "textures": []
+  },
+  "2908499942": {
+   "images": [
+    "vgui/endroundlobby/maps/abdallah_b1",
+    "vgui/endroundlobby/maps/almaden",
+    "vgui/endroundlobby/maps/almaden_b3",
+    "vgui/endroundlobby/maps/almaden_b5",
+    "vgui/endroundlobby/maps/almaden_coop_v1_1",
+    "vgui/endroundlobby/maps/amber_spirits",
+    "vgui/endroundlobby/maps/anbar",
+    "vgui/endroundlobby/maps/anbar_nights",
+    "vgui/endroundlobby/maps/angle_iron_coop_ws",
+    "vgui/endroundlobby/maps/ar_dizzy_ins",
+    "vgui/endroundlobby/maps/as_oilrig_v2_ins",
+    "vgui/endroundlobby/maps/as_tundra_v3_ins",
+    "vgui/endroundlobby/maps/badel_b5",
+    "vgui/endroundlobby/maps/badel_coop_2020",
+    "vgui/endroundlobby/maps/badel_coop_v1",
+    "vgui/endroundlobby/maps/badlands_b1",
+    "vgui/endroundlobby/maps/badlands_b2",
+    "vgui/endroundlobby/maps/baghdad_b5",
+    "vgui/endroundlobby/maps/baghdad_coop_b5",
+    "vgui/endroundlobby/maps/bastion",
+    "vgui/endroundlobby/maps/bb_arena_coop_final",
+    "vgui/endroundlobby/maps/bb_base_coop_gold",
+    "vgui/endroundlobby/maps/bb_desertpass_coop_ws",
+    "vgui/endroundlobby/maps/bb_gauntlet_b9_ws_d",
+    "vgui/endroundlobby/maps/bb_junkyard_coop_gold",
+    "vgui/endroundlobby/maps/bb_lighthouse_gold",
+    "vgui/endroundlobby/maps/bb_maya_beta5",
+    "vgui/endroundlobby/maps/bb_subyard_beta5",
+    "vgui/endroundlobby/maps/block26_b1",
+    "vgui/endroundlobby/maps/block_party_coop_ws",
+    "vgui/endroundlobby/maps/breville_pve",
+    "vgui/endroundlobby/maps/bridge_coop_2021",
+    "vgui/endroundlobby/maps/bridge_coop_optimized_v1",
+    "vgui/endroundlobby/maps/bridge_coop_ws",
+    "vgui/endroundlobby/maps/buhriz_night",
+    "vgui/endroundlobby/maps/buhriz_open",
+    "vgui/endroundlobby/maps/buhriz_rainstorm",
+    "vgui/endroundlobby/maps/bunker_busting",
+    "vgui/endroundlobby/maps/bunker_busting_coop_ws",
+    "vgui/endroundlobby/maps/car_parking_ins_b",
+    "vgui/endroundlobby/maps/cargo_redux9",
+    "vgui/endroundlobby/maps/caves",
+    "vgui/endroundlobby/maps/caves_coop",
+    "vgui/endroundlobby/maps/caves_coop3",
+    "vgui/endroundlobby/maps/cementplant",
+    "vgui/endroundlobby/maps/central_coop_apc_v1_5",
+    "vgui/endroundlobby/maps/central_coop_final",
+    "vgui/endroundlobby/maps/cf_transportship_ins_b",
+    "vgui/endroundlobby/maps/chateau_tunnels_v3",
+    "vgui/endroundlobby/maps/christmas_house",
+    "vgui/endroundlobby/maps/citadel",
+    "vgui/endroundlobby/maps/clean_sweep_coop_ws",
+    "vgui/endroundlobby/maps/cobblestone",
+    "vgui/endroundlobby/maps/congress",
+    "vgui/endroundlobby/maps/congress_open",
+    "vgui/endroundlobby/maps/contact_coop_old_fixbysakey",
+    "vgui/endroundlobby/maps/contact_coopv2",
+    "vgui/endroundlobby/maps/convoy_coopv1",
+    "vgui/endroundlobby/maps/convoy_day_apc_coop_v1_1",
+    "vgui/endroundlobby/maps/convoy_pve",
+    "vgui/endroundlobby/maps/crash_course",
+    "vgui/endroundlobby/maps/crete",
+    "vgui/endroundlobby/maps/crossbow",
+    "vgui/endroundlobby/maps/cs_747_ins_b1",
+    "vgui/endroundlobby/maps/cs_agency_ins_b2",
+    "vgui/endroundlobby/maps/cs_downtown",
+    "vgui/endroundlobby/maps/cs_havana_ins_b2",
+    "vgui/endroundlobby/maps/cs_italy",
+    "vgui/endroundlobby/maps/cs_motel_coop_nd_v1_3",
+    "vgui/endroundlobby/maps/cs_office_coop_b2",
+    "vgui/endroundlobby/maps/cs_workout_v1",
+    "vgui/endroundlobby/maps/cu_chi_tunnels_x64",
+    "vgui/endroundlobby/maps/cutoff4-9",
+    "vgui/endroundlobby/maps/de_aqueduct_d",
+    "vgui/endroundlobby/maps/de_aztec",
+    "vgui/endroundlobby/maps/de_breach_d",
+    "vgui/endroundlobby/maps/de_cbble_coop_v1",
+    "vgui/endroundlobby/maps/de_centered_nv1",
+    "vgui/endroundlobby/maps/de_centered_v1",
+    "vgui/endroundlobby/maps/de_coldwater",
+    "vgui/endroundlobby/maps/de_lake_coop_nd_v1_2",
+    "vgui/endroundlobby/maps/de_mirage_csco_pb4",
+    "vgui/endroundlobby/maps/de_mirage_csco_pbd4",
+    "vgui/endroundlobby/maps/de_prodigy",
+    "vgui/endroundlobby/maps/de_safehouse_coop_v1_4_nde2",
+    "vgui/endroundlobby/maps/de_survivor_css_ins_b",
+    "vgui/endroundlobby/maps/de_train_csgo_pb2",
+    "vgui/endroundlobby/maps/de_vertigo",
+    "vgui/endroundlobby/maps/dedust1p2",
+    "vgui/endroundlobby/maps/dedust1p2_aof",
+    "vgui/endroundlobby/maps/depot",
+    "vgui/endroundlobby/maps/depot_checkpoint",
+    "vgui/endroundlobby/maps/depot_ws_1",
+    "vgui/endroundlobby/maps/desert_hell_coop_remix",
+    "vgui/endroundlobby/maps/desert_warfare_vehicles_coop_v1_3",
+    "vgui/endroundlobby/maps/district_coopv3",
+    "vgui/endroundlobby/maps/district_night",
+    "vgui/endroundlobby/maps/docks_coopb2",
+    "vgui/endroundlobby/maps/docks_coopb2_day",
+    "vgui/endroundlobby/maps/docks_day",
+    "vgui/endroundlobby/maps/dod_beach_landing_ins",
+    "vgui/endroundlobby/maps/dog_red",
+    "vgui/endroundlobby/maps/doi_resistance_2021",
+    "vgui/endroundlobby/maps/downtown",
+    "vgui/endroundlobby/maps/downtown_coop",
+    "vgui/endroundlobby/maps/downtown_coopv1a",
+    "vgui/endroundlobby/maps/drycanal_coop_old",
+    "vgui/endroundlobby/maps/drycanal_open",
+    "vgui/endroundlobby/maps/dunkirk",
+    "vgui/endroundlobby/maps/dunkirk_pve",
+    "vgui/endroundlobby/maps/dust2_checkpoint_b8",
+    "vgui/endroundlobby/maps/dust_new",
+    "vgui/endroundlobby/maps/dust_open",
+    "vgui/endroundlobby/maps/dusty_anguish_coopvfix",
+    "vgui/endroundlobby/maps/dusty_nights_coop",
+    "vgui/endroundlobby/maps/dusty_nights_coopv1_1",
+    "vgui/endroundlobby/maps/embassy_coop_141103",
+    "vgui/endroundlobby/maps/embassy_night",
+    "vgui/endroundlobby/maps/estates_b4",
+    "vgui/endroundlobby/maps/estates_b4_push",
+    "vgui/endroundlobby/maps/fa-allinclusive_coop_v6",
+    "vgui/endroundlobby/maps/facilityb2_coop_v1_1",
+    "vgui/endroundlobby/maps/fairgrounds",
+    "vgui/endroundlobby/maps/flakturm",
+    "vgui/endroundlobby/maps/fortress_coop_fixed",
+    "vgui/endroundlobby/maps/fortress_coop_ws",
+    "vgui/endroundlobby/maps/frequency",
+    "vgui/endroundlobby/maps/frequency_open",
+    "vgui/endroundlobby/maps/game_day",
+    "vgui/endroundlobby/maps/game_day_coop_ws",
+    "vgui/endroundlobby/maps/gauntlet",
+    "vgui/endroundlobby/maps/gioconda_eron_battlebag",
+    "vgui/endroundlobby/maps/gioconda_eron_bunkers",
+    "vgui/endroundlobby/maps/gioconda_eron_dark_darkscape_mc",
+    "vgui/endroundlobby/maps/gioconda_eron_dark_roadrage",
+    "vgui/endroundlobby/maps/gioconda_eron_district",
+    "vgui/endroundlobby/maps/gioconda_eron_forest",
+    "vgui/endroundlobby/maps/gioconda_eron_inscrossing",
+    "vgui/endroundlobby/maps/gioconda_eron_leveled",
+    "vgui/endroundlobby/maps/gioconda_eron_market",
+    "vgui/endroundlobby/maps/gioconda_eron_mountains",
+    "vgui/endroundlobby/maps/gioconda_eron_smalltown",
+    "vgui/endroundlobby/maps/gioconda_eron_trenches",
+    "vgui/endroundlobby/maps/gioconda_eron_village",
+    "vgui/endroundlobby/maps/gioconda_eron_white_streets",
+    "vgui/endroundlobby/maps/gioconda_ministry_coop_eron",
+    "vgui/endroundlobby/maps/gizab_aof",
+    "vgui/endroundlobby/maps/gizab_b1",
+    "vgui/endroundlobby/maps/gizab_b2",
+    "vgui/endroundlobby/maps/gizab_bm",
+    "vgui/endroundlobby/maps/glycencity",
+    "vgui/endroundlobby/maps/haditha",
+    "vgui/endroundlobby/maps/haditha_dam_2022",
+    "vgui/endroundlobby/maps/haditha_dam_coop_finale",
+    "vgui/endroundlobby/maps/hard_rain",
+    "vgui/endroundlobby/maps/hastings",
+    "vgui/endroundlobby/maps/healthcenter_coop_fixbysakey",
+    "vgui/endroundlobby/maps/heights_coop_old_fixbysakey",
+    "vgui/endroundlobby/maps/hesitation_coop_ins",
+    "vgui/endroundlobby/maps/hideout_aof",
+    "vgui/endroundlobby/maps/hideout_b2",
+    "vgui/endroundlobby/maps/hideout_coop",
+    "vgui/endroundlobby/maps/hijacked_ws",
+    "vgui/endroundlobby/maps/hurtlocker_coop_legacy",
+    "vgui/endroundlobby/maps/ikazuchi_jungle_coop_b3",
+    "vgui/endroundlobby/maps/inferno_checkpoint_b2",
+    "vgui/endroundlobby/maps/inferno_new_v1",
+    "vgui/endroundlobby/maps/ins_abdallah_coop_fix",
+    "vgui/endroundlobby/maps/ins_abdallah_night_coop_fix",
+    "vgui/endroundlobby/maps/ins_arcate_npb1",
+    "vgui/endroundlobby/maps/ins_arcate_pb1",
+    "vgui/endroundlobby/maps/ins_bastogne",
+    "vgui/endroundlobby/maps/ins_bridgeatremagen",
+    "vgui/endroundlobby/maps/ins_chilly_p1",
+    "vgui/endroundlobby/maps/ins_chinatown",
+    "vgui/endroundlobby/maps/ins_dog_red",
+    "vgui/endroundlobby/maps/ins_italy",
+    "vgui/endroundlobby/maps/ins_mosul",
+    "vgui/endroundlobby/maps/ins_mountain_escape_v1_3",
+    "vgui/endroundlobby/maps/ins_panzer_tag",
+    "vgui/endroundlobby/maps/ins_prison_2020_new",
+    "vgui/endroundlobby/maps/ins_prison_b3",
+    "vgui/endroundlobby/maps/ins_saint_lo_v1",
+    "vgui/endroundlobby/maps/ins_subway_b4",
+    "vgui/endroundlobby/maps/ins_tosca_nv1",
+    "vgui/endroundlobby/maps/ins_tosca_v1",
+    "vgui/endroundlobby/maps/ins_underworld",
+    "vgui/endroundlobby/maps/ins_workout",
+    "vgui/endroundlobby/maps/insz_favela",
+    "vgui/endroundlobby/maps/invasion_coop_ws",
+    "vgui/endroundlobby/maps/iron_express",
+    "vgui/endroundlobby/maps/iron_express_b2",
+    "vgui/endroundlobby/maps/isis_laststand",
+    "vgui/endroundlobby/maps/jack_hammer_coopvfix",
+    "vgui/endroundlobby/maps/jail_break_fix",
+    "vgui/endroundlobby/maps/kandagal_aof",
+    "vgui/endroundlobby/maps/karkand_coop_p1_redux_v1_7",
+    "vgui/endroundlobby/maps/karkand_redux_p2",
+    "vgui/endroundlobby/maps/karkar_b11",
+    "vgui/endroundlobby/maps/khanashin_b8",
+    "vgui/endroundlobby/maps/khanashin_b8_night",
+    "vgui/endroundlobby/maps/khe_sanh",
+    "vgui/endroundlobby/maps/kunar",
+    "vgui/endroundlobby/maps/l4d2_bridge",
+    "vgui/endroundlobby/maps/l4d2_nomercy_subway",
+    "vgui/endroundlobby/maps/l4d_ag_b1",
+    "vgui/endroundlobby/maps/l4d_airport_terminal_b3",
+    "vgui/endroundlobby/maps/l4d_ga_b2_day",
+    "vgui/endroundlobby/maps/l4d_garage01_alleys_b2",
+    "vgui/endroundlobby/maps/l4d_garage_lots_day",
+    "vgui/endroundlobby/maps/l4d_garage_lotsb3",
+    "vgui/endroundlobby/maps/l4d_mercy_hospital_b5",
+    "vgui/endroundlobby/maps/l4d_viennacalling_city_b1",
+    "vgui/endroundlobby/maps/launch_control_coop_ws",
+    "vgui/endroundlobby/maps/mad_long_road",
+    "vgui/endroundlobby/maps/market_coop_old_fixbysakey",
+    "vgui/endroundlobby/maps/market_coopv2",
+    "vgui/endroundlobby/maps/market_night_coop",
+    "vgui/endroundlobby/maps/market_open_coop",
+    "vgui/endroundlobby/maps/marquis",
+    "vgui/endroundlobby/maps/ministry_coop_2013a",
+    "vgui/endroundlobby/maps/ministry_coop_old_fixbysakey",
+    "vgui/endroundlobby/maps/ministry_night",
+    "vgui/endroundlobby/maps/ministry_open",
+    "vgui/endroundlobby/maps/miransh_alpha",
+    "vgui/endroundlobby/maps/mountain_lake_coopv1_1",
+    "vgui/endroundlobby/maps/nightfall_coopvfix",
+    "vgui/endroundlobby/maps/nomercy_coopv1",
+    "vgui/endroundlobby/maps/nova_prospect",
+    "vgui/endroundlobby/maps/oasis",
+    "vgui/endroundlobby/maps/oilfield_pve",
+    "vgui/endroundlobby/maps/oms_corridor_coopb3",
+    "vgui/endroundlobby/maps/operation_intrude_v2",
+    "vgui/endroundlobby/maps/operation_metro_b_ins",
+    "vgui/endroundlobby/maps/operator_range_checkpoint",
+    "vgui/endroundlobby/maps/osama_b3_checkpoint",
+    "vgui/endroundlobby/maps/osama_b4_push",
+    "vgui/endroundlobby/maps/panama_canal_b2",
+    "vgui/endroundlobby/maps/panj_coop_eronfix",
+    "vgui/endroundlobby/maps/peak",
+    "vgui/endroundlobby/maps/pipeline",
+    "vgui/endroundlobby/maps/pl_minecraft_redstone_f15_ins_b",
+    "vgui/endroundlobby/maps/point_blank",
+    "vgui/endroundlobby/maps/point_blank_fix",
+    "vgui/endroundlobby/maps/pow_raid_x64",
+    "vgui/endroundlobby/maps/pripyat",
+    "vgui/endroundlobby/maps/prophet",
+    "vgui/endroundlobby/maps/prophet_coop2021",
+    "vgui/endroundlobby/maps/prospect_coop_b6",
+    "vgui/endroundlobby/maps/ps7",
+    "vgui/endroundlobby/maps/ps7_co_b91",
+    "vgui/endroundlobby/maps/r6_safehouse_coop_v1_1",
+    "vgui/endroundlobby/maps/rainforest_fixed_final",
+    "vgui/endroundlobby/maps/revolt_coopv2",
+    "vgui/endroundlobby/maps/revolt_rainstorm",
+    "vgui/endroundlobby/maps/revolt_rainstorm_day",
+    "vgui/endroundlobby/maps/rhineland_pve",
+    "vgui/endroundlobby/maps/salerno_pve",
+    "vgui/endroundlobby/maps/shellshock",
+    "vgui/endroundlobby/maps/shop_invasion_coop_b2",
+    "vgui/endroundlobby/maps/showdown",
+    "vgui/endroundlobby/maps/shrine",
+    "vgui/endroundlobby/maps/shrine_coop_v1",
+    "vgui/endroundlobby/maps/siege_coop_old_fixbysakey",
+    "vgui/endroundlobby/maps/siege_rainstorm",
+    "vgui/endroundlobby/maps/sinjar_night",
+    "vgui/endroundlobby/maps/sotu_city",
+    "vgui/endroundlobby/maps/sotu_keep_v1",
+    "vgui/endroundlobby/maps/sotu_m_is_for_madness",
+    "vgui/endroundlobby/maps/sotu_maze",
+    "vgui/endroundlobby/maps/sotu_spiral",
+    "vgui/endroundlobby/maps/station_aof",
+    "vgui/endroundlobby/maps/szepezd_b3_coopv1_2",
+    "vgui/endroundlobby/maps/szepezd_redux",
+    "vgui/endroundlobby/maps/taboo",
+    "vgui/endroundlobby/maps/takbar",
+    "vgui/endroundlobby/maps/takbar_b6",
+    "vgui/endroundlobby/maps/tell_night",
+    "vgui/endroundlobby/maps/tell_open",
+    "vgui/endroundlobby/maps/tet_b1",
+    "vgui/endroundlobby/maps/tet_x64",
+    "vgui/endroundlobby/maps/the_burbs",
+    "vgui/endroundlobby/maps/the_raid_coop_ws",
+    "vgui/endroundlobby/maps/the_sacrifice",
+    "vgui/endroundlobby/maps/thicket_beta_3",
+    "vgui/endroundlobby/maps/trenches6_coop_v1_2",
+    "vgui/endroundlobby/maps/tunnel_rats",
+    "vgui/endroundlobby/maps/uprising_night",
+    "vgui/endroundlobby/maps/uprising_open",
+    "vgui/endroundlobby/maps/vietnam_b2",
+    "vgui/endroundlobby/maps/warehouse_coopv2u1",
+    "vgui/endroundlobby/maps/warehouse_coopv3b4",
+    "vgui/endroundlobby/maps/winter_rescue_ws",
+    "vgui/endroundlobby/maps/zagros_convoy_b5"
+   ],
+   "manifest": "6106615258569841894",
+   "maps": [],
+   "textures": [
+    "vgui/endroundlobby/maps/abdallah_b1",
+    "vgui/endroundlobby/maps/almaden",
+    "vgui/endroundlobby/maps/almaden_b3",
+    "vgui/endroundlobby/maps/almaden_b5",
+    "vgui/endroundlobby/maps/almaden_coop",
+    "vgui/endroundlobby/maps/amber_spirits_coop",
+    "vgui/endroundlobby/maps/anbar_coop",
+    "vgui/endroundlobby/maps/anbar_nights_coop",
+    "vgui/endroundlobby/maps/angle_iron_coop_ws",
+    "vgui/endroundlobby/maps/ar_dizzy_ins",
+    "vgui/endroundlobby/maps/as_oilrig_v2_ins",
+    "vgui/endroundlobby/maps/as_tundra_v3_ins",
+    "vgui/endroundlobby/maps/badel_b5",
+    "vgui/endroundlobby/maps/badel_coop_2020",
+    "vgui/endroundlobby/maps/badel_coop_v1",
+    "vgui/endroundlobby/maps/badlands_b1",
+    "vgui/endroundlobby/maps/badlands_b2",
+    "vgui/endroundlobby/maps/baghdad_b5",
+    "vgui/endroundlobby/maps/baghdad_coop_b5",
+    "vgui/endroundlobby/maps/bastion_coop",
+    "vgui/endroundlobby/maps/bb_arena_coop_final",
+    "vgui/endroundlobby/maps/bb_base_coop_gold",
+    "vgui/endroundlobby/maps/bb_desertpass_coop_ws",
+    "vgui/endroundlobby/maps/bb_gauntlet_b9_ws",
+    "vgui/endroundlobby/maps/bb_junkyard_coop_gold",
+    "vgui/endroundlobby/maps/bb_lighthouse_gold",
+    "vgui/endroundlobby/maps/bb_maya_beta5",
+    "vgui/endroundlobby/maps/bb_subyard_beta5",
+    "vgui/endroundlobby/maps/block26_b1",
+    "vgui/endroundlobby/maps/block_party_coop_ws",
+    "vgui/endroundlobby/maps/breville_pve",
+    "vgui/endroundlobby/maps/bridge_coop_2021",
+    "vgui/endroundlobby/maps/bridge_coop_optimized_v1",
+    "vgui/endroundlobby/maps/buhriz_night_coop",
+    "vgui/endroundlobby/maps/buhriz_open_coop",
+    "vgui/endroundlobby/maps/buhriz_rainstorm",
+    "vgui/endroundlobby/maps/bunker_busting",
+    "vgui/endroundlobby/maps/bunker_busting_coop_ws",
+    "vgui/endroundlobby/maps/car_parking_ins_b",
+    "vgui/endroundlobby/maps/cargo_redux9",
+    "vgui/endroundlobby/maps/caves",
+    "vgui/endroundlobby/maps/caves_coop",
+    "vgui/endroundlobby/maps/caves_coop3",
+    "vgui/endroundlobby/maps/cementplant",
+    "vgui/endroundlobby/maps/central_coop_apc_v1_5",
+    "vgui/endroundlobby/maps/central_coop_final",
+    "vgui/endroundlobby/maps/cf_transportship_ins_b",
+    "vgui/endroundlobby/maps/chateau_tunnels_v3",
+    "vgui/endroundlobby/maps/christmas_house_coop",
+    "vgui/endroundlobby/maps/citadel",
+    "vgui/endroundlobby/maps/citadel_coop",
+    "vgui/endroundlobby/maps/clean_sweep_coop_ws",
+    "vgui/endroundlobby/maps/cobblestone",
+    "vgui/endroundlobby/maps/congress_coop",
+    "vgui/endroundlobby/maps/congress_open_coop",
+    "vgui/endroundlobby/maps/contact_coop_old_fixbysakey",
+    "vgui/endroundlobby/maps/contact_coopv2",
+    "vgui/endroundlobby/maps/convoy_coopv1",
+    "vgui/endroundlobby/maps/convoy_day_apc_coop_v1_1",
+    "vgui/endroundlobby/maps/convoy_pve",
+    "vgui/endroundlobby/maps/crash_course",
+    "vgui/endroundlobby/maps/crete",
+    "vgui/endroundlobby/maps/crossbow",
+    "vgui/endroundlobby/maps/cs_747_ins_b1",
+    "vgui/endroundlobby/maps/cs_agency_ins_b2",
+    "vgui/endroundlobby/maps/cs_downtown_coop",
+    "vgui/endroundlobby/maps/cs_havana_ins_b2",
+    "vgui/endroundlobby/maps/cs_italy_coop",
+    "vgui/endroundlobby/maps/cs_motel_coop_nd_v1_3",
+    "vgui/endroundlobby/maps/cs_office_coop_b2",
+    "vgui/endroundlobby/maps/cs_workout_v1",
+    "vgui/endroundlobby/maps/cu_chi_tunnels",
+    "vgui/endroundlobby/maps/cu_chi_tunnels_x64",
+    "vgui/endroundlobby/maps/cutoff4-9",
+    "vgui/endroundlobby/maps/de_aqueduct_d",
+    "vgui/endroundlobby/maps/de_aztec",
+    "vgui/endroundlobby/maps/de_aztec_coop",
+    "vgui/endroundlobby/maps/de_breach_d",
+    "vgui/endroundlobby/maps/de_cbble_coop_v1",
+    "vgui/endroundlobby/maps/de_centered_nv1",
+    "vgui/endroundlobby/maps/de_centered_v1",
+    "vgui/endroundlobby/maps/de_coldwater",
+    "vgui/endroundlobby/maps/de_lake_coop_nd_v1_2",
+    "vgui/endroundlobby/maps/de_mirage_csco_pb4",
+    "vgui/endroundlobby/maps/de_mirage_csco_pbd4",
+    "vgui/endroundlobby/maps/de_prodigy_coop",
+    "vgui/endroundlobby/maps/de_safehouse_coop_v1_4_nde2",
+    "vgui/endroundlobby/maps/de_survivor_css_ins_b",
+    "vgui/endroundlobby/maps/de_train_csgo_pb2",
+    "vgui/endroundlobby/maps/de_vertigo_coop",
+    "vgui/endroundlobby/maps/dedust1p2_aof",
+    "vgui/endroundlobby/maps/dedust1p2_coop",
+    "vgui/endroundlobby/maps/depot_checkpoint",
+    "vgui/endroundlobby/maps/depot_coop",
+    "vgui/endroundlobby/maps/depot_ws_1",
+    "vgui/endroundlobby/maps/desert_hell_coop_remix",
+    "vgui/endroundlobby/maps/desert_warfare_vehicles_coop_v1_3",
+    "vgui/endroundlobby/maps/district_coopv3",
+    "vgui/endroundlobby/maps/district_night_coop",
+    "vgui/endroundlobby/maps/docks_coopb2",
+    "vgui/endroundlobby/maps/docks_coopb2_day",
+    "vgui/endroundlobby/maps/docks_day",
+    "vgui/endroundlobby/maps/dod_beach_landing_ins",
+    "vgui/endroundlobby/maps/dog_red",
+    "vgui/endroundlobby/maps/doi_resistance_2021",
+    "vgui/endroundlobby/maps/downtown",
+    "vgui/endroundlobby/maps/downtown_coop",
+    "vgui/endroundlobby/maps/downtown_coopv1a",
+    "vgui/endroundlobby/maps/drycanal_coop_old",
+    "vgui/endroundlobby/maps/drycanal_open",
+    "vgui/endroundlobby/maps/drycanal_open_coop",
+    "vgui/endroundlobby/maps/dunkirk",
+    "vgui/endroundlobby/maps/dunkirk_pve",
+    "vgui/endroundlobby/maps/dust2_checkpoint_b8",
+    "vgui/endroundlobby/maps/dust_new",
+    "vgui/endroundlobby/maps/dust_open",
+    "vgui/endroundlobby/maps/dusty_anguish_coopvfix",
+    "vgui/endroundlobby/maps/dusty_nights_coop",
+    "vgui/endroundlobby/maps/dusty_nights_coopv1_1",
+    "vgui/endroundlobby/maps/embassy_coop_141103",
+    "vgui/endroundlobby/maps/embassy_night_coop",
+    "vgui/endroundlobby/maps/estates_b4",
+    "vgui/endroundlobby/maps/estates_b4_push",
+    "vgui/endroundlobby/maps/fa-allinclusive_coop_v6",
+    "vgui/endroundlobby/maps/facilityb2_coop_v1_1",
+    "vgui/endroundlobby/maps/fairgrounds",
+    "vgui/endroundlobby/maps/flakturm",
+    "vgui/endroundlobby/maps/fortress_coop_fixed",
+    "vgui/endroundlobby/maps/fortress_coop_ws",
+    "vgui/endroundlobby/maps/frequency",
+    "vgui/endroundlobby/maps/frequency_open_coop",
+    "vgui/endroundlobby/maps/game_day",
+    "vgui/endroundlobby/maps/game_day_coop_ws",
+    "vgui/endroundlobby/maps/gauntlet",
+    "vgui/endroundlobby/maps/gioconda_eron_battlebag",
+    "vgui/endroundlobby/maps/gioconda_eron_bunkers",
+    "vgui/endroundlobby/maps/gioconda_eron_dark_darkscape_mc",
+    "vgui/endroundlobby/maps/gioconda_eron_dark_roadrage",
+    "vgui/endroundlobby/maps/gioconda_eron_forest",
+    "vgui/endroundlobby/maps/gioconda_eron_leveled",
+    "vgui/endroundlobby/maps/gioconda_eron_mountains",
+    "vgui/endroundlobby/maps/gioconda_eron_smalltown",
+    "vgui/endroundlobby/maps/gioconda_eron_village",
+    "vgui/endroundlobby/maps/gioconda_eron_white_streets",
+    "vgui/endroundlobby/maps/gioconda_ministry_coop_eron",
+    "vgui/endroundlobby/maps/gizab_aof",
+    "vgui/endroundlobby/maps/gizab_b1_coop",
+    "vgui/endroundlobby/maps/gizab_b2",
+    "vgui/endroundlobby/maps/glycencity",
+    "vgui/endroundlobby/maps/haditha",
+    "vgui/endroundlobby/maps/haditha_coop",
+    "vgui/endroundlobby/maps/haditha_dam_2022",
+    "vgui/endroundlobby/maps/haditha_dam_coop_finale",
+    "vgui/endroundlobby/maps/hard_rain",
+    "vgui/endroundlobby/maps/hastings",
+    "vgui/endroundlobby/maps/healthcenter_coop_fixbysakey",
+    "vgui/endroundlobby/maps/heights_coop_old_fixbysakey",
+    "vgui/endroundlobby/maps/hesitation_coop_ins",
+    "vgui/endroundlobby/maps/hideout_b2",
+    "vgui/endroundlobby/maps/hideout_coop",
+    "vgui/endroundlobby/maps/hijacked_ws",
+    "vgui/endroundlobby/maps/hurtlocker_coop_legacy",
+    "vgui/endroundlobby/maps/ikazuchi_jungle_coop_b3",
+    "vgui/endroundlobby/maps/inferno_checkpoint_b2",
+    "vgui/endroundlobby/maps/inferno_new_v1",
+    "vgui/endroundlobby/maps/ins_abdallah_coop_fix",
+    "vgui/endroundlobby/maps/ins_abdallah_night_coop_fix",
+    "vgui/endroundlobby/maps/ins_arcate_npb1",
+    "vgui/endroundlobby/maps/ins_arcate_pb1",
+    "vgui/endroundlobby/maps/ins_bastogne",
+    "vgui/endroundlobby/maps/ins_bridgeatremagen_coop",
+    "vgui/endroundlobby/maps/ins_chilly_p1",
+    "vgui/endroundlobby/maps/ins_chinatown",
+    "vgui/endroundlobby/maps/ins_dog_red",
+    "vgui/endroundlobby/maps/ins_italy_coop",
+    "vgui/endroundlobby/maps/ins_mosul",
+    "vgui/endroundlobby/maps/ins_mountain_escape_v1_3",
+    "vgui/endroundlobby/maps/ins_panzer_tag",
+    "vgui/endroundlobby/maps/ins_prison_2020_new",
+    "vgui/endroundlobby/maps/ins_prison_b3",
+    "vgui/endroundlobby/maps/ins_saint_lo_v1",
+    "vgui/endroundlobby/maps/ins_subway_b4",
+    "vgui/endroundlobby/maps/ins_tosca_nv1",
+    "vgui/endroundlobby/maps/ins_tosca_v1",
+    "vgui/endroundlobby/maps/ins_underworld",
+    "vgui/endroundlobby/maps/ins_workout",
+    "vgui/endroundlobby/maps/insz_favela",
+    "vgui/endroundlobby/maps/invasion_coop_ws",
+    "vgui/endroundlobby/maps/iron_express",
+    "vgui/endroundlobby/maps/iron_express_b2",
+    "vgui/endroundlobby/maps/isis_laststand",
+    "vgui/endroundlobby/maps/jack_hammer_coopvfix",
+    "vgui/endroundlobby/maps/jail_break_fix",
+    "vgui/endroundlobby/maps/kandagal_aof",
+    "vgui/endroundlobby/maps/karkand_coop_p1_redux_v1_7",
+    "vgui/endroundlobby/maps/karkand_redux_p2",
+    "vgui/endroundlobby/maps/karkar_b11",
+    "vgui/endroundlobby/maps/khanashin_b8",
+    "vgui/endroundlobby/maps/khanashin_b8_night",
+    "vgui/endroundlobby/maps/khe_sanh",
+    "vgui/endroundlobby/maps/kunar",
+    "vgui/endroundlobby/maps/l4d2_bridge",
+    "vgui/endroundlobby/maps/l4d2_nomercy_subway_coop",
+    "vgui/endroundlobby/maps/l4d_ag_b1",
+    "vgui/endroundlobby/maps/l4d_airport_terminal_b3",
+    "vgui/endroundlobby/maps/l4d_ga_b2_day",
+    "vgui/endroundlobby/maps/l4d_garage01_alleys_b2",
+    "vgui/endroundlobby/maps/l4d_garage_lots_day",
+    "vgui/endroundlobby/maps/l4d_garage_lotsb3",
+    "vgui/endroundlobby/maps/l4d_mercy_hospital_b5",
+    "vgui/endroundlobby/maps/l4d_viennacalling_city_b1",
+    "vgui/endroundlobby/maps/launch_control_coop_ws",
+    "vgui/endroundlobby/maps/mad_long_road",
+    "vgui/endroundlobby/maps/market",
+    "vgui/endroundlobby/maps/market_coopv2",
+    "vgui/endroundlobby/maps/market_night_coop",
+    "vgui/endroundlobby/maps/marquis",
+    "vgui/endroundlobby/maps/ministry_coop",
+    "vgui/endroundlobby/maps/ministry_coop_2013a",
+    "vgui/endroundlobby/maps/ministry_night_coop",
+    "vgui/endroundlobby/maps/ministry_open_coop",
+    "vgui/endroundlobby/maps/miransh_alpha",
+    "vgui/endroundlobby/maps/mountain_lake_coopv1_1",
+    "vgui/endroundlobby/maps/nightfall_coopvfix",
+    "vgui/endroundlobby/maps/nomercy_coopv1",
+    "vgui/endroundlobby/maps/nova_prospect",
+    "vgui/endroundlobby/maps/oasis",
+    "vgui/endroundlobby/maps/oilfield_pve",
+    "vgui/endroundlobby/maps/oms_corridor_coopb3",
+    "vgui/endroundlobby/maps/operation_intrude_v2",
+    "vgui/endroundlobby/maps/operation_metro_b_ins",
+    "vgui/endroundlobby/maps/operator_range_checkpoint",
+    "vgui/endroundlobby/maps/osama_b3_checkpoint",
+    "vgui/endroundlobby/maps/osama_b4_push",
+    "vgui/endroundlobby/maps/panama_canal_b2",
+    "vgui/endroundlobby/maps/panj_coop_eronfix",
+    "vgui/endroundlobby/maps/peak_coop",
+    "vgui/endroundlobby/maps/pipeline",
+    "vgui/endroundlobby/maps/pipeline_coop",
+    "vgui/endroundlobby/maps/pl_minecraft_redstone_f15_ins_b",
+    "vgui/endroundlobby/maps/point_blank",
+    "vgui/endroundlobby/maps/point_blank_fix",
+    "vgui/endroundlobby/maps/pow_raid_x64",
+    "vgui/endroundlobby/maps/pripyat",
+    "vgui/endroundlobby/maps/prophet_coop",
+    "vgui/endroundlobby/maps/prophet_coop2021",
+    "vgui/endroundlobby/maps/prospect_coop_b6",
+    "vgui/endroundlobby/maps/ps7",
+    "vgui/endroundlobby/maps/ps7_co_b91",
+    "vgui/endroundlobby/maps/r6_safehouse_coop_v1_1",
+    "vgui/endroundlobby/maps/rainforest_fixed_final",
+    "vgui/endroundlobby/maps/revolt_coopv2",
+    "vgui/endroundlobby/maps/revolt_rainstorm",
+    "vgui/endroundlobby/maps/revolt_rainstorm_day",
+    "vgui/endroundlobby/maps/rhineland_pve",
+    "vgui/endroundlobby/maps/salerno_pve",
+    "vgui/endroundlobby/maps/shellshock",
+    "vgui/endroundlobby/maps/shop_invasion_coop_b2",
+    "vgui/endroundlobby/maps/showdown",
+    "vgui/endroundlobby/maps/shrine",
+    "vgui/endroundlobby/maps/shrine_coop_v1",
+    "vgui/endroundlobby/maps/siege_coop_old_fixbysakey",
+    "vgui/endroundlobby/maps/siege_rainstorm",
+    "vgui/endroundlobby/maps/sinjar_night_coop",
+    "vgui/endroundlobby/maps/sotu_city",
+    "vgui/endroundlobby/maps/sotu_keep",
+    "vgui/endroundlobby/maps/sotu_keep_v1",
+    "vgui/endroundlobby/maps/sotu_m_is_for_madness",
+    "vgui/endroundlobby/maps/sotu_maze",
+    "vgui/endroundlobby/maps/sotu_spiral",
+    "vgui/endroundlobby/maps/station_aof",
+    "vgui/endroundlobby/maps/szepezd_b3_coopv1_2",
+    "vgui/endroundlobby/maps/szepezd_redux",
+    "vgui/endroundlobby/maps/szepezd_redux_coop",
+    "vgui/endroundlobby/maps/taboo_coop",
+    "vgui/endroundlobby/maps/takbar",
+    "vgui/endroundlobby/maps/takbar_b6",
+    "vgui/endroundlobby/maps/tell_night_coop",
+    "vgui/endroundlobby/maps/tell_open",
+    "vgui/endroundlobby/maps/tet",
+    "vgui/endroundlobby/maps/tet_x64",
+    "vgui/endroundlobby/maps/the_burbs_coop",
+    "vgui/endroundlobby/maps/the_raid_coop_ws",
+    "vgui/endroundlobby/maps/the_sacrifice",
+    "vgui/endroundlobby/maps/thicket_beta_3",
+    "vgui/endroundlobby/maps/trenches",
+    "vgui/endroundlobby/maps/tunnel_rats",
+    "vgui/endroundlobby/maps/uprising_night_coop",
+    "vgui/endroundlobby/maps/uprising_open_coop",
+    "vgui/endroundlobby/maps/vietnam_b2",
+    "vgui/endroundlobby/maps/warehouse_coopv2u1",
+    "vgui/endroundlobby/maps/warehouse_coopv3b4",
+    "vgui/endroundlobby/maps/winter_rescue_ws",
+    "vgui/endroundlobby/maps/zagros_convoy_b5"
+   ]
+  },
+  "2910284180": {
+   "images": [],
+   "manifest": "4693341428547567106",
+   "maps": [
+    "baghdad_remastered"
+   ],
+   "textures": []
+  },
+  "292081732": {
+   "images": [],
+   "manifest": "790027515235326458",
+   "maps": [
+    "launch_control_coop_ws"
+   ],
+   "textures": []
+  },
+  "2927739938": {
+   "images": [],
+   "manifest": "4619278329072891680",
+   "maps": [
+    "liberty_mall"
+   ],
+   "textures": []
+  },
+  "2959755350": {
+   "images": [],
+   "manifest": "2446230438773441704",
+   "maps": [
+    "bombshelter"
+   ],
+   "textures": []
+  },
+  "2962802373": {
+   "images": [],
+   "manifest": "3921036225149865754",
+   "maps": [
+    "cityhall"
+   ],
+   "textures": []
+  },
+  "2966432441": {
+   "images": [],
+   "manifest": "9068778289622610671",
+   "maps": [
+    "dead_air"
+   ],
+   "textures": []
+  },
+  "2967215012": {
+   "images": [],
+   "manifest": "6970049143468764837",
+   "maps": [
+    "l4d_garage_alley_day"
+   ],
+   "textures": []
+  },
+  "2980224364": {
+   "images": [],
+   "manifest": "8260778967173714576",
+   "maps": [
+    "block_party_fixed"
+   ],
+   "textures": []
+  },
+  "3008318690": {
+   "images": [],
+   "manifest": "1225988837924648363",
+   "maps": [
+    "payback_x64"
+   ],
+   "textures": []
+  },
+  "3015821699": {
+   "images": [],
+   "manifest": "145695202577896107",
+   "maps": [
+    "ins_dustbowl"
+   ],
+   "textures": []
+  },
+  "3015824154": {
+   "images": [],
+   "manifest": "3603525043181699251",
+   "maps": [
+    "ins_goldrush"
+   ],
+   "textures": []
+  },
+  "3015826569": {
+   "images": [],
+   "manifest": "7747065556920200859",
+   "maps": [],
+   "textures": []
+  },
+  "3015826914": {
+   "images": [],
+   "manifest": "7613540782522342594",
+   "maps": [],
+   "textures": []
+  },
+  "3041234121": {
+   "images": [
+    "vgui/endroundlobby/maps/shop_invasion_coop_b2"
+   ],
+   "manifest": "1930973293962867595",
+   "maps": [
+    "shop_invasion_coop_b2"
+   ],
+   "textures": [
+    "vgui/endroundlobby/maps/shop_invasion_coop_b2"
+   ]
+  },
+  "3260723441": {
+   "images": [],
+   "manifest": "2219198468267761202",
+   "maps": [
+    "de_coldwater_tug24"
+   ],
+   "textures": []
+  },
+  "3306889421": {
+   "images": [],
+   "manifest": "7705330428448969031",
+   "maps": [],
+   "textures": []
+  },
+  "3468251942": {
+   "images": [
+    "vgui/endroundlobby/maps/ins_desert_atrocity_a1",
+    "vgui/maps/ins_desert_atrocity_a1_large"
+   ],
+   "manifest": "147871810786293531",
+   "maps": [
+    "ins_desert_atrocity_a1"
+   ],
+   "textures": [
+    "vgui/endroundlobby/maps/ins_desert_atrocity_a1",
+    "vgui/maps/ins_desert_atrocity_a1_large"
+   ]
+  },
+  "346843105": {
+   "images": [],
+   "manifest": "4562216881517298266",
+   "maps": [
+    "the_burbs_coop"
+   ],
+   "textures": []
+  },
+  "3510794344": {
+   "images": [],
+   "manifest": "7368385883894178914",
+   "maps": [
+    "de_nuke"
+   ],
+   "textures": []
+  },
+  "3511353649": {
+   "images": [],
+   "manifest": "6083164722352236093",
+   "maps": [
+    "coastdawn_gf"
+   ],
+   "textures": []
+  },
+  "352148389": {
+   "images": [
+    "vgui/endroundlobby/maps/angle_iron_coop_ws"
+   ],
+   "manifest": "6377875302578375420",
+   "maps": [
+    "angle_iron_coop_ws"
+   ],
+   "textures": [
+    "vgui/endroundlobby/maps/angle_iron_coop_ws"
+   ]
+  },
+  "3551935737": {
+   "images": [],
+   "manifest": "7641588715112482498",
+   "maps": [],
+   "textures": []
+  },
+  "3629465190": {
+   "images": [],
+   "manifest": "5499744124065134872",
+   "maps": [],
+   "textures": []
+  },
+  "383525894": {
+   "images": [],
+   "manifest": "2434371308443939189",
+   "maps": [
+    "khanashin_b8"
+   ],
+   "textures": []
+  },
+  "395001767": {
+   "images": [],
+   "manifest": "1605140403241815329",
+   "maps": [
+    "ramadi_b5"
+   ],
+   "textures": []
+  },
+  "426742049": {
+   "images": [
+    "vgui/endroundlobby/maps/karkar_b11",
+    "vgui/maps/karkar_b11_large",
+    "vgui/maps/karkar_b11_small"
+   ],
+   "manifest": "1989037133240651228",
+   "maps": [
+    "karkar_b11"
+   ],
+   "textures": [
+    "vgui/endroundlobby/maps/karkar_b11",
+    "vgui/maps/karkar_b11_large",
+    "vgui/maps/karkar_b11_small"
+   ]
+  },
+  "440046323": {
+   "images": [],
+   "manifest": "5416108014987172053",
+   "maps": [
+    "shellshock"
+   ],
+   "textures": []
+  },
+  "492051918": {
+   "images": [],
+   "manifest": "5817919254734251493",
+   "maps": [
+    "the_raid_coop_ws"
+   ],
+   "textures": []
+  },
+  "498252536": {
+   "images": [],
+   "manifest": "5342438127531605685",
+   "maps": [
+    "invasion_coop_ws"
+   ],
+   "textures": []
+  },
+  "498253639": {
+   "images": [
+    "vgui/endroundlobby/maps/amber_spirits_coop_beta6"
+   ],
+   "manifest": "609297726724840516",
+   "maps": [
+    "amber_spirits_coop"
+   ],
+   "textures": [
+    "vgui/endroundlobby/maps/amber_spirits_coop_beta6"
+   ]
+  },
+  "498255733": {
+   "images": [],
+   "manifest": "6367257996313233069",
+   "maps": [
+    "clean_sweep_coop_ws"
+   ],
+   "textures": []
+  },
+  "501104499": {
+   "images": [
+    "vgui/endroundlobby/maps/prospect_coop_b6"
+   ],
+   "manifest": "2343882586547974395",
+   "maps": [
+    "prospect_coop_b6"
+   ],
+   "textures": [
+    "vgui/endroundlobby/maps/prospect_coop_b6"
+   ]
+  },
+  "504080476": {
+   "images": [],
+   "manifest": "1494807837084676018",
+   "maps": [
+    "cargo_redux9"
+   ],
+   "textures": []
+  },
+  "505775175": {
+   "images": [],
+   "manifest": "5037397020300103578",
+   "maps": [
+    "skyscraper_redux_v1"
+   ],
+   "textures": []
+  },
+  "517972533": {
+   "images": [],
+   "manifest": "576011176942774552",
+   "maps": [
+    "zagros_convoy_b5"
+   ],
+   "textures": []
+  },
+  "523594320": {
+   "images": [],
+   "manifest": "2984229718869833638",
+   "maps": [
+    "osama_b3_checkpoint"
+   ],
+   "textures": []
+  },
+  "573278223": {
+   "images": [
+    "vgui/endroundlobby/maps/panama_canal_b2"
+   ],
+   "manifest": "4525263955419968341",
+   "maps": [
+    "panama_canal_b2"
+   ],
+   "textures": [
+    "vgui/endroundlobby/maps/panama_canal_b2"
+   ]
+  },
+  "586951234": {
+   "images": [],
+   "manifest": "8473797070162260073",
+   "maps": [],
+   "textures": []
+  },
+  "599730897": {
+   "images": [],
+   "manifest": "1253426195698944000",
+   "maps": [
+    "dust2_checkpoint_b8"
+   ],
+   "textures": []
+  },
+  "605055192": {
+   "images": [],
+   "manifest": "7505879993060307010",
+   "maps": [
+    "crossbow"
+   ],
+   "textures": []
+  },
+  "650616844": {
+   "images": [],
+   "manifest": "5482491668660727063",
+   "maps": [
+    "estates_b4"
+   ],
+   "textures": []
+  },
+  "672667761": {
+   "images": [],
+   "manifest": "5193529174717015621",
+   "maps": [
+    "chateau_tunnels_v3"
+   ],
+   "textures": []
+  },
+  "730009401": {
+   "images": [],
+   "manifest": "1138404464281547985",
+   "maps": [],
+   "textures": []
+  },
+  "795846849": {
+   "images": [],
+   "manifest": "3792504691054639808",
+   "maps": [
+    "mountain_lake_coopv1_1"
+   ],
+   "textures": []
+  },
+  "822609478": {
+   "images": [],
+   "manifest": "566036081236212778",
+   "maps": [
+    "ins_bridgeatremagen_coop"
+   ],
+   "textures": []
+  },
+  "841479518": {
+   "images": [],
+   "manifest": "5541635943979530922",
+   "maps": [
+    "khe_sanh"
+   ],
+   "textures": []
+  },
+  "852587108": {
+   "images": [],
+   "manifest": "1633066933855324771",
+   "maps": [
+    "khe_sanh_night"
+   ],
+   "textures": []
+  },
+  "859127166": {
+   "images": [],
+   "manifest": "4009866035885803093",
+   "maps": [],
+   "textures": []
+  },
+  "863961825": {
+   "images": [],
+   "manifest": "7189683580014268595",
+   "maps": [
+    "hastings"
+   ],
+   "textures": []
+  },
+  "878171320": {
+   "images": [],
+   "manifest": "7507269715084438841",
+   "maps": [],
+   "textures": []
+  },
+  "878666586": {
+   "images": [],
+   "manifest": "7235141857794946932",
+   "maps": [
+    "la_drang"
+   ],
+   "textures": []
+  },
+  "890084623": {
+   "images": [
+    "vgui/endroundlobby/maps/abdallah_b1",
+    "vgui/endroundlobby/maps/almaden",
+    "vgui/endroundlobby/maps/almaden_b3",
+    "vgui/endroundlobby/maps/almaden_coop_v1_1",
+    "vgui/endroundlobby/maps/amber_spirits",
+    "vgui/endroundlobby/maps/anbar",
+    "vgui/endroundlobby/maps/angle_iron_coop_ws",
+    "vgui/endroundlobby/maps/badel_coop_2020",
+    "vgui/endroundlobby/maps/badel_coop_v1",
+    "vgui/endroundlobby/maps/badlands_b1",
+    "vgui/endroundlobby/maps/baghdad_coop_b5",
+    "vgui/endroundlobby/maps/baghdad_remastered",
+    "vgui/endroundlobby/maps/bastion",
+    "vgui/endroundlobby/maps/block_party_fixed",
+    "vgui/endroundlobby/maps/breville_pve",
+    "vgui/endroundlobby/maps/bridge_coop_2021",
+    "vgui/endroundlobby/maps/bunker_busting",
+    "vgui/endroundlobby/maps/bunker_busting_coop_ws",
+    "vgui/endroundlobby/maps/cargo_redux9",
+    "vgui/endroundlobby/maps/caves_coop3",
+    "vgui/endroundlobby/maps/cementplant",
+    "vgui/endroundlobby/maps/chateau_tunnels_v3",
+    "vgui/endroundlobby/maps/citadel",
+    "vgui/endroundlobby/maps/cityhall",
+    "vgui/endroundlobby/maps/clean_sweep_coop_ws",
+    "vgui/endroundlobby/maps/cobblestone",
+    "vgui/endroundlobby/maps/congress",
+    "vgui/endroundlobby/maps/congress_open",
+    "vgui/endroundlobby/maps/contact_coopv2",
+    "vgui/endroundlobby/maps/convoy_pve",
+    "vgui/endroundlobby/maps/crash_course",
+    "vgui/endroundlobby/maps/crete",
+    "vgui/endroundlobby/maps/crossbow",
+    "vgui/endroundlobby/maps/cs_agency_ins_b2",
+    "vgui/endroundlobby/maps/cs_downtown",
+    "vgui/endroundlobby/maps/cs_italy",
+    "vgui/endroundlobby/maps/cs_motel_coop_nd_v1_3",
+    "vgui/endroundlobby/maps/cs_office_coop_b2",
+    "vgui/endroundlobby/maps/cs_workout_v1",
+    "vgui/endroundlobby/maps/cu_chi_tunnels_x64",
+    "vgui/endroundlobby/maps/de_aqueduct_d",
+    "vgui/endroundlobby/maps/de_aztec",
+    "vgui/endroundlobby/maps/de_breach_d",
+    "vgui/endroundlobby/maps/de_cbble_coop_v1",
+    "vgui/endroundlobby/maps/de_centered_v1",
+    "vgui/endroundlobby/maps/de_coldwater",
+    "vgui/endroundlobby/maps/de_mirage_csco_pb4",
+    "vgui/endroundlobby/maps/de_prodigy",
+    "vgui/endroundlobby/maps/de_survivor_css_ins_b",
+    "vgui/endroundlobby/maps/de_train_csgo_pb2",
+    "vgui/endroundlobby/maps/de_vertigo",
+    "vgui/endroundlobby/maps/dead_air",
+    "vgui/endroundlobby/maps/depot_checkpoint",
+    "vgui/endroundlobby/maps/depot_ws_1",
+    "vgui/endroundlobby/maps/docks_coopb2_day",
+    "vgui/endroundlobby/maps/dog_red",
+    "vgui/endroundlobby/maps/doi_resistance_2021",
+    "vgui/endroundlobby/maps/downtown",
+    "vgui/endroundlobby/maps/downtown_coopv1a",
+    "vgui/endroundlobby/maps/drycanal_open",
+    "vgui/endroundlobby/maps/dunkirk_pve",
+    "vgui/endroundlobby/maps/dust2_checkpoint_b8",
+    "vgui/endroundlobby/maps/dust_open",
+    "vgui/endroundlobby/maps/estates_b4_push",
+    "vgui/endroundlobby/maps/facilityb2_coop_v1_1",
+    "vgui/endroundlobby/maps/fairgrounds",
+    "vgui/endroundlobby/maps/flakturm",
+    "vgui/endroundlobby/maps/fortress_coop_fixed",
+    "vgui/endroundlobby/maps/fortress_coop_ws",
+    "vgui/endroundlobby/maps/frequency",
+    "vgui/endroundlobby/maps/frequency_open",
+    "vgui/endroundlobby/maps/game_day",
+    "vgui/endroundlobby/maps/game_day_coop_ws",
+    "vgui/endroundlobby/maps/gauntlet",
+    "vgui/endroundlobby/maps/gioconda_ministry_coop_eron",
+    "vgui/endroundlobby/maps/gizab_b1",
+    "vgui/endroundlobby/maps/gizab_bm",
+    "vgui/endroundlobby/maps/glycencity",
+    "vgui/endroundlobby/maps/haditha",
+    "vgui/endroundlobby/maps/haditha_dam_2022",
+    "vgui/endroundlobby/maps/haditha_dam_coop_finale",
+    "vgui/endroundlobby/maps/hard_rain",
+    "vgui/endroundlobby/maps/hastings",
+    "vgui/endroundlobby/maps/healthcenter_coop_fixbysakey",
+    "vgui/endroundlobby/maps/hideout",
+    "vgui/endroundlobby/maps/inferno_checkpoint_b2",
+    "vgui/endroundlobby/maps/inferno_new_v1",
+    "vgui/endroundlobby/maps/ins_arcate_pb1",
+    "vgui/endroundlobby/maps/ins_bastogne",
+    "vgui/endroundlobby/maps/ins_bridgeatremagen",
+    "vgui/endroundlobby/maps/ins_chilly_p1",
+    "vgui/endroundlobby/maps/ins_chinatown",
+    "vgui/endroundlobby/maps/ins_coastdawn_a3",
+    "vgui/endroundlobby/maps/ins_dog_red",
+    "vgui/endroundlobby/maps/ins_italy",
+    "vgui/endroundlobby/maps/ins_mountain_escape_v1_3",
+    "vgui/endroundlobby/maps/ins_prison_2020_new",
+    "vgui/endroundlobby/maps/ins_saint_lo_v1",
+    "vgui/endroundlobby/maps/ins_tosca_v1",
+    "vgui/endroundlobby/maps/ins_workout",
+    "vgui/endroundlobby/maps/insz_favela",
+    "vgui/endroundlobby/maps/invasion_coop_ws",
+    "vgui/endroundlobby/maps/iron_express",
+    "vgui/endroundlobby/maps/iron_express_b2",
+    "vgui/endroundlobby/maps/jail_break_coop_ws",
+    "vgui/endroundlobby/maps/jail_break_fix",
+    "vgui/endroundlobby/maps/kandagal_coop_b5",
+    "vgui/endroundlobby/maps/karkand_redux_p2",
+    "vgui/endroundlobby/maps/karkar_b11",
+    "vgui/endroundlobby/maps/khanashin_b8",
+    "vgui/endroundlobby/maps/khe_sanh",
+    "vgui/endroundlobby/maps/kunar",
+    "vgui/endroundlobby/maps/l4d2_bridge",
+    "vgui/endroundlobby/maps/l4d_ag_b1",
+    "vgui/endroundlobby/maps/l4d_airport_terminal_b3",
+    "vgui/endroundlobby/maps/l4d_ga_b2_day",
+    "vgui/endroundlobby/maps/l4d_garage01_alleys_b2",
+    "vgui/endroundlobby/maps/l4d_garage_lots_day",
+    "vgui/endroundlobby/maps/l4d_mercy_hospital_b5",
+    "vgui/endroundlobby/maps/launch_control_coop_ws",
+    "vgui/endroundlobby/maps/liberty_mall",
+    "vgui/endroundlobby/maps/mad_long_road",
+    "vgui/endroundlobby/maps/market_coopv2",
+    "vgui/endroundlobby/maps/marquis",
+    "vgui/endroundlobby/maps/ministry_coop_2013a",
+    "vgui/endroundlobby/maps/miransh_alpha",
+    "vgui/endroundlobby/maps/nova_prospect",
+    "vgui/endroundlobby/maps/oilfield_pve",
+    "vgui/endroundlobby/maps/oms_corridor_coopb3",
+    "vgui/endroundlobby/maps/operation_intrude_v2",
+    "vgui/endroundlobby/maps/osama_b3_checkpoint",
+    "vgui/endroundlobby/maps/panama_canal_b2",
+    "vgui/endroundlobby/maps/payback_x64",
+    "vgui/endroundlobby/maps/pipeline",
+    "vgui/endroundlobby/maps/pl_minecraft_redstone_f15_ins_b",
+    "vgui/endroundlobby/maps/point_blank",
+    "vgui/endroundlobby/maps/pow_raid_x64",
+    "vgui/endroundlobby/maps/pripyat",
+    "vgui/endroundlobby/maps/prophet_coop2021",
+    "vgui/endroundlobby/maps/prospect_coop_b6",
+    "vgui/endroundlobby/maps/ps7",
+    "vgui/endroundlobby/maps/rhineland_pve",
+    "vgui/endroundlobby/maps/salerno_pve",
+    "vgui/endroundlobby/maps/shellshock",
+    "vgui/endroundlobby/maps/siege_coop_old_fixbysakey",
+    "vgui/endroundlobby/maps/sotu_city",
+    "vgui/endroundlobby/maps/sotu_keep_v1",
+    "vgui/endroundlobby/maps/sotu_m_is_for_madness",
+    "vgui/endroundlobby/maps/sotu_pyramidv2",
+    "vgui/endroundlobby/maps/station_ws",
+    "vgui/endroundlobby/maps/szepezd_b3_coopv1_2",
+    "vgui/endroundlobby/maps/szepezd_redux",
+    "vgui/endroundlobby/maps/takbar_b6",
+    "vgui/endroundlobby/maps/tet_b1",
+    "vgui/endroundlobby/maps/tet_x64",
+    "vgui/endroundlobby/maps/the_burbs",
+    "vgui/endroundlobby/maps/the_raid_coop_ws",
+    "vgui/endroundlobby/maps/the_sacrifice",
+    "vgui/endroundlobby/maps/tunnel_rats",
+    "vgui/endroundlobby/maps/uprising_open",
+    "vgui/endroundlobby/maps/warehouse_coopv3b4"
+   ],
+   "manifest": "2754384783144156042",
+   "maps": [],
+   "textures": [
+    "vgui/endroundlobby/maps/abdallah_b1",
+    "vgui/endroundlobby/maps/almaden",
+    "vgui/endroundlobby/maps/almaden_b3",
+    "vgui/endroundlobby/maps/amber_spirits_coop",
+    "vgui/endroundlobby/maps/anbar_coop",
+    "vgui/endroundlobby/maps/angle_iron_coop_ws",
+    "vgui/endroundlobby/maps/badel_coop_2020",
+    "vgui/endroundlobby/maps/badel_coop_v1",
+    "vgui/endroundlobby/maps/badlands_b1",
+    "vgui/endroundlobby/maps/baghdad_coop_b5",
+    "vgui/endroundlobby/maps/baghdad_remastered",
+    "vgui/endroundlobby/maps/bastion_coop",
+    "vgui/endroundlobby/maps/block_party_fixed",
+    "vgui/endroundlobby/maps/breville_pve",
+    "vgui/endroundlobby/maps/bridge_coop_2021",
+    "vgui/endroundlobby/maps/bunker_busting",
+    "vgui/endroundlobby/maps/cargo_redux9",
+    "vgui/endroundlobby/maps/caves_coop3",
+    "vgui/endroundlobby/maps/cementplant",
+    "vgui/endroundlobby/maps/chateau_tunnels_v3",
+    "vgui/endroundlobby/maps/citadel_coop",
+    "vgui/endroundlobby/maps/cityhall",
+    "vgui/endroundlobby/maps/clean_sweep_coop_ws",
+    "vgui/endroundlobby/maps/cobblestone",
+    "vgui/endroundlobby/maps/congress_coop",
+    "vgui/endroundlobby/maps/contact_coopv2",
+    "vgui/endroundlobby/maps/convoy_pve",
+    "vgui/endroundlobby/maps/crash_course",
+    "vgui/endroundlobby/maps/crete",
+    "vgui/endroundlobby/maps/crossbow",
+    "vgui/endroundlobby/maps/cs_agency_ins_b2",
+    "vgui/endroundlobby/maps/cs_downtown_coop",
+    "vgui/endroundlobby/maps/cs_italy_coop",
+    "vgui/endroundlobby/maps/cs_motel_coop_nd_v1_3",
+    "vgui/endroundlobby/maps/cs_office_coop_b2",
+    "vgui/endroundlobby/maps/cs_workout_v1",
+    "vgui/endroundlobby/maps/cu_chi_tunnels_x64",
+    "vgui/endroundlobby/maps/de_aqueduct_d",
+    "vgui/endroundlobby/maps/de_aztec",
+    "vgui/endroundlobby/maps/de_breach_d",
+    "vgui/endroundlobby/maps/de_cbble_coop_v1",
+    "vgui/endroundlobby/maps/de_centered_v1",
+    "vgui/endroundlobby/maps/de_coldwater",
+    "vgui/endroundlobby/maps/de_mirage_csco_pb4",
+    "vgui/endroundlobby/maps/de_prodigy_coop",
+    "vgui/endroundlobby/maps/de_survivor_css_ins_b",
+    "vgui/endroundlobby/maps/de_train_csgo_pb2",
+    "vgui/endroundlobby/maps/de_vertigo_coop",
+    "vgui/endroundlobby/maps/dead_air",
+    "vgui/endroundlobby/maps/depot_ws_1",
+    "vgui/endroundlobby/maps/docks_coopb2_day",
+    "vgui/endroundlobby/maps/dog_red",
+    "vgui/endroundlobby/maps/doi_resistance_2021",
+    "vgui/endroundlobby/maps/downtown",
+    "vgui/endroundlobby/maps/downtown_coopv1a",
+    "vgui/endroundlobby/maps/drycanal_open",
+    "vgui/endroundlobby/maps/dunkirk_pve",
+    "vgui/endroundlobby/maps/dust2_checkpoint_b8",
+    "vgui/endroundlobby/maps/dust_open",
+    "vgui/endroundlobby/maps/estates_b4_push",
+    "vgui/endroundlobby/maps/facilityb2_coop_v1_1",
+    "vgui/endroundlobby/maps/fairgrounds",
+    "vgui/endroundlobby/maps/flakturm",
+    "vgui/endroundlobby/maps/fortress_coop_fixed",
+    "vgui/endroundlobby/maps/frequency",
+    "vgui/endroundlobby/maps/game_day",
+    "vgui/endroundlobby/maps/game_day_coop_ws",
+    "vgui/endroundlobby/maps/gauntlet",
+    "vgui/endroundlobby/maps/gioconda_ministry_coop_eron",
+    "vgui/endroundlobby/maps/gizab_b1_coop",
+    "vgui/endroundlobby/maps/glycencity",
+    "vgui/endroundlobby/maps/haditha",
+    "vgui/endroundlobby/maps/haditha_dam_2022",
+    "vgui/endroundlobby/maps/haditha_dam_coop_finale",
+    "vgui/endroundlobby/maps/hard_rain",
+    "vgui/endroundlobby/maps/hastings",
+    "vgui/endroundlobby/maps/healthcenter_coop_fixbysakey",
+    "vgui/endroundlobby/maps/hideout",
+    "vgui/endroundlobby/maps/inferno_checkpoint_b2",
+    "vgui/endroundlobby/maps/inferno_new_v1",
+    "vgui/endroundlobby/maps/ins_arcate_pb1",
+    "vgui/endroundlobby/maps/ins_bastogne",
+    "vgui/endroundlobby/maps/ins_bridgeatremagen_coop",
+    "vgui/endroundlobby/maps/ins_chilly_p1",
+    "vgui/endroundlobby/maps/ins_chinatown",
+    "vgui/endroundlobby/maps/ins_coastdawn_a3",
+    "vgui/endroundlobby/maps/ins_dog_red",
+    "vgui/endroundlobby/maps/ins_mountain_escape_v1_3",
+    "vgui/endroundlobby/maps/ins_prison_2020_new",
+    "vgui/endroundlobby/maps/ins_saint_lo_v1",
+    "vgui/endroundlobby/maps/ins_tosca_v1",
+    "vgui/endroundlobby/maps/insz_favela",
+    "vgui/endroundlobby/maps/invasion_coop_ws",
+    "vgui/endroundlobby/maps/iron_express",
+    "vgui/endroundlobby/maps/iron_express_b2",
+    "vgui/endroundlobby/maps/jail_break_coop_ws",
+    "vgui/endroundlobby/maps/jail_break_fix",
+    "vgui/endroundlobby/maps/kandagal_coop_b5",
+    "vgui/endroundlobby/maps/karkand_redux_p2",
+    "vgui/endroundlobby/maps/karkar_b11",
+    "vgui/endroundlobby/maps/khanashin_b8",
+    "vgui/endroundlobby/maps/khe_sanh",
+    "vgui/endroundlobby/maps/kunar",
+    "vgui/endroundlobby/maps/l4d2_bridge",
+    "vgui/endroundlobby/maps/l4d_ag_b1",
+    "vgui/endroundlobby/maps/l4d_airport_terminal_b3",
+    "vgui/endroundlobby/maps/l4d_ga_b2_day",
+    "vgui/endroundlobby/maps/l4d_garage01_alleys_b2",
+    "vgui/endroundlobby/maps/l4d_garage_lots_day",
+    "vgui/endroundlobby/maps/l4d_mercy_hospital_b5",
+    "vgui/endroundlobby/maps/launch_control_coop_ws",
+    "vgui/endroundlobby/maps/liberty_mall",
+    "vgui/endroundlobby/maps/mad_long_road",
+    "vgui/endroundlobby/maps/market_coopv2",
+    "vgui/endroundlobby/maps/marquis",
+    "vgui/endroundlobby/maps/ministry_coop_2013a",
+    "vgui/endroundlobby/maps/miransh_alpha",
+    "vgui/endroundlobby/maps/nova_prospect",
+    "vgui/endroundlobby/maps/oilfield_pve",
+    "vgui/endroundlobby/maps/oms_corridor_coopb3",
+    "vgui/endroundlobby/maps/operation_intrude_v2",
+    "vgui/endroundlobby/maps/osama_b3_checkpoint",
+    "vgui/endroundlobby/maps/panama_canal_b2",
+    "vgui/endroundlobby/maps/payback_x64",
+    "vgui/endroundlobby/maps/pipeline",
+    "vgui/endroundlobby/maps/pl_minecraft_redstone_f15_ins_b",
+    "vgui/endroundlobby/maps/point_blank",
+    "vgui/endroundlobby/maps/pow_raid_x64",
+    "vgui/endroundlobby/maps/pripyat",
+    "vgui/endroundlobby/maps/prophet_coop2021",
+    "vgui/endroundlobby/maps/prospect_coop_b6",
+    "vgui/endroundlobby/maps/ps7",
+    "vgui/endroundlobby/maps/rhineland_pve",
+    "vgui/endroundlobby/maps/salerno_pve",
+    "vgui/endroundlobby/maps/shellshock",
+    "vgui/endroundlobby/maps/siege_coop_old_fixbysakey",
+    "vgui/endroundlobby/maps/sotu_city",
+    "vgui/endroundlobby/maps/sotu_keep_v1",
+    "vgui/endroundlobby/maps/sotu_m_is_for_madness",
+    "vgui/endroundlobby/maps/sotu_pyramidv2",
+    "vgui/endroundlobby/maps/station_ws",
+    "vgui/endroundlobby/maps/szepezd_b3_coopv1_2",
+    "vgui/endroundlobby/maps/szepezd_redux",
+    "vgui/endroundlobby/maps/takbar_b6",
+    "vgui/endroundlobby/maps/tet",
+    "vgui/endroundlobby/maps/tet_x64",
+    "vgui/endroundlobby/maps/the_burbs_coop",
+    "vgui/endroundlobby/maps/the_raid_coop_ws",
+    "vgui/endroundlobby/maps/the_sacrifice",
+    "vgui/endroundlobby/maps/tunnel_rats",
+    "vgui/endroundlobby/maps/uprising_open_coop",
+    "vgui/endroundlobby/maps/warehouse_coopv3b4"
+   ]
+  },
+  "890747795": {
+   "images": [],
+   "manifest": "7653388598575063635",
+   "maps": [
+    "showdown"
+   ],
+   "textures": []
+  },
+  "936432939": {
+   "images": [],
+   "manifest": "222893917373466102",
+   "maps": [],
+   "textures": []
+  },
+  "939856603": {
+   "images": [],
+   "manifest": "3729484046250516221",
+   "maps": [
+    "convoy_day_apc_coop_v1_1"
+   ],
+   "textures": []
+  },
+  "939859861": {
+   "images": [],
+   "manifest": "6280776846420524782",
+   "maps": [
+    "cs_motel_coop_nd_v1_3"
+   ],
+   "textures": []
+  },
+  "939870068": {
+   "images": [],
+   "manifest": "725768604512976780",
+   "maps": [
+    "trenches6_coop_v1_2"
+   ],
+   "textures": []
+  },
+  "939871975": {
+   "images": [
+    "vgui/endroundlobby/maps/shrine_coop_v1"
+   ],
+   "manifest": "3187383115376953804",
+   "maps": [
+    "shrine_coop_v1"
+   ],
+   "textures": [
+    "vgui/endroundlobby/maps/shrine_coop_v1"
+   ]
+  }
+ }
+}

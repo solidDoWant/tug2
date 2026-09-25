@@ -3,18 +3,23 @@ package main
 // vtfc compiles texture sources into VTFs.
 //
 //	foo.png + foo.png.txt   compiled using the settings in the sidecar
+//	foo.jpg + foo.jpg.txt   likewise - for photographic sources kept as they were published, i.e.
+//	                        the map vote screenshots, where a PNG would only be a lossless copy of a
+//	                        JPEG's artifacts at several times the size
 //	foo.vtf                 copied through byte-for-byte
 //
 // Pass-through matters: re-encoding a DXT texture you did not edit costs a second generation of block
 // artifacts for nothing, and on normal maps that is visible. Only ship a .png for maps you edit.
 //
 // Sidecar keys are vtex-flavoured: format, normal, clamps, clampt, nomip, nolod, bumpscale, version.
+// Plus fit/focusx/focusy/zoom, which resize the source before encoding - see fit.go.
 
 import (
 	"bufio"
 	"fmt"
 	"image"
 	"image/draw"
+	_ "image/jpeg"
 	_ "image/png"
 	"io/fs"
 	"os"
@@ -89,6 +94,13 @@ func compilePNG(src, dst string, cfg map[string]string) (string, error) {
 	img, err := loadNRGBA(src)
 	if err != nil {
 		return "", err
+	}
+	fw, fh, fx, fy, zoom, fit, err := parseFit(cfg)
+	if err != nil {
+		return "", fmt.Errorf("%s: %w", src, err)
+	}
+	if fit {
+		img = fitImage(img, fw, fh, fx, fy, zoom)
 	}
 	w, h := img.Bounds().Dx(), img.Bounds().Dy()
 
@@ -174,7 +186,7 @@ func cmdVtfc(args []string) error {
 			}
 			fmt.Printf("  copy    %s\n", filepath.Join(rel, d.Name()))
 			made++
-		case strings.HasSuffix(lower, ".png"):
+		case strings.HasSuffix(lower, ".png"), strings.HasSuffix(lower, ".jpg"):
 			if err := os.MkdirAll(outDir, 0o755); err != nil {
 				return err
 			}
@@ -182,12 +194,13 @@ func cmdVtfc(args []string) error {
 			if err != nil {
 				return err
 			}
-			out := filepath.Join(outDir, d.Name()[:len(d.Name())-4]+".vtf")
+			stem := d.Name()[:len(d.Name())-4]
+			out := filepath.Join(outDir, stem+".vtf")
 			info, err := compilePNG(p, out, cfg)
 			if err != nil {
 				return err
 			}
-			fmt.Printf("  compile %s.vtf  [%s]\n", filepath.Join(rel, d.Name()[:len(d.Name())-4]), info)
+			fmt.Printf("  compile %s.vtf  [%s]\n", filepath.Join(rel, stem), info)
 			made++
 		}
 		return nil
@@ -196,7 +209,7 @@ func cmdVtfc(args []string) error {
 		return err
 	}
 	if made == 0 {
-		return fmt.Errorf("vtfc: no .png or .vtf sources under %s", srcRoot)
+		return fmt.Errorf("vtfc: no .png, .jpg or .vtf sources under %s", srcRoot)
 	}
 	fmt.Printf("vtfc: %d texture(s)\n", made)
 	return nil

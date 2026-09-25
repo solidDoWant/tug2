@@ -1,0 +1,25 @@
+// Per-map corrections to what mapvote_images.py generates. See "Map vote images" in fastdl/README.md.
+//
+//   <map> url   <image url>    a different picture (list candidates with --previews <map>)
+//   <map> alias <texture>      reuse an image clients already have; ships a VMT, no texture
+//   <map> item  <workshop id>  take the preview from this item
+//   <map> skip                 never generate
+//
+// After changing a line, delete the map's current output and rerun. Mind write-once: an image that
+// has already shipped cannot be replaced on clients that have it.
+
+// Every preview has a HUD over it (another map's viewmodel and "WAITING FOR PLAYERS"). The vote pack
+// has the same coast map as ins_coastdawn_a3.
+coastdawn_gf         alias vgui/endroundlobby/maps/ins_coastdawn_a3
+
+// The preview is an overhead layout map. This is the Tugged 2024 edit of de_coldwater, which the
+// vote pack covers.
+de_coldwater_tug24   alias vgui/endroundlobby/maps/de_coldwater
+
+// The only preview carries spectator HUD text. The stock night District loading image is 2:1
+// (1024x512) and is the same map.
+district_night_coop  alias vgui/maps/district_night_large
+
+// All six previews carry a Chinese-language HUD. This one is a clean interior; focusy 1 in its
+// sidecar crops away the banner at the top, leaving only small centre text.
+laboratory           url   https://images.steamusercontent.com/ugc/1892091893991110469/B84A0896ACB185C763B8298F03E6818EA147B05B/

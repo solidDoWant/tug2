@@ -64,6 +64,8 @@ src/materials/   .vmt                     -> templated
 src/models/      .qc/.qci/.smd/.dmx       -> templated, then PulseModel
                  <dir>/<model>/<model>.qc -> the same, compiled from its own directory (decompiled
                                              models, e.g. xm8/, each carry meshes/ and anims/)
+src/mapvote/     .jpg/.png + .txt sidecar -> cropped to 512x256, compiled to VTF, NOT hashed
+                 .vmt                     -> copied (an alias to an image clients already have)
 map_asset_stubs/                          -> copied, deliberately NOT hashed
 ```
 
@@ -126,12 +128,13 @@ the original.
 |---|---|
 | `tools/build.sh` | the ordered pipeline; runnable outside Docker for debugging |
 | `tools/` (Go) | one static binary, `fastdl-tools`, with four subcommands |
-| &nbsp;&nbsp;`vtfc` | texture compiler (`.png` → `.vtf`, `.vtf` → copy) |
+| &nbsp;&nbsp;`vtfc` | texture compiler (`.png`/`.jpg` → `.vtf`, `.vtf` → copy) |
 | &nbsp;&nbsp;`hashdir` | `<prefix>_<hash12>` for a directory's contents |
 | &nbsp;&nbsp;`template` | the hashed-reference pre-pass |
 | &nbsp;&nbsp;`vtf2png` | decode a VTF, for re-extracting an editable source |
 | `tools/build.sh` | the ordered pipeline; runnable outside Docker for debugging |
 | `tools/compile_models.sh` | PulseModel invocation |
+| `tools/mapvote_images.py` | fills `src/mapvote/` from workshop previews - see below |
 
 Go, to match `tools/server-runner`: one static binary and no runtime dependencies in the build
 image. `make -C fastdl tools` builds it locally; normally it is built inside the `tools` stage.
@@ -139,3 +142,76 @@ image. `make -C fastdl tools` builds it locally; normally it is built inside the
 The VTF codec is hand-rolled because there was nothing to vendor: VTFEdit and `vtex` are
 Windows-only, and `no_vtf` decodes but does not encode. Mipmaps use a 2x2 box filter - conventional
 for mipmaps, and no ringing on the hard edges these textures have.
+
+## Map vote images
+
+The end-of-round vote panel shows a picture of each candidate map. `client.so` looks for, in order:
+
+1. `materials/vgui/maps/<map>_large.vmt` - the stock loading-screen image
+2. `materials/vgui/maps/<map>_small.vmt` - with a "using incorrect size" console warning
+3. `materials/vgui/endroundlobby/maps/<map>.vmt` - "falling back to old voting image"
+4. `materials/vgui/maps/fallback_large.vmt` - a generic placeholder
+
+Stock maps have (1). Custom maps mostly get (3) from the "map vote ui" workshop item (`890084623`),
+and the rest showed the placeholder. `tools/mapvote_images.py` fills that gap from each map's workshop
+preview image, which is the same kind of picture - the vote pack's images are plain 2:1 screenshots.
+
+```sh
+python3 fastdl/tools/mapvote_images.py            # generate what is missing
+python3 fastdl/tools/mapvote_images.py --fetch    # first run on a machine, or after new items
+python3 fastdl/tools/mapvote_images.py --previews <map>   # other preview images to choose from
+```
+
+Only maps in a server's `mapcycle.txt` count - that is the only place vote choices come from.
+
+**Generated images go to (3), the lowest-priority slot that is not the placeholder.** So a real image
+shipped later - by the mapper or by the vote pack - wins without anyone deleting ours, and the script
+then lists ours as no longer needed.
+
+**Knowing what is missing requires every subscribed item's contents**, because a map's image can come
+from any item, not just the map's own. `src/mapvote/index.json` records, per item and at the manifest
+the lockfile pins, the maps it holds and the vote/loading images it ships (loose, in VPKs, or packed
+into a BSP). It is committed, so later runs need no workshop content; an item is rescanned only when
+its pin moves. Items the Steam client has not downloaded are fetched with `--fetch`: `steamcmd` into
+a scratch dir, a batch of about 1 GB at a time, deleted after indexing. The script refuses to
+generate while any item is unindexed, because an unknown item could already hold the image.
+
+### Fixing a bad image
+
+Each image is the preview exactly as published, plus a sidecar that crops it at compile time:
+
+```
+"fit"     "512x256"
+"focusx"  "0.5"      0 = keep the left edge, 1 = the right
+"focusy"  "0.5"      0 = keep the top, 1 = the bottom
+"zoom"    "1"        above 1 crops tighter than 2:1 needs
+```
+
+A bad crop is fixed by moving the focus; `zoom` reaches a HUD line or viewmodel that sits further in
+than the aspect crop does (`laboratory` and `2022_BB_Arena_1` use it). A bad *picture* - HUD text, a logo, an overhead layout - is
+fixed in `src/mapvote/overrides.txt`:
+
+```
+<map> url   <image url>        a different picture, e.g. one from --previews
+<map> alias <texture>          reuse an image clients already have, e.g. a sibling map's
+                               vgui/endroundlobby/maps/<other> - writes a VMT, ships no texture
+<map> item  <workshop id>      take the preview from this item (a map no item's BSP resolves)
+<map> skip                     never generate; the placeholder stays
+```
+
+An alias is also made **automatically** when a texture named after the map already exists but no
+VMT of that name does. The vote pack does this for eight of its own images (`anbar_coop.vtf` sits
+behind `anbar.vmt`, and so on): the picture was made for the map and never shown.
+
+then delete the map's current image and sidecar and rerun.
+
+### Write-once
+
+The path is fixed by the map name, so like the buy-menu icons it cannot be content-hashed, and a
+client that has fetched an image keeps it forever. Changing an image after it has shipped does not
+reach anyone who already has it. Get it right before publishing; `--force <map>` regenerates one that
+has not shipped yet. Adding images for new maps is always fine.
+
+Nothing here needs the server image rebuilt: the images are in `manifest.json`, which `gg2_fastdl`
+advertises at every map change.
+
