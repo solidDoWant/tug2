@@ -4,6 +4,7 @@
 #include <mapnames>
 #include <workshopmaps>
 #include <steamids>
+#include <objectivestatus>
 // #include <sourcebanspp>  // SourceBansPP is not currently in use
 #pragma newdecls required
 #define TEAM_SPEC                1
@@ -27,6 +28,11 @@ int   g_cps_capped     = 0;
 // lookup itself failed, not that the server is unconfigured.
 ConVar g_cvMaxRounds = null;
 ConVar g_cvGamemode  = null;
+
+// MVP lookup - see FindMvp. Both stay null/Address_Null if the gamedata is missing, and the messages
+// then go out without an MVP rather than the plugin failing.
+Handle  g_hFindTopPlayers = null;
+Address g_pGameStats      = Address_Null;
 
 // SteamID64 -> GetEngineTime() of bans already posted from OnBanClient/OnBanIdentity. The engine's
 // server_addban event fires for the same ban a moment later; this is how it knows to stay quiet.
@@ -140,6 +146,7 @@ public void OnPluginStart()
         LogError("[DISCORD] mp_maxrounds not found - round end will report the round limit as ?");
 
     g_cvGamemode = FindConVar("mp_gamemode");
+    PrepareFindTopPlayers();
 
     // Display names for the map. configs/mapnames.cfg is only the exceptions - see mapnames.inc for
     // why almost every name has to be derived from the filename rather than looked up.
@@ -156,6 +163,7 @@ public void OnPluginStart()
     HookEvent("player_disconnect", Event_PlayerDisconnect);
     HookEvent("round_start", Event_RoundStart);
     HookEvent("round_end", Event_RoundEnd);
+    HookEvent("game_end", Event_GameEnd);
     HookEvent("controlpoint_captured", Event_ControlPointCaptured, EventHookMode_Pre);
     HookEvent("object_destroyed", Event_ObjectDestroyed, EventHookMode_Pre);
     HookEvent("player_changename", Event_PlayerChangeName);
@@ -477,12 +485,113 @@ public Action Event_RoundEnd(Event event, const char[] name, bool dontBroadcast)
     char gamemode[32];
     GetGamemodeLabel(gamemode, sizeof(gamemode));
 
+    // How far the round got, in the words the server browser name uses: "Cap 3/8", "Level 16", ...
+    char status[64];
+    ObjectiveStatus_Build(status, sizeof(status), GameRules_GetProp("m_iGameState"));
+
+    char details[192];
+    Format(details, sizeof(details), "%s %s", round_progress, mapname);
+    if (gamemode[0]) Format(details, sizeof(details), "%s, %s", details, gamemode);
+    if (status[0]) Format(details, sizeof(details), "%s, %s", details, status);
+
+    char mvp[256];
+    FindMvp(true, mvp, sizeof(mvp));
+
     char round_message[1024];
-    if (gamemode[0]) Format(round_message, sizeof(round_message), "**ROUND END:** __%s Forces WIN!__ (%s %s, %s)", winning_team, round_progress, mapname, gamemode);
-    else Format(round_message, sizeof(round_message), "**ROUND END:** __%s Forces WIN!__ (%s %s)", winning_team, round_progress, mapname);
+    Format(round_message, sizeof(round_message), "**ROUND END:** __%s Forces WIN!__ (%s)%s", winning_team, details, mvp);
     send_discord(round_message, sizeof(round_message));
 
     return Plugin_Continue;
+}
+
+// The game is over and the map vote is up. Fires ~5s after the last round's ROUND END, so this is
+// the one message that sums up the map: the game MVP is sorted by game score, not the last round's.
+public Action Event_GameEnd(Event event, const char[] name, bool dontBroadcast)
+{
+    char mapname[128];
+    MapNames_GetCurrent(mapname, sizeof(mapname));
+
+    char gamemode[32];
+    GetGamemodeLabel(gamemode, sizeof(gamemode));
+
+    int rounds = GameRules_GetProp("m_iRoundPlayedCount");
+
+    char details[96];
+    Format(details, sizeof(details), "%d round%s", rounds, rounds == 1 ? "" : "s");
+    if (gamemode[0]) Format(details, sizeof(details), "%s, %s", gamemode, details);
+
+    char mvp[256];
+    FindMvp(false, mvp, sizeof(mvp));
+
+    char message[512];
+    Format(message, sizeof(message), "**GAME OVER:** __%s__ (%s)%s", mapname, details, mvp);
+    send_discord(message, sizeof(message));
+
+    return Plugin_Continue;
+}
+
+// MVP. The game's own pick, not one made here: CINSServerGameStats::FindTopPlayers is what the
+// round-end and end-of-game screens use, sorted by round or game score with the game's tie-breaks.
+// It returns one entindex per team (bots included); a bot can top a team only on a tie at zero,
+// because bots never score (IncrementPlayerScore skips them), so bots and zero scores are dropped.
+// In co-op only one team has humans; if both did, the higher score is shown.
+void PrepareFindTopPlayers()
+{
+    GameData conf = new GameData("tug2.games");
+    if (conf == null)
+    {
+        LogError("[DISCORD] Missing gamedata \"tug2.games\" - messages will not name an MVP");
+        return;
+    }
+
+    g_pGameStats = conf.GetAddress("INSServerGameStats");
+
+    StartPrepSDKCall(SDKCall_Raw);
+    if (PrepSDKCall_SetFromConf(conf, SDKConf_Signature, "CINSServerGameStats::FindTopPlayers"))
+    {
+        PrepSDKCall_AddParameter(SDKType_PlainOldData, SDKPass_Pointer, _, VENCODE_FLAG_COPYBACK);
+        PrepSDKCall_AddParameter(SDKType_PlainOldData, SDKPass_Pointer, _, VENCODE_FLAG_COPYBACK);
+        PrepSDKCall_AddParameter(SDKType_Bool, SDKPass_Plain);
+        g_hFindTopPlayers = EndPrepSDKCall();
+    }
+    delete conf;
+
+    if (g_hFindTopPlayers == null || g_pGameStats == Address_Null)
+        LogError("[DISCORD] CINSServerGameStats::FindTopPlayers unavailable - messages will not name an MVP");
+}
+
+// A player's score from the game's per-player stats: the block at +0x18 + entindex*0x594, round
+// score at +0x168 and game score at +0x248 (read off StatsTopPlayerRoundScoreSort and
+// StatsTopPlayerGameScoreSort in server_srv.so).
+int GetStatsScore(int client, bool round)
+{
+    int offset = 0x18 + client * 0x594 + (round ? 0x168 : 0x248);
+    return LoadFromAddress(g_pGameStats + view_as<Address>(offset), NumberType_Int32);
+}
+
+// " - MVP: <player link> (<score>)", or empty if there is no MVP to name.
+void FindMvp(bool round, char[] buffer, int maxlen)
+{
+    buffer[0] = '\0';
+    if (g_hFindTopPlayers == null || g_pGameStats == Address_Null) return;
+
+    int top[2] = { -1, -1 };
+    SDKCall(g_hFindTopPlayers, g_pGameStats, top[0], top[1], round);
+
+    int best = -1, bestScore = 0;
+    for (int i = 0; i < sizeof(top); i++)
+    {
+        int client = top[i];
+        if (client < 1 || client > MaxClients || !IsClientInGame(client) || IsFakeClient(client)) continue;
+
+        int score = GetStatsScore(client, round);
+        if (score > bestScore) { best = client; bestScore = score; }
+    }
+    if (best == -1) return;
+
+    char link[256];
+    gen_tug_link(best, link, sizeof(link));
+    Format(buffer, maxlen, " - MVP: %s (%d)", link, bestScore);
 }
 
 public Action Event_PlayerDisconnect(Event event, const char[] name, bool dontBroadcast)
@@ -701,6 +810,9 @@ public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max
 {
     CreateNative("send_to_discord", Native_send_to_discord);
     CreateNative("discord_player_link", Native_discord_player_link);
+    // Only the round end status needs gg2_insurgency (objectivestatus.inc probes for it); don't fail
+    // to load without it.
+    MarkNativeAsOptional("Ins_ObjectiveResource_GetProp");
     return APLRes_Success;
 }
 

@@ -213,6 +213,17 @@
 				"linux"		"@_ZN19CINSServerGameStats20IncrementPlayerScoreEP10CINSPlayerii"
 			}
 
+			// Round/game MVP for gg2_discord - the same pick the game shows. Args: (this, int& topSec,
+			// int& topIns, bool round). Each connected player (bots included) on team 2 or 3 is sorted
+			// by StatsTopPlayerRoundScoreSort (round true: round score, then two tie-break stats) or
+			// StatsTopPlayerGameScoreSort (false); each out param gets that team's top entindex, or
+			// -1 if the team has nobody. It reads the static stats block, never this.
+			"CINSServerGameStats::FindTopPlayers"
+			{
+				"library"	"server"
+				"linux"		"@_ZN19CINSServerGameStats14FindTopPlayersERiS0_b"
+			}
+
 			// The CINSServerGameStats singleton itself (a .bss object, not a pointer to one) -
 			// the address the MVP sort functions index into. Resolved through "Addresses" below.
 			"s_INSServerGameStats"
