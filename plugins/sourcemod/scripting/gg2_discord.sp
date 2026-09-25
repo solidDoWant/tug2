@@ -187,8 +187,13 @@ public Action Event_PlayerChangeName(Event event, const char[] name, bool dontBr
     char oldname[128];
     GetEventString(event, "oldname", oldname, sizeof(oldname));
 
+    // The event fires before the engine applies the new name, so %N / GetClientName would still
+    // return the old one here. Take the new name from the event instead.
+    char newname[128];
+    GetEventString(event, "newname", newname, sizeof(newname));
+
     char newnamelink[256];
-    gen_tug_link(client, newnamelink, sizeof(newnamelink));
+    gen_steam_link_named(client, newname, newnamelink, sizeof(newnamelink));
 
     char message[1024];
     Format(message, sizeof(message), "%s Changed Name to %s", oldname, newnamelink);
@@ -247,14 +252,23 @@ public Action Event_ObjectDestroyed(Event event, const char[] name, bool dontBro
 
 void gen_steam_link(int client, char[] url_safe, int max_size)
 {
+    char name[MAX_NAME_LENGTH];
+    GetClientName(client, name, sizeof(name));
+    gen_steam_link_named(client, name, url_safe, max_size);
+}
+
+// Same as gen_steam_link, but with the displayed name supplied by the caller. Needed where the
+// client's current name is stale, e.g. player_changename fires before the new name is applied.
+void gen_steam_link_named(int client, const char[] name, char[] url_safe, int max_size)
+{
     char authID[32];
     if (!GetClientAuthId(client, AuthId_SteamID64, authID, sizeof(authID)) || StrEqual(BAWT_AUTH_ID, authID))
     {
-        Format(url_safe, max_size, "%N", client);
+        strcopy(url_safe, max_size, name);
         return;
     }
 
-    Format(url_safe, max_size, "[%N](<https://steamcommunity.com/profiles/%s>)", client, authID);
+    Format(url_safe, max_size, "[%s](<https://steamcommunity.com/profiles/%s>)", name, authID);
 }
 
 void gen_tug_link(int client, char[] url_safe, int max_size)
