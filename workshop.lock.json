@@ -1,0 +1,1755 @@
+{
+  "appid": 222880,
+  "solo_bytes": 536870912,
+  "buckets": {
+    "main": 15,
+    "main-test": 24,
+    "test": 6
+  },
+  "items": {
+    "248148672": {
+      "title": "Anbar Coop Final Workshop Version -  (anbar_coop_ws)",
+      "manifest": "3283225786388242530",
+      "size": 56688257,
+      "time_updated": 1492824008,
+      "servers": [
+        "test"
+      ]
+    },
+    "283120201": {
+      "title": "bunker_busting_coop_ws",
+      "manifest": "8020516459263424907",
+      "size": 27167192,
+      "time_updated": 1461424448,
+      "servers": [
+        "main",
+        "test"
+      ]
+    },
+    "292081732": {
+      "title": "launch_control_coop_ws",
+      "manifest": "790027515235326458",
+      "size": 51281112,
+      "time_updated": 1453934490,
+      "servers": [
+        "main"
+      ]
+    },
+    "346843105": {
+      "title": "the_burbs_coop",
+      "manifest": "4562216881517298266",
+      "size": 168685958,
+      "time_updated": 1441281220,
+      "servers": [
+        "main"
+      ]
+    },
+    "352148389": {
+      "title": "angle_iron_coop_ws",
+      "manifest": "6377875302578375420",
+      "size": 49864007,
+      "time_updated": 1439329163,
+      "servers": [
+        "test"
+      ]
+    },
+    "383525894": {
+      "title": "khanashin_b8",
+      "manifest": "2434371308443939189",
+      "size": 154351410,
+      "time_updated": 1458493152,
+      "servers": [
+        "test"
+      ]
+    },
+    "395001767": {
+      "title": "Ramadi",
+      "manifest": "1605140403241815329",
+      "size": 139160415,
+      "time_updated": 1458489120,
+      "servers": [
+        "test"
+      ]
+    },
+    "426742049": {
+      "title": "Karkar",
+      "manifest": "1989037133240651228",
+      "size": 242859298,
+      "time_updated": 1576011541,
+      "servers": [
+        "main"
+      ]
+    },
+    "440046323": {
+      "title": "SHELLSHOCK",
+      "manifest": "5416108014987172053",
+      "size": 39855036,
+      "time_updated": 1528608712,
+      "servers": [
+        "main"
+      ]
+    },
+    "492051918": {
+      "title": "the_raid_coop_ws",
+      "manifest": "5817919254734251493",
+      "size": 64281552,
+      "time_updated": 1440006292,
+      "servers": [
+        "main",
+        "test"
+      ]
+    },
+    "498252536": {
+      "title": "invasion_coop_ws",
+      "manifest": "5342438127531605685",
+      "size": 93988013,
+      "time_updated": 1439331372,
+      "servers": [
+        "test"
+      ]
+    },
+    "498253639": {
+      "title": "amber_spirits_coop",
+      "manifest": "609297726724840516",
+      "size": 72577246,
+      "time_updated": 1439331510,
+      "servers": [
+        "test"
+      ]
+    },
+    "498255733": {
+      "title": "clean_sweep_coop_ws",
+      "manifest": "6367257996313233069",
+      "size": 57910383,
+      "time_updated": 1439331792,
+      "servers": [
+        "main"
+      ]
+    },
+    "501104499": {
+      "title": "Prospect COOP",
+      "manifest": "2343882586547974395",
+      "size": 515328844,
+      "time_updated": 1455458457,
+      "servers": [
+        "main",
+        "test"
+      ]
+    },
+    "504080476": {
+      "title": "cargo_redux9",
+      "manifest": "1494807837084676018",
+      "size": 150401086,
+      "time_updated": 1440436919,
+      "servers": [
+        "test"
+      ]
+    },
+    "505775175": {
+      "title": "Skyscraper 2.0",
+      "manifest": "5037397020300103578",
+      "size": 14380419,
+      "time_updated": 1492152883,
+      "servers": [
+        "test"
+      ]
+    },
+    "517972533": {
+      "title": "zagros_convoy_b5",
+      "manifest": "576011176942774552",
+      "size": 99573476,
+      "time_updated": 1458494510,
+      "servers": [
+        "main",
+        "test"
+      ]
+    },
+    "523594320": {
+      "title": "osama_b3_checkpoint",
+      "manifest": "2984229718869833638",
+      "size": 104970437,
+      "time_updated": 1443050812,
+      "servers": [
+        "main",
+        "test"
+      ]
+    },
+    "573278223": {
+      "title": "Panama Canal",
+      "manifest": "4525263955419968341",
+      "size": 462715038,
+      "time_updated": 1466245434,
+      "servers": [
+        "main",
+        "test"
+      ]
+    },
+    "586951234": {
+      "title": "bilibili server tactical maps(minimap)\u6218\u672f\u5730\u56fe",
+      "manifest": "8473797070162260073",
+      "size": 25209328,
+      "time_updated": 1508366167,
+      "servers": [
+        "main",
+        "test"
+      ]
+    },
+    "599730897": {
+      "title": "dust2_checkpoint",
+      "manifest": "1253426195698944000",
+      "size": 123260255,
+      "time_updated": 1453493767,
+      "servers": [
+        "test"
+      ]
+    },
+    "605055192": {
+      "title": "crossbow",
+      "manifest": "7505879993060307010",
+      "size": 56386143,
+      "time_updated": 1454706166,
+      "servers": [
+        "main",
+        "test"
+      ]
+    },
+    "650616844": {
+      "title": "Estates_b4",
+      "manifest": "5482491668660727063",
+      "size": 293672493,
+      "time_updated": 1465145518,
+      "servers": [
+        "main",
+        "test"
+      ]
+    },
+    "672667761": {
+      "title": "Chateau Tunnels 2.0",
+      "manifest": "5193529174717015621",
+      "size": 23175942,
+      "time_updated": 1497905186,
+      "servers": [
+        "test"
+      ]
+    },
+    "730009401": {
+      "title": "Just do it Remix (Last man Standing)",
+      "manifest": "1138404464281547985",
+      "size": 36300321,
+      "time_updated": 1469287837,
+      "servers": [
+        "test"
+      ]
+    },
+    "795846849": {
+      "title": "mountain_lake_coopv1_1",
+      "manifest": "3792504691054639808",
+      "size": 66164839,
+      "time_updated": 1481309451,
+      "servers": [
+        "main",
+        "test"
+      ]
+    },
+    "822609478": {
+      "title": "ins_bridgeatremagen_coop",
+      "manifest": "566036081236212778",
+      "size": 171958782,
+      "time_updated": 1483183014,
+      "servers": [
+        "main",
+        "test"
+      ]
+    },
+    "841479518": {
+      "title": "Khe Sanh (Born to Kill)",
+      "manifest": "5541635943979530922",
+      "size": 413535333,
+      "time_updated": 1485691665,
+      "servers": [
+        "test"
+      ]
+    },
+    "852587108": {
+      "title": "Khe Sanh Night (Born to Kill)",
+      "manifest": "1633066933855324771",
+      "size": 415647918,
+      "time_updated": 1485693149,
+      "servers": [
+        "test"
+      ]
+    },
+    "859127166": {
+      "title": "The Armory: Expanded - 35 Angry Bots Version",
+      "manifest": "4009866035885803093",
+      "size": 1782153315,
+      "time_updated": 1550059181,
+      "servers": [
+        "main",
+        "test"
+      ]
+    },
+    "863961825": {
+      "title": "Hastings (Born to Kill)",
+      "manifest": "7189683580014268595",
+      "size": 242919446,
+      "time_updated": 1492337204,
+      "servers": [
+        "test"
+      ]
+    },
+    "878171320": {
+      "title": "AE_miscaddons",
+      "manifest": "7507269715084438841",
+      "size": 421762104,
+      "time_updated": 1649676500,
+      "servers": [
+        "main",
+        "test"
+      ]
+    },
+    "878666586": {
+      "title": "Ia Drang (Born to Kill)",
+      "manifest": "7235141857794946932",
+      "size": 304556987,
+      "time_updated": 1489045117,
+      "servers": [
+        "test"
+      ]
+    },
+    "890084623": {
+      "title": "map vote ui",
+      "manifest": "2754384783144156042",
+      "size": 10161943,
+      "time_updated": 1785842988,
+      "servers": [
+        "main",
+        "test"
+      ]
+    },
+    "890747795": {
+      "title": "Showdown (Cod 4 Remake)",
+      "manifest": "7653388598575063635",
+      "size": 123341462,
+      "time_updated": 1490808151,
+      "servers": [
+        "main",
+        "test"
+      ]
+    },
+    "936432939": {
+      "title": "Intense Bullet Crack",
+      "manifest": "222893917373466102",
+      "size": 12123330,
+      "time_updated": 1500791321,
+      "servers": [
+        "main",
+        "test"
+      ]
+    },
+    "939856603": {
+      "title": "convoy_day_apc_coop_v1_1",
+      "manifest": "3729484046250516221",
+      "size": 66368434,
+      "time_updated": 1496604070,
+      "servers": [
+        "main"
+      ]
+    },
+    "939859861": {
+      "title": "cs_motel_coop_nd_v1_3",
+      "manifest": "6280776846420524782",
+      "size": 203137930,
+      "time_updated": 1496604326,
+      "servers": [
+        "main",
+        "test"
+      ]
+    },
+    "939870068": {
+      "title": "trenches6_coop_v1_2",
+      "manifest": "725768604512976780",
+      "size": 89714441,
+      "time_updated": 1496605005,
+      "servers": [
+        "main",
+        "test"
+      ]
+    },
+    "939871975": {
+      "title": "shrine_coop",
+      "manifest": "3187383115376953804",
+      "size": 139952009,
+      "time_updated": 1496605164,
+      "servers": [
+        "main"
+      ]
+    },
+    "1083630976": {
+      "title": "winter_rescue_ws (2020 fix)",
+      "manifest": "5951646364309842700",
+      "size": 89631484,
+      "time_updated": 1582027719,
+      "servers": [
+        "main"
+      ]
+    },
+    "1100976090": {
+      "title": "Operation Intrude 2.0",
+      "manifest": "8525446416856687709",
+      "size": 35743370,
+      "time_updated": 1502263590,
+      "servers": [
+        "main",
+        "test"
+      ]
+    },
+    "1125220551": {
+      "title": "caves_coop",
+      "manifest": "5506954577651112481",
+      "size": 31530136,
+      "time_updated": 1504250979,
+      "servers": [
+        "main",
+        "test"
+      ]
+    },
+    "1161583627": {
+      "title": "market_night_coop - checkpoint",
+      "manifest": "3860434989988815112",
+      "size": 77308077,
+      "time_updated": 1509749279,
+      "servers": [
+        "main",
+        "test"
+      ]
+    },
+    "1163373032": {
+      "title": "district_night_coop - checkpoint",
+      "manifest": "3349655750213861283",
+      "size": 88086681,
+      "time_updated": 1509209788,
+      "servers": [
+        "main",
+        "test"
+      ]
+    },
+    "1172671775": {
+      "title": "warehouse_coopv3b4",
+      "manifest": "4233021842961099444",
+      "size": 257110097,
+      "time_updated": 1681092839,
+      "servers": [
+        "main",
+        "test"
+      ]
+    },
+    "1180002850": {
+      "title": "nomercy_coopv1",
+      "manifest": "7214572708555651955",
+      "size": 139001263,
+      "time_updated": 1513729577,
+      "servers": [
+        "main"
+      ]
+    },
+    "1189448765": {
+      "title": "miransh_alpha",
+      "manifest": "4056170938766937542",
+      "size": 173145910,
+      "time_updated": 1509672025,
+      "servers": [
+        "main"
+      ]
+    },
+    "1202839339": {
+      "title": "de_vertigo_coop - checkpoint",
+      "manifest": "5903704349326355566",
+      "size": 216113400,
+      "time_updated": 1511911223,
+      "servers": [
+        "main"
+      ]
+    },
+    "1207457291": {
+      "title": "cs_italy_coop - checkpoint",
+      "manifest": "1348629247254926438",
+      "size": 176009293,
+      "time_updated": 1511911085,
+      "servers": [
+        "test"
+      ]
+    },
+    "1217898298": {
+      "title": "l4d_mercy_hospital_b5",
+      "manifest": "2668116666723008061",
+      "size": 145932313,
+      "time_updated": 1512767614,
+      "servers": [
+        "test"
+      ]
+    },
+    "1264090927": {
+      "title": "l4d_airport_terminal_b3",
+      "manifest": "3944615759119409023",
+      "size": 115410351,
+      "time_updated": 1516410063,
+      "servers": [
+        "test"
+      ]
+    },
+    "1269418802": {
+      "title": "BB Desertpass Coop",
+      "manifest": "606946750119732106",
+      "size": 107433571,
+      "time_updated": 1515946401,
+      "servers": [
+        "main",
+        "test"
+      ]
+    },
+    "1353915069": {
+      "title": "bm_tacticalmaps",
+      "manifest": "7226709143889370349",
+      "size": 18199716,
+      "time_updated": 1784762168,
+      "servers": [
+        "main",
+        "test"
+      ]
+    },
+    "1379716589": {
+      "title": "Maps CPSetup.txt Fix",
+      "manifest": "4438945156617216874",
+      "size": 32762,
+      "time_updated": 1526529950,
+      "servers": [
+        "main",
+        "test"
+      ]
+    },
+    "1380424575": {
+      "title": "ins_abdallah_coop_fix - Fixed",
+      "manifest": "3391805046937389357",
+      "size": 67906954,
+      "time_updated": 1629989328,
+      "servers": [
+        "main",
+        "test"
+      ]
+    },
+    "1388547184": {
+      "title": "ikazuchi_jungle_coop_b3",
+      "manifest": "5844965366987463791",
+      "size": 344755436,
+      "time_updated": 1526647955,
+      "servers": [
+        "main",
+        "test"
+      ]
+    },
+    "1388556079": {
+      "title": "ps7_co_b91",
+      "manifest": "7506328278912890784",
+      "size": 78816109,
+      "time_updated": 1526648774,
+      "servers": [
+        "main"
+      ]
+    },
+    "1393527442": {
+      "title": "point_blank_fix",
+      "manifest": "4626838514360406962",
+      "size": 193439501,
+      "time_updated": 1527176104,
+      "servers": [
+        "main",
+        "test"
+      ]
+    },
+    "1457936959": {
+      "title": "bastion_coop",
+      "manifest": "1884870229540061173",
+      "size": 86393663,
+      "time_updated": 1533275985,
+      "servers": [
+        "main",
+        "test"
+      ]
+    },
+    "1469832785": {
+      "title": "cs_office_coop_b2",
+      "manifest": "880450735653051946",
+      "size": 201554512,
+      "time_updated": 1534078332,
+      "servers": [
+        "main"
+      ]
+    },
+    "1482148634": {
+      "title": "facilityb2_coop_v1_1",
+      "manifest": "2851875859647825867",
+      "size": 99577534,
+      "time_updated": 1534572109,
+      "servers": [
+        "main"
+      ]
+    },
+    "1501650494": {
+      "title": "Docks_coopb2_day",
+      "manifest": "7136395718723592166",
+      "size": 240686531,
+      "time_updated": 1535914997,
+      "servers": [
+        "main",
+        "test"
+      ]
+    },
+    "1574936010": {
+      "title": "cutoff4-9",
+      "manifest": "5989598263981391839",
+      "size": 180149807,
+      "time_updated": 1543313257,
+      "servers": [
+        "main"
+      ]
+    },
+    "1586281347": {
+      "title": "dusty_anguish_coopvfix",
+      "manifest": "3277382502552762367",
+      "size": 66161510,
+      "time_updated": 1544329488,
+      "servers": [
+        "main",
+        "test"
+      ]
+    },
+    "1586281667": {
+      "title": "jack_hammer_coopvfix",
+      "manifest": "4514965458896198226",
+      "size": 62901158,
+      "time_updated": 1544329571,
+      "servers": [
+        "main"
+      ]
+    },
+    "1595712656": {
+      "title": "Hesco Bastions",
+      "manifest": "7745274677332251388",
+      "size": 11886500,
+      "time_updated": 1545282124,
+      "servers": [
+        "main",
+        "test"
+      ]
+    },
+    "1617934454": {
+      "title": "Glycencity Coop",
+      "manifest": "2640211871519254674",
+      "size": 233212034,
+      "time_updated": 1610012028,
+      "servers": [
+        "main"
+      ]
+    },
+    "1642088392": {
+      "title": "ins_leveled",
+      "manifest": "8979859932621260656",
+      "size": 34781611,
+      "time_updated": 1549074259,
+      "servers": [
+        "main"
+      ]
+    },
+    "1734873741": {
+      "title": "de_mirage_csco_pb4",
+      "manifest": "8337097249858118499",
+      "size": 93226940,
+      "time_updated": 1557288016,
+      "servers": [
+        "main"
+      ]
+    },
+    "1743348046": {
+      "title": "de_train_csgo_pb2",
+      "manifest": "2087851213989604144",
+      "size": 443725220,
+      "time_updated": 1558144236,
+      "servers": [
+        "test"
+      ]
+    },
+    "1787552582": {
+      "title": "karkand_redux_p2",
+      "manifest": "7701490869284518184",
+      "size": 128354328,
+      "time_updated": 1561958093,
+      "servers": [
+        "main"
+      ]
+    },
+    "1876212727": {
+      "title": "Masterchief Tactical Maps",
+      "manifest": "7904518032334888280",
+      "size": 21003893,
+      "time_updated": 1569778415,
+      "servers": [
+        "main",
+        "test"
+      ]
+    },
+    "1893781116": {
+      "title": "badlands_b2",
+      "manifest": "9113502856414502840",
+      "size": 221353868,
+      "time_updated": 1590356521,
+      "servers": [
+        "main",
+        "test"
+      ]
+    },
+    "1905422214": {
+      "title": "insz_favela",
+      "manifest": "5920435362875613913",
+      "size": 23996852,
+      "time_updated": 1572777752,
+      "servers": [
+        "main"
+      ]
+    },
+    "1908980534": {
+      "title": "ins_arcate_npb1",
+      "manifest": "9073250590849812166",
+      "size": 65679851,
+      "time_updated": 1574090063,
+      "servers": [
+        "main"
+      ]
+    },
+    "1963814261": {
+      "title": "Haditha",
+      "manifest": "6188160848502128259",
+      "size": 53493770,
+      "time_updated": 1687035251,
+      "servers": [
+        "main"
+      ]
+    },
+    "1988310157": {
+      "title": "Iron Express",
+      "manifest": "435492015601177068",
+      "size": 94150973,
+      "time_updated": 1680566583,
+      "servers": [
+        "main"
+      ]
+    },
+    "1989120573": {
+      "title": "aof_mapdata.vpk",
+      "manifest": "823207703301777768",
+      "size": 100832438,
+      "time_updated": 1631368803,
+      "servers": [
+        "main",
+        "test"
+      ]
+    },
+    "1989124779": {
+      "title": "arcate_aof (checkpoint)",
+      "manifest": "1383075839965324992",
+      "size": 58105850,
+      "time_updated": 1667255141,
+      "servers": [
+        "main",
+        "test"
+      ]
+    },
+    "1989125473": {
+      "title": "dedust1p2_aof (checkpoint)",
+      "manifest": "5908926899969492934",
+      "size": 174299819,
+      "time_updated": 1667255076,
+      "servers": [
+        "main",
+        "test"
+      ]
+    },
+    "1989129424": {
+      "title": "station_aof (checkpoint)",
+      "manifest": "5101435359388477569",
+      "size": 55692114,
+      "time_updated": 1582011239,
+      "servers": [
+        "main"
+      ]
+    },
+    "2010242125": {
+      "title": "kandagal_aof (checkpoint)",
+      "manifest": "5781862322255602462",
+      "size": 108043502,
+      "time_updated": 1631578124,
+      "servers": [
+        "main",
+        "test"
+      ]
+    },
+    "2010901052": {
+      "title": "ins_tosca_nv1",
+      "manifest": "3627629245881857934",
+      "size": 211510196,
+      "time_updated": 1583142505,
+      "servers": [
+        "main",
+        "test"
+      ]
+    },
+    "2015565348": {
+      "title": "Szepezd Redux Co-op",
+      "manifest": "3186333443082857479",
+      "size": 236340708,
+      "time_updated": 1584397731,
+      "servers": [
+        "main"
+      ]
+    },
+    "2034193905": {
+      "title": "Gauntlet",
+      "manifest": "477550226658100409",
+      "size": 69028805,
+      "time_updated": 1585163287,
+      "servers": [
+        "main",
+        "test"
+      ]
+    },
+    "2035514246": {
+      "title": "Pripyat",
+      "manifest": "5053112404133028501",
+      "size": 191202843,
+      "time_updated": 1585565772,
+      "servers": [
+        "main"
+      ]
+    },
+    "2071869506": {
+      "title": "Left 4 Dead 2 Bridge",
+      "manifest": "4447287672030291499",
+      "size": 193922806,
+      "time_updated": 1588268419,
+      "servers": [
+        "main"
+      ]
+    },
+    "2107007637": {
+      "title": "Breach",
+      "manifest": "2552339605465155175",
+      "size": 454830270,
+      "time_updated": 1590342434,
+      "servers": [
+        "main"
+      ]
+    },
+    "2110527993": {
+      "title": "peak_coop",
+      "manifest": "7975018087782544766",
+      "size": 153546206,
+      "time_updated": 1590579221,
+      "servers": [
+        "main"
+      ]
+    },
+    "2148192104": {
+      "title": "Inferno New [inferno_new_v1]",
+      "manifest": "6331431788873396653",
+      "size": 290982271,
+      "time_updated": 1634713373,
+      "servers": [
+        "main",
+        "test"
+      ]
+    },
+    "2168078889": {
+      "title": "de_centered_v1",
+      "manifest": "3564784398022966987",
+      "size": 273976989,
+      "time_updated": 1594954645,
+      "servers": [
+        "main"
+      ]
+    },
+    "2168116352": {
+      "title": "de_centered assets",
+      "manifest": "1165484499061288988",
+      "size": 9558981,
+      "time_updated": 1594917483,
+      "servers": [
+        "main"
+      ]
+    },
+    "2169943977": {
+      "title": "Fairgrounds",
+      "manifest": "5258205641255772385",
+      "size": 217114306,
+      "time_updated": 1624129836,
+      "servers": [
+        "main",
+        "test"
+      ]
+    },
+    "2169963412": {
+      "title": "L4D2 soundscapes",
+      "manifest": "4483070800200134236",
+      "size": 114230171,
+      "time_updated": 1682284102,
+      "servers": [
+        "main",
+        "test"
+      ]
+    },
+    "2191010494": {
+      "title": "Dust New",
+      "manifest": "8694843794502362141",
+      "size": 481460157,
+      "time_updated": 1596882656,
+      "servers": [
+        "main",
+        "test"
+      ]
+    },
+    "2208434069": {
+      "title": "Cobblestone",
+      "manifest": "497943373325101089",
+      "size": 335911376,
+      "time_updated": 1635156810,
+      "servers": [
+        "main"
+      ]
+    },
+    "2240929834": {
+      "title": "Badel 2020",
+      "manifest": "6018310154481417391",
+      "size": 221126037,
+      "time_updated": 1688935181,
+      "servers": [
+        "main"
+      ]
+    },
+    "2257195565": {
+      "title": "hesitation_coop_ins",
+      "manifest": "7624894621768683966",
+      "size": 56102409,
+      "time_updated": 1602646015,
+      "servers": [
+        "main",
+        "test"
+      ]
+    },
+    "2296749488": {
+      "title": "kunar",
+      "manifest": "3207298516843637055",
+      "size": 108143278,
+      "time_updated": 1606482220,
+      "servers": [
+        "main"
+      ]
+    },
+    "2300512394": {
+      "title": "Sandstorm Insurgent Weapon Cache",
+      "manifest": "6979611064617911583",
+      "size": 16373005,
+      "time_updated": 1606789282,
+      "servers": [
+        "main",
+        "test"
+      ]
+    },
+    "2327421432": {
+      "title": "Fixed Navmesh for custom maps",
+      "manifest": "3857808425297464168",
+      "size": 412263835,
+      "time_updated": 1690985837,
+      "servers": [
+        "main",
+        "test"
+      ]
+    },
+    "2347162033": {
+      "title": "bridge_coop_2021",
+      "manifest": "672385037222312732",
+      "size": 185309009,
+      "time_updated": 1611404032,
+      "servers": [
+        "main",
+        "test"
+      ]
+    },
+    "2352663377": {
+      "title": "Convoy [convoy_pve]",
+      "manifest": "5520057850735276996",
+      "size": 110956331,
+      "time_updated": 1635488016,
+      "servers": [
+        "main",
+        "test"
+      ]
+    },
+    "2361038040": {
+      "title": "citadel_coop",
+      "manifest": "1973991878036638558",
+      "size": 62327973,
+      "time_updated": 1680566411,
+      "servers": [
+        "main"
+      ]
+    },
+    "2373005014": {
+      "title": "CSGO Workout",
+      "manifest": "480082728338823752",
+      "size": 321271957,
+      "time_updated": 1611527486,
+      "servers": [
+        "main",
+        "test"
+      ]
+    },
+    "2393118985": {
+      "title": "Masterchief Assets-Two",
+      "manifest": "764375582873819576",
+      "size": 50788243,
+      "time_updated": 1637950530,
+      "servers": [
+        "main",
+        "test"
+      ]
+    },
+    "2397669169": {
+      "title": "Buhriz Heavyrain",
+      "manifest": "8161425723306793127",
+      "size": 119970699,
+      "time_updated": 1613482923,
+      "servers": [
+        "test"
+      ]
+    },
+    "2397670590": {
+      "title": "Buhriz Heavyrain (Assets)",
+      "manifest": "5399862778726293608",
+      "size": 6446096,
+      "time_updated": 1613483004,
+      "servers": [
+        "test"
+      ]
+    },
+    "2419142919": {
+      "title": "Dog Red (ins_dog_red) from DOI mod",
+      "manifest": "5433957352462122060",
+      "size": 129642686,
+      "time_updated": 1629968388,
+      "servers": [
+        "main",
+        "test"
+      ]
+    },
+    "2461902631": {
+      "title": "limansk_aof (checkpoint)",
+      "manifest": "7918046699196433317",
+      "size": 288101453,
+      "time_updated": 1622283659,
+      "servers": [
+        "main",
+        "test"
+      ]
+    },
+    "2508715344": {
+      "title": "cementplant",
+      "manifest": "8736546735568155784",
+      "size": 293739467,
+      "time_updated": 1629634214,
+      "servers": [
+        "main"
+      ]
+    },
+    "2510398645": {
+      "title": "Crash Course",
+      "manifest": "3957374782168634407",
+      "size": 204692898,
+      "time_updated": 1625577112,
+      "servers": [
+        "main"
+      ]
+    },
+    "2521980943": {
+      "title": "Saint Lo",
+      "manifest": "3468337863009197713",
+      "size": 820078674,
+      "time_updated": 1624181620,
+      "servers": [
+        "main"
+      ]
+    },
+    "2522001554": {
+      "title": "Saint Lo (Assets)",
+      "manifest": "8856847608746742759",
+      "size": 52600450,
+      "time_updated": 1624183030,
+      "servers": [
+        "main"
+      ]
+    },
+    "2538211718": {
+      "title": "Drycanal_coop_old",
+      "manifest": "8826513789951879794",
+      "size": 98572576,
+      "time_updated": 1710930569,
+      "servers": [
+        "main"
+      ]
+    },
+    "2544674426": {
+      "title": "DOI soundscapes",
+      "manifest": "413339970850709637",
+      "size": 205662789,
+      "time_updated": 1677777208,
+      "servers": [
+        "main",
+        "test"
+      ]
+    },
+    "2567903738": {
+      "title": "Breville [breville_pve]",
+      "manifest": "3511136465013889764",
+      "size": 815597511,
+      "time_updated": 1696053257,
+      "servers": [
+        "main",
+        "test"
+      ]
+    },
+    "2568914411": {
+      "title": "parachutes",
+      "manifest": "3109603200193524535",
+      "size": 11838825,
+      "time_updated": 1628377592,
+      "servers": [
+        "main",
+        "test"
+      ]
+    },
+    "2574250983": {
+      "title": "prophet_coop2021",
+      "manifest": "7810913647217508199",
+      "size": 57526692,
+      "time_updated": 1629630895,
+      "servers": [
+        "main",
+        "test"
+      ]
+    },
+    "2575300560": {
+      "title": "operation_metro_b_ins",
+      "manifest": "2581495078568696044",
+      "size": 46603212,
+      "time_updated": 1628994866,
+      "servers": [
+        "main"
+      ]
+    },
+    "2575302067": {
+      "title": "pl_minecraft_redstone_f15_ins_b",
+      "manifest": "7629022230891033116",
+      "size": 113708791,
+      "time_updated": 1628995001,
+      "servers": [
+        "test"
+      ]
+    },
+    "2588320140": {
+      "title": "Bastogne [ins_bastogne]",
+      "manifest": "4325154143377075846",
+      "size": 744498827,
+      "time_updated": 1677776661,
+      "servers": [
+        "main",
+        "test"
+      ]
+    },
+    "2599050685": {
+      "title": "hideout_aof (checkpoint)",
+      "manifest": "8605686671660627961",
+      "size": 145873708,
+      "time_updated": 1631571017,
+      "servers": [
+        "main",
+        "test"
+      ]
+    },
+    "2603024361": {
+      "title": "Marquis",
+      "manifest": "7358381616626468171",
+      "size": 318136723,
+      "time_updated": 1632767460,
+      "servers": [
+        "main",
+        "test"
+      ]
+    },
+    "2606328136": {
+      "title": "Pow Raid [pow_raid_x64]",
+      "manifest": "7969792235399288716",
+      "size": 148360694,
+      "time_updated": 1685642507,
+      "servers": [
+        "main",
+        "test"
+      ]
+    },
+    "2608962360": {
+      "title": "Ultimate GGX Shader Mod (All Weapons + Accessories)",
+      "manifest": "2496454655619823014",
+      "size": 189643813,
+      "time_updated": 1699908907,
+      "servers": [
+        "test"
+      ]
+    },
+    "2627393585": {
+      "title": "Crete [crete]",
+      "manifest": "3104467432362246609",
+      "size": 703106756,
+      "time_updated": 1655753474,
+      "servers": [
+        "main",
+        "test"
+      ]
+    },
+    "2635219866": {
+      "title": "Depot Open [depot_checkpoint]",
+      "manifest": "4826755711166472558",
+      "size": 71066698,
+      "time_updated": 1644515287,
+      "servers": [
+        "main"
+      ]
+    },
+    "2651481089": {
+      "title": "custom map sndscps",
+      "manifest": "7302109678983218515",
+      "size": 18029502,
+      "time_updated": 1666047205,
+      "servers": [
+        "main",
+        "test"
+      ]
+    },
+    "2670949874": {
+      "title": "ministry_coop_oldv1",
+      "manifest": "8682245896844640386",
+      "size": 60005255,
+      "time_updated": 1638456887,
+      "servers": [
+        "main"
+      ]
+    },
+    "2670960489": {
+      "title": "Dusty Nights - Checkpoint + Hunt - by Chief C",
+      "manifest": "199675607531522824",
+      "size": 26105832,
+      "time_updated": 1638457814,
+      "servers": [
+        "main",
+        "test"
+      ]
+    },
+    "2674972433": {
+      "title": "DOI Resistance Fix",
+      "manifest": "707398136148663147",
+      "size": 272676893,
+      "time_updated": 1638800375,
+      "servers": [
+        "main",
+        "test"
+      ]
+    },
+    "2678703408": {
+      "title": "Dust - No Clips",
+      "manifest": "1826381388227950051",
+      "size": 175346792,
+      "time_updated": 1680566226,
+      "servers": [
+        "main",
+        "test"
+      ]
+    },
+    "2688056722": {
+      "title": "Gizab BM",
+      "manifest": "3057792891557444779",
+      "size": 134008345,
+      "time_updated": 1640096599,
+      "servers": [
+        "main"
+      ]
+    },
+    "2696258019": {
+      "title": "Congress [congress_open_coop]",
+      "manifest": "1113583986795488174",
+      "size": 138618989,
+      "time_updated": 1640588224,
+      "servers": [
+        "main"
+      ]
+    },
+    "2705735526": {
+      "title": "Haditha Dam 2022",
+      "manifest": "5380429294369615820",
+      "size": 128122596,
+      "time_updated": 1688831140,
+      "servers": [
+        "main",
+        "test"
+      ]
+    },
+    "2717691676": {
+      "title": "Flakturm",
+      "manifest": "7838671098564091444",
+      "size": 620204998,
+      "time_updated": 1677939894,
+      "servers": [
+        "main"
+      ]
+    },
+    "2744179612": {
+      "title": "Tug Arty Smoke (INS)",
+      "manifest": "420708957001672991",
+      "size": 12474683,
+      "time_updated": 1644095870,
+      "servers": [
+        "main",
+        "test"
+      ]
+    },
+    "2744181131": {
+      "title": "Tug Green smoke (US)",
+      "manifest": "4405808069076123380",
+      "size": 12474592,
+      "time_updated": 1644095952,
+      "servers": [
+        "main",
+        "test"
+      ]
+    },
+    "2744435243": {
+      "title": "Tug M1897",
+      "manifest": "2254290363765609380",
+      "size": 54491788,
+      "time_updated": 1644112752,
+      "servers": [
+        "main",
+        "test"
+      ]
+    },
+    "2749105820": {
+      "title": "Tug SIG MCX",
+      "manifest": "6636338138602338514",
+      "size": 90579137,
+      "time_updated": 1644506405,
+      "servers": [
+        "main",
+        "test"
+      ]
+    },
+    "2749114575": {
+      "title": "Tug M110 (SASS)",
+      "manifest": "8718220437724226601",
+      "size": 185802332,
+      "time_updated": 1644507055,
+      "servers": [
+        "main",
+        "test"
+      ]
+    },
+    "2766356125": {
+      "title": "SOTU Keep v1",
+      "manifest": "6479463400607097273",
+      "size": 104683692,
+      "time_updated": 1645905077,
+      "servers": [
+        "main"
+      ]
+    },
+    "2767466217": {
+      "title": "Tug Sounds3",
+      "manifest": "727350829163522396",
+      "size": 147945741,
+      "time_updated": 1656069460,
+      "servers": [
+        "main",
+        "test"
+      ]
+    },
+    "2767467973": {
+      "title": "Tug Upgrades3",
+      "manifest": "9073174476896678889",
+      "size": 14504055,
+      "time_updated": 1645976287,
+      "servers": [
+        "main",
+        "test"
+      ]
+    },
+    "2769526047": {
+      "title": "Salerno [salerno_pve]",
+      "manifest": "8527433727767161765",
+      "size": 684309168,
+      "time_updated": 1647974838,
+      "servers": [
+        "main",
+        "test"
+      ]
+    },
+    "2784911431": {
+      "title": "Tet [tet_x64]",
+      "manifest": "2164511124571116033",
+      "size": 211525499,
+      "time_updated": 1648306576,
+      "servers": [
+        "main",
+        "test"
+      ]
+    },
+    "2787485611": {
+      "title": "Cu Chi Tunnels [cu_chi_tunnels_x64]",
+      "manifest": "3594300065260875076",
+      "size": 151378911,
+      "time_updated": 1649011833,
+      "servers": [
+        "main",
+        "test"
+      ]
+    },
+    "2802314613": {
+      "title": "Hard Rain [hard_rain]",
+      "manifest": "2794686434752646909",
+      "size": 384774038,
+      "time_updated": 1674589026,
+      "servers": [
+        "main"
+      ]
+    },
+    "2818856572": {
+      "title": "Almaden [almaden_coop]",
+      "manifest": "6589725085183953568",
+      "size": 70169757,
+      "time_updated": 1677958334,
+      "servers": [
+        "main",
+        "test"
+      ]
+    },
+    "2825248282": {
+      "title": "Panama Canal (Sound Fix)",
+      "manifest": "6241744185373130480",
+      "size": 16833077,
+      "time_updated": 1656082904,
+      "servers": [
+        "main",
+        "test"
+      ]
+    },
+    "2832406643": {
+      "title": "The Sacrifice [the_sacrifice]",
+      "manifest": "3744120148318909398",
+      "size": 278642231,
+      "time_updated": 1657310514,
+      "servers": [
+        "main"
+      ]
+    },
+    "2834243418": {
+      "title": "SEC icon (spade)",
+      "manifest": "113286430087135582",
+      "size": 1398467,
+      "time_updated": 1657636436,
+      "servers": [
+        "main",
+        "test"
+      ]
+    },
+    "2835956934": {
+      "title": "laboratory",
+      "manifest": "1898071101933825168",
+      "size": 29478238,
+      "time_updated": 1657972330,
+      "servers": [
+        "main"
+      ]
+    },
+    "2840759249": {
+      "title": "Downtown [downtown_coop]",
+      "manifest": "6355316458712729670",
+      "size": 60544540,
+      "time_updated": 1658998243,
+      "servers": [
+        "main",
+        "test"
+      ]
+    },
+    "2876174607": {
+      "title": "fortress_coop_fixed",
+      "manifest": "4348405390400449112",
+      "size": 51551337,
+      "time_updated": 1665948654,
+      "servers": [
+        "main",
+        "test"
+      ]
+    },
+    "2888145663": {
+      "title": "game_day",
+      "manifest": "1650843569798320655",
+      "size": 41037569,
+      "time_updated": 1670673699,
+      "servers": [
+        "main",
+        "test"
+      ]
+    },
+    "2888146733": {
+      "title": "tunnel_rats",
+      "manifest": "1918619030624772103",
+      "size": 50444227,
+      "time_updated": 1668348542,
+      "servers": [
+        "main"
+      ]
+    },
+    "2890756233": {
+      "title": "jail_break_fix",
+      "manifest": "8357478366560277008",
+      "size": 50625661,
+      "time_updated": 1670673843,
+      "servers": [
+        "main"
+      ]
+    },
+    "2905676416": {
+      "title": "PFLP Insurgents",
+      "manifest": "7990779581717180623",
+      "size": 95072183,
+      "time_updated": 1763312255,
+      "servers": [
+        "main"
+      ]
+    },
+    "2907513227": {
+      "title": "2022_BB_Arena_1",
+      "manifest": "3136069242206699941",
+      "size": 38622960,
+      "time_updated": 1672109475,
+      "servers": [
+        "main"
+      ]
+    },
+    "2908499942": {
+      "title": "TUG Voting",
+      "manifest": "6106615258569841894",
+      "size": 23157296,
+      "time_updated": 1672258721,
+      "servers": [
+        "main",
+        "test"
+      ]
+    },
+    "2910284180": {
+      "title": "baghdad_remastered",
+      "manifest": "4693341428547567106",
+      "size": 88880089,
+      "time_updated": 1672513268,
+      "servers": [
+        "main"
+      ]
+    },
+    "2927739938": {
+      "title": "liberty_mall",
+      "manifest": "4619278329072891680",
+      "size": 266649651,
+      "time_updated": 1675432762,
+      "servers": [
+        "main"
+      ]
+    },
+    "2959755350": {
+      "title": "bombshelter",
+      "manifest": "2446230438773441704",
+      "size": 227380587,
+      "time_updated": 1682511184,
+      "servers": [
+        "main",
+        "test"
+      ]
+    },
+    "2962802373": {
+      "title": "cityhall",
+      "manifest": "3921036225149865754",
+      "size": 297172451,
+      "time_updated": 1682511652,
+      "servers": [
+        "main"
+      ]
+    },
+    "2966432441": {
+      "title": "dead_air",
+      "manifest": "9068778289622610671",
+      "size": 290624750,
+      "time_updated": 1688853713,
+      "servers": [
+        "main"
+      ]
+    },
+    "2967215012": {
+      "title": "l4d_garage_alley_day",
+      "manifest": "6970049143468764837",
+      "size": 220161880,
+      "time_updated": 1682452604,
+      "servers": [
+        "main",
+        "test"
+      ]
+    },
+    "2980224364": {
+      "title": "block_party_fixed",
+      "manifest": "8260778967173714576",
+      "size": 85114414,
+      "time_updated": 1685481001,
+      "servers": [
+        "main"
+      ]
+    },
+    "3008318690": {
+      "title": "Payback [payback_x64]",
+      "manifest": "1225988837924648363",
+      "size": 203924240,
+      "time_updated": 1690057033,
+      "servers": [
+        "main",
+        "test"
+      ]
+    },
+    "3015821699": {
+      "title": "Dustbowl",
+      "manifest": "145695202577896107",
+      "size": 321693988,
+      "time_updated": 1691320025,
+      "servers": [
+        "main",
+        "test"
+      ]
+    },
+    "3015824154": {
+      "title": "Gold Rush",
+      "manifest": "3603525043181699251",
+      "size": 339938663,
+      "time_updated": 1691320428,
+      "servers": [
+        "main",
+        "test"
+      ]
+    },
+    "3015826569": {
+      "title": "Dustbowl (Assets)",
+      "manifest": "7747065556920200859",
+      "size": 3624319,
+      "time_updated": 1691320785,
+      "servers": [
+        "main",
+        "test"
+      ]
+    },
+    "3015826914": {
+      "title": "Gold Rush (Assets)",
+      "manifest": "7613540782522342594",
+      "size": 4700045,
+      "time_updated": 1691320836,
+      "servers": [
+        "main",
+        "test"
+      ]
+    },
+    "3041234121": {
+      "title": "shop_invasion_coop_b2",
+      "manifest": "1930973293962867595",
+      "size": 30985349,
+      "time_updated": 1698453492,
+      "servers": [
+        "main",
+        "test"
+      ]
+    },
+    "3260723441": {
+      "title": "Coldwater (Tugged 2024)",
+      "manifest": "2219198468267761202",
+      "size": 287192295,
+      "time_updated": 1718064666,
+      "servers": [
+        "main",
+        "test"
+      ]
+    },
+    "3306889421": {
+      "title": "Better NVG",
+      "manifest": "7705330428448969031",
+      "size": 1137,
+      "time_updated": 1723741739,
+      "servers": [
+        "test"
+      ]
+    },
+    "3468251942": {
+      "title": "ins_desert_atrocity_a1",
+      "manifest": "147871810786293531",
+      "size": 156866795,
+      "time_updated": 1745270104,
+      "servers": [
+        "main"
+      ]
+    },
+    "3510794344": {
+      "title": "de_nuke",
+      "manifest": "7368385883894178914",
+      "size": 203458041,
+      "time_updated": 1751116842,
+      "servers": [
+        "main",
+        "test"
+      ]
+    },
+    "3511353649": {
+      "title": "coastdawn_gf",
+      "manifest": "6083164722352236093",
+      "size": 417800566,
+      "time_updated": 1751158412,
+      "servers": [
+        "main",
+        "test"
+      ]
+    },
+    "3551935737": {
+      "title": "TUG Scripts 3.9 (10,12,14p)",
+      "manifest": "7641588715112482498",
+      "size": 1092296,
+      "time_updated": 1755599904,
+      "servers": [
+        "main",
+        "test"
+      ]
+    },
+    "3629465190": {
+      "title": "extra audio settings",
+      "manifest": "5499744124065134872",
+      "size": 12151,
+      "time_updated": 1766480066,
+      "servers": [
+        "test"
+      ]
+    }
+  }
+}
