@@ -35,6 +35,15 @@
         "main"
       ]
     },
+    "335578709": {
+      "title": "Hijacked Final Workshop Version - (hijacked_ws)",
+      "manifest": "7015066753210997135",
+      "size": 209835790,
+      "time_updated": 1575284312,
+      "servers": [
+        "test"
+      ]
+    },
     "346843105": {
       "title": "the_burbs_coop",
       "manifest": "4562216881517298266",
@@ -42,15 +51,6 @@
       "time_updated": 1441281220,
       "servers": [
         "main"
-      ]
-    },
-    "352148389": {
-      "title": "angle_iron_coop_ws",
-      "manifest": "6377875302578375420",
-      "size": 49864007,
-      "time_updated": 1439329163,
-      "servers": [
-        "test"
       ]
     },
     "383525894": {
@@ -181,6 +181,15 @@
       "time_updated": 1466245434,
       "servers": [
         "main",
+        "test"
+      ]
+    },
+    "574334931": {
+      "title": "Hurtlocker_coopv2hc",
+      "manifest": "7686530832889541343",
+      "size": 41175971,
+      "time_updated": 1449966330,
+      "servers": [
         "test"
       ]
     },
@@ -605,6 +614,15 @@
         "test"
       ]
     },
+    "1562834364": {
+      "title": "ins_chinatown",
+      "manifest": "8449820872174600474",
+      "size": 285034541,
+      "time_updated": 1541963071,
+      "servers": [
+        "test"
+      ]
+    },
     "1574936010": {
       "title": "cutoff4-9",
       "manifest": "5989598263981391839",
@@ -877,6 +895,15 @@
         "main"
       ]
     },
+    "2112742937": {
+      "title": "Aqueduct",
+      "manifest": "6648329837005954467",
+      "size": 279172973,
+      "time_updated": 1590773681,
+      "servers": [
+        "test"
+      ]
+    },
     "2148192104": {
       "title": "Inferno New [inferno_new_v1]",
       "manifest": "6331431788873396653",
@@ -970,6 +997,15 @@
       "time_updated": 1602646015,
       "servers": [
         "main",
+        "test"
+      ]
+    },
+    "2267598925": {
+      "title": "Prison 2020",
+      "manifest": "1274870913738102965",
+      "size": 223629491,
+      "time_updated": 1606821898,
+      "servers": [
         "test"
       ]
     },
@@ -1512,6 +1548,15 @@
         "main"
       ]
     },
+    "2836590374": {
+      "title": "72\u8857\u4ed3\u5e93 cs_assault",
+      "manifest": "3341784885173932905",
+      "size": 5298961,
+      "time_updated": 1660466400,
+      "servers": [
+        "test"
+      ]
+    },
     "2840759249": {
       "title": "Downtown [downtown_coop]",
       "manifest": "6355316458712729670",
@@ -1558,6 +1603,15 @@
       "time_updated": 1670673843,
       "servers": [
         "main"
+      ]
+    },
+    "2899910052": {
+      "title": "SoTu Pyramid v2",
+      "manifest": "5024317237275070107",
+      "size": 294085704,
+      "time_updated": 1671419936,
+      "servers": [
+        "test"
       ]
     },
     "2905676416": {

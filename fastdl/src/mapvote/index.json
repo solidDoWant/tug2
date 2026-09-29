@@ -405,6 +405,14 @@
    ],
    "textures": []
   },
+  "1562834364": {
+   "images": [],
+   "manifest": "8449820872174600474",
+   "maps": [
+    "ins_chinatown"
+   ],
+   "textures": []
+  },
   "1574936010": {
    "images": [],
    "manifest": "5989598263981391839",
@@ -449,6 +457,12 @@
    "maps": [
     "glycencity"
    ],
+   "textures": []
+  },
+  "1618602773": {
+   "images": [],
+   "manifest": "8680845855029608507",
+   "maps": [],
    "textures": []
   },
   "1642088392": {
@@ -677,6 +691,12 @@
    ],
    "textures": []
   },
+  "2010310686": {
+   "images": [],
+   "manifest": "3187403748196522130",
+   "maps": [],
+   "textures": []
+  },
   "2010901052": {
    "images": [],
    "manifest": "3627629245881857934",
@@ -737,12 +757,26 @@
    ],
    "textures": []
   },
+  "2112742937": {
+   "images": [],
+   "manifest": "6648329837005954467",
+   "maps": [
+    "de_aqueduct_d"
+   ],
+   "textures": []
+  },
   "2148192104": {
    "images": [],
    "manifest": "6331431788873396653",
    "maps": [
     "inferno_new_v1"
    ],
+   "textures": []
+  },
+  "2159576320": {
+   "images": [],
+   "manifest": "3960141545891923957",
+   "maps": [],
    "textures": []
   },
   "2168078889": {
@@ -802,6 +836,14 @@
    "manifest": "7624894621768683966",
    "maps": [
     "hesitation_coop_ins"
+   ],
+   "textures": []
+  },
+  "2267598925": {
+   "images": [],
+   "manifest": "1274870913738102965",
+   "maps": [
+    "ins_prison_2020_new"
    ],
    "textures": []
   },
@@ -1233,6 +1275,14 @@
    ],
    "textures": []
   },
+  "2836590374": {
+   "images": [],
+   "manifest": "3341784885173932905",
+   "maps": [
+    "cs_assault"
+   ],
+   "textures": []
+  },
   "2840759249": {
    "images": [],
    "manifest": "6355316458712729670",
@@ -1270,6 +1320,14 @@
    "manifest": "8357478366560277008",
    "maps": [
     "jail_break_fix"
+   ],
+   "textures": []
+  },
+  "2899910052": {
+   "images": [],
+   "manifest": "5024317237275070107",
+   "maps": [
+    "sotu_pyramidv2"
    ],
    "textures": []
   },
@@ -2009,6 +2067,14 @@
    "maps": [],
    "textures": []
   },
+  "335578709": {
+   "images": [],
+   "manifest": "7015066753210997135",
+   "maps": [
+    "hijacked_ws"
+   ],
+   "textures": []
+  },
   "3468251942": {
    "images": [
     "vgui/endroundlobby/maps/ins_desert_atrocity_a1",
@@ -2046,18 +2112,6 @@
     "coastdawn_gf"
    ],
    "textures": []
-  },
-  "352148389": {
-   "images": [
-    "vgui/endroundlobby/maps/angle_iron_coop_ws"
-   ],
-   "manifest": "6377875302578375420",
-   "maps": [
-    "angle_iron_coop_ws"
-   ],
-   "textures": [
-    "vgui/endroundlobby/maps/angle_iron_coop_ws"
-   ]
   },
   "3551935737": {
    "images": [],
@@ -2202,6 +2256,14 @@
    "textures": [
     "vgui/endroundlobby/maps/panama_canal_b2"
    ]
+  },
+  "574334931": {
+   "images": [],
+   "manifest": "7686530832889541343",
+   "maps": [
+    "hurtlocker_coopv2hc"
+   ],
+   "textures": []
   },
   "586951234": {
    "images": [],

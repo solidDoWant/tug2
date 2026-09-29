@@ -212,6 +212,15 @@
 
 		// ---- new / outpost (1) ----
 		"la_drang"			"outpost"
+
+		// ---- NEW 2026-09-29: requested additions, all checkpoint-only (see mapcycle.txt) ----
+		"de_aqueduct_d"						"checkpoint"
+		"ins_chinatown"						"checkpoint"
+		"hurtlocker_coopv2hc"				"checkpoint"
+		"sotu_pyramidv2"					"checkpoint"
+		"hijacked_ws"						"checkpoint"
+		"ins_prison_2020_new"				"checkpoint"
+		"cs_assault"						"checkpoint"
 	}
 	
 	"cvars"
