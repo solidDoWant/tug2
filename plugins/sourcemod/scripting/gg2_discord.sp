@@ -5,6 +5,10 @@
 #include <workshopmaps>
 #include <steamids>
 #include <objectivestatus>
+// Optional: without punitive_persistence nobody is banned from !calladmin, and every one pings.
+#undef REQUIRE_PLUGIN
+#include <punishments>
+#define REQUIRE_PLUGIN
 // #include <sourcebanspp>  // SourceBansPP is not currently in use
 #pragma newdecls required
 #define TEAM_SPEC                1
@@ -14,29 +18,29 @@
 #define MAX_DISCORD_MESSAGE_SIZE 2000
 #define MAX_MESSAGE_SIZE         MAX_DISCORD_MESSAGE_SIZE
 
-char  WebhookURL[1024];
-char  AdminRoleID[32];
+char      WebhookURL[1024];
+char      AdminRoleID[32];
 
-char  BAWT_AUTH_ID[32] = "STEAM_ID_STOP_IGNORING_RETVALS";
+char      BAWT_AUTH_ID[32]  = "STEAM_ID_STOP_IGNORING_RETVALS";
 
-int   g_cps_capped     = 0;
+int       g_cps_capped      = 0;
 
 // mp_maxrounds, looked up rather than hard-coded. This used to be "#define max_rounds 3", which is
 // why round-end reported "(4/3 mapname)" on a server running mp_maxrounds 5 - the numerator counted
 // real rounds while the denominator was a constant that had nothing to do with the server config.
 // Resolved once at load: mp_maxrounds is a stock cvar and always exists, so a null here means the
 // lookup itself failed, not that the server is unconfigured.
-ConVar g_cvMaxRounds = null;
-ConVar g_cvGamemode  = null;
+ConVar    g_cvMaxRounds     = null;
+ConVar    g_cvGamemode      = null;
 
 // MVP lookup - see FindMvp. Both stay null/Address_Null if the gamedata is missing, and the messages
 // then go out without an MVP rather than the plugin failing.
-Handle  g_hFindTopPlayers = null;
-Address g_pGameStats      = Address_Null;
+Handle    g_hFindTopPlayers = null;
+Address   g_pGameStats      = Address_Null;
 
 // SteamID64 -> GetEngineTime() of bans already posted from OnBanClient/OnBanIdentity. The engine's
 // server_addban event fires for the same ban a moment later; this is how it knows to stay quiet.
-StringMap g_RecentBans = null;
+StringMap g_RecentBans      = null;
 #define BAN_DEDUPE_WINDOW 10.0
 
 // Message batching queue (circular buffer)
@@ -330,7 +334,6 @@ public Action Event_VoteStarted(Event event, const char[] name, bool dontBroadca
 // the admin and reason attached, so they are now the primary source. server_addban remains as a
 // fallback for bans SourceMod never sees - the native vote kick and a raw `banid` over RCON -
 // and is suppressed for a SteamID those forwards have just reported.
-
 public Action OnBanClient(int client, int time, int flags, const char[] reason, const char[] kick_message, const char[] command, any source)
 {
     if (IsFakeClient(client)) return Plugin_Continue;
@@ -414,10 +417,17 @@ void FormatBanDuration(int minutes, char[] buffer, int maxlen)
         return;
     }
 
-    int    amount = minutes;
-    char   unit[8] = "minute";
-    if (minutes % 1440 == 0)    { amount = minutes / 1440; unit = "day"; }
-    else if (minutes % 60 == 0) { amount = minutes / 60;   unit = "hour"; }
+    int  amount  = minutes;
+    char unit[8] = "minute";
+    if (minutes % 1440 == 0)
+    {
+        amount = minutes / 1440;
+        unit   = "day";
+    }
+    else if (minutes % 60 == 0) {
+        amount = minutes / 60;
+        unit   = "hour";
+    }
 
     Format(buffer, maxlen, "for %d %s%s", amount, unit, amount == 1 ? "" : "s");
 }
@@ -475,7 +485,7 @@ public Action Event_RoundEnd(Event event, const char[] name, bool dontBroadcast)
     // events across those restarts is how round end came to report "(12/5 Desertpass)".
     // It is already incremented for the round that just ended when round_end fires, and the event
     // firing proves the gamerules entity exists, so it is safe to read here.
-    int rounds_played = GameRules_GetProp("m_iRoundPlayedCount");
+    int  rounds_played    = GameRules_GetProp("m_iRoundPlayedCount");
 
     int  winner           = GetEventInt(event, "winner");
     char winning_team[16] = "Insurgent";
@@ -528,7 +538,7 @@ public Action Event_GameEnd(Event event, const char[] name, bool dontBroadcast)
     char gamemode[32];
     GetGamemodeLabel(gamemode, sizeof(gamemode));
 
-    int rounds = GameRules_GetProp("m_iRoundPlayedCount");
+    int  rounds = GameRules_GetProp("m_iRoundPlayedCount");
 
     char details[96];
     Format(details, sizeof(details), "%d round%s", rounds, rounds == 1 ? "" : "s");
@@ -599,7 +609,11 @@ void FindMvp(bool round, char[] buffer, int maxlen)
         if (client < 1 || client > MaxClients || !IsClientInGame(client) || IsFakeClient(client)) continue;
 
         int score = GetStatsScore(client, round);
-        if (score > bestScore) { best = client; bestScore = score; }
+        if (score > bestScore)
+        {
+            best      = client;
+            bestScore = score;
+        }
     }
     if (best == -1) return;
 
@@ -640,9 +654,9 @@ public Action Event_PlayerTeam(Event event, const char[] name, bool dontBroadcas
     // Event_PlayerDisconnect above already filters this way; this is the same test.
     if (IsFakeClient(client)) return Plugin_Continue;
 
-    int  team             = GetEventInt(event, "team");
-    char joined_team[20]  = "Spectators";    // "Insurgent Forces" is 16 chars, so not [16]
-    if (team == TEAM_1_SEC)      joined_team = "Security Forces";
+    int  team            = GetEventInt(event, "team");
+    char joined_team[20] = "Spectators";    // "Insurgent Forces" is 16 chars, so not [16]
+    if (team == TEAM_1_SEC) joined_team = "Security Forces";
     else if (team == TEAM_2_INS) joined_team = "Insurgent Forces";
 
     char link[256];
@@ -742,10 +756,17 @@ Action HandleChatMessage(int client, const char[] prefix)
     char message_entire[2048];
     Format(message_entire, sizeof(message_entire), "%s%s %s", link, prefix, message);
 
-    if (StrContains(message, "!calladmin", false) == 0)
+    if (IsCallAdminMessage(message))
     {
-        Call_Admin(client, message_entire, sizeof(message_entire));
-        return Plugin_Continue;
+        if (!IsCallAdminBanned(client))
+        {
+            Call_Admin(client, message_entire, sizeof(message_entire));
+            return Plugin_Continue;
+        }
+
+        // A player banned from !calladmin (punitive_persistence bans them from the server for
+        // this) still has the message relayed, just without pinging the admin role.
+        StrCat(message_entire, sizeof(message_entire), " *(banned from !calladmin - no ping)*");
     }
 
     send_discord(message_entire, sizeof(message_entire));
@@ -760,6 +781,11 @@ public Action Event_TeamSay(int client, const char[] command, int argc)
 public Action Event_Say(int client, const char[] command, int argc)
 {
     return HandleChatMessage(client, ":");
+}
+
+bool IsCallAdminBanned(int client)
+{
+    return LibraryExists("punitive_persistence") && Punishments_IsCallAdminBanned(client);
 }
 
 public void Call_Admin(int client, char[] message, int max_size)

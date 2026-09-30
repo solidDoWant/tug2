@@ -1,6 +1,9 @@
 #include <sourcemod>
 #include <adminmenu>
 #include <steamids>
+// Provides the natives declared there, so it must not declare itself as a dependency.
+#define PUNISHMENTS_PLUGIN
+#include <punishments>
 
 // Optional: without basecomm this plugin still persists and enforces bans; only gag/mute
 // persistence is lost.
@@ -57,6 +60,21 @@ ArrayList g_BanCache          = null;  // BanRow
 bool      g_bBanCacheLoaded   = false;
 bool      g_bBanCacheLoading  = false;
 
+// !calladmin bans - see "CALLADMIN BANS".
+#define CALLADMIN_ABUSE_REASON  "Abusing !calladmin"
+#define CALLADMIN_ABUSE_COMMAND "calladmin_abuse"      // BanClient command string for the auto-ban
+bool     g_bCallAdminBanned[MAXPLAYERS + 1];
+int      g_iCallAdminBanExpires[MAXPLAYERS + 1];       // GetTime() the ban ends, 0 = permanent
+char     g_szCallAdminBanOwner[MAXPLAYERS + 1][32];    // SteamID64 of the admin who issued it, "" = console
+int      g_iMenuTargetUserId[MAXPLAYERS + 1];          // admin menu: player picked, awaiting a length
+ConVar   g_cvCallAdminAbuseBanMinutes;
+TopMenu  g_hAdminMenu = null;
+
+// Admin who owns the next ban OnBanClient stores, when that is not BanClient's `source` (a client
+// index): the !calladmin auto-ban belongs to whoever issued the calladmin ban, who may be offline.
+bool g_bBanOwnerOverride = false;
+char g_szBanOwnerOverride[32];
+
 // Plugin info
 public Plugin myinfo =
 {
@@ -67,10 +85,36 @@ public Plugin myinfo =
     url         = "https://github.com/solidDoWant/tug2"
 };
 
+public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max)
+{
+    CreateNative("Punishments_IsCallAdminBanned", Native_IsCallAdminBanned);
+    RegPluginLibrary("punitive_persistence");
+    return APLRes_Success;
+}
+
 public void OnPluginStart()
 {
+    LoadTranslations("common.phrases");
+
     // Create plugin version cvar
     CreateConVar("sm_punishments_version", PLUGIN_VERSION, "Persistent Punishments version", FCVAR_NOTIFY | FCVAR_DONTRECORD);
+
+    g_cvCallAdminAbuseBanMinutes = CreateConVar("sm_calladmin_abuse_ban_minutes", "60",
+                                                "Minutes a player banned from !calladmin is banned from the server for each time they use it",
+                                                _, true, 1.0);
+
+    // calladmin_ban is this plugin's own punishment, so unlike bans and comms it owns the commands.
+    // As sm_ commands they also work from chat as !bancalladmin / !unbancalladmin.
+    RegAdminCmd("sm_bancalladmin", Command_BanCallAdmin, ADMFLAG_BAN,
+                "sm_bancalladmin <#userid|name|steamid> <minutes|0> [reason] - ban the player from the server whenever they use !calladmin");
+    RegAdminCmd("sm_unbancalladmin", Command_UnbanCallAdmin, ADMFLAG_BAN,
+                "sm_unbancalladmin <#userid|name|steamid> - lift a !calladmin ban");
+    AddCommandListener(Listener_Say, "say");
+    AddCommandListener(Listener_Say, "say_team");
+
+    TopMenu topmenu;
+    if (LibraryExists("adminmenu") && ((topmenu = GetAdminTopMenu()) != null))
+        OnAdminMenuReady(topmenu);
 
     // Ban commands (sm_ban, sm_addban, sm_banip, sm_unban) are deliberately NOT registered here.
     // basebans owns them, and every ban and unban it issues reaches the database through the
@@ -253,7 +297,7 @@ void CheckActivePunishments(int client, const char[] steamid, const char[] ip)
     // Longest ban first, so the message shows the one that actually decides when they can return.
     char query[1024];
     g_Database.Format(query, sizeof(query),
-                      "SELECT punishment_type, " ... BAN_REMAINING_SQL ... ", COALESCE(reason, ''), COALESCE(target_ip, ''), COALESCE(target_steam_id::text, '') FROM punishments WHERE is_active = TRUE AND (target_steam_id = %s OR target_ip = '%s') AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP) ORDER BY expires_at DESC NULLS FIRST",
+                      "SELECT punishment_type, " ... BAN_REMAINING_SQL ... ", COALESCE(reason, ''), COALESCE(target_ip, ''), COALESCE(target_steam_id::text, ''), COALESCE(admin_steam_id::text, '') FROM punishments WHERE is_active = TRUE AND (target_steam_id = %s OR target_ip = '%s') AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP) ORDER BY expires_at DESC NULLS FIRST",
                       steamid, ip);
 
     DataPack pack = new DataPack();
@@ -320,6 +364,12 @@ public void OnActivePunishmentsChecked(Database db, DBResultSet results, const c
             delete pack;
             return;
         }
+        else if (StrEqual(punishmentType, "calladmin_ban"))
+        {
+            char owner[32];
+            results.FetchString(5, owner, sizeof(owner));
+            SetCallAdminBanState(client, true, results.IsFieldNull(1) ? 0 : ExpiryFromRemaining(results.FetchInt(1)), owner);
+        }
         else if (StrEqual(punishmentType, "gag"))
         {
             gagged = true;
@@ -374,15 +424,19 @@ public void OnActivePunishmentsChecked(Database db, DBResultSet results, const c
 // already in its kick queue, and KickClient here queues first, so this message is the one shown.
 // Same for sm_banip, which kicks with "Banned: <reason>" after BanIdentity returns.
 //
-// No double-insert with this plugin's own commands: those kick and insert directly and never call
-// BanClient/BanIdentity, so they never reach these forwards.
+// The !calladmin auto-ban (see "CALLADMIN BANS") comes through here too, on purpose: it calls
+// BanClient so it is stored and messaged like any other ban.
 
 public Action OnBanClient(int client, int time, int flags, const char[] rawReason, const char[] kick_message, const char[] command, any source)
 {
     // Not a real ban length (basebans rejects these); leave it to the engine rather than guess.
     if (IsFakeClient(client) || time < 0) return Plugin_Continue;
 
-    int admin = ResolveBanSource(source);
+    char adminSteamId[32];
+    if (g_bBanOwnerOverride)
+        strcopy(adminSteamId, sizeof(adminSteamId), g_szBanOwnerOverride);
+    else
+        GetAdminSteamId(ResolveBanSource(source), adminSteamId, sizeof(adminSteamId));
 
     BanRow ban;
     ban.byIp    = (flags & BANFLAG_IP) != 0;
@@ -402,7 +456,7 @@ public Action OnBanClient(int client, int time, int flags, const char[] rawReaso
     }
 
     CacheBan(ban);
-    AddBanToDatabase(admin, ban.steamid, ban.ip, ban.reason, time, ban.byIp ? "ban_ip" : "ban_steamid");
+    AddBanToDatabase(adminSteamId, ban.steamid, ban.ip, ban.reason, time, ban.byIp ? "ban_ip" : "ban_steamid");
 
     if (!(flags & BANFLAG_NOKICK))
     {
@@ -418,7 +472,8 @@ public Action OnBanIdentity(const char[] identity, int time, int flags, const ch
 {
     if (time < 0) return Plugin_Continue;
 
-    int admin = ResolveBanSource(source);
+    char adminSteamId[32];
+    GetAdminSteamId(ResolveBanSource(source), adminSteamId, sizeof(adminSteamId));
 
     BanRow ban;
     ban.byIp    = (flags & BANFLAG_IP) != 0;
@@ -434,7 +489,7 @@ public Action OnBanIdentity(const char[] identity, int time, int flags, const ch
     }
 
     CacheBan(ban);
-    AddBanToDatabase(admin, ban.steamid, ban.ip, ban.reason, time, ban.byIp ? "ban_ip" : "ban_steamid");
+    AddBanToDatabase(adminSteamId, ban.steamid, ban.ip, ban.reason, time, ban.byIp ? "ban_ip" : "ban_steamid");
 
     // sm_addban is usually for someone offline, but if they are here, a ban means gone now - not
     // whenever they next reconnect.
@@ -589,6 +644,7 @@ public void OnClientDisconnect(int client)
 {
     g_bPendingGag[client]  = false;
     g_bPendingMute[client] = false;
+    SetCallAdminBanState(client, false, 0, "");
 }
 
 // ============================================================
@@ -649,14 +705,7 @@ void ReadBanRow(DBResultSet results, int col, bool byIp, BanRow ban)
 {
     ban.byIp = byIp;
 
-    if (results.IsFieldNull(col))
-        ban.expires = 0;
-    else
-    {
-        int remaining = results.FetchInt(col);
-        int now       = GetTime();
-        ban.expires   = (remaining > 2147483647 - now) ? 2147483647 : now + remaining;
-    }
+    ban.expires = results.IsFieldNull(col) ? 0 : ExpiryFromRemaining(results.FetchInt(col));
 
     results.FetchString(col + 1, ban.reason, sizeof(ban.reason));
     results.FetchString(col + 2, ban.ip, sizeof(ban.ip));
@@ -763,6 +812,13 @@ int BanExpiry(int minutes)
     return now + minutes * 60;
 }
 
+// GetTime() something ends at, from BAN_REMAINING_SQL's seconds remaining. Clamped at 2038.
+int ExpiryFromRemaining(int remaining)
+{
+    int now = GetTime();
+    return (remaining > 2147483647 - now) ? 2147483647 : now + remaining;
+}
+
 // Whole minutes left, rounded up so a ban never reads "0m"; 0 for a permanent ban.
 int RemainingBanMinutes(BanRow ban)
 {
@@ -771,6 +827,419 @@ int RemainingBanMinutes(BanRow ban)
     int seconds = ban.expires - GetTime();
     if (seconds < 60) return 1;
     return (seconds + 59) / 60;
+}
+
+// ============================================================
+// CALLADMIN BANS - calladmin_ban rows, sm_bancalladmin / sm_unbancalladmin, admin menu
+// ============================================================
+//
+// For players who abuse !calladmin, which pings the whole admin role on Discord. A player banned
+// from it can still type it: the message is relayed to Discord by gg2_discord as usual, but
+// without the role ping (it asks Punishments_IsCallAdminBanned), and this plugin bans them from
+// the server for sm_calladmin_abuse_ban_minutes. That server ban goes through BanClient like any
+// other, so it is stored, cached, reported to Discord and messaged the same way, and it is owned by
+// the admin who issued the calladmin ban. The calladmin ban itself stays, so every repeat costs
+// another server ban.
+//
+// Re-applied on connect from the database.
+
+public any Native_IsCallAdminBanned(Handle plugin, int numParams)
+{
+    int client = GetNativeCell(1);
+    if (client < 1 || client > MaxClients) return false;
+    return IsCallAdminBanned(client);
+}
+
+bool IsCallAdminBanned(int client)
+{
+    if (!g_bCallAdminBanned[client]) return false;
+
+    // A timed ban that ran out while the player was online.
+    if (g_iCallAdminBanExpires[client] != 0 && g_iCallAdminBanExpires[client] <= GetTime())
+    {
+        SetCallAdminBanState(client, false, 0, "");
+        return false;
+    }
+    return true;
+}
+
+void SetCallAdminBanState(int client, bool banned, int expires, const char[] owner)
+{
+    g_bCallAdminBanned[client]     = banned;
+    g_iCallAdminBanExpires[client] = banned ? expires : 0;
+    strcopy(g_szCallAdminBanOwner[client], sizeof(g_szCallAdminBanOwner[]), banned ? owner : "");
+}
+
+public Action Listener_Say(int client, const char[] command, int argc)
+{
+    if (client < 1 || client > MaxClients || !IsClientInGame(client) || IsFakeClient(client)) return Plugin_Continue;
+
+    // In the kick queue already: a second !calladmin in the same frame must not ban twice.
+    if (!IsCallAdminBanned(client) || IsClientInKickQueue(client)) return Plugin_Continue;
+
+    char message[1024];
+    GetCmdArgString(message, sizeof(message));
+    StripQuotes(message);
+    if (!IsCallAdminMessage(message)) return Plugin_Continue;
+
+    // Plugin_Continue either way: the message still goes out to chat and to Discord. The kick is
+    // delayed to the next frame, so the player is still here for both.
+    int minutes = g_cvCallAdminAbuseBanMinutes.IntValue;
+    LogAction(0, client, "\"%L\" used !calladmin while banned from it and was banned (minutes \"%d\")", client, minutes);
+
+    // The owner goes to the database through the override; `source` is only for who Discord and
+    // other listeners see, and has to be a client index, so it names the issuer only if online.
+    int issuer = g_szCallAdminBanOwner[client][0] != '\0' ? FindClientBySteamId64(g_szCallAdminBanOwner[client]) : 0;
+    if (issuer != 0 && !IsClientInGame(issuer)) issuer = 0;
+
+    g_bBanOwnerOverride = true;
+    strcopy(g_szBanOwnerOverride, sizeof(g_szBanOwnerOverride), g_szCallAdminBanOwner[client]);
+    BanClient(client, minutes, BANFLAG_AUTO, CALLADMIN_ABUSE_REASON, CALLADMIN_ABUSE_REASON, CALLADMIN_ABUSE_COMMAND, issuer);
+    g_bBanOwnerOverride = false;
+
+    return Plugin_Continue;
+}
+
+// ------------------------------------------------------------
+// Commands
+// ------------------------------------------------------------
+
+public Action Command_BanCallAdmin(int client, int args)
+{
+    char target[MAX_TARGET_LENGTH], minutesArg[16], reason[MAX_REASON_BYTES];
+    GetCallAdminBanArgs(target, sizeof(target), minutesArg, sizeof(minutesArg), reason, sizeof(reason));
+    if (target[0] == '\0' || !IsDigitString(minutesArg))
+    {
+        ReplyToCommand(client, "[SM] Usage: sm_bancalladmin <#userid|name|steamid> <minutes|0> [reason]");
+        return Plugin_Handled;
+    }
+
+    ApplyCallAdminBanCommand(client, target, true, StringToInt(minutesArg), reason);
+    return Plugin_Handled;
+}
+
+public Action Command_UnbanCallAdmin(int client, int args)
+{
+    char target[MAX_TARGET_LENGTH], unused[16], unusedReason[16];
+    GetCallAdminBanArgs(target, sizeof(target), unused, sizeof(unused), unusedReason, sizeof(unusedReason));
+    if (target[0] == '\0')
+    {
+        ReplyToCommand(client, "[SM] Usage: sm_unbancalladmin <#userid|name|steamid>");
+        return Plugin_Handled;
+    }
+
+    ApplyCallAdminBanCommand(client, target, false, 0, "");
+    return Plugin_Handled;
+}
+
+// <target> <minutes> [reason...], split from the raw argument string with BreakString like
+// basebans: GetCmdArg would split "STEAM_1:0:123" at the colons. The reason is the rest of the
+// line, as typed, with one surrounding pair of quotes removed.
+void GetCallAdminBanArgs(char[] target, int targetLen, char[] minutes, int minutesLen, char[] reason, int reasonLen)
+{
+    char args[MAX_REASON_BYTES];
+    GetCmdArgString(args, sizeof(args));
+
+    target[0]  = '\0';
+    minutes[0] = '\0';
+    reason[0]  = '\0';
+
+    int pos = BreakString(args, target, targetLen);
+    if (pos == -1) return;
+
+    int next = BreakString(args[pos], minutes, minutesLen);
+    if (next == -1) return;
+
+    CleanBanReason(args[pos + next], reason, reasonLen);
+}
+
+bool IsDigitString(const char[] s)
+{
+    if (s[0] == '\0') return false;
+    for (int i = 0; s[i] != '\0'; i++)
+        if (!IsCharNumeric(s[i])) return false;
+    return true;
+}
+
+// The target is a SteamID in any form (the player may be offline), or a name / #userid / group.
+void ApplyCallAdminBanCommand(int admin, const char[] target, bool ban, int minutes, const char[] reason)
+{
+    char details[MAX_REASON_BYTES + 64];
+    FormatCallAdminBanDetails(ban, minutes, reason, details, sizeof(details));
+
+    char steamid64[32];
+    if (SteamIdTo64(target, steamid64, sizeof(steamid64)))
+    {
+        int  online  = FindClientBySteamId64(steamid64);
+        bool allowed = (online != 0) ? CanUserTarget(admin, online)
+                                     : (admin == 0 || CanAdminTarget(GetUserAdmin(admin), FindAdminByIdentity("steam", target)));
+        if (!allowed)
+        {
+            ReplyToCommand(admin, "[SM] %t", "Unable to target");
+            return;
+        }
+
+        SetCallAdminBan(admin, steamid64, ban, minutes, reason);
+        LogAction(admin, online != 0 ? online : -1, "\"%L\" %s %s from !calladmin%s", admin, ban ? "banned" : "unbanned", target, details);
+        ShowActivity2(admin, "[SM] ", "%s %s from !calladmin%s.", ban ? "Banned" : "Unbanned", target, details);
+        return;
+    }
+
+    int  targets[MAXPLAYERS];
+    char targetName[MAX_TARGET_LENGTH];
+    bool tnIsMl;
+    int  count = ProcessTargetString(target, admin, targets, sizeof(targets), COMMAND_FILTER_NO_BOTS,
+                                     targetName, sizeof(targetName), tnIsMl);
+    if (count <= 0)
+    {
+        ReplyToTargetError(admin, count);
+        return;
+    }
+
+    for (int i = 0; i < count; i++)
+        CallAdminBanClient(admin, targets[i], ban, minutes, reason, details);
+
+    if (tnIsMl)
+        ShowActivity2(admin, "[SM] ", "%s %t from !calladmin%s.", ban ? "Banned" : "Unbanned", targetName, details);
+    else
+        ShowActivity2(admin, "[SM] ", "%s %s from !calladmin%s.", ban ? "Banned" : "Unbanned", targetName, details);
+}
+
+// One connected player, from a command or the admin menu. False, with a reply, when they have no
+// SteamID yet - there is nothing to store it under.
+bool CallAdminBanClient(int admin, int target, bool ban, int minutes, const char[] reason, const char[] details)
+{
+    char steamid64[32];
+    if (!GetClientAuthId(target, AuthId_SteamID64, steamid64, sizeof(steamid64)))
+    {
+        ReplyToCommand(admin, "[SM] %N has no SteamID yet, not changed.", target);
+        return false;
+    }
+
+    SetCallAdminBan(admin, steamid64, ban, minutes, reason);
+    LogAction(admin, target, "\"%L\" %s \"%L\" from !calladmin%s", admin, ban ? "banned" : "unbanned", target, details);
+    return true;
+}
+
+// " for 1d (reason)", " permanently", or "" for an unban.
+void FormatCallAdminBanDetails(bool ban, int minutes, const char[] reason, char[] out, int maxlen)
+{
+    out[0] = '\0';
+    if (!ban) return;
+
+    if (minutes > 0)
+    {
+        char duration[64];
+        FormatBanDuration(minutes, duration, sizeof(duration));
+        Format(out, maxlen, " for %s", duration);
+    }
+    else
+        strcopy(out, maxlen, " permanently");
+
+    if (reason[0] != '\0')
+        Format(out, maxlen, "%s (%s)", out, reason);
+}
+
+// Applies to the player now if they are connected, and replaces any stored calladmin ban.
+void SetCallAdminBan(int admin, const char[] steamid64, bool ban, int minutes, const char[] reason)
+{
+    char owner[32];
+    GetAdminSteamId(admin, owner, sizeof(owner));
+
+    int online = FindClientBySteamId64(steamid64);
+    if (online != 0)
+        SetCallAdminBanState(online, ban, BanExpiry(minutes), owner);
+
+    // steamid64 is digits only (SteamIdTo64 / GetClientAuthId). Deactivate first so a re-ban with a
+    // new length replaces the old row; RunWrite keeps the two in order.
+    char query[MAX_QUERY_LENGTH];
+    Format(query, sizeof(query),
+           "UPDATE punishments SET is_active = FALSE WHERE target_steam_id = %s AND punishment_type = 'calladmin_ban' AND is_active",
+           steamid64);
+    RunWrite(query);
+
+    if (!ban) return;
+
+    char adminValue[32];
+    SteamIdSqlValue(owner, adminValue, sizeof(adminValue));
+
+    char expiresValue[128];
+    if (minutes == 0)
+        strcopy(expiresValue, sizeof(expiresValue), "NULL");
+    else
+        Format(expiresValue, sizeof(expiresValue), "CURRENT_TIMESTAMP + INTERVAL '%d minutes'", minutes);
+
+    char reasonValue[MAX_REASON_BYTES * 2 + 3];
+    if (reason[0] != '\0')
+        SqlQuote(reason, reasonValue, sizeof(reasonValue));
+    else
+        strcopy(reasonValue, sizeof(reasonValue), "NULL");
+
+    Format(query, sizeof(query),
+           "INSERT INTO punishments (punishment_type, target_steam_id, admin_steam_id, reason, expires_at) VALUES ('calladmin_ban', %s, %s, %s, %s)",
+           steamid64, adminValue, reasonValue, expiresValue);
+    RunWrite(query);
+}
+
+// 0 when nobody connected has that SteamID64.
+int FindClientBySteamId64(const char[] steamid64)
+{
+    char auth[32];
+    for (int i = 1; i <= MaxClients; i++)
+    {
+        if (IsClientConnected(i) && !IsFakeClient(i)
+            && GetClientAuthId(i, AuthId_SteamID64, auth, sizeof(auth)) && StrEqual(auth, steamid64))
+            return i;
+    }
+    return 0;
+}
+
+// ------------------------------------------------------------
+// Admin menu - Player Commands > "Ban/unban from !calladmin"
+// ------------------------------------------------------------
+//
+// Pick a player; one already banned from !calladmin is unbanned, anyone else goes on to a length.
+// No reason step - the menu has nowhere to type one; use the command for that.
+
+public void OnAdminMenuReady(Handle aTopMenu)
+{
+    TopMenu topmenu = TopMenu.FromHandle(aTopMenu);
+    if (topmenu == g_hAdminMenu) return;
+    g_hAdminMenu = topmenu;
+
+    TopMenuObject playerCommands = g_hAdminMenu.FindCategory(ADMINMENU_PLAYERCOMMANDS);
+    if (playerCommands != INVALID_TOPMENUOBJECT)
+        g_hAdminMenu.AddItem("sm_bancalladmin", AdminMenu_BanCallAdmin, playerCommands, "sm_bancalladmin", ADMFLAG_BAN);
+}
+
+public void OnLibraryRemoved(const char[] name)
+{
+    if (StrEqual(name, "adminmenu"))
+        g_hAdminMenu = null;
+}
+
+public void AdminMenu_BanCallAdmin(TopMenu topmenu, TopMenuAction action, TopMenuObject object_id, int param, char[] buffer, int maxlength)
+{
+    if (action == TopMenuAction_DisplayOption)
+        strcopy(buffer, maxlength, "Ban/unban from !calladmin");
+    else if (action == TopMenuAction_SelectOption)
+        DisplayCallAdminTargetMenu(param);
+}
+
+void DisplayCallAdminTargetMenu(int client)
+{
+    Menu menu = new Menu(MenuHandler_CallAdminTarget);
+    menu.SetTitle("Ban/unban from !calladmin:");
+    menu.ExitBackButton = true;
+
+    char userid[16], label[MAX_NAME_LENGTH + 16];
+    for (int i = 1; i <= MaxClients; i++)
+    {
+        if (!IsClientInGame(i) || IsFakeClient(i) || !CanUserTarget(client, i)) continue;
+
+        IntToString(GetClientUserId(i), userid, sizeof(userid));
+        Format(label, sizeof(label), "%N%s", i, IsCallAdminBanned(i) ? " [banned]" : "");
+        menu.AddItem(userid, label);
+    }
+
+    if (menu.ItemCount == 0)
+        menu.AddItem("", "No players", ITEMDRAW_DISABLED);
+
+    menu.Display(client, MENU_TIME_FOREVER);
+}
+
+public int MenuHandler_CallAdminTarget(Menu menu, MenuAction action, int param1, int param2)
+{
+    if (action == MenuAction_End)
+        delete menu;
+    else if (action == MenuAction_Cancel)
+    {
+        if (param2 == MenuCancel_ExitBack && g_hAdminMenu != null)
+            g_hAdminMenu.Display(param1, TopMenuPosition_LastCategory);
+    }
+    else if (action == MenuAction_Select)
+    {
+        char info[16];
+        menu.GetItem(param2, info, sizeof(info));
+        int userid = StringToInt(info);
+
+        int target = MenuTargetOrReply(param1, userid);
+        if (target == 0)
+            DisplayCallAdminTargetMenu(param1);
+        else if (IsCallAdminBanned(target))
+        {
+            ApplyCallAdminBanFromMenu(param1, target, false, 0);
+            DisplayCallAdminTargetMenu(param1);
+        }
+        else
+        {
+            g_iMenuTargetUserId[param1] = userid;
+            DisplayCallAdminLengthMenu(param1);
+        }
+    }
+    return 0;
+}
+
+void DisplayCallAdminLengthMenu(int client)
+{
+    Menu menu = new Menu(MenuHandler_CallAdminLength);
+    menu.SetTitle("Ban from !calladmin for:");
+    menu.ExitBackButton = true;
+
+    menu.AddItem("0", "Permanently");
+    menu.AddItem("1440", "1 day");
+    menu.AddItem("10080", "1 week");
+    menu.AddItem("43200", "30 days");
+
+    menu.Display(client, MENU_TIME_FOREVER);
+}
+
+public int MenuHandler_CallAdminLength(Menu menu, MenuAction action, int param1, int param2)
+{
+    if (action == MenuAction_End)
+        delete menu;
+    else if (action == MenuAction_Cancel)
+    {
+        if (param2 == MenuCancel_ExitBack)
+            DisplayCallAdminTargetMenu(param1);
+    }
+    else if (action == MenuAction_Select)
+    {
+        char info[16];
+        menu.GetItem(param2, info, sizeof(info));
+
+        int target = MenuTargetOrReply(param1, g_iMenuTargetUserId[param1]);
+        if (target != 0)
+            ApplyCallAdminBanFromMenu(param1, target, true, StringToInt(info));
+        DisplayCallAdminTargetMenu(param1);
+    }
+    return 0;
+}
+
+// The picked player, re-checked: they may have left, or the admin may no longer outrank them.
+int MenuTargetOrReply(int admin, int userid)
+{
+    int target = GetClientOfUserId(userid);
+    if (target == 0)
+        PrintToChat(admin, "[SM] %t", "Player no longer available");
+    else if (!CanUserTarget(admin, target))
+    {
+        PrintToChat(admin, "[SM] %t", "Unable to target");
+        target = 0;
+    }
+    return target;
+}
+
+void ApplyCallAdminBanFromMenu(int admin, int target, bool ban, int minutes)
+{
+    char details[64];
+    FormatCallAdminBanDetails(ban, minutes, "", details, sizeof(details));
+
+    // Replies from the shared code go to chat: the menu has no command of its own to reply to.
+    ReplySource previous = SetCmdReplySource(SM_REPLY_TO_CHAT);
+    if (CallAdminBanClient(admin, target, ban, minutes, "", details))
+        ShowActivity2(admin, "[SM] ", "%s %N from !calladmin%s.", ban ? "Banned" : "Unbanned", target, details);
+    SetCmdReplySource(previous);
 }
 
 // ============================================================
@@ -853,12 +1322,12 @@ void AppendDurationUnit(char[] out, int maxlen, int value, const char[] unit)
 // DATABASE OPERATIONS
 // ============================================================
 
-void AddBanToDatabase(int requesterClient, const char[] targetSteamID, const char[] targetIP, const char[] reason, int minutes, const char[] punishmentType)
+void AddBanToDatabase(const char[] adminSteamId, const char[] targetSteamID, const char[] targetIP, const char[] reason, int minutes, const char[] punishmentType)
 {
     bool hasIP    = (strlen(targetIP) > 0);
 
     char adminValue[32];
-    AdminSqlValue(requesterClient, adminValue, sizeof(adminValue));
+    SteamIdSqlValue(adminSteamId, adminValue, sizeof(adminValue));
 
     // An IP ban of someone who is not connected has no SteamID. Writing the empty string into the
     // unquoted bigint slot would be a syntax error, so it becomes NULL.
@@ -1059,10 +1528,21 @@ bool IsConnectionError(const char[] error)
 void AdminSqlValue(int client, char[] out, int maxlen)
 {
     char steamid[32];
-    if (client > 0 && GetClientAuthId(client, AuthId_SteamID64, steamid, sizeof(steamid)))
-        strcopy(out, maxlen, steamid);
-    else
-        strcopy(out, maxlen, "NULL");
+    GetAdminSteamId(client, steamid, sizeof(steamid));
+    SteamIdSqlValue(steamid, out, maxlen);
+}
+
+// A SteamID64 as a SQL value; "" becomes NULL.
+void SteamIdSqlValue(const char[] steamid, char[] out, int maxlen)
+{
+    strcopy(out, maxlen, steamid[0] != '\0' ? steamid : "NULL");
+}
+
+// The admin's SteamID64, or "" for the console or an admin with no SteamID yet.
+void GetAdminSteamId(int client, char[] out, int maxlen)
+{
+    if (client < 1 || !GetClientAuthId(client, AuthId_SteamID64, out, maxlen))
+        out[0] = '\0';
 }
 
 // Quotes a string for Postgres without needing a live connection, so a query can be built while

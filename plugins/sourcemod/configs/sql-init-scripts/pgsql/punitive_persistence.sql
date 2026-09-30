@@ -52,16 +52,19 @@ BEGIN
     END IF;
 END $$;
 
--- Ensure punishment type is valid
-DO $$ 
+-- Ensure punishment type is valid. Keyed on the newest type rather than on the constraint existing,
+-- so a database created with an older list gets it replaced - this script runs on every load.
+DO $$
 BEGIN
     IF NOT EXISTS (
-        SELECT 1 FROM pg_constraint 
+        SELECT 1 FROM pg_constraint
         WHERE conname = 'chk_punishment_type'
+        AND pg_get_constraintdef(oid) LIKE '%calladmin_ban%'
     ) THEN
-        ALTER TABLE punishments 
-        ADD CONSTRAINT chk_punishment_type 
-        CHECK (punishment_type IN ('ban_steamid', 'ban_ip', 'gag', 'mute', 'silence'));
+        ALTER TABLE punishments DROP CONSTRAINT IF EXISTS chk_punishment_type;
+        ALTER TABLE punishments
+        ADD CONSTRAINT chk_punishment_type
+        CHECK (punishment_type IN ('ban_steamid', 'ban_ip', 'gag', 'mute', 'silence', 'calladmin_ban'));
     END IF;
 END $$;
 

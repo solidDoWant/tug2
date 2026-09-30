@@ -6,6 +6,7 @@ A comprehensive SourceMod plugin for managing persistent bans and communication 
 
 - **Persistent Bans**: every basebans ban (`!ban`, `sm_addban`, `sm_banip`, the admin menu, auto-bans) is stored and re-enforced on connect
 - **Persistent Gags/Mutes**: every basecomm gag (text chat) and mute (voice) is stored and re-applied on connect
+- **!calladmin bans**: a player banned from `!calladmin` who uses it is banned from the server automatically, and their message reaches Discord without the admin ping
 - **Unbans/ungags** through basebans/basecomm deactivate the stored row
 - **Survives database drops**: writes that hit a dead connection are queued and replayed after reconnecting
 
@@ -91,7 +92,7 @@ rather than being let through unchecked.
 | Column          | Type         | Description                                   |
 | --------------- | ------------ | --------------------------------------------- |
 | punishment_id   | SERIAL       | Primary key                                   |
-| punishment_type | VARCHAR(32)  | Type: ban_steamid, ban_ip, gag, mute, silence |
+| punishment_type | VARCHAR(32)  | Type: ban_steamid, ban_ip, gag, mute, silence, calladmin_ban |
 | target_steamid  | VARCHAR(32)  | Target's SteamID (nullable)                   |
 | target_ip       | VARCHAR(64)  | Target's IP address (nullable)                |
 | target_name     | VARCHAR(64)  | Last known name                               |
@@ -146,8 +147,45 @@ GROUP BY punishment_type;
 
 ## How It Works
 
-This plugin registers **no admin commands**. basebans and basecomm own every ban and comm command;
-this plugin records what they do and re-applies it.
+basebans and basecomm own every ban and comm command; this plugin records what they do and
+re-applies it. The only commands it registers are for its own punishment, the `!calladmin` ban.
+
+### !calladmin bans
+
+`!calladmin` pings the whole admin role on Discord (gg2_discord). For players who abuse it:
+
+| Command | Use |
+| --- | --- |
+| `sm_bancalladmin <#userid\|name\|steamid> <minutes\|0> [reason]` | Ban from `!calladmin`; `0` is permanent |
+| `sm_unbancalladmin <#userid\|name\|steamid>` | Lift it |
+
+Both need the ban flag (`d`) and work from chat as `!bancalladmin` / `!unbancalladmin`. Arguments
+match `sm_ban`: the length is required, and the reason is the rest of the line. A SteamID in any
+form works for players who are offline. Banning again replaces the old calladmin ban, its length
+and its reason.
+
+The admin menu has it under **Player Commands > Ban/unban from !calladmin**. Picking a player who
+is already banned from `!calladmin` (marked `[banned]`) lifts it; anyone else goes on to a length
+(permanent, 1 day, 1 week, 30 days). The menu has no way to enter a reason, so its calladmin bans
+have none; use the command when you want one.
+
+When a player banned from `!calladmin` types it:
+- **The message still goes through.** It shows in chat, and gg2_discord relays it to Discord
+  marked `(banned from !calladmin - no ping)`, without the role mention. gg2_discord asks through
+  the `Punishments_IsCallAdminBanned` native (`include/punishments.inc`), which also holds the
+  shared `IsCallAdminMessage` check (message starts with `!calladmin`, any case) so both plugins
+  agree on what counts.
+- **They are banned from the server** for `sm_calladmin_abuse_ban_minutes` (default `60`) with the
+  reason `Abusing !calladmin`. The ban goes through `BanClient`, so it is stored, cached, messaged
+  and reported to Discord like any other.
+- **The calladmin ban stays**, so each later use costs another server ban.
+
+Calladmin bans are stored as `calladmin_ban` rows and re-applied on connect.
+
+**Ownership.** `admin_steam_id` records who issued each row (NULL = console):
+- A `calladmin_ban` row belongs to the admin who ran the command or used the menu.
+- The server ban it triggers belongs to that same admin, even if they are offline by then.
+  Discord's **BAN:** notice names them when they're online, and says Console otherwise.
 
 ### Gags and mutes
 
@@ -163,15 +201,18 @@ by splitting it into its own row.
 ### When a punishment is issued
 1. Bans: the forward caches the ban, kicks with the duration message and writes the row
 2. Gags/mutes: basecomm applies it in-game, then the forward writes the row
-3. Writes go through `RunWrite` (see Database outages)
+3. `!calladmin` bans: applied to the player if connected, and the row is written
+4. Writes go through `RunWrite` (see Database outages)
 
 ### On Player Connect
 1. IP bans: refused at connect from the cache
 2. SteamID bans: kicked on authorization from the cache, otherwise from the database lookup
 3. Gags/mutes: re-applied through basecomm once the player is fully in game - basecomm's natives
    refuse a client that is still loading, which is where the lookup usually finishes
+4. `!calladmin` bans: re-applied from the database lookup
 
 ## Admin Immunity
 
 Enforced by basebans and basecomm when the command is issued, using SourceMod's standard
-`CanUserTarget()` rules. This plugin issues no punishments of its own, so it has nothing to check.
+`CanUserTarget()` rules. The `!calladmin` ban commands and menu apply the same rules: `CanUserTarget()`
+for a connected player, `CanAdminTarget()` for an offline SteamID.
