@@ -12,14 +12,50 @@ A comprehensive SourceMod plugin for managing persistent bans and communication 
 ## Bans From Other Plugins
 
 `!ban` / `sm_ban`, basebans' `sm_addban` and `sm_banip`, and anything else that calls `BanClient()` or
-`BanIdentity()` with a command string (including gg2_teamkill's automatic team-kill bans) are also
-written to the database, through SourceMod's `OnBanClient` / `OnBanIdentity` forwards. The engine
-still applies the ban itself - the forwards return `Plugin_Continue` - so it takes effect and kicks
-immediately; the database row is what makes it survive a restart. The engine only holds timed bans
-in memory, so before this every `!ban` was lost on the next restart or redeploy.
+`BanIdentity()` with a command string (including gg2_teamkill's automatic team-kill bans) are
+written to the database through SourceMod's `OnBanClient` / `OnBanIdentity` forwards.
+
+**This plugin enforces bans, not the engine.** The forwards return `Plugin_Handled`, so core skips
+its `banid` / `addip`. The engine rejects banned players with its own fixed text, which can't be
+changed; taking the ban away from it means every message the player sees can show the duration.
+
+The plugin also kicks the player itself. Core still queues its own kick after a handled forward
+(basebans' message: `Banned` or the bare reason), but it ignores a second kick for a player
+already queued, and ours is queued first.
+
+### Ban messages
+
+| When | Message |
+| --- | --- |
+| On the ban | `Banned for 1d 8h. Reason: TK` |
+| Reconnecting | `Banned - 23h 12m remaining. Reason: TK` |
+| Permanent | `Permanently banned. Reason: TK` |
+
+Durations are compact (`y`/`d`/`h`/`m`, zero units dropped, a year is 365 days). Remaining time
+rounds up, so it never reads `0m`. basebans' placeholder reason `Banned` (no reason given) is
+left out. Kick messages are capped at 255 bytes (`KickClient`'s buffer). The duration is never
+cut; a long reason is trimmed on a UTF-8 character boundary and marked with `...`.
+
+The chat announcement to other players (`Banned player "x" for 1440 minutes.`) is basebans' and is
+unchanged.
+
+### Ban cache
+
+Every active ban is held in memory so enforcement never waits on the database. The cache is loaded
+from the database once, on the first connection that works. After that, bans and unbans issued on
+this server update it directly. Bans are only ever issued through this server, never on another
+server or in SQL, so there's no periodic refresh. A ban added to the table by hand is still
+enforced through the per-connect database lookup, but an unban done in SQL won't take effect
+until the plugin reloads.
+
+- **IP bans** are refused in `OnClientConnect`, before the player loads in and without needing
+  Steam authorization.
+- **SteamID bans** are kicked in `OnClientAuthorized`. A cache miss still asks the database, and a
+  ban found there is added to the cache.
 
 basebans' `sm_unban` is mirrored the same way (`OnRemoveBan`), so an unban there also deactivates
-the row instead of leaving the player to be kicked again on their next connect.
+the row and drops the ban from the cache. It still lets the engine run its `removeid`/`removeip`,
+which lifts any ban the engine held from before this plugin took bans over.
 
 SteamIDs in `STEAM_X:Y:Z`, `[U:1:N]` or SteamID64 form are all stored as SteamID64
 (see `include/steamids.inc`).
@@ -125,12 +161,13 @@ Legacy `silence` rows are still enforced. Lifting one half of a legacy silence k
 by splitting it into its own row.
 
 ### When a punishment is issued
-1. basebans / basecomm apply it in-game immediately (and kick, for bans)
-2. The matching forward fires and the row is written via `RunWrite` (see Database outages)
+1. Bans: the forward caches the ban, kicks with the duration message and writes the row
+2. Gags/mutes: basecomm applies it in-game, then the forward writes the row
+3. Writes go through `RunWrite` (see Database outages)
 
 ### On Player Connect
-1. Query database for active punishments by SteamID and IP
-2. Bans: kick immediately
+1. IP bans: refused at connect from the cache
+2. SteamID bans: kicked on authorization from the cache, otherwise from the database lookup
 3. Gags/mutes: re-applied through basecomm once the player is fully in game - basecomm's natives
    refuse a client that is still loading, which is where the lookup usually finishes
 

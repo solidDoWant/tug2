@@ -17,6 +17,15 @@
 // and Postgres rejects the whole INSERT on an invalid UTF-8 sequence.
 #define MAX_REASON_BYTES  512
 
+// Longest kick message that reaches the player intact: KickClient formats into a 256-byte buffer.
+// Ban messages are built to fit this, trimming the reason rather than losing the duration.
+#define KICK_MESSAGE_BYTES 256
+
+// Seconds until expires_at, NULL for a permanent ban. Worked out by the database rather than by
+// comparing against GetTime(), so clock skew between the two hosts cannot shift a ban. Capped to
+// fit an int (a ban past 2038 still ends up "permanent enough").
+#define BAN_REMAINING_SQL "LEAST(CEIL(EXTRACT(EPOCH FROM (expires_at - CURRENT_TIMESTAMP))), 2147483647)::int"
+
 // Database handle
 Database g_Database = null;
 
@@ -33,6 +42,20 @@ bool g_bApplyingFromDb = false;              // true while re-applying stored st
 int  g_iCommIssuer     = -1;                 // client running a comm command right now (0 = console)
 bool g_bPendingGag[MAXPLAYERS + 1];          // stored state waiting for the client to be in game
 bool g_bPendingMute[MAXPLAYERS + 1];
+
+// One active ban - mirrors a punishments row. See "BAN CACHE".
+enum struct BanRow
+{
+    bool byIp;                        // ban_ip row; otherwise ban_steamid
+    char steamid[32];                 // SteamID64, or "" (an ip ban of someone never seen)
+    char ip[64];                      // "" for a ban_steamid row
+    int  expires;                     // GetTime() it ends at, 0 = permanent
+    char reason[MAX_REASON_BYTES];
+}
+
+ArrayList g_BanCache          = null;  // BanRow
+bool      g_bBanCacheLoaded   = false;
+bool      g_bBanCacheLoading  = false;
 
 // Plugin info
 public Plugin myinfo =
@@ -58,6 +81,7 @@ public void OnPluginStart()
     // "sm_addban 8h STEAM_1:..." cut an 8-hour engine ban to 8 minutes and wrote nothing here.
 
     g_PendingWrites = new ArrayList(ByteCountToCells(MAX_QUERY_LENGTH));
+    g_BanCache      = new ArrayList(sizeof(BanRow));
 
     // Same for the comm commands: basecomm owns sm_gag/sm_mute/sm_silence and their un- forms, and
     // changes reach the database through its BaseComm_OnClientGag/OnClientMute forwards. This plugin
@@ -85,6 +109,7 @@ public void OnDatabaseConnected(Database db, const char[] error, any data)
     g_Database = db;
     LogMessage("Successfully connected to database");
     FlushPendingWrites();
+    LoadBanCache();
 }
 
 // Attempt to reconnect to the database
@@ -115,6 +140,7 @@ public void OnDatabaseReconnected(Database db, const char[] error, any data)
     g_bReconnecting = false;
     LogMessage("Successfully reconnected to database");
     FlushPendingWrites();
+    LoadBanCache();
 }
 
 public Action Timer_RetryReconnect(Handle timer)
@@ -161,6 +187,25 @@ public Action Timer_RetryPunishmentCheck(Handle timer, DataPack pack)
 // ============================================================
 // CLIENT CONNECTION - Reapply Active Punishments
 // ============================================================
+
+// IP bans are refused here, before the player loads in. Only the IP is known this early, and it
+// has to be: a player who never gets Steam-authorized (Steam outage, or deliberately) never reaches
+// OnClientAuthorized, and the engine's addip - which used to stop them - no longer holds our bans.
+public bool OnClientConnect(int client, char[] rejectmsg, int maxlen)
+{
+    if (IsFakeClient(client)) return true;
+
+    char ip[64];
+    GetClientIP(client, ip, sizeof(ip));
+
+    BanRow ban;
+    if (!FindCachedBan("", ip, ban)) return true;
+
+    BuildBanMessage(RemainingBanMinutes(ban), true, ban.reason, rejectmsg, maxlen < KICK_MESSAGE_BYTES ? maxlen : KICK_MESSAGE_BYTES);
+    LogMessage("Refused connection from banned IP %s: %s", ip, rejectmsg);
+    return false;
+}
+
 public void OnClientAuthorized(int client, const char[] auth)
 {
     if (IsFakeClient(client)) return;
@@ -174,6 +219,15 @@ public void OnClientAuthorized(int client, const char[] auth)
     if (!GetClientAuthId(client, AuthId_SteamID64, steamid64, sizeof(steamid64)))
     {
         LogError("Failed to get SteamID64 for client %d", client);
+        return;
+    }
+
+    // The cache answers without the database, so a ban holds through a database outage. A miss
+    // still goes to the database below, which covers the time before the cache has loaded.
+    BanRow ban;
+    if (FindCachedBan(steamid64, ip, ban))
+    {
+        KickForBan(client, ban);
         return;
     }
 
@@ -196,9 +250,10 @@ public void OnClientAuthorized(int client, const char[] auth)
 
 void CheckActivePunishments(int client, const char[] steamid, const char[] ip)
 {
-    char query[512];
+    // Longest ban first, so the message shows the one that actually decides when they can return.
+    char query[1024];
     g_Database.Format(query, sizeof(query),
-                      "SELECT punishment_type, expires_at FROM punishments WHERE is_active = TRUE AND (target_steam_id = %s OR target_ip = '%s') AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP)",
+                      "SELECT punishment_type, " ... BAN_REMAINING_SQL ... ", COALESCE(reason, ''), COALESCE(target_ip, ''), COALESCE(target_steam_id::text, '') FROM punishments WHERE is_active = TRUE AND (target_steam_id = %s OR target_ip = '%s') AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP) ORDER BY expires_at DESC NULLS FIRST",
                       steamid, ip);
 
     DataPack pack = new DataPack();
@@ -256,13 +311,14 @@ public void OnActivePunishmentsChecked(Database db, DBResultSet results, const c
 
         if (StrEqual(punishmentType, "ban_steamid") || StrEqual(punishmentType, "ban_ip"))
         {
-            // Get expiration time if exists
-            char expiresAt[64];
-            if (!results.IsFieldNull(1))
-                results.FetchString(1, expiresAt, sizeof(expiresAt));
-
-            // Kick the player
-            KickClient(client, "You are banned from this server");
+            // Rows are longest-first, so the first ban is the one to report. Cache it so the next
+            // attempt is refused without waiting on the database.
+            BanRow ban;
+            ReadBanRow(results, 1, StrEqual(punishmentType, "ban_ip"), ban);
+            CacheBan(ban);
+            KickForBan(client, ban);
+            delete pack;
+            return;
         }
         else if (StrEqual(punishmentType, "gag"))
         {
@@ -308,80 +364,109 @@ public void OnActivePunishmentsChecked(Database db, DBResultSet results, const c
 // this plugin's own sm_addban/sm_banip ever reached the database. Found on main on 2026-09-23: an
 // 8-hour !ban was live in `listid` but the punishments table had nothing newer than 2025-12-27.
 //
-// These forwards fire before core applies the ban. They return Plugin_Continue so the engine ban
-// still happens as normal - it takes effect immediately and handles the kick - and the database
-// row is what makes it survive a restart (OnClientAuthorized re-kicks from it).
+// These forwards fire before core applies the ban, and return Plugin_Handled: core then skips its
+// engine `banid`/`addip`, and this plugin alone enforces the ban - from the cache, backed by the
+// database (see "BAN CACHE"). The engine rejects a banned player with its own fixed text, which
+// cannot be changed; taking the ban away from it is what lets every rejection carry the duration.
+//
+// The kick is ours too. BanClient still queues core's own kick after a handled forward, with
+// basebans' message ("Banned", or the bare reason) - but core ignores a second kick for a player
+// already in its kick queue, and KickClient here queues first, so this message is the one shown.
+// Same for sm_banip, which kicks with "Banned: <reason>" after BanIdentity returns.
 //
 // No double-insert with this plugin's own commands: those kick and insert directly and never call
 // BanClient/BanIdentity, so they never reach these forwards.
 
 public Action OnBanClient(int client, int time, int flags, const char[] rawReason, const char[] kick_message, const char[] command, any source)
 {
-    if (IsFakeClient(client)) return Plugin_Continue;
+    // Not a real ban length (basebans rejects these); leave it to the engine rather than guess.
+    if (IsFakeClient(client) || time < 0) return Plugin_Continue;
 
     int admin = ResolveBanSource(source);
 
-    char reason[MAX_REASON_BYTES];
-    CleanBanReason(rawReason, reason, sizeof(reason));
+    BanRow ban;
+    ban.byIp    = (flags & BANFLAG_IP) != 0;
+    ban.expires = BanExpiry(time);
+    CleanBanReason(rawReason, ban.reason, sizeof(ban.reason));
 
-    if (flags & BANFLAG_IP)
-    {
-        char ip[64], steamid64[32];
-        GetClientIP(client, ip, sizeof(ip));
-        if (!GetClientAuthId(client, AuthId_SteamID64, steamid64, sizeof(steamid64)))
-            steamid64[0] = '\0';
-        AddBanToDatabase(admin, steamid64, ip, reason, time * 60, "ban_ip");
-        return Plugin_Continue;
-    }
+    if (!GetClientAuthId(client, AuthId_SteamID64, ban.steamid, sizeof(ban.steamid)))
+        ban.steamid[0] = '\0';
 
-    char steamid64[32];
-    if (!GetClientAuthId(client, AuthId_SteamID64, steamid64, sizeof(steamid64)))
+    if (ban.byIp)
+        GetClientIP(client, ban.ip, sizeof(ban.ip));
+    else if (ban.steamid[0] == '\0')
     {
+        // Nothing to store or cache it under: leave this one to the engine, as before.
         LogError("Not persisting %s ban of %N: no SteamID available", command, client);
         return Plugin_Continue;
     }
 
-    AddBanToDatabase(admin, steamid64, "", reason, time * 60, "ban_steamid");
-    return Plugin_Continue;
+    CacheBan(ban);
+    AddBanToDatabase(admin, ban.steamid, ban.ip, ban.reason, time, ban.byIp ? "ban_ip" : "ban_steamid");
+
+    if (!(flags & BANFLAG_NOKICK))
+    {
+        char message[KICK_MESSAGE_BYTES];
+        BuildBanMessage(time, false, ban.reason, message, sizeof(message));
+        KickClient(client, "%s", message);
+    }
+
+    return Plugin_Handled;
 }
 
 public Action OnBanIdentity(const char[] identity, int time, int flags, const char[] rawReason, const char[] command, any source)
 {
+    if (time < 0) return Plugin_Continue;
+
     int admin = ResolveBanSource(source);
 
-    char reason[MAX_REASON_BYTES];
-    CleanBanReason(rawReason, reason, sizeof(reason));
+    BanRow ban;
+    ban.byIp    = (flags & BANFLAG_IP) != 0;
+    ban.expires = BanExpiry(time);
+    CleanBanReason(rawReason, ban.reason, sizeof(ban.reason));
 
-    if (flags & BANFLAG_IP)
-    {
-        AddBanToDatabase(admin, "", identity, reason, time * 60, "ban_ip");
-        return Plugin_Continue;
-    }
-
-    char steamid64[32];
-    if (!SteamIdTo64(identity, steamid64, sizeof(steamid64)))
+    if (ban.byIp)
+        strcopy(ban.ip, sizeof(ban.ip), identity);
+    else if (!SteamIdTo64(identity, ban.steamid, sizeof(ban.steamid)))
     {
         LogError("Not persisting %s ban of \"%s\": unrecognised SteamID format", command, identity);
         return Plugin_Continue;
     }
 
-    AddBanToDatabase(admin, steamid64, "", reason, time * 60, "ban_steamid");
-    return Plugin_Continue;
+    CacheBan(ban);
+    AddBanToDatabase(admin, ban.steamid, ban.ip, ban.reason, time, ban.byIp ? "ban_ip" : "ban_steamid");
+
+    // sm_addban is usually for someone offline, but if they are here, a ban means gone now - not
+    // whenever they next reconnect.
+    char message[KICK_MESSAGE_BYTES];
+    BuildBanMessage(time, false, ban.reason, message, sizeof(message));
+    for (int i = 1; i <= MaxClients; i++)
+    {
+        if (IsClientConnected(i) && !IsFakeClient(i) && BanMatchesClient(ban, i))
+            KickClient(i, "%s", message);
+    }
+
+    return Plugin_Handled;
 }
 
 // basebans' sm_unban. Without this, a ban persisted above would outlive an unban issued through
-// basebans: the engine would forget it, but the next connect would find the active row and kick.
+// basebans. Returns Plugin_Continue so the engine also drops any ban it still holds from before
+// this plugin took bans over (e.g. permanent ones in banned_user.cfg).
 public Action OnRemoveBan(const char[] identity, int flags, const char[] command, any source)
 {
     if (flags & BANFLAG_IP)
     {
+        UncacheBan(true, identity);
         RemoveBanFromDatabase(identity, true);
         return Plugin_Continue;
     }
 
     char steamid64[32];
     if (SteamIdTo64(identity, steamid64, sizeof(steamid64)))
+    {
+        UncacheBan(false, steamid64);
         RemoveBanFromDatabase(steamid64, false);
+    }
 
     return Plugin_Continue;
 }
@@ -507,10 +592,268 @@ public void OnClientDisconnect(int client)
 }
 
 // ============================================================
+// BAN CACHE - every active ban, held in memory
+// ============================================================
+//
+// Bans are enforced here rather than by the engine (see OnBanClient), and a lookup that needed the
+// database would let banned players in whenever it is unreachable - the pooled connection drops
+// when idle, so that is not rare. The cache answers every connect check first.
+//
+// Loaded from the database once, on the first connection that works. After that it is kept
+// current by this server's own bans and unbans, which update it before their database write -
+// bans are only ever issued through this server, so nothing else can change the table under it.
+// Until the load completes, the database lookup in OnClientAuthorized covers SteamID bans.
+//
+// Rows mirror the table: matching is "SteamID matches OR IP matches", like the database check,
+// and an unban removes exactly the rows RemoveBanFromDatabase deactivates.
+
+void LoadBanCache()
+{
+    if (g_Database == null || g_bBanCacheLoaded || g_bBanCacheLoading) return;
+    g_bBanCacheLoading = true;
+
+    g_Database.Query(OnBanCacheLoaded,
+                     "SELECT punishment_type, " ... BAN_REMAINING_SQL ... ", COALESCE(reason, ''), COALESCE(target_ip, ''), COALESCE(target_steam_id::text, '') FROM punishments WHERE is_active = TRUE AND punishment_type IN ('ban_steamid', 'ban_ip') AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP)");
+}
+
+public void OnBanCacheLoaded(Database db, DBResultSet results, const char[] error, any data)
+{
+    g_bBanCacheLoading = false;
+
+    if (results == null)
+    {
+        // A reconnect tries again; any other failure leaves only the per-connect database lookup.
+        LogError("Failed to load ban cache: %s", error);
+        if (IsConnectionError(error))
+            ReconnectDatabase();
+        return;
+    }
+
+    // Merged, not replaced: a ban issued while this query was running is already in the cache.
+    char punishmentType[32];
+    BanRow ban;
+    while (results.FetchRow())
+    {
+        results.FetchString(0, punishmentType, sizeof(punishmentType));
+        ReadBanRow(results, 1, StrEqual(punishmentType, "ban_ip"), ban);
+        CacheBan(ban);
+    }
+
+    g_bBanCacheLoaded = true;
+    LogMessage("Loaded %d active ban(s) into the ban cache", g_BanCache.Length);
+}
+
+// Reads a ban from columns col (seconds remaining, NULL = permanent), col+1 (reason), col+2 (IP)
+// and col+3 (SteamID64) - the layout both ban queries use.
+void ReadBanRow(DBResultSet results, int col, bool byIp, BanRow ban)
+{
+    ban.byIp = byIp;
+
+    if (results.IsFieldNull(col))
+        ban.expires = 0;
+    else
+    {
+        int remaining = results.FetchInt(col);
+        int now       = GetTime();
+        ban.expires   = (remaining > 2147483647 - now) ? 2147483647 : now + remaining;
+    }
+
+    results.FetchString(col + 1, ban.reason, sizeof(ban.reason));
+    results.FetchString(col + 2, ban.ip, sizeof(ban.ip));
+    results.FetchString(col + 3, ban.steamid, sizeof(ban.steamid));
+}
+
+// Adds a ban, or extends the existing one for the same target - a re-ban never shortens a ban.
+void CacheBan(BanRow ban)
+{
+    BanRow existing;
+    for (int i = 0; i < g_BanCache.Length; i++)
+    {
+        g_BanCache.GetArray(i, existing);
+        if (existing.byIp != ban.byIp || !StrEqual(existing.steamid, ban.steamid) || !StrEqual(existing.ip, ban.ip))
+            continue;
+
+        if (!BanOutlasts(existing, ban))
+            g_BanCache.SetArray(i, ban);
+        return;
+    }
+
+    g_BanCache.PushArray(ban);
+}
+
+void UncacheBan(bool byIp, const char[] identity)
+{
+    BanRow ban;
+    for (int i = g_BanCache.Length - 1; i >= 0; i--)
+    {
+        g_BanCache.GetArray(i, ban);
+        if (ban.byIp == byIp && StrEqual(byIp ? ban.ip : ban.steamid, identity))
+            g_BanCache.Erase(i);
+    }
+}
+
+// The longest active ban matching either identifier ("" matches nothing). Drops expired rows.
+bool FindCachedBan(const char[] steamid, const char[] ip, BanRow found)
+{
+    bool   foundAny = false;
+    int    now = GetTime();
+    BanRow ban;
+
+    for (int i = g_BanCache.Length - 1; i >= 0; i--)
+    {
+        g_BanCache.GetArray(i, ban);
+
+        if (ban.expires != 0 && ban.expires <= now)
+        {
+            g_BanCache.Erase(i);
+            continue;
+        }
+
+        bool matches = (steamid[0] != '\0' && StrEqual(ban.steamid, steamid))
+                    || (ip[0] != '\0' && StrEqual(ban.ip, ip));
+        if (!matches) continue;
+
+        if (!foundAny || BanOutlasts(ban, found))
+            found = ban;
+        foundAny = true;
+    }
+
+    return foundAny;
+}
+
+// True when a ends strictly later than b (permanent is latest).
+bool BanOutlasts(BanRow a, BanRow b)
+{
+    if (b.expires == 0) return false;
+    if (a.expires == 0) return true;
+    return a.expires > b.expires;
+}
+
+bool BanMatchesClient(BanRow ban, int client)
+{
+    char value[64];
+    if (ban.steamid[0] != '\0' && GetClientAuthId(client, AuthId_SteamID64, value, sizeof(value)) && StrEqual(value, ban.steamid))
+        return true;
+
+    if (ban.ip[0] != '\0')
+    {
+        GetClientIP(client, value, sizeof(value));
+        if (StrEqual(value, ban.ip)) return true;
+    }
+
+    return false;
+}
+
+void KickForBan(int client, BanRow ban)
+{
+    char message[KICK_MESSAGE_BYTES];
+    BuildBanMessage(RemainingBanMinutes(ban), true, ban.reason, message, sizeof(message));
+    LogMessage("Kicking banned player %L: %s", client, message);
+    KickClient(client, "%s", message);
+}
+
+// GetTime() a ban of this many minutes ends at; 0 (permanent) for 0. Minutes, not seconds, so a
+// long ban cannot overflow on the way; anything past 2038 is clamped there.
+int BanExpiry(int minutes)
+{
+    if (minutes <= 0) return 0;
+
+    int now = GetTime();
+    if (minutes > (2147483647 - now) / 60) return 2147483647;
+    return now + minutes * 60;
+}
+
+// Whole minutes left, rounded up so a ban never reads "0m"; 0 for a permanent ban.
+int RemainingBanMinutes(BanRow ban)
+{
+    if (ban.expires == 0) return 0;
+
+    int seconds = ban.expires - GetTime();
+    if (seconds < 60) return 1;
+    return (seconds + 59) / 60;
+}
+
+// ============================================================
+// BAN MESSAGES
+// ============================================================
+
+// "Banned for 1d 8h" (on the ban), "Banned - 23h 12m remaining" (on a later connect), or
+// "Permanently banned", then ". Reason: <reason>".
+// minutes 0 = permanent.
+//
+// Fits maxlen, which callers cap at KICK_MESSAGE_BYTES. The duration is never cut: the reason is
+// trimmed to what is left, on a UTF-8 character boundary, with "..." to show it was cut, and left
+// out entirely when too little room remains for it to say anything.
+void BuildBanMessage(int minutes, bool remaining, const char[] reason, char[] out, int maxlen)
+{
+    if (minutes == 0)
+        strcopy(out, maxlen, "Permanently banned");
+    else
+    {
+        char duration[64];
+        FormatBanDuration(minutes, duration, sizeof(duration));
+        if (remaining)
+            Format(out, maxlen, "Banned - %s remaining", duration);
+        else
+            Format(out, maxlen, "Banned for %s", duration);
+    }
+
+    // basebans passes the literal "Banned" when the admin gave no reason.
+    if (reason[0] == '\0' || StrEqual(reason, "Banned", false)) return;
+
+    static const char separator[] = ". Reason: ";
+    int room = maxlen - 1 - strlen(out) - (sizeof(separator) - 1);
+    if (room < 16) return;
+
+    StrCat(out, maxlen, separator);
+
+    int len = strlen(reason);
+    if (len <= room)
+    {
+        StrCat(out, maxlen, reason);
+        return;
+    }
+
+    // Back off to the start of a character so a multi-byte one is not split.
+    int cut = room - 3;
+    while (cut > 0 && (reason[cut] & 0xC0) == 0x80) cut--;
+
+    int end = strlen(out);
+    for (int i = 0; i < cut; i++)
+        out[end + i] = reason[i];
+    out[end + cut] = '\0';
+    StrCat(out, maxlen, "...");
+}
+
+// Compact duration: 1440 -> "1d", 2042 -> "1d 10h 2m", 90 -> "1h 30m". Zero units are left out;
+// a year is 365 days.
+void FormatBanDuration(int minutes, char[] out, int maxlen)
+{
+    int years = minutes / 525600;
+    minutes %= 525600;
+    int days = minutes / 1440;
+    minutes %= 1440;
+    int hours = minutes / 60;
+    minutes %= 60;
+
+    out[0] = '\0';
+    AppendDurationUnit(out, maxlen, years, "y");
+    AppendDurationUnit(out, maxlen, days, "d");
+    AppendDurationUnit(out, maxlen, hours, "h");
+    AppendDurationUnit(out, maxlen, minutes, "m");
+}
+
+void AppendDurationUnit(char[] out, int maxlen, int value, const char[] unit)
+{
+    if (value == 0) return;
+    Format(out, maxlen, "%s%s%d%s", out, out[0] != '\0' ? " " : "", value, unit);
+}
+
+// ============================================================
 // DATABASE OPERATIONS
 // ============================================================
 
-void AddBanToDatabase(int requesterClient, const char[] targetSteamID, const char[] targetIP, const char[] reason, int duration, const char[] punishmentType)
+void AddBanToDatabase(int requesterClient, const char[] targetSteamID, const char[] targetIP, const char[] reason, int minutes, const char[] punishmentType)
 {
     bool hasIP    = (strlen(targetIP) > 0);
 
@@ -532,10 +875,12 @@ void AddBanToDatabase(int requesterClient, const char[] targetSteamID, const cha
         strcopy(ipValue, sizeof(ipValue), "NULL");
 
     char expiresValue[128];
-    if (duration == 0)
+    // In minutes, as given: converting to seconds first overflowed an int for bans over ~68 years
+    // and stored them as already expired.
+    if (minutes == 0)
         strcopy(expiresValue, sizeof(expiresValue), "NULL");
     else
-        Format(expiresValue, sizeof(expiresValue), "CURRENT_TIMESTAMP + INTERVAL '%d seconds'", duration);
+        Format(expiresValue, sizeof(expiresValue), "CURRENT_TIMESTAMP + INTERVAL '%d minutes'", minutes);
 
     char reasonValue[MAX_REASON_BYTES * 2 + 3];
     SqlQuote(reason, reasonValue, sizeof(reasonValue));
