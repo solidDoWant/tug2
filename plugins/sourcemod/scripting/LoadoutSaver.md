@@ -109,6 +109,11 @@ that are not tied to a class:
   `!savelo`, which would otherwise silently overwrite the class loadout instead.
 - Names are matched case-insensitively, so `!loadlo CQB Kit` finds `cqb kit`. You cannot have two
   names that differ only in case.
+- `!loadlo` also takes part of a name, the way player targeting does: `!loadlo cqb` loads
+  `cqb kit` if that is the only loadout containing "cqb". An exact name always wins, so a loadout
+  called `cqb` still loads even alongside `cqb kit`. If several match and none exactly, the
+  matches are listed back instead of picking one. A partial match says which loadout it loaded.
+  `!dello` still needs the exact name, so a partial match can never delete the wrong loadout.
 - `all` is reserved, since `!dello all` uses it.
 - Saving under a name you already have overwrites it, and that is allowed even at the cap.
 - The cap (`sm_loadout_max_named`, default 15) applies only to named loadouts. Your per-class

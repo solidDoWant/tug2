@@ -819,9 +819,87 @@ public Action Command_LoadLoadout(int client, int args)
         return Plugin_Handled;
     }
 
-    LoadPlayerLoadout(client, true, name);    // Manual load with messages
+    if (name[0] == '\0')
+        LoadPlayerLoadout(client, true, name);    // Manual load with messages
+    else
+        ResolveAndLoadNamedLoadout(client, name);
     g_LastLoadTime[client] = GetGameTime();
     return Plugin_Handled;
+}
+
+// !loadlo <name> matches the way player targeting does: an exact name (any case) wins, otherwise any
+// loadout whose name contains what was typed, as long as only one does. More than one is listed
+// back rather than guessed at. strpos, not LIKE, so a % or _ in the typed text is just a character.
+#define MAX_NAME_MATCHES_LISTED 8
+
+void ResolveAndLoadNamedLoadout(int client, const char[] typed)
+{
+    if (g_Database == null)
+    {
+        SendFailedMessage(client);
+        return;
+    }
+
+    // Exact match sorted first, so it is always in the result however many partial matches there are.
+    char query[512];
+    g_Database.Format(query, sizeof(query),
+                      "SELECT name FROM loadouts_slots WHERE steam_id = %s AND name IS NOT NULL AND strpos(lower(name), lower('%s')) > 0 ORDER BY (lower(name) = lower('%s')) DESC, lower(name) LIMIT %d",
+                      g_PlayerSteamId[client], typed, typed, MAX_NAME_MATCHES_LISTED + 1);
+
+    DataPack pack = new DataPack();
+    pack.WriteCell(GetClientUserId(client));
+    pack.WriteString(typed);
+    g_Database.Query(OnLoadoutNameResolved, query, pack);
+}
+
+void OnLoadoutNameResolved(Database db, DBResultSet results, const char[] error, DataPack pack)
+{
+    pack.Reset();
+    int  userid = pack.ReadCell();
+    char typed[MAX_LOADOUT_NAME + 1];
+    pack.ReadString(typed, sizeof(typed));
+    delete pack;
+
+    int client = GetClientOfUserId(userid);
+    if (client < 1) return;
+
+    if (results == null)
+    {
+        LogError("Failed to look up loadout name: %s", error);
+        SendFailedMessage(client);
+        return;
+    }
+
+    if (!results.FetchRow())
+    {
+        CPrintToChat(client, "{red}[Loadout]{default} No loadout matches {green}%s{default}. See !listlo", typed);
+        return;
+    }
+
+    char first[MAX_LOADOUT_NAME + 1];
+    results.FetchString(0, first, sizeof(first));
+
+    if (StrEqual(first, typed, false) || results.RowCount == 1)
+    {
+        if (!StrEqual(first, typed, false))
+            CPrintToChat(client, "{olivedrab}[Loadout]{default} Loading {green}%s{default}.", first);
+        LoadPlayerLoadout(client, true, first);
+        return;
+    }
+
+    char list[512], match[MAX_LOADOUT_NAME + 1];
+    strcopy(list, sizeof(list), first);
+    int listed = 1;
+    while (listed < MAX_NAME_MATCHES_LISTED && results.FetchRow())
+    {
+        results.FetchString(0, match, sizeof(match));
+        Format(list, sizeof(list), "%s, %s", list, match);
+        listed++;
+    }
+    if (results.RowCount > MAX_NAME_MATCHES_LISTED)
+        StrCat(list, sizeof(list), ", ...");
+
+    CPrintToChat(client, "{red}[Loadout]{default} {green}%s{default} matches more than one loadout: {green}%s{default}. Type more of the name.", typed, list);
 }
 
 public Action Command_ListLoadouts(int client, int args)
