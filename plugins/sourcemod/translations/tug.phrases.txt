@@ -426,6 +426,18 @@
     "pt_p"      "Sua arma ficou muito quente!"
     "tr"        "Silahın çok ısındı!"
   }
+  "held_in_place_getting_healed"
+  {
+    "#format"   "{1:s},{2:i}"
+    "en"        "{1} is holding you in place to heal you (HP: {2}). You can move again at full health."
+    "ua"        "{1} утримує тебе на місці, щоб вилікувати (HP: {2}). Зможеш рухатися, коли здоров'я буде повним."
+    "jp"        "{1}があなたをその場に固定して治療しています (HP:{2})。体力が満タンになると動けます。"
+    "chi"       "{1}正在将你固定在原地进行治疗（生命值：{2}）。生命值满后即可移动。"
+    "ru"        "{1} удерживает тебя на месте, чтобы вылечить (HP: {2}). Сможешь двигаться при полном здоровье."
+    "es"        "{1} te mantiene en el sitio para curarte (PV: {2}). Podrás moverte con la salud al máximo."
+    "pt_p"      "{1} está segurando você no lugar para te curar (HP: {2}). Você poderá se mover com a vida cheia."
+    "tr"        "{1} seni iyileştirmek için yerinde tutuyor (Sağlık: {2}). Sağlığın dolunca hareket edebilirsin."
+  }
   "do_not_move_getting_healed"
   {
     "#format"   "{1:s},{2:i}"

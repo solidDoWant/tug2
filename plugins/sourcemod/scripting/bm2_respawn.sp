@@ -203,6 +203,12 @@ char g_client_last_classstring[MAXPLAYERS + 1][64],
 
 #define letme_heal_sounds_count 10
 
+// Heal hold - see "HEAL HOLD" below.
+#define IN_SPRINT IN_ALT2    // Insurgency's sprint key (d_dy_pull_rag defines the same)
+int      g_iHealHeldBy[MAXPLAYERS + 1];         // target -> medic holding them in place, 0 = free
+int      g_iHealHolding[MAXPLAYERS + 1];        // medic -> target they are holding, 0 = none
+MoveType g_HealHoldPrevMoveType[MAXPLAYERS + 1];
+
 char normal_ragdoll_player[128] = "models/characters/civilian_vip_security.mdl";
 char normal_ragdoll_medic[128]  = "models/characters/security_medic.mdl";
 char ww2_ragdoll_any[128]       = "models/characters/american/player_american_01.mdl";
@@ -651,6 +657,7 @@ public void OnPluginStart()
     HookEvent("player_spawn", Event_Spawn);
     HookEvent("player_spawn", Event_SpawnPost, EventHookMode_Post);
     HookEvent("player_death", Event_PlayerDeath);
+    HookEvent("player_death", Event_HealHoldDeath);
     HookEvent("round_start", Event_RoundStart);
     HookEvent("round_end", Event_RoundEnd);
     HookEvent("player_pick_squad", Event_PlayerPickSquad_Post, EventHookMode_Post);
@@ -1015,6 +1022,7 @@ Action Timer_MapStart(Handle timer)
 
 public void OnMapEnd()
 {
+    ReleaseAllHealHolds();
     // Reset respawn token
     ResetInsurgencyLives();
     g_isMapInit    = 0;
@@ -1854,6 +1862,7 @@ void SetNextAttack(int client)
 public void OnClientDisconnect(int client)
 {
     g_bHuntPending[client] = false;
+    ReleaseHealHold(client);
 }
 
 public void OnClientPutInServer(int client)
@@ -3409,13 +3418,113 @@ public Action SendForwardResult(int iMedic, int iInjured, int revive)
     return result;
 }
 
+// ============================================================
+// HEAL HOLD
+// ============================================================
+//
+// A medic healing with defib paddles can hold crouch + sprint to keep the target in place until
+// they are at full health - the "DON'T MOVE!" hint on its own never stopped anyone walking off
+// mid-heal. The target can still turn, aim and shoot; only walking (and jumping) stops.
+//
+// MOVETYPE_NONE rather than a speed scale: it is what sm_freeze uses, it is networked so client
+// prediction agrees and there is no rubber-banding, and Insurgency recomputes the player's max
+// speed from stance and weight every frame, so a speed scale would not hold. It also switches off
+// gravity, which is why only a target standing on the ground in normal walk mode is held.
+//
+// Engaged by Timer_MedicMonitor on each heal tick. Released when the target reaches full health,
+// when the medic stops pressing the keys (checked every tick in OnPlayerRunCmd, so the release is
+// immediate), or when any heal tick passes without the medic re-confirming the hold - looking away,
+// walking out of range, switching weapon. Also on death, disconnect, round and map end.
+
+bool WantsHealHold(int medic)
+{
+    int buttons = GetClientButtons(medic);
+    return (buttons & IN_DUCK) && (buttons & IN_SPRINT);
+}
+
+// True if the target is now (or already was) held by this medic.
+bool HoldForHeal(int medic, int target)
+{
+    if (g_iHealHeldBy[target] == medic) return true;
+
+    // Another medic got there first and is still holding them; leave it to them.
+    if (g_iHealHeldBy[target] != 0) return false;
+
+    if (!(GetEntityFlags(target) & FL_ONGROUND) || GetEntityMoveType(target) != MOVETYPE_WALK) return false;
+
+    // One target per medic.
+    if (g_iHealHolding[medic] != 0)
+        ReleaseHealHold(g_iHealHolding[medic]);
+
+    g_HealHoldPrevMoveType[target] = GetEntityMoveType(target);
+    SetEntityMoveType(target, MOVETYPE_NONE);
+    TeleportEntity(target, NULL_VECTOR, NULL_VECTOR, view_as<float>({ 0.0, 0.0, 0.0 }));
+
+    g_iHealHeldBy[target]  = medic;
+    g_iHealHolding[medic]  = target;
+    return true;
+}
+
+// Frees whoever this client is holding and/or being held by.
+void ReleaseHealHold(int client)
+{
+    if (g_iHealHolding[client] != 0)
+        FreeHealTarget(g_iHealHolding[client]);
+    if (g_iHealHeldBy[client] != 0)
+        FreeHealTarget(client);
+}
+
+void FreeHealTarget(int target)
+{
+    int medic = g_iHealHeldBy[target];
+    if (medic == 0) return;
+
+    g_iHealHeldBy[target] = 0;
+    g_iHealHolding[medic] = 0;
+
+    // A dead target is already in observer movement, which must not be overwritten; the next spawn
+    // resets the move type anyway.
+    if (IsClientInGame(target) && IsPlayerAlive(target) && GetEntityMoveType(target) == MOVETYPE_NONE)
+        SetEntityMoveType(target, g_HealHoldPrevMoveType[target]);
+}
+
+void ReleaseAllHealHolds()
+{
+    for (int client = 1; client <= MaxClients; client++)
+    {
+        if (g_iHealHeldBy[client] != 0)
+            FreeHealTarget(client);
+    }
+}
+
+public Action Event_HealHoldDeath(Event event, const char[] name, bool dontBroadcast)
+{
+    int client = GetClientOfUserId(event.GetInt("userid"));
+    if (client != 0)
+        ReleaseHealHold(client);
+    return Plugin_Continue;
+}
+
+public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3], float angles[3], int &weapon)
+{
+    // The medic let go of the keys: free the target now rather than on the next heal tick.
+    if (g_iHealHolding[client] != 0 && !((buttons & IN_DUCK) && (buttons & IN_SPRINT)))
+        FreeHealTarget(g_iHealHolding[client]);
+    return Plugin_Continue;
+}
+
 // Handles medic functions (Inspecting health, healing)
 Action Timer_MedicMonitor(Handle timer)
 {
     if (!g_iRoundStatus)
     {
+        ReleaseAllHealHolds();
         return Plugin_Continue;
     }
+
+    // Targets a medic is still holding this tick; anyone held but not re-confirmed is released
+    // after the loop (medic looked away, walked off, switched weapon, stopped pressing the keys).
+    bool heldThisTick[MAXPLAYERS + 1];
 
     bool bCanHealPaddle   = false,
          bCanHealMedpack  = false;
@@ -3499,6 +3608,13 @@ Action Timer_MedicMonitor(Handle timer)
                 {
                     iHealth += bCanHealPaddle && !bCanHealMedpack ? g_iHealAmountPaddles : g_iHealAmountMedpack;
 
+                    // Paddles only (bCanHealPaddle also covers knives), and never past full health:
+                    // a target that reaches 100 here is simply not re-confirmed, so it is released.
+                    bool held = iHealth < 100 && StrContains(sWeapon, "weapon_defib") != -1
+                             && WantsHealHold(originatingPlayer) && HoldForHeal(originatingPlayer, targetPlayer);
+                    if (held)
+                        heldThisTick[targetPlayer] = true;
+
                     if (iHealth >= 100)
                     {
                         g_iStatHeals[originatingPlayer]++;
@@ -3516,7 +3632,10 @@ Action Timer_MedicMonitor(Handle timer)
                         // PrintHintText(targetPlayer, "DON'T MOVE! %N is healing you.(HP: %i)", originatingPlayer, iHealth);
                         char originating_player_name[64];
                         Format(originating_player_name, sizeof(originating_player_name), "%N", originatingPlayer);
-                        PrintHintText(targetPlayer, "%T", "do_not_move_getting_healed", targetPlayer, originating_player_name, iHealth);
+                        if (held)
+                            PrintHintText(targetPlayer, "%T", "held_in_place_getting_healed", targetPlayer, originating_player_name, iHealth);
+                        else
+                            PrintHintText(targetPlayer, "%T", "do_not_move_getting_healed", targetPlayer, originating_player_name, iHealth);
                         // PrintHintText(targetPlayer, "%T", "do_not_move_getting_healed", targetPlayer, originatingPlayer, iHealth);
                         if (g_should_ask_to_heal)
                         {
@@ -3528,7 +3647,7 @@ Action Timer_MedicMonitor(Handle timer)
                         }
                     }
                     SetEntityHealth(targetPlayer, iHealth);
-                    PrintHintText(originatingPlayer, "%N\nHP: %i\n\nHealing with %s for: %i", targetPlayer, iHealth, bCanHealPaddle && !bCanHealMedpack ? "paddle" : "medpack", bCanHealPaddle && !bCanHealMedpack ? g_iHealAmountPaddles : g_iHealAmountMedpack);
+                    PrintHintText(originatingPlayer, "%N\nHP: %i\n\nHealing with %s for: %i%s", targetPlayer, iHealth, bCanHealPaddle && !bCanHealMedpack ? "paddle" : "medpack", bCanHealPaddle && !bCanHealMedpack ? g_iHealAmountPaddles : g_iHealAmountMedpack, held ? "\nHolding them in place" : "");
                 }
             }
             else {
@@ -3639,6 +3758,12 @@ Action Timer_MedicMonitor(Handle timer)
             }
         }
     }
+    for (int client = 1; client <= MaxClients; client++)
+    {
+        if (g_iHealHeldBy[client] != 0 && !heldThisTick[client])
+            FreeHealTarget(client);
+    }
+
     return Plugin_Continue;
 }
 
@@ -4720,6 +4845,7 @@ bool IsInfiniteCounterAttack()
 
 public void OnPluginEnd()
 {
+    ReleaseAllHealHolds();
     delete ga_hMapSpawns;
     delete ga_hBotSpawns;
     delete ga_hNextBotSpawns;
