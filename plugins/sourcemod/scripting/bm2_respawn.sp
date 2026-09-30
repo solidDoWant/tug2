@@ -384,6 +384,7 @@ public void OnPluginStart()
     // Event_PlayerDeath is, so with DOCTOR off the counter never moves and the number would lie.
     RegConsoleCmd("sm_lives", Command_Lives, "sm_lives [#userid|name|all] - show remaining extra lives");
     RegConsoleCmd("lives", Command_Lives, "lives [#userid|name|all] - show remaining extra lives");
+    RegAdminCmd("sm_givelives", Command_GiveLives, ADMFLAG_SLAY, "sm_givelives <#userid|name|@humans|@alive|...> [amount] - give extra lives for this round");
 
     // TUG medic_tracker
     MedicRevivedForward = new GlobalForward("Medic_Revived", ET_Event, Param_Cell, Param_Cell);
@@ -5465,6 +5466,79 @@ static void ReportFreeLives(int caller, int target)
     else {
         ReplyToCommand(caller, "%N has %i extra %s left this round.", target, g_iFreeLives[target], word);
     }
+}
+
+// Adds to g_iFreeLives, the same counter a death on the players' team spends and the one reviving
+// three players tops up. Like those, it lasts until the round ends (Event_RoundEnd_Pre resets it).
+public Action Command_GiveLives(int client, int args)
+{
+    if (args < 1)
+    {
+        ReplyToCommand(client, "[SM] Usage: sm_givelives <#userid|name|@humans|@alive|@dead> [amount, default 1]");
+        return Plugin_Handled;
+    }
+
+    char arg[65];
+    GetCmdArg(1, arg, sizeof(arg));
+
+    int amount = 1;
+    if (args >= 2)
+    {
+        char amountArg[16];
+        GetCmdArg(2, amountArg, sizeof(amountArg));
+        amount = StringToInt(amountArg);
+        if (amount < 1 || amount > 100)
+        {
+            ReplyToCommand(client, "[SM] The amount must be between 1 and 100.");
+            return Plugin_Handled;
+        }
+    }
+
+    char target_name[MAX_TARGET_LENGTH];
+    int  target_list[MAXPLAYERS], target_count;
+    bool tn_is_ml;
+    target_count = ProcessTargetString(arg, client, target_list, sizeof(target_list), COMMAND_FILTER_NO_BOTS,
+                                       target_name, sizeof(target_name), tn_is_ml);
+    if (target_count <= COMMAND_TARGET_NONE)
+    {
+        ReplyToTargetError(client, target_count);
+        return Plugin_Handled;
+    }
+
+    // Lives only do anything on the players' team (see ReportFreeLives), so a group like @humans
+    // gives them to that team and skips spectators (and the other team in PvP) rather than handing
+    // out a number that means nothing.
+    int team  = PlayerTeam();
+    int given = 0;
+    for (int i = 0; i < target_count; i++)
+    {
+        int target = target_list[i];
+        if (GetClientTeam(target) != team)
+        {
+            if (target_count == 1)
+                ReplyToCommand(client, "[SM] %N is not on the players' team, so extra lives do not apply.", target);
+            continue;
+        }
+
+        g_iFreeLives[target] += amount;
+        given++;
+        PrintToChat(target, "[SM] You were given %d extra %s (%d left this round).",
+                    amount, amount == 1 ? "life" : "lives", g_iFreeLives[target]);
+        LogAction(client, target, "\"%L\" gave \"%L\" %d extra lives (now %d)", client, target, amount, g_iFreeLives[target]);
+    }
+
+    if (given == 0)
+    {
+        if (target_count > 1)
+            ReplyToCommand(client, "[SM] None of those players are on the players' team.");
+        return Plugin_Handled;
+    }
+
+    if (tn_is_ml)
+        ShowActivity2(client, "[SM] ", "Gave %t %d extra %s for this round.", target_name, amount, amount == 1 ? "life" : "lives");
+    else
+        ShowActivity2(client, "[SM] ", "Gave %s %d extra %s for this round.", target_name, amount, amount == 1 ? "life" : "lives");
+    return Plugin_Handled;
 }
 
 public Action Command_Lives(int client, int args)

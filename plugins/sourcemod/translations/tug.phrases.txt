@@ -988,6 +988,17 @@
     "pt_p"      "{green}!respawn <jogador>{common} - Faz renascer um jogador morto"
     "tr"        "{green}!respawn <oyuncu>{common} - Ölü bir oyuncuyu yeniden doğur"
   }
+  "help_admin_givelives"
+  {
+    "en"        "{green}!givelives <player|@humans> [amount]{common} - Give extra lives for this round"
+    "ua"        "{green}!givelives <гравець|@humans> [кількість]{common} - Дати додаткові життя на цей раунд"
+    "jp"        "{green}!givelives <プレイヤー|@humans> [数]{common} - このラウンドの追加ライフを付与します"
+    "chi"       "{green}!givelives <玩家|@humans> [数量]{common} - 给予本回合额外生命"
+    "ru"        "{green}!givelives <игрок|@humans> [количество]{common} - Дать дополнительные жизни на этот раунд"
+    "es"        "{green}!givelives <jugador|@humans> [cantidad]{common} - Da vidas extra para esta ronda"
+    "pt_p"      "{green}!givelives <jogador|@humans> [quantidade]{common} - Dá vidas extras nesta rodada"
+    "tr"        "{green}!givelives <oyuncu|@humans> [miktar]{common} - Bu tur için ekstra can ver"
+  }
   "help_admin_medicstats"
   {
     "en"        "{green}!medic_stats2{common} - Stats for the current medics"

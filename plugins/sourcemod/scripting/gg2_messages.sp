@@ -163,6 +163,7 @@ char g_AdminHelpPhrases[][] = {
     "help_admin_ban",
     "help_admin_class",
     "help_admin_respawn",
+    "help_admin_givelives",
     "help_admin_medicstats",
     "help_admin_enemies",
     "help_admin_lives"
@@ -174,6 +175,7 @@ char g_AdminHelpCommands[][] = {
     "sm_addban",
     "sm_banclass",
     "sm_respawn",
+    "sm_givelives",
     "medic_stats2",
     "totalb",
     // Matches the override name Command_Lives passes to CheckCommandAccess, so this line appears
@@ -186,6 +188,7 @@ int  g_AdminHelpFlags[] = {
     ADMFLAG_CHAT,
     ADMFLAG_BAN,
     ADMFLAG_BAN,
+    ADMFLAG_SLAY,
     ADMFLAG_SLAY,
     ADMFLAG_GENERIC,
     ADMFLAG_BAN,
