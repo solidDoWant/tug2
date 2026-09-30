@@ -814,8 +814,14 @@ public any Native_send_to_discord(Handle plugin, int numParams)
 {
     int  client = GetNativeCell(1);
 
+    // Client 0 is the server console (an admin command run from RCON, or a plugin with no player to
+    // name). gen_tug_link would throw on it - GetClientAuthId rejects index 0 outright - and the
+    // message was lost.
     char link[256];
-    gen_tug_link(client, link, sizeof(link));
+    if (client >= 1 && client <= MaxClients && IsClientInGame(client))
+        gen_tug_link(client, link, sizeof(link));
+    else
+        strcopy(link, sizeof(link), "Console");
 
     int stringLength;
     GetNativeStringLength(2, stringLength);

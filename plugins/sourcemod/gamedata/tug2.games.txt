@@ -42,6 +42,31 @@
 				"linux"		"@_Z25SendProxy_TheaterDirectorPK8SendPropPKvS3_P20CSendProxyRecipientsi"
 			}
 
+			// Class bans (punitive_persistence). TheaterDirector+0x28 is the CTheaterTeamDefinitions;
+			// this maps a team number to its teamDefinition_t, whose squads and slots give the class
+			// template each squad slot hands out. Layout, read from CINSPlayer::OnSquadSlotChanged and
+			// CTheaterTeamDefinitions::InitFromKV:
+			//   teamDefinition_t  +0x4a8 teamSquad_t*  +0x4b4 squad count
+			//   teamSquad_t       0x90 bytes; +0x20 squadSlot_t*  +0x2c slot count
+			//   squadSlot_t       0x54 bytes; +0x00 char[0x50] title ("#Squad_Fireteam_WeaponsSgt")
+			//                     +0x50 const char* class template name (pooled string)
+			"CTheaterTeamDefinitions::GetDefinitionByTeamNumber"
+			{
+				"library"	"server"
+				"linux"		"@_ZN23CTheaterTeamDefinitions25GetDefinitionByTeamNumberEi"
+			}
+
+			// The one place a player is put into a squad slot. Its only caller is
+			// CINSPlayer::JoinSquad(int, int), which every route goes through - the joinsquad command,
+			// a squad-only pick (first free slot), and AutoJoinSquad on team change / game reset.
+			// Returning false makes JoinSquad fail before anything changes: no class, no event. A
+			// refused AutoJoinSquad simply tries the next free slot.
+			"CPlayTeam::AddPlayerToSquad"
+			{
+				"library"	"server"
+				"linux"		"@_ZN9CPlayTeam16AddPlayerToSquadEP10CINSPlayerii"
+			}
+
 			// The pursuit decision. AddKnownEntity gives the bot a threat, but its own assessment
 			// then answers "yes" to pursue, so it walks into the smoke instead of shooting at it.
 			// There are only two ShouldPursue implementations in the whole binary; these are both.
@@ -375,6 +400,28 @@
 		// objects, not entities.
 		"Functions"
 		{
+			"CPlayTeam::AddPlayerToSquad"
+			{
+				"signature"	"CPlayTeam::AddPlayerToSquad"
+				"callconv"	"thiscall"
+				"return"	"bool"
+				"this"		"address"
+				"arguments"
+				{
+					"player"
+					{
+						"type"	"cbaseentity"
+					}
+					"squad"
+					{
+						"type"	"int"
+					}
+					"slot"
+					{
+						"type"	"int"
+					}
+				}
+			}
 			"CINSBotMainAction::ShouldPursue"
 			{
 				"signature"	"CINSBotMainAction::ShouldPursue"

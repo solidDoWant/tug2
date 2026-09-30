@@ -1,5 +1,7 @@
 #include <sourcemod>
+#include <sdktools>
 #include <adminmenu>
+#include <dhooks>
 #include <steamids>
 // Provides the natives declared there, so it must not declare itself as a dependency.
 #define PUNISHMENTS_PLUGIN
@@ -10,6 +12,9 @@
 #undef REQUIRE_PLUGIN
 #include <basecomm>
 #define REQUIRE_PLUGIN
+
+// Optional too: class bans are announced on Discord through gg2_discord when it is loaded.
+#include <discord>
 
 #pragma semicolon 1
 #pragma newdecls required
@@ -75,6 +80,25 @@ TopMenu  g_hAdminMenu = null;
 bool g_bBanOwnerOverride = false;
 char g_szBanOwnerOverride[32];
 
+// Class bans - see "CLASS BANS".
+#define MAX_CLASS_NAME   64                             // class template name, e.g. template_combat_medic
+#define MAX_SLOT_TITLE   80                             // squadSlot_t title buffer (char[0x50])
+#define TEAM_SPECTATOR   1
+enum struct ClassBan
+{
+    char className[MAX_CLASS_NAME];
+    int  expires;                                       // GetTime() it ends at, 0 = permanent
+    char reason[MAX_REASON_BYTES];
+}
+ArrayList g_ClassBans[MAXPLAYERS + 1];                  // ClassBan, per player; null = none loaded
+char      g_szCurrentClass[MAXPLAYERS + 1][MAX_CLASS_NAME];   // from player_pick_squad, "" = none yet
+float     g_fLastClassRefusal[MAXPLAYERS + 1];          // GetGameTime() of the last refusal message
+int       g_iMenuClassTargetUserId[MAXPLAYERS + 1];     // admin menu: player picked
+char      g_szMenuClass[MAXPLAYERS + 1][MAX_CLASS_NAME];// admin menu: class picked, awaiting a length
+Handle    g_hGetTheaterDirector   = null;
+Handle    g_hGetTeamDefinition    = null;
+bool      g_bClassPickHooked      = false;              // AddPlayerToSquad detour active
+
 // Plugin info
 public Plugin myinfo =
 {
@@ -89,6 +113,7 @@ public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max
 {
     CreateNative("Punishments_IsCallAdminBanned", Native_IsCallAdminBanned);
     RegPluginLibrary("punitive_persistence");
+    MarkNativeAsOptional("send_to_discord");
     return APLRes_Success;
 }
 
@@ -111,6 +136,16 @@ public void OnPluginStart()
                 "sm_unbancalladmin <#userid|name|steamid> - lift a !calladmin ban");
     AddCommandListener(Listener_Say, "say");
     AddCommandListener(Listener_Say, "say_team");
+
+    RegAdminCmd("sm_banclass", Command_BanClass, ADMFLAG_BAN,
+                "sm_banclass <#userid|name|steamid> <class> <minutes|0> [reason] - ban a player from a class");
+    RegAdminCmd("sm_unbanclass", Command_UnbanClass, ADMFLAG_BAN,
+                "sm_unbanclass <#userid|name|steamid> <class> - lift a class ban");
+    RegAdminCmd("sm_classes", Command_Classes, ADMFLAG_BAN,
+                "sm_classes - list the current theater's classes, for sm_banclass");
+    HookEvent("player_pick_squad", Event_PlayerPickSquad);
+    HookEvent("player_team", Event_PlayerTeam);
+    SetupClassHooks();
 
     TopMenu topmenu;
     if (LibraryExists("adminmenu") && ((topmenu = GetAdminTopMenu()) != null))
@@ -297,7 +332,7 @@ void CheckActivePunishments(int client, const char[] steamid, const char[] ip)
     // Longest ban first, so the message shows the one that actually decides when they can return.
     char query[1024];
     g_Database.Format(query, sizeof(query),
-                      "SELECT punishment_type, " ... BAN_REMAINING_SQL ... ", COALESCE(reason, ''), COALESCE(target_ip, ''), COALESCE(target_steam_id::text, ''), COALESCE(admin_steam_id::text, '') FROM punishments WHERE is_active = TRUE AND (target_steam_id = %s OR target_ip = '%s') AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP) ORDER BY expires_at DESC NULLS FIRST",
+                      "SELECT punishment_type, " ... BAN_REMAINING_SQL ... ", COALESCE(reason, ''), COALESCE(target_ip, ''), COALESCE(target_steam_id::text, ''), COALESCE(admin_steam_id::text, ''), COALESCE(target_class, '') FROM punishments WHERE is_active = TRUE AND (target_steam_id = %s OR target_ip = '%s') AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP) ORDER BY expires_at DESC NULLS FIRST",
                       steamid, ip);
 
     DataPack pack = new DataPack();
@@ -345,8 +380,9 @@ public void OnActivePunishmentsChecked(Database db, DBResultSet results, const c
     }
 
     // Apply all active punishments
-    bool gagged = false;
-    bool muted  = false;
+    bool gagged         = false;
+    bool muted          = false;
+    bool loadedClassBan = false;
 
     while (results.FetchRow())
     {
@@ -370,6 +406,15 @@ public void OnActivePunishmentsChecked(Database db, DBResultSet results, const c
             results.FetchString(5, owner, sizeof(owner));
             SetCallAdminBanState(client, true, results.IsFieldNull(1) ? 0 : ExpiryFromRemaining(results.FetchInt(1)), owner);
         }
+        else if (StrEqual(punishmentType, "class_ban"))
+        {
+            ClassBan classBan;
+            results.FetchString(6, classBan.className, sizeof(classBan.className));
+            results.FetchString(2, classBan.reason, sizeof(classBan.reason));
+            classBan.expires = results.IsFieldNull(1) ? 0 : ExpiryFromRemaining(results.FetchInt(1));
+            SetClientClassBan(client, classBan);
+            loadedClassBan = true;
+        }
         else if (StrEqual(punishmentType, "gag"))
         {
             gagged = true;
@@ -388,6 +433,10 @@ public void OnActivePunishmentsChecked(Database db, DBResultSet results, const c
 
     if (gagged || muted)
         ApplyStoredComm(client, gagged, muted);
+
+    // The lookup usually finishes before the player has picked a class, but not always.
+    if (loadedClassBan)
+        EnforceCurrentClass(client);
 
     // Log reapplied punishments
     if (gagged || muted)
@@ -645,6 +694,9 @@ public void OnClientDisconnect(int client)
     g_bPendingGag[client]  = false;
     g_bPendingMute[client] = false;
     SetCallAdminBanState(client, false, 0, "");
+    delete g_ClassBans[client];
+    g_szCurrentClass[client][0] = '\0';
+    g_fLastClassRefusal[client] = 0.0;
 }
 
 // ============================================================
@@ -822,9 +874,15 @@ int ExpiryFromRemaining(int remaining)
 // Whole minutes left, rounded up so a ban never reads "0m"; 0 for a permanent ban.
 int RemainingBanMinutes(BanRow ban)
 {
-    if (ban.expires == 0) return 0;
+    return MinutesUntil(ban.expires);
+}
 
-    int seconds = ban.expires - GetTime();
+// The same for any GetTime() expiry; 0 (permanent) stays 0.
+int MinutesUntil(int expires)
+{
+    if (expires == 0) return 0;
+
+    int seconds = expires - GetTime();
     if (seconds < 60) return 1;
     return (seconds + 59) / 60;
 }
@@ -965,7 +1023,7 @@ bool IsDigitString(const char[] s)
 void ApplyCallAdminBanCommand(int admin, const char[] target, bool ban, int minutes, const char[] reason)
 {
     char details[MAX_REASON_BYTES + 64];
-    FormatCallAdminBanDetails(ban, minutes, reason, details, sizeof(details));
+    FormatBanDetails(ban, minutes, reason, details, sizeof(details));
 
     char steamid64[32];
     if (SteamIdTo64(target, steamid64, sizeof(steamid64)))
@@ -1022,7 +1080,7 @@ bool CallAdminBanClient(int admin, int target, bool ban, int minutes, const char
 }
 
 // " for 1d (reason)", " permanently", or "" for an unban.
-void FormatCallAdminBanDetails(bool ban, int minutes, const char[] reason, char[] out, int maxlen)
+void FormatBanDetails(bool ban, int minutes, const char[] reason, char[] out, int maxlen)
 {
     out[0] = '\0';
     if (!ban) return;
@@ -1109,7 +1167,10 @@ public void OnAdminMenuReady(Handle aTopMenu)
 
     TopMenuObject playerCommands = g_hAdminMenu.FindCategory(ADMINMENU_PLAYERCOMMANDS);
     if (playerCommands != INVALID_TOPMENUOBJECT)
+    {
         g_hAdminMenu.AddItem("sm_bancalladmin", AdminMenu_BanCallAdmin, playerCommands, "sm_bancalladmin", ADMFLAG_BAN);
+        g_hAdminMenu.AddItem("sm_banclass", AdminMenu_BanClass, playerCommands, "sm_banclass", ADMFLAG_BAN);
+    }
 }
 
 public void OnLibraryRemoved(const char[] name)
@@ -1233,12 +1294,844 @@ int MenuTargetOrReply(int admin, int userid)
 void ApplyCallAdminBanFromMenu(int admin, int target, bool ban, int minutes)
 {
     char details[64];
-    FormatCallAdminBanDetails(ban, minutes, "", details, sizeof(details));
+    FormatBanDetails(ban, minutes, "", details, sizeof(details));
 
     // Replies from the shared code go to chat: the menu has no command of its own to reply to.
     ReplySource previous = SetCmdReplySource(SM_REPLY_TO_CHAT);
     if (CallAdminBanClient(admin, target, ban, minutes, "", details))
         ShowActivity2(admin, "[SM] ", "%s %N from !calladmin%s.", ban ? "Banned" : "Unbanned", target, details);
+    SetCmdReplySource(previous);
+}
+
+// ============================================================
+// CLASS BANS - class_ban rows, sm_banclass / sm_unbanclass, admin menu
+// ============================================================
+//
+// Bans a player from one class (a theater class template, e.g. template_recon_security_coop for
+// the Weapons Sergeant slot, template_combat_medic for the medic). Keyed by template name, so a
+// theater without that class simply never matches and the ban is still there on maps that have it.
+//
+// ENFORCEMENT. A detour on CPlayTeam::AddPlayerToSquad refuses the pick itself: it is the single
+// place a player is put into a squad slot (every joinsquad, squad-only pick and AutoJoinSquad goes
+// through it - see tug2.games.txt), and returning false leaves the player exactly as they were:
+// no class, no loadout, no player_pick_squad. An AutoJoinSquad just moves on to the next free slot.
+// The slot's class comes from the theater's team definition, read the way the game reads it in
+// CINSPlayer::OnSquadSlotChanged.
+//
+// FALLBACK. If the gamedata ever stops resolving, the pick goes through and player_pick_squad moves
+// the player to spectator instead. The same path handles a player already in a class when they are
+// banned from it, or when their stored bans load after they picked.
+
+void SetupClassHooks()
+{
+    GameData conf = new GameData("tug2.games");
+    if (conf == null)
+    {
+        LogError("tug2.games gamedata missing - class picks cannot be blocked, only undone after the fact");
+        return;
+    }
+
+    // TheaterDirector: see gg2_theater_items for why this send proxy is the way to read it.
+    StartPrepSDKCall(SDKCall_Static);
+    if (PrepSDKCall_SetFromConf(conf, SDKConf_Signature, "SendProxy_TheaterDirector"))
+    {
+        for (int i = 0; i < 5; i++) PrepSDKCall_AddParameter(SDKType_PlainOldData, SDKPass_Plain);
+        PrepSDKCall_SetReturnInfo(SDKType_PlainOldData, SDKPass_Plain);
+        g_hGetTheaterDirector = EndPrepSDKCall();
+    }
+
+    StartPrepSDKCall(SDKCall_Raw);
+    if (PrepSDKCall_SetFromConf(conf, SDKConf_Signature, "CTheaterTeamDefinitions::GetDefinitionByTeamNumber"))
+    {
+        PrepSDKCall_AddParameter(SDKType_PlainOldData, SDKPass_Plain);
+        PrepSDKCall_SetReturnInfo(SDKType_PlainOldData, SDKPass_Plain);
+        g_hGetTeamDefinition = EndPrepSDKCall();
+    }
+
+    // Kept for the plugin's lifetime: deleting the handle would remove the detour.
+    static DynamicDetour detour = null;
+    if (g_hGetTheaterDirector != null && g_hGetTeamDefinition != null)
+    {
+        detour = DynamicDetour.FromConf(conf, "CPlayTeam::AddPlayerToSquad");
+        g_bClassPickHooked = detour != null && detour.Enable(Hook_Pre, Detour_AddPlayerToSquad);
+    }
+
+    if (!g_bClassPickHooked)
+        LogError("Could not hook class picks - banned classes are undone by moving the player to spectator instead");
+
+    delete conf;
+}
+
+public MRESReturn Detour_AddPlayerToSquad(Address team, DHookReturn hReturn, DHookParam hParams)
+{
+    int client = hParams.Get(1);
+    if (client < 1 || client > MaxClients || g_ClassBans[client] == null || !IsClientInGame(client) || IsFakeClient(client))
+        return MRES_Ignored;
+
+    char className[MAX_CLASS_NAME], title[MAX_SLOT_TITLE];
+    if (!GetSlotClass(GetClientTeam(client), hParams.Get(2), hParams.Get(3), className, sizeof(className), title, sizeof(title)))
+        return MRES_Ignored;
+
+    ClassBan ban;
+    if (!FindClassBan(client, className, ban)) return MRES_Ignored;
+
+    NotifyClassRefused(client, title, ban);
+    hReturn.Value = false;
+    return MRES_Supercede;
+}
+
+void NotifyClassRefused(int client, const char[] title, ClassBan ban)
+{
+    // AutoJoinSquad can refuse several slots in one go; one message is enough.
+    float now = GetGameTime();
+    if (now - g_fLastClassRefusal[client] < 1.0 && g_fLastClassRefusal[client] != 0.0) return;
+    g_fLastClassRefusal[client] = now;
+
+    char label[MAX_SLOT_TITLE], details[MAX_REASON_BYTES + 64];
+    FormatClassLabel(title, ban.className, label, sizeof(label));
+    FormatClassBanDetails(ban, details, sizeof(details));
+
+    PrintToChat(client, "[SM] You are banned from %s%s. Pick another class.", label, details);
+    PrintCenterText(client, "You are banned from %s - pick another class", label);
+
+    // A player with no class yet is left on the selection screen's empty state; ask the client to
+    // reopen it. changesquad is the client's own command for that menu.
+    if (g_szCurrentClass[client][0] == '\0')
+        RequestFrame(Frame_ReopenSquadMenu, GetClientUserId(client));
+}
+
+public void Frame_ReopenSquadMenu(any userid)
+{
+    int client = GetClientOfUserId(userid);
+    if (client != 0 && IsClientInGame(client))
+        ClientCommand(client, "changesquad");
+}
+
+// ------------------------------------------------------------
+// Fallback and already-in-class enforcement
+// ------------------------------------------------------------
+
+public void Event_PlayerPickSquad(Event event, const char[] name, bool dontBroadcast)
+{
+    int client = GetClientOfUserId(event.GetInt("userid"));
+    if (client == 0) return;
+
+    event.GetString("class_template", g_szCurrentClass[client], sizeof(g_szCurrentClass[]));
+    EnforceCurrentClass(client);
+}
+
+public void Event_PlayerTeam(Event event, const char[] name, bool dontBroadcast)
+{
+    // A team change drops the class; the next pick sets it again.
+    int client = GetClientOfUserId(event.GetInt("userid"));
+    if (client != 0)
+        g_szCurrentClass[client][0] = '\0';
+}
+
+// Moves the player to spectator if they are in a class they are banned from. Deferred a frame:
+// this runs from inside player_pick_squad, i.e. from inside JoinSquad, which is not the place to
+// change the player's team.
+void EnforceCurrentClass(int client)
+{
+    if (g_ClassBans[client] == null || g_szCurrentClass[client][0] == '\0') return;
+
+    ClassBan ban;
+    if (FindClassBan(client, g_szCurrentClass[client], ban))
+        RequestFrame(Frame_EnforceCurrentClass, GetClientUserId(client));
+}
+
+public void Frame_EnforceCurrentClass(any userid)
+{
+    int client = GetClientOfUserId(userid);
+    if (client == 0 || !IsClientInGame(client) || IsFakeClient(client)) return;
+
+    ClassBan ban;
+    if (g_szCurrentClass[client][0] == '\0' || !FindClassBan(client, g_szCurrentClass[client], ban)) return;
+
+    char label[MAX_SLOT_TITLE], details[MAX_REASON_BYTES + 64];
+    GetClassLabel(ban.className, label, sizeof(label));
+    FormatClassBanDetails(ban, details, sizeof(details));
+
+    LogMessage("Moving %L to spectator: banned from %s", client, ban.className);
+    ChangeClientTeam(client, TEAM_SPECTATOR);
+    PrintToChat(client, "[SM] You were moved to spectator: you are banned from %s%s. Rejoin and pick another class.", label, details);
+}
+
+// ------------------------------------------------------------
+// Per-player state
+// ------------------------------------------------------------
+
+// Adds or replaces the player's ban from that class.
+void SetClientClassBan(int client, ClassBan ban)
+{
+    if (g_ClassBans[client] == null)
+        g_ClassBans[client] = new ArrayList(sizeof(ClassBan));
+
+    RemoveClientClassBan(client, ban.className);
+    g_ClassBans[client].PushArray(ban);
+}
+
+void RemoveClientClassBan(int client, const char[] className)
+{
+    if (g_ClassBans[client] == null) return;
+
+    ClassBan ban;
+    for (int i = g_ClassBans[client].Length - 1; i >= 0; i--)
+    {
+        g_ClassBans[client].GetArray(i, ban);
+        if (StrEqual(ban.className, className, false))
+            g_ClassBans[client].Erase(i);
+    }
+}
+
+// Drops expired entries on the way.
+bool FindClassBan(int client, const char[] className, ClassBan found)
+{
+    if (g_ClassBans[client] == null) return false;
+
+    int  now = GetTime();
+    bool hit = false;
+    ClassBan ban;
+    for (int i = g_ClassBans[client].Length - 1; i >= 0; i--)
+    {
+        g_ClassBans[client].GetArray(i, ban);
+        if (ban.expires != 0 && ban.expires <= now)
+        {
+            g_ClassBans[client].Erase(i);
+            continue;
+        }
+        if (!hit && StrEqual(ban.className, className, false))
+        {
+            found = ban;
+            hit   = true;
+        }
+    }
+    return hit;
+}
+
+// ------------------------------------------------------------
+// Theater team definitions
+// ------------------------------------------------------------
+
+enum struct TheaterClass
+{
+    char className[MAX_CLASS_NAME];
+    char title[MAX_SLOT_TITLE];
+}
+
+Address GetTeamDefinition(int team)
+{
+    if (g_hGetTheaterDirector == null || g_hGetTeamDefinition == null) return Address_Null;
+
+    Address director = view_as<Address>(SDKCall(g_hGetTheaterDirector, 0, 0, 0, 0, 0));
+    if (director == Address_Null) return Address_Null;
+
+    Address teamDefs = view_as<Address>(ReadInt(director, 0x28));
+    if (teamDefs == Address_Null) return Address_Null;
+
+    return view_as<Address>(SDKCall(g_hGetTeamDefinition, teamDefs, team));
+}
+
+// The class template (and slot title) a squad slot hands out on that team. False for an index the
+// theater does not have, or before a theater is loaded.
+bool GetSlotClass(int team, int squad, int slot, char[] className, int classLen, char[] title, int titleLen)
+{
+    Address teamDef = GetTeamDefinition(team);
+    if (teamDef == Address_Null) return false;
+
+    if (squad < 0 || squad >= ReadInt(teamDef, 0x4b4)) return false;
+    Address squadDef = view_as<Address>(ReadInt(teamDef, 0x4a8) + squad * 0x90);
+
+    if (slot < 0 || slot >= ReadInt(squadDef, 0x2c)) return false;
+    Address slotDef = view_as<Address>(ReadInt(squadDef, 0x20) + slot * 0x54);
+
+    Address namePtr = view_as<Address>(ReadInt(slotDef, 0x50));
+    if (namePtr == Address_Null) return false;
+
+    ReadCString(namePtr, className, classLen);
+    ReadCString(slotDef, title, titleLen);
+    return className[0] != '\0';
+}
+
+// Every class the current theater's play teams hand out, one entry per template. Empty when the
+// theater cannot be read. The caller deletes it.
+ArrayList GetTheaterClasses()
+{
+    ArrayList classes = new ArrayList(sizeof(TheaterClass));
+    TheaterClass entry;
+
+    for (int team = 2; team <= 3; team++)
+    {
+        Address teamDef = GetTeamDefinition(team);
+        if (teamDef == Address_Null) continue;
+
+        int squads = ReadInt(teamDef, 0x4b4);
+        for (int squad = 0; squad < squads; squad++)
+        {
+            Address squadDef = view_as<Address>(ReadInt(teamDef, 0x4a8) + squad * 0x90);
+            int slots = ReadInt(squadDef, 0x2c);
+            for (int slot = 0; slot < slots; slot++)
+            {
+                if (!GetSlotClass(team, squad, slot, entry.className, sizeof(entry.className), entry.title, sizeof(entry.title)))
+                    continue;
+                if (FindTheaterClass(classes, entry.className) == -1)
+                    classes.PushArray(entry);
+            }
+        }
+    }
+    return classes;
+}
+
+int FindTheaterClass(ArrayList classes, const char[] className)
+{
+    TheaterClass entry;
+    for (int i = 0; i < classes.Length; i++)
+    {
+        classes.GetArray(i, entry);
+        if (StrEqual(entry.className, className, false)) return i;
+    }
+    return -1;
+}
+
+int ReadInt(Address base, int offset)
+{
+    return LoadFromAddress(base + view_as<Address>(offset), NumberType_Int32);
+}
+
+void ReadCString(Address p, char[] out, int maxlen)
+{
+    int i = 0;
+    for (; i < maxlen - 1; i++)
+    {
+        int c = LoadFromAddress(p + view_as<Address>(i), NumberType_Int8) & 0xFF;
+        if (c == 0) break;
+        out[i] = c;
+    }
+    out[i] = '\0';
+}
+
+// ------------------------------------------------------------
+// Names
+// ------------------------------------------------------------
+
+// "#Squad_Fireteam_WeaponsSgt" -> "Fireteam WeaponsSgt"; falls back to the template name.
+void FormatClassLabel(const char[] title, const char[] className, char[] out, int maxlen)
+{
+    if (title[0] == '\0')
+    {
+        strcopy(out, maxlen, className);
+        return;
+    }
+
+    int start = (title[0] == '#') ? 1 : 0;
+    if (strncmp(title[start], "Squad_", 6, false) == 0) start += 6;
+    strcopy(out, maxlen, title[start]);
+    ReplaceString(out, maxlen, "_", " ");
+}
+
+// The label for a template, via its slot in the current theater if it has one.
+void GetClassLabel(const char[] className, char[] out, int maxlen)
+{
+    ArrayList classes = GetTheaterClasses();
+    int index = FindTheaterClass(classes, className);
+
+    TheaterClass entry;
+    if (index != -1)
+        classes.GetArray(index, entry);
+    else
+        entry.title[0] = '\0';
+    delete classes;
+
+    FormatClassLabel(entry.title, className, out, maxlen);
+}
+
+// " for another 1d 2h (reason)", " permanently (reason)".
+void FormatClassBanDetails(ClassBan ban, char[] out, int maxlen)
+{
+    int minutes = MinutesUntil(ban.expires);
+    if (minutes > 0)
+    {
+        char duration[64];
+        FormatBanDuration(minutes, duration, sizeof(duration));
+        Format(out, maxlen, " for another %s", duration);
+    }
+    else
+        strcopy(out, maxlen, " permanently");
+
+    if (ban.reason[0] != '\0')
+        Format(out, maxlen, "%s (%s)", out, ban.reason);
+}
+
+// Turns what an admin typed into a class template name: an exact template name, or text found in
+// exactly one of the current theater's template names or slot titles ("medic", "sgt"). A full
+// "template_..." name is taken as is even when this theater lacks it - the ban still applies on
+// maps whose theater has that class.
+bool ResolveClassArg(int admin, const char[] text, char[] out, int maxlen)
+{
+    ArrayList classes = GetTheaterClasses();
+    TheaterClass entry;
+
+    int  matches = 0;
+    char list[256];
+    list[0] = '\0';
+
+    for (int i = 0; i < classes.Length; i++)
+    {
+        classes.GetArray(i, entry);
+        if (StrEqual(entry.className, text, false))
+        {
+            strcopy(out, maxlen, entry.className);
+            delete classes;
+            return true;
+        }
+        if (StrContains(entry.className, text, false) == -1 && StrContains(entry.title, text, false) == -1)
+            continue;
+
+        if (++matches == 1)
+            strcopy(out, maxlen, entry.className);
+        Format(list, sizeof(list), "%s%s%s", list, list[0] != '\0' ? ", " : "", entry.className);
+    }
+    delete classes;
+
+    if (matches == 1) return true;
+
+    if (matches > 1)
+    {
+        ReplyToCommand(admin, "[SM] \"%s\" matches more than one class: %s", text, list);
+        return false;
+    }
+
+    if (strncmp(text, "template_", 9, false) == 0 && strlen(text) < maxlen)
+    {
+        strcopy(out, maxlen, text);
+        return true;
+    }
+
+    ReplyToCommand(admin, "[SM] No class in the current theater matches \"%s\". Any part of a name below works:", text);
+    PrintTheaterClasses(admin);
+    ReplyToCommand(admin, "[SM] For a class this theater does not have, give its full template_ name.");
+    return false;
+}
+
+// ------------------------------------------------------------
+// Commands
+// ------------------------------------------------------------
+
+public Action Command_BanClass(int client, int args)
+{
+    char target[MAX_TARGET_LENGTH], classArg[MAX_CLASS_NAME], minutesArg[16], reason[MAX_REASON_BYTES];
+    GetClassBanArgs(target, sizeof(target), classArg, sizeof(classArg), minutesArg, sizeof(minutesArg), reason, sizeof(reason));
+    if (target[0] == '\0' || classArg[0] == '\0' || !IsDigitString(minutesArg))
+    {
+        ReplyToCommand(client, "[SM] Usage: sm_banclass <#userid|name|steamid> <class> <minutes|0> [reason]");
+        return Plugin_Handled;
+    }
+
+    char className[MAX_CLASS_NAME];
+    if (ResolveClassArg(client, classArg, className, sizeof(className)))
+        ApplyClassBanCommand(client, target, className, true, StringToInt(minutesArg), reason);
+    return Plugin_Handled;
+}
+
+public Action Command_UnbanClass(int client, int args)
+{
+    char target[MAX_TARGET_LENGTH], classArg[MAX_CLASS_NAME], unused[16], unusedReason[16];
+    GetClassBanArgs(target, sizeof(target), classArg, sizeof(classArg), unused, sizeof(unused), unusedReason, sizeof(unusedReason));
+    if (target[0] == '\0' || classArg[0] == '\0')
+    {
+        ReplyToCommand(client, "[SM] Usage: sm_unbanclass <#userid|name|steamid> <class>");
+        return Plugin_Handled;
+    }
+
+    char className[MAX_CLASS_NAME];
+    if (ResolveClassArg(client, classArg, className, sizeof(className)))
+        ApplyClassBanCommand(client, target, className, false, 0, "");
+    return Plugin_Handled;
+}
+
+public Action Command_Classes(int client, int args)
+{
+    PrintTheaterClasses(client);
+
+    if (!g_bClassPickHooked)
+        ReplyToCommand(client, "[SM] Class picks are not hooked: banned classes are undone by moving the player to spectator.");
+    return Plugin_Handled;
+}
+
+// One line per class: "Combat Medic - template_combat_medic".
+void PrintTheaterClasses(int client)
+{
+    ArrayList classes = GetTheaterClasses();
+    if (classes.Length == 0)
+        ReplyToCommand(client, "[SM] Could not read the theater's classes%s.", g_bClassPickHooked ? "" : " (gamedata did not resolve)");
+
+    TheaterClass entry;
+    char label[MAX_SLOT_TITLE];
+    for (int i = 0; i < classes.Length; i++)
+    {
+        classes.GetArray(i, entry);
+        FormatClassLabel(entry.title, entry.className, label, sizeof(label));
+        ReplyToCommand(client, "[SM] %s - %s", label, entry.className);
+    }
+    delete classes;
+}
+
+// <target> <class> <minutes> [reason...], split with BreakString like sm_bancalladmin.
+void GetClassBanArgs(char[] target, int targetLen, char[] className, int classLen, char[] minutes, int minutesLen, char[] reason, int reasonLen)
+{
+    char args[MAX_REASON_BYTES];
+    GetCmdArgString(args, sizeof(args));
+
+    target[0]    = '\0';
+    className[0] = '\0';
+    minutes[0]   = '\0';
+    reason[0]    = '\0';
+
+    int pos = BreakString(args, target, targetLen);
+    if (pos == -1) return;
+
+    int next = BreakString(args[pos], className, classLen);
+    if (next == -1) return;
+    pos += next;
+
+    next = BreakString(args[pos], minutes, minutesLen);
+    if (next == -1) return;
+
+    CleanBanReason(args[pos + next], reason, reasonLen);
+}
+
+// The target is a SteamID in any form (the player may be offline), or a name / #userid / group.
+void ApplyClassBanCommand(int admin, const char[] target, const char[] className, bool ban, int minutes, const char[] reason)
+{
+    char label[MAX_SLOT_TITLE], details[MAX_REASON_BYTES + 64];
+    GetClassLabel(className, label, sizeof(label));
+    FormatBanDetails(ban, minutes, reason, details, sizeof(details));
+
+    char steamid64[32];
+    if (SteamIdTo64(target, steamid64, sizeof(steamid64)))
+    {
+        int  online  = FindClientBySteamId64(steamid64);
+        bool allowed = (online != 0) ? CanUserTarget(admin, online)
+                                     : (admin == 0 || CanAdminTarget(GetUserAdmin(admin), FindAdminByIdentity("steam", target)));
+        if (!allowed)
+        {
+            ReplyToCommand(admin, "[SM] %t", "Unable to target");
+            return;
+        }
+
+        SetClassBan(admin, steamid64, className, ban, minutes, reason);
+        LogAction(admin, online != 0 ? online : -1, "\"%L\" %s %s from class \"%s\"%s", admin, ban ? "banned" : "unbanned", target, className, details);
+        PostClassBanToDiscord(admin, target, ban, label, details);
+        ShowActivity2(admin, "[SM] ", "%s %s from %s%s.", ban ? "Banned" : "Unbanned", target, label, details);
+        return;
+    }
+
+    int  targets[MAXPLAYERS];
+    char targetName[MAX_TARGET_LENGTH];
+    bool tnIsMl;
+    int  count = ProcessTargetString(target, admin, targets, sizeof(targets), COMMAND_FILTER_NO_BOTS,
+                                     targetName, sizeof(targetName), tnIsMl);
+    if (count <= 0)
+    {
+        ReplyToTargetError(admin, count);
+        return;
+    }
+
+    for (int i = 0; i < count; i++)
+        ClassBanClient(admin, targets[i], className, ban, minutes, reason);
+
+    if (tnIsMl)
+        ShowActivity2(admin, "[SM] ", "%s %t from %s%s.", ban ? "Banned" : "Unbanned", targetName, label, details);
+    else
+        ShowActivity2(admin, "[SM] ", "%s %s from %s%s.", ban ? "Banned" : "Unbanned", targetName, label, details);
+}
+
+// One connected player, from a command or the admin menu. False, with a reply, when they have no
+// SteamID yet.
+bool ClassBanClient(int admin, int target, const char[] className, bool ban, int minutes, const char[] reason)
+{
+    char steamid64[32];
+    if (!GetClientAuthId(target, AuthId_SteamID64, steamid64, sizeof(steamid64)))
+    {
+        ReplyToCommand(admin, "[SM] %N has no SteamID yet, not changed.", target);
+        return false;
+    }
+
+    SetClassBan(admin, steamid64, className, ban, minutes, reason);
+    LogAction(admin, target, "\"%L\" %s \"%L\" from class \"%s\" (minutes \"%d\") (reason \"%s\")", admin, ban ? "banned" : "unbanned", target, className, minutes, reason);
+
+    char name[MAX_NAME_LENGTH], label[MAX_SLOT_TITLE], details[MAX_REASON_BYTES + 64];
+    GetClientName(target, name, sizeof(name));
+    GetClassLabel(className, label, sizeof(label));
+    FormatBanDetails(ban, minutes, reason, details, sizeof(details));
+    PostClassBanToDiscord(admin, name, ban, label, details);
+    return true;
+}
+
+// "<admin>: **CLASS BAN:** banned X from Combat Medic for 1d (reason)", when gg2_discord is loaded.
+void PostClassBanToDiscord(int admin, const char[] target, bool ban, const char[] label, const char[] details)
+{
+    if (GetFeatureStatus(FeatureType_Native, "send_to_discord") != FeatureStatus_Available) return;
+
+    char message[MAX_REASON_BYTES + 256];
+    Format(message, sizeof(message), "**CLASS %s:** %s %s from %s%s",
+           ban ? "BAN" : "UNBAN", ban ? "banned" : "unbanned", target, label, details);
+    send_to_discord(admin, message);
+}
+
+// Applies to the player now if they are connected (moving them out of the class if they are in
+// it), and replaces any stored ban from that class.
+void SetClassBan(int admin, const char[] steamid64, const char[] className, bool ban, int minutes, const char[] reason)
+{
+    int online = FindClientBySteamId64(steamid64);
+    if (online != 0)
+    {
+        if (ban)
+        {
+            ClassBan entry;
+            strcopy(entry.className, sizeof(entry.className), className);
+            strcopy(entry.reason, sizeof(entry.reason), reason);
+            entry.expires = BanExpiry(minutes);
+            SetClientClassBan(online, entry);
+            EnforceCurrentClass(online);
+        }
+        else
+            RemoveClientClassBan(online, className);
+    }
+
+    char classValue[MAX_CLASS_NAME * 2 + 3];
+    SqlQuote(className, classValue, sizeof(classValue));
+
+    // Deactivate first so a re-ban replaces the old row; RunWrite keeps the two in order.
+    char query[MAX_QUERY_LENGTH];
+    Format(query, sizeof(query),
+           "UPDATE punishments SET is_active = FALSE WHERE target_steam_id = %s AND punishment_type = 'class_ban' AND lower(target_class) = lower(%s) AND is_active",
+           steamid64, classValue);
+    RunWrite(query);
+
+    if (!ban) return;
+
+    char adminValue[32];
+    AdminSqlValue(admin, adminValue, sizeof(adminValue));
+
+    char expiresValue[128];
+    if (minutes == 0)
+        strcopy(expiresValue, sizeof(expiresValue), "NULL");
+    else
+        Format(expiresValue, sizeof(expiresValue), "CURRENT_TIMESTAMP + INTERVAL '%d minutes'", minutes);
+
+    char reasonValue[MAX_REASON_BYTES * 2 + 3];
+    if (reason[0] != '\0')
+        SqlQuote(reason, reasonValue, sizeof(reasonValue));
+    else
+        strcopy(reasonValue, sizeof(reasonValue), "NULL");
+
+    Format(query, sizeof(query),
+           "INSERT INTO punishments (punishment_type, target_steam_id, admin_steam_id, reason, expires_at, target_class) VALUES ('class_ban', %s, %s, %s, %s, %s)",
+           steamid64, adminValue, reasonValue, expiresValue, classValue);
+    RunWrite(query);
+}
+
+// ------------------------------------------------------------
+// Admin menu - Player Commands > "Ban/unban from a class"
+// ------------------------------------------------------------
+//
+// Player, then class: the current theater's classes, plus any class the player is banned from that
+// this theater lacks. A class marked [banned] is unbanned when picked; anything else goes on to a
+// length. No reason step, as with the !calladmin menu.
+
+public void AdminMenu_BanClass(TopMenu topmenu, TopMenuAction action, TopMenuObject object_id, int param, char[] buffer, int maxlength)
+{
+    if (action == TopMenuAction_DisplayOption)
+        strcopy(buffer, maxlength, "Ban/unban from a class");
+    else if (action == TopMenuAction_SelectOption)
+        DisplayClassTargetMenu(param);
+}
+
+void DisplayClassTargetMenu(int client)
+{
+    Menu menu = new Menu(MenuHandler_ClassTarget);
+    menu.SetTitle("Ban/unban from a class:");
+    menu.ExitBackButton = true;
+
+    char userid[16], label[MAX_NAME_LENGTH + 24];
+    for (int i = 1; i <= MaxClients; i++)
+    {
+        if (!IsClientInGame(i) || IsFakeClient(i) || !CanUserTarget(client, i)) continue;
+
+        IntToString(GetClientUserId(i), userid, sizeof(userid));
+        int bans = (g_ClassBans[i] != null) ? g_ClassBans[i].Length : 0;
+        if (bans > 0)
+            Format(label, sizeof(label), "%N [%d class ban%s]", i, bans, bans == 1 ? "" : "s");
+        else
+            Format(label, sizeof(label), "%N", i);
+        menu.AddItem(userid, label);
+    }
+
+    if (menu.ItemCount == 0)
+        menu.AddItem("", "No players", ITEMDRAW_DISABLED);
+
+    menu.Display(client, MENU_TIME_FOREVER);
+}
+
+public int MenuHandler_ClassTarget(Menu menu, MenuAction action, int param1, int param2)
+{
+    if (action == MenuAction_End)
+        delete menu;
+    else if (action == MenuAction_Cancel)
+    {
+        if (param2 == MenuCancel_ExitBack && g_hAdminMenu != null)
+            g_hAdminMenu.Display(param1, TopMenuPosition_LastCategory);
+    }
+    else if (action == MenuAction_Select)
+    {
+        char info[16];
+        menu.GetItem(param2, info, sizeof(info));
+        g_iMenuClassTargetUserId[param1] = StringToInt(info);
+
+        if (MenuTargetOrReply(param1, g_iMenuClassTargetUserId[param1]) != 0)
+            DisplayClassListMenu(param1);
+        else
+            DisplayClassTargetMenu(param1);
+    }
+    return 0;
+}
+
+void DisplayClassListMenu(int client)
+{
+    int target = GetClientOfUserId(g_iMenuClassTargetUserId[client]);
+    if (target == 0)
+    {
+        DisplayClassTargetMenu(client);
+        return;
+    }
+
+    Menu menu = new Menu(MenuHandler_ClassList);
+    menu.SetTitle("Class for %N:", target);
+    menu.ExitBackButton = true;
+
+    ArrayList classes = GetTheaterClasses();
+    TheaterClass entry;
+    ClassBan ban;
+    char label[MAX_SLOT_TITLE + 16];
+
+    for (int i = 0; i < classes.Length; i++)
+    {
+        classes.GetArray(i, entry);
+        FormatClassLabel(entry.title, entry.className, label, sizeof(label));
+        if (FindClassBan(target, entry.className, ban))
+            StrCat(label, sizeof(label), " [banned]");
+        menu.AddItem(entry.className, label);
+    }
+
+    // Bans from classes this theater does not have - still listed, so they can be lifted here.
+    if (g_ClassBans[target] != null)
+    {
+        for (int i = 0; i < g_ClassBans[target].Length; i++)
+        {
+            g_ClassBans[target].GetArray(i, ban);
+            if (FindTheaterClass(classes, ban.className) != -1) continue;
+            Format(label, sizeof(label), "%s [banned]", ban.className);
+            menu.AddItem(ban.className, label);
+        }
+    }
+
+    if (classes.Length == 0)
+        menu.AddItem("", "Class list unavailable - use sm_banclass", ITEMDRAW_DISABLED);
+    delete classes;
+
+    menu.Display(client, MENU_TIME_FOREVER);
+}
+
+public int MenuHandler_ClassList(Menu menu, MenuAction action, int param1, int param2)
+{
+    if (action == MenuAction_End)
+        delete menu;
+    else if (action == MenuAction_Cancel)
+    {
+        if (param2 == MenuCancel_ExitBack)
+            DisplayClassTargetMenu(param1);
+    }
+    else if (action == MenuAction_Select)
+    {
+        char className[MAX_CLASS_NAME];
+        menu.GetItem(param2, className, sizeof(className));
+
+        int target = MenuTargetOrReply(param1, g_iMenuClassTargetUserId[param1]);
+        if (target == 0)
+        {
+            DisplayClassTargetMenu(param1);
+            return 0;
+        }
+
+        ClassBan ban;
+        if (FindClassBan(target, className, ban))
+        {
+            ApplyClassBanFromMenu(param1, target, className, false, 0);
+            DisplayClassListMenu(param1);
+        }
+        else
+        {
+            strcopy(g_szMenuClass[param1], sizeof(g_szMenuClass[]), className);
+            DisplayClassLengthMenu(param1);
+        }
+    }
+    return 0;
+}
+
+void DisplayClassLengthMenu(int client)
+{
+    char label[MAX_SLOT_TITLE];
+    GetClassLabel(g_szMenuClass[client], label, sizeof(label));
+
+    Menu menu = new Menu(MenuHandler_ClassLength);
+    menu.SetTitle("Ban from %s for:", label);
+    menu.ExitBackButton = true;
+
+    menu.AddItem("0", "Permanently");
+    menu.AddItem("1440", "1 day");
+    menu.AddItem("10080", "1 week");
+    menu.AddItem("43200", "30 days");
+
+    menu.Display(client, MENU_TIME_FOREVER);
+}
+
+public int MenuHandler_ClassLength(Menu menu, MenuAction action, int param1, int param2)
+{
+    if (action == MenuAction_End)
+        delete menu;
+    else if (action == MenuAction_Cancel)
+    {
+        if (param2 == MenuCancel_ExitBack)
+            DisplayClassListMenu(param1);
+    }
+    else if (action == MenuAction_Select)
+    {
+        char info[16];
+        menu.GetItem(param2, info, sizeof(info));
+
+        int target = MenuTargetOrReply(param1, g_iMenuClassTargetUserId[param1]);
+        if (target != 0)
+        {
+            ApplyClassBanFromMenu(param1, target, g_szMenuClass[param1], true, StringToInt(info));
+            DisplayClassListMenu(param1);
+        }
+        else
+            DisplayClassTargetMenu(param1);
+    }
+    return 0;
+}
+
+void ApplyClassBanFromMenu(int admin, int target, const char[] className, bool ban, int minutes)
+{
+    char label[MAX_SLOT_TITLE], details[64];
+    GetClassLabel(className, label, sizeof(label));
+    FormatBanDetails(ban, minutes, "", details, sizeof(details));
+
+    // Replies from the shared code go to chat: the menu has no command of its own to reply to.
+    ReplySource previous = SetCmdReplySource(SM_REPLY_TO_CHAT);
+    if (ClassBanClient(admin, target, className, ban, minutes, ""))
+        ShowActivity2(admin, "[SM] ", "%s %N from %s%s.", ban ? "Banned" : "Unbanned", target, label, details);
     SetCmdReplySource(previous);
 }
 

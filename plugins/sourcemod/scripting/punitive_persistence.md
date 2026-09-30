@@ -7,6 +7,7 @@ A comprehensive SourceMod plugin for managing persistent bans and communication 
 - **Persistent Bans**: every basebans ban (`!ban`, `sm_addban`, `sm_banip`, the admin menu, auto-bans) is stored and re-enforced on connect
 - **Persistent Gags/Mutes**: every basecomm gag (text chat) and mute (voice) is stored and re-applied on connect
 - **!calladmin bans**: a player banned from `!calladmin` who uses it is banned from the server automatically, and their message reaches Discord without the admin ping
+- **Class bans**: a player banned from a class (medic, sergeant, ...) can't pick it - the pick is refused, not undone with warnings and a kick
 - **Unbans/ungags** through basebans/basecomm deactivate the stored row
 - **Survives database drops**: writes that hit a dead connection are queued and replayed after reconnecting
 
@@ -92,7 +93,7 @@ rather than being let through unchecked.
 | Column          | Type         | Description                                   |
 | --------------- | ------------ | --------------------------------------------- |
 | punishment_id   | SERIAL       | Primary key                                   |
-| punishment_type | VARCHAR(32)  | Type: ban_steamid, ban_ip, gag, mute, silence, calladmin_ban |
+| punishment_type | VARCHAR(32)  | Type: ban_steamid, ban_ip, gag, mute, silence, calladmin_ban, class_ban |
 | target_steamid  | VARCHAR(32)  | Target's SteamID (nullable)                   |
 | target_ip       | VARCHAR(64)  | Target's IP address (nullable)                |
 | target_name     | VARCHAR(64)  | Last known name                               |
@@ -102,6 +103,7 @@ rather than being let through unchecked.
 | issued_at       | TIMESTAMP    | When issued                                   |
 | expires_at      | TIMESTAMP    | When expires (NULL = permanent)               |
 | is_active       | BOOLEAN      | Whether currently active                      |
+| target_class    | VARCHAR(64)  | Class template of a `class_ban`; NULL otherwise |
 
 ## Maintenance
 
@@ -148,7 +150,8 @@ GROUP BY punishment_type;
 ## How It Works
 
 basebans and basecomm own every ban and comm command; this plugin records what they do and
-re-applies it. The only commands it registers are for its own punishment, the `!calladmin` ban.
+re-applies it. The only commands it registers are for its own punishments: the `!calladmin` ban
+and class bans.
 
 ### !calladmin bans
 
@@ -187,6 +190,56 @@ Calladmin bans are stored as `calladmin_ban` rows and re-applied on connect.
 - The server ban it triggers belongs to that same admin, even if they are offline by then.
   Discord's **BAN:** notice names them when they're online, and says Console otherwise.
 
+### Class bans
+
+Bans a player from one class. Replaces gg2_medic_tracker's `sm_ban_medic`, which let the player
+pick medic and then warned them three times before kicking; that plugin now only tracks medic
+playtime.
+
+| Command | Use |
+| --- | --- |
+| `sm_banclass <#userid\|name\|steamid> <class> <minutes\|0> [reason]` | Ban from a class; `0` is permanent |
+| `sm_unbanclass <#userid\|name\|steamid> <class>` | Lift it |
+| `sm_classes` | List the current theater's classes: slot title and template name |
+
+Both need the ban flag (`d`) and work from chat as `!banclass` / `!unbanclass`. A SteamID in any
+form works for offline players. Banning again from the same class replaces the length and reason.
+
+**Naming the class.** Bans are stored by class template name (`template_combat_medic`,
+`template_recon_security_coop`). `<class>` can be:
+- the full template name;
+- any text found in exactly one of the current theater's template names or slot titles: `medic`,
+  `sgt` (the `#Squad_Fireteam_WeaponsSgt` slot), `recon`. More than one match lists them, and no
+  match prints every class in the current theater (slot title and template name, as `sm_classes`);
+- a full `template_...` name the current theater doesn't have. It's stored anyway and applies on
+  maps whose theater has that class.
+
+Because the key is the template, a theater that drops a class just never matches it; the ban is
+kept and applies again wherever the class exists.
+
+**Admin menu:** Player Commands > **Ban/unban from a class**. Pick a player, then a class: the
+current theater's classes by slot title, plus any class the player is banned from that this theater
+lacks. A class marked `[banned]` is lifted when picked; anything else goes on to a length
+(permanent, 1 day, 1 week, 30 days). No reason step, as with the `!calladmin` menu.
+
+**Enforcement.** The pick itself is refused:
+- A detour on `CPlayTeam::AddPlayerToSquad` (`gamedata/tug2.games.txt`) returns false for a slot
+  whose class the player is banned from. It is the only place a player is put into a squad slot;
+  its single caller, `CINSPlayer::JoinSquad(int, int)`, serves the `joinsquad` command, squad-only
+  picks and `AutoJoinSquad` alike. A refused join changes nothing: no class, no loadout, no
+  `player_pick_squad`. `AutoJoinSquad` moves on to the next free slot.
+- The slot's class is read from the theater's team definition, the way `OnSquadSlotChanged` reads
+  it (offsets are in the gamedata comments).
+- The player is told why in chat and center text. If they had no class yet, the plugin sends the
+  client `changesquad` to reopen the selection screen.
+- A player already in the class when banned, or whose stored bans load after they picked, is moved
+  to spectator with the same explanation.
+- If the gamedata stops resolving, the plugin logs an error and falls back to moving the player to
+  spectator after the pick. Server bans are unaffected either way.
+
+Class bans and unbans are posted to Discord (`**CLASS BAN:**` / `**CLASS UNBAN:**`) when gg2_discord
+is loaded.
+
 ### Gags and mutes
 
 basecomm owns `sm_gag` (text chat), `sm_mute` (voice), `sm_silence` (both) and their `sm_un...`
@@ -201,7 +254,7 @@ by splitting it into its own row.
 ### When a punishment is issued
 1. Bans: the forward caches the ban, kicks with the duration message and writes the row
 2. Gags/mutes: basecomm applies it in-game, then the forward writes the row
-3. `!calladmin` bans: applied to the player if connected, and the row is written
+3. `!calladmin` bans and class bans: applied to the player if connected, and the row is written
 4. Writes go through `RunWrite` (see Database outages)
 
 ### On Player Connect
@@ -209,10 +262,10 @@ by splitting it into its own row.
 2. SteamID bans: kicked on authorization from the cache, otherwise from the database lookup
 3. Gags/mutes: re-applied through basecomm once the player is fully in game - basecomm's natives
    refuse a client that is still loading, which is where the lookup usually finishes
-4. `!calladmin` bans: re-applied from the database lookup
+4. `!calladmin` bans and class bans: re-applied from the database lookup
 
 ## Admin Immunity
 
 Enforced by basebans and basecomm when the command is issued, using SourceMod's standard
-`CanUserTarget()` rules. The `!calladmin` ban commands and menu apply the same rules: `CanUserTarget()`
+`CanUserTarget()` rules. The `!calladmin` and class ban commands and menus apply the same rules: `CanUserTarget()`
 for a connected player, `CanAdminTarget()` for an offline SteamID.

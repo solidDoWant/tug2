@@ -954,16 +954,16 @@
     "pt_p"      "{green}!addban <steamid>{common} / {green}!banip <ip>{common} / {green}!unban{common} - Bane ou desbane por SteamID ou IP"
     "tr"        "{green}!addban <steamid>{common} / {green}!banip <ip>{common} / {green}!unban{common} - SteamID veya IP ile yasakla ya da yasağı kaldır"
   }
-  "help_admin_medic"
+  "help_admin_class"
   {
-    "en"        "{green}!ban_medic !unban_medic <player>{common} - Ban a player out of the medic slots"
-    "ua"        "{green}!ban_medic !unban_medic <гравець>{common} - Заборонити гравцю грати за медика"
-    "jp"        "{green}!ban_medic !unban_medic <プレイヤー>{common} - プレイヤーを衛生兵枠から締め出します"
-    "chi"       "{green}!ban_medic !unban_medic <玩家>{common} - 禁止玩家使用医疗兵位置"
-    "ru"        "{green}!ban_medic !unban_medic <игрок>{common} - Запретить игроку играть за медика"
-    "es"        "{green}!ban_medic !unban_medic <jugador>{common} - Prohíbe a un jugador las plazas de médico"
-    "pt_p"      "{green}!ban_medic !unban_medic <jogador>{common} - Proíbe um jogador das vagas de médico"
-    "tr"        "{green}!ban_medic !unban_medic <oyuncu>{common} - Bir oyuncuyu sağlıkçı yerlerinden men et"
+    "en"        "{green}!banclass <player> <class> <minutes|0> [reason]{common} - Ban a player from a class (e.g. medic, sgt); {green}!unbanclass{common} lifts it"
+    "ua"        "{green}!banclass <гравець> <клас> <хвилини|0> [причина]{common} - Заборонити гравцю клас (напр. medic, sgt); {green}!unbanclass{common} знімає заборону"
+    "jp"        "{green}!banclass <プレイヤー> <クラス> <分|0> [理由]{common} - プレイヤーを特定のクラスから締め出します（例: medic, sgt）。{green}!unbanclass{common} で解除"
+    "chi"       "{green}!banclass <玩家> <职业> <分钟|0> [原因]{common} - 禁止玩家使用某个职业（如 medic、sgt）；{green}!unbanclass{common} 解除"
+    "ru"        "{green}!banclass <игрок> <класс> <минуты|0> [причина]{common} - Запретить игроку класс (напр. medic, sgt); {green}!unbanclass{common} снимает запрет"
+    "es"        "{green}!banclass <jugador> <clase> <minutos|0> [motivo]{common} - Prohíbe a un jugador una clase (p. ej. medic, sgt); {green}!unbanclass{common} lo levanta"
+    "pt_p"      "{green}!banclass <jogador> <classe> <minutos|0> [motivo]{common} - Proíbe um jogador de uma classe (ex.: medic, sgt); {green}!unbanclass{common} remove"
+    "tr"        "{green}!banclass <oyuncu> <sınıf> <dakika|0> [sebep]{common} - Bir oyuncuyu bir sınıftan men et (ör. medic, sgt); {green}!unbanclass{common} kaldırır"
   }
   "help_admin_respawn"
   {

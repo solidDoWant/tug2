@@ -15,6 +15,10 @@ CREATE TABLE IF NOT EXISTS punishments (
     is_active BOOLEAN DEFAULT TRUE
 );
 
+-- Class template a class_ban applies to (e.g. template_recon_security_coop); NULL for every other
+-- type. Added after the table existed, so it is added here rather than in the CREATE above.
+ALTER TABLE punishments ADD COLUMN IF NOT EXISTS target_class VARCHAR(64);
+
 -- =====================================================
 -- Indexes for Performance
 -- =====================================================
@@ -59,12 +63,12 @@ BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM pg_constraint
         WHERE conname = 'chk_punishment_type'
-        AND pg_get_constraintdef(oid) LIKE '%calladmin_ban%'
+        AND pg_get_constraintdef(oid) LIKE '%''class_ban''%'
     ) THEN
         ALTER TABLE punishments DROP CONSTRAINT IF EXISTS chk_punishment_type;
         ALTER TABLE punishments
         ADD CONSTRAINT chk_punishment_type
-        CHECK (punishment_type IN ('ban_steamid', 'ban_ip', 'gag', 'mute', 'silence', 'calladmin_ban'));
+        CHECK (punishment_type IN ('ban_steamid', 'ban_ip', 'gag', 'mute', 'silence', 'calladmin_ban', 'class_ban'));
     END IF;
 END $$;
 
