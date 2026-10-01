@@ -1,7 +1,7 @@
 #include <sourcemod>
 #include <sdktools>
 
-#define PLUGIN_VERSION     "1.1.0"
+#define PLUGIN_VERSION     "1.2.0"
 #define PLUGIN_DESCRIPTION "Fucking fuck yeah"
 
 #pragma newdecls required
@@ -24,9 +24,9 @@ Handle g_CvarYellChance;
 
 // list of specific files that are decent
 //
-// EVERY ONE OF THESE IS A SECURITY LINE - see the paths. The game ships no insurgent equivalent for
-// them, so this only ever plays for the security team; see the team gate in Fuck(). If insurgent
-// lines are ever added, they need their own list and a team-indexed pick, not an append here.
+// One list per faction, picked by the killer's team in Fuck(). Players are security in most modes
+// but insurgents in survival, and a line from the wrong list plays the other faction's voice out of
+// the killer's body.
 char   FuckingSounds[][] = {
     "player/voice/radial/security/leader/suppressed/target5.ogg",
     "player/voice/radial/security/subordinate/unsuppressed/enemydown_knifekill3.ogg",
@@ -44,6 +44,24 @@ char   FuckingSounds[][] = {
     "player/voice/responses/security/subordinate/suppressed/target11.ogg",
     "player/voice/responses/security/subordinate/suppressed/target12.ogg",
     "player/voice/responses/security/subordinate/suppressed/target13.ogg"
+};
+
+// The insurgent counterparts of the lines above: same categories, as far as the game ships them
+// (it has 10 subordinate "target" responses for insurgents to security's 13).
+char   FuckingSoundsIns[][] = {
+    "player/voice/radial/insurgents/leader/suppressed/target5.ogg",
+    "player/voice/radial/insurgents/subordinate/unsuppressed/enemydown_knifekill3.ogg",
+    "player/voice/radial/insurgents/subordinate/unsuppressed/enemydown_knifekill1.ogg",
+    "player/voice/responses/insurgent/subordinate/suppressed/target1.ogg",
+    "player/voice/responses/insurgent/subordinate/suppressed/target2.ogg",
+    "player/voice/responses/insurgent/subordinate/suppressed/target3.ogg",
+    "player/voice/responses/insurgent/subordinate/suppressed/target4.ogg",
+    "player/voice/responses/insurgent/subordinate/suppressed/target5.ogg",
+    "player/voice/responses/insurgent/subordinate/suppressed/target6.ogg",
+    "player/voice/responses/insurgent/subordinate/suppressed/target7.ogg",
+    "player/voice/responses/insurgent/subordinate/suppressed/target8.ogg",
+    "player/voice/responses/insurgent/subordinate/suppressed/target9.ogg",
+    "player/voice/responses/insurgent/subordinate/suppressed/target10.ogg"
 };
 
 // whether or not the player has an active cooldown, end time for cooldown
@@ -105,8 +123,12 @@ public void OnMapStart()
     {
         PrecacheSound(FuckingSounds[i]);
     }
+    for (int i = 0; i < sizeof(FuckingSoundsIns); i++)
+    {
+        PrecacheSound(FuckingSoundsIns[i]);
+    }
 
-    PrintToServer("[FY] Done caching %d sounds", sizeof(FuckingSounds));
+    PrintToServer("[FY] Done caching %d sounds", sizeof(FuckingSounds) + sizeof(FuckingSoundsIns));
 
     // The retry timer does not survive a map change, so pick a failed connection back up here.
     if (g_hDb == null) ConnectDatabase();
@@ -376,17 +398,24 @@ public Action Fuck(int client)
     if (IsFakeClient(client)) return Plugin_Continue;
     if (!IsClientInGame(client)) return Plugin_Continue;
 
-    // Security only. Every file in FuckingSounds is a security voice line and the game ships no
-    // insurgent counterpart, so an insurgent kill used to emit a security voice out of the killer's
-    // own body - audible to everyone, and wrong for the team that made the kill. Gated here rather
-    // than at the player_death caller so the "fuckyeah" test command obeys it too.
-    if (GetClientTeam(client) != TEAM_SEC) return Plugin_Continue;
-
     // An opted-out player's own kills stay silent.
     if (g_OptOut[client]) return Plugin_Continue;
 
-    int numSoundsAvailable = sizeof(FuckingSounds) - 1;    // Inclusive, starting from zero
+    // Pick the list by the killer's team. Decided here rather than at the player_death caller so the
+    // "fuckyeah" test command gets it right too. Spectators have no voice.
+    int team = GetClientTeam(client);
+    if (team == TEAM_SEC) return PlaySound(client, FuckingSounds, sizeof(FuckingSounds));
+    if (team == TEAM_INS) return PlaySound(client, FuckingSoundsIns, sizeof(FuckingSoundsIns));
+    return Plugin_Continue;
+}
+
+Action PlaySound(int client, const char[][] sounds, int soundCount)
+{
+    int numSoundsAvailable = soundCount - 1;    // Inclusive, starting from zero
     int lastSoundNumber    = PlayerLastSoundNumber[client];
+    // The last pick came from the other team's list and is out of range for this one; there is no
+    // repeat to avoid.
+    if (lastSoundNumber >= soundCount) lastSoundNumber = -1;
     if (lastSoundNumber != -1)
     {
         // Removing another item prevents the same sound from being picked twice
@@ -412,7 +441,7 @@ public Action Fuck(int client)
     }
     if (numClients == 0) return Plugin_Continue;
 
-    EmitSound(clients, numClients, FuckingSounds[soundNumber], client);
+    EmitSound(clients, numClients, sounds[soundNumber], client);
     PlayerLastSoundNumber[client] = soundNumber;
 
     return Plugin_Continue;
