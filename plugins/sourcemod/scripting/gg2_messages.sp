@@ -123,6 +123,7 @@ char g_HelpPhrases[][] = {
     "help_lives",
     "help_lastmaps",
     "help_stock",
+    "help_fy",
     "help_autoreconnect",
     "help_dragmode"
 };
@@ -147,6 +148,7 @@ char g_HelpGateCommands[][] = {
     "sm_lives",    // help_lives - bm2_respawn only registers it when built with DOCTOR
     "",
     "",
+    "sm_fy",       // help_fy - gg2_fuckyeah
     "sm_autoreconnect",
     "cvar:sm_pullrag_allow_choice"
 };

@@ -1,7 +1,7 @@
 #include <sourcemod>
 #include <sdktools>
 
-#define PLUGIN_VERSION     "1.0.2"
+#define PLUGIN_VERSION     "1.1.0"
 #define PLUGIN_DESCRIPTION "Fucking fuck yeah"
 
 #pragma newdecls required
@@ -53,6 +53,21 @@ int    PlayerLastSoundNumber[MAXPLAYERS + 1] = { -1, ... };
 // length of time to wait before yelling can occur again (in seconds)
 Handle CooldownPeriod;
 
+// Per-player opt-out, toggled with !fy. An opted-out player neither yells on their own kills nor
+// hears anyone else's yells. Saved in player_fy_opt_out in the insurgency-stats database so it
+// survives map changes and reconnects; g_OptOut mirrors it for connected players. Until a player's
+// row has loaded (or if they have none) they are opted in.
+bool     g_OptOut[MAXPLAYERS + 1];
+// Chosen but not yet saved. A load must not overwrite it, and a reconnect writes it rather than
+// re-reading - otherwise a database hiccup would silently flip the player back.
+bool     g_OptOutDirty[MAXPLAYERS + 1];
+
+Database g_hDb = null;
+bool     g_bDbConnecting = false;
+// Bumped on every successful connect. A query that fails with a connection error on an older handle
+// is simply retried on the new one instead of starting yet another reconnect.
+int      g_iDbGeneration = 0;
+
 public void OnPluginStart()
 {
     // cvars
@@ -63,6 +78,11 @@ public void OnPluginStart()
 
     // commands (debug)
     RegConsoleCmd("fuckyeah", Command_FuckTest, "Test Fuck Yeah plugin.");
+    // sm_ prefixed commands are reachable as both !fy and /fy.
+    RegConsoleCmd("sm_fy", Command_Toggle, "Turn the kill voice lines on or off for yourself. Usage: !fy [on|off]");
+
+    // The connect callback also loads everyone already connected, for a late load.
+    ConnectDatabase();
 
     // events
     HookEvent("player_death", Event_PlayerDeath, EventHookMode_Pre);
@@ -87,6 +107,252 @@ public void OnMapStart()
     }
 
     PrintToServer("[FY] Done caching %d sounds", sizeof(FuckingSounds));
+
+    // The retry timer does not survive a map change, so pick a failed connection back up here.
+    if (g_hDb == null) ConnectDatabase();
+}
+
+public void OnClientConnected(int client)
+{
+    g_OptOut[client]      = false;
+    g_OptOutDirty[client] = false;
+}
+
+public void OnClientPostAdminCheck(int client)
+{
+    if (IsFakeClient(client)) return;
+
+    // Toggled before the SteamID was available, so that save could not run yet.
+    if (g_OptOutDirty[client]) SaveOptOut(client);
+    else LoadOptOut(client);
+}
+
+public Action Command_Toggle(int client, int args)
+{
+    if (client == 0 || !IsClientInGame(client) || IsFakeClient(client)) return Plugin_Handled;
+
+    bool wantOptOut;
+    if (args == 0)
+    {
+        // No argument: toggle.
+        wantOptOut = !g_OptOut[client];
+    }
+    else
+    {
+        char arg[8];
+        GetCmdArg(1, arg, sizeof(arg));
+        if (StrEqual(arg, "on", false) || StrEqual(arg, "1", false) || StrEqual(arg, "yes", false))
+        {
+            wantOptOut = false;
+        }
+        else if (StrEqual(arg, "off", false) || StrEqual(arg, "0", false) || StrEqual(arg, "no", false))
+        {
+            wantOptOut = true;
+        }
+        else
+        {
+            PrintToChat(client, "[FY] Usage: !fy [on|off]");
+            return Plugin_Handled;
+        }
+    }
+
+    SetOptOut(client, wantOptOut);
+    return Plugin_Handled;
+}
+
+void SetOptOut(int client, bool optOut)
+{
+    if (optOut == g_OptOut[client])
+    {
+        PrintToChat(client, "[FY] Kill voice lines are already %s for you.", optOut ? "OFF" : "ON");
+        return;
+    }
+
+    // Applies immediately; the save happens in the background.
+    g_OptOut[client]      = optOut;
+    g_OptOutDirty[client] = true;
+    SaveOptOut(client);
+    PrintToChat(client, "[FY] Kill voice lines are now %s for you. Type !fy to turn them %s.",
+                optOut ? "OFF" : "ON", optOut ? "back on" : "off");
+}
+
+// ---------------------------------------------------------------------------------------------
+// Database. Same pattern as d_dy_pull_rag: the pooled connection to the stats database is dropped
+// when idle, so every query treats a connection error as "reconnect and try again" rather than as
+// a real failure.
+// ---------------------------------------------------------------------------------------------
+
+void ConnectDatabase()
+{
+    if (g_bDbConnecting) return;
+
+    g_bDbConnecting = true;
+    delete g_hDb;
+    Database.Connect(OnDatabaseConnected, "insurgency-stats");
+}
+
+public void OnDatabaseConnected(Database db, const char[] error, any data)
+{
+    g_bDbConnecting = false;
+
+    if (db == null)
+    {
+        LogError("[FY] Could not connect to insurgency-stats: %s - everyone hears the voice lines until it is back", error);
+        CreateTimer(30.0, Timer_RetryConnect, _, TIMER_FLAG_NO_MAPCHANGE);
+        return;
+    }
+
+    g_hDb = db;
+    g_iDbGeneration++;
+    LoadAllOptOuts();
+}
+
+public Action Timer_RetryConnect(Handle timer)
+{
+    if (g_hDb == null) ConnectDatabase();
+    return Plugin_Stop;
+}
+
+bool IsConnectionError(const char[] error)
+{
+    static const char markers[][] = {
+        "server closed the connection",
+        "no connection to the server",
+        "connection not open",
+        "could not send data to server",
+        "could not receive data from server",
+        "terminating connection",
+        "SSL SYSCALL error",
+    };
+
+    for (int i = 0; i < sizeof(markers); i++)
+        if (StrContains(error, markers[i], false) != -1) return true;
+
+    return false;
+}
+
+// A query failed with a connection error. If the handle it ran on has already been replaced, run it
+// again on the new one; otherwise this is the first to notice, so reconnect - the connect callback
+// re-runs everything that is outstanding.
+bool RetryOnNewConnection(int generation)
+{
+    if (generation != g_iDbGeneration && g_hDb != null) return true;
+
+    ConnectDatabase();
+    return false;
+}
+
+// Everyone in game: write what is unsaved, read the rest.
+void LoadAllOptOuts()
+{
+    for (int i = 1; i <= MaxClients; i++)
+    {
+        if (!IsClientInGame(i) || IsFakeClient(i) || !IsClientAuthorized(i)) continue;
+
+        if (g_OptOutDirty[i]) SaveOptOut(i);
+        else LoadOptOut(i);
+    }
+}
+
+void LoadOptOut(int client)
+{
+    if (g_hDb == null)
+    {
+        ConnectDatabase();    // the connect callback loads everyone
+        return;
+    }
+
+    char steamId[32];
+    if (!GetClientAuthId(client, AuthId_SteamID64, steamId, sizeof(steamId))) return;
+
+    char query[256];
+    // ::int because the pgsql driver hands FetchInt a BOOLEAN's text form, which reads as 0.
+    g_hDb.Format(query, sizeof(query), "SELECT opt_out::int FROM player_fy_opt_out WHERE steam_id = %s", steamId);
+
+    DataPack pack = new DataPack();
+    pack.WriteCell(GetClientUserId(client));
+    pack.WriteCell(g_iDbGeneration);
+    g_hDb.Query(OnOptOutLoaded, query, pack);
+}
+
+public void OnOptOutLoaded(Database db, DBResultSet results, const char[] error, DataPack pack)
+{
+    pack.Reset();
+    int client     = GetClientOfUserId(pack.ReadCell());
+    int generation = pack.ReadCell();
+    delete pack;
+
+    if (client == 0) return;
+
+    if (results == null)
+    {
+        if (IsConnectionError(error))
+        {
+            if (RetryOnNewConnection(generation)) LoadOptOut(client);
+            return;
+        }
+
+        LogError("[FY] Could not load opt-out for %N: %s", client, error);
+        return;
+    }
+
+    // Chosen while this was in flight - the choice wins over what was stored before it.
+    if (g_OptOutDirty[client]) return;
+
+    g_OptOut[client] = results.FetchRow() && results.FetchInt(0) != 0;
+}
+
+void SaveOptOut(int client)
+{
+    if (g_hDb == null)
+    {
+        ConnectDatabase();    // stays dirty; the connect callback writes it
+        return;
+    }
+
+    char steamId[32];
+    if (!GetClientAuthId(client, AuthId_SteamID64, steamId, sizeof(steamId))) return;
+
+    bool optOut = g_OptOut[client];
+
+    char query[384];
+    g_hDb.Format(query, sizeof(query),
+                 "INSERT INTO player_fy_opt_out (steam_id, opt_out) VALUES (%s, %s) ON CONFLICT (steam_id) DO UPDATE SET opt_out = EXCLUDED.opt_out, updated_at = CURRENT_TIMESTAMP",
+                 steamId, optOut ? "TRUE" : "FALSE");
+
+    DataPack pack = new DataPack();
+    pack.WriteCell(GetClientUserId(client));
+    pack.WriteCell(g_iDbGeneration);
+    pack.WriteCell(optOut);
+    g_hDb.Query(OnOptOutSaved, query, pack);
+}
+
+public void OnOptOutSaved(Database db, DBResultSet results, const char[] error, DataPack pack)
+{
+    pack.Reset();
+    int  client     = GetClientOfUserId(pack.ReadCell());
+    int  generation = pack.ReadCell();
+    bool optOut     = pack.ReadCell();
+    delete pack;
+
+    if (client == 0) return;
+
+    if (results == null)
+    {
+        if (IsConnectionError(error))
+        {
+            if (RetryOnNewConnection(generation)) SaveOptOut(client);
+            return;
+        }
+
+        LogError("[FY] Could not save opt-out for %N: %s", client, error);
+        PrintToChat(client, "[FY] Couldn't save that, so it only lasts until you disconnect.");
+        g_OptOutDirty[client] = false;
+        return;
+    }
+
+    // Only clean if nothing newer was chosen while this write was in flight.
+    if (g_OptOut[client] == optOut) g_OptOutDirty[client] = false;
 }
 
 public Action Event_PlayerDisconnect(Event event, const char[] name, bool dontBroadcast)
@@ -116,6 +382,9 @@ public Action Fuck(int client)
     // than at the player_death caller so the "fuckyeah" test command obeys it too.
     if (GetClientTeam(client) != TEAM_SEC) return Plugin_Continue;
 
+    // An opted-out player's own kills stay silent.
+    if (g_OptOut[client]) return Plugin_Continue;
+
     int numSoundsAvailable = sizeof(FuckingSounds) - 1;    // Inclusive, starting from zero
     int lastSoundNumber    = PlayerLastSoundNumber[client];
     if (lastSoundNumber != -1)
@@ -133,7 +402,17 @@ public Action Fuck(int client)
         soundNumber++;
     }
 
-    EmitSoundToAll(FuckingSounds[soundNumber], client);
+    // Everyone except opted-out players. Same as EmitSoundToAll, which also skips bots.
+    int clients[MAXPLAYERS];
+    int numClients = 0;
+    for (int i = 1; i <= MaxClients; i++)
+    {
+        if (!IsClientInGame(i) || IsFakeClient(i) || g_OptOut[i]) continue;
+        clients[numClients++] = i;
+    }
+    if (numClients == 0) return Plugin_Continue;
+
+    EmitSound(clients, numClients, FuckingSounds[soundNumber], client);
     PlayerLastSoundNumber[client] = soundNumber;
 
     return Plugin_Continue;

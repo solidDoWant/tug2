@@ -497,10 +497,12 @@ FROM sourcemod-plugins-base AS sourcemod-plugins-gg2-fuckyeah
 
 # Build the gg2_fuckyeah plugin
 COPY plugins/sourcemod/gamedata/ /insurgency/addons/sourcemod/gamedata/
-RUN --mount=type=bind,source=./plugins/sourcemod/scripting,target=/plugin-source/scripting \
+RUN --mount=type=bind,source=./plugins/sourcemod,target=/plugin-source \
     /sourcemod/addons/sourcemod/scripting/spcomp --include=/plugin-source/scripting/include  /plugin-source/scripting/gg2_fuckyeah.sp -o /insurgency/addons/sourcemod/plugins/gg2_fuckyeah.smx && \
     mkdir -p /insurgency/cfg/sourcemod && \
     touch /insurgency/cfg/sourcemod/fuckyeah.cfg && \
+    mkdir -p /insurgency/addons/sourcemod/configs/sql-init-scripts/pgsql && \
+    cp /plugin-source/configs/sql-init-scripts/pgsql/gg2_fuckyeah.sql /insurgency/addons/sourcemod/configs/sql-init-scripts/pgsql/ && \
     # Fixup file permissions
     find /insurgency -type d -exec chmod 755 {} \; && \
     find /insurgency -type f -exec chmod 644 {} \;
