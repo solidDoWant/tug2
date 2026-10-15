@@ -737,39 +737,6 @@
 				"weapon"				"weapon_f1"
 			}
 		}
-		"template_tugvar_submachinegunner_sterling"
-		{
-			"team"					"security,insurgents"
-			"print_name"				"#Squad_Cell_SubmachineGunner"
-			"models"
-			{
-			"player"				"models/characters/insurgent_light.mdl"
-			"viewmodel_hands"			"models/weapons/v_hands_ins_l.mdl"
-
-			"bodygoups"
-			{
-			"kit"					"0"
-			"backpack"				"0"
-			}
-
-			}
-			"buy_order"
-			{
-				"gear"					"ins_light_armor"
-				"gear"					"ins_chest_rig"
-				"weapon"				"weapon_kabar"
-				"weapon"				"weapon_sterling"
-				"weapon_upgrade"		"ammo_hp_mp40"
-				"weapon_upgrade"		"optic_kobra"
-				"weapon"				"weapon_ots33"
-			}
-			"allowed_items"
-			{
-				"weapon"				"weapon_kabar"
-				"weapon"				"weapon_sterling"
-				"weapon"				"weapon_ots33"
-			}
-		}
 		"template_tugvar_specialist_aks74u"
 		{
 			"team"					"security,insurgents"
@@ -840,7 +807,7 @@
 				"weapon"				"weapon_anm14"
 			}
 		}
-		"template_tugvar_specialist_mp5"
+		"template_tugvar_specialist_mp5a4"
 		{
 			"team"					"security,insurgents"
 			"print_name"				"#Squad_Cell_Specialist"
@@ -861,7 +828,7 @@
 				"gear"					"ins_light_armor"
 				"gear"					"ins_chest_carrier"
 				"weapon"				"weapon_kabar"
-				"weapon"				"weapon_mp5"
+				"weapon"				"weapon_mp5a4"
 				"weapon_upgrade"		"ammo_tracer_mp5"
 				"weapon_upgrade"		"optic_elcan"
 				"weapon"				"weapon_makarov"
@@ -870,7 +837,7 @@
 			"allowed_items"
 			{
 				"weapon"				"weapon_kabar"
-				"weapon"				"weapon_mp5"
+				"weapon"				"weapon_mp5a4"
 				"weapon"				"weapon_makarov"
 				"weapon"				"weapon_m18_ins"
 			}
@@ -917,7 +884,7 @@
 				"weapon"				"weapon_rpg7"
 			}
 		}
-		"template_tugvar_sapper_law"
+		"template_tugvar_sapper_at4_akm"
 		{
 			"team"					"security,insurgents"
 			"print_name"				"#Squad_Cell_Sapper"
@@ -949,13 +916,13 @@
 				"weapon_upgrade"		"ammo_hp_akm"
 				"weapon_upgrade"		"optic_acog"
 				"weapon_upgrade"		"magazine_extended_akseries_45rd"
-				"weapon"				"weapon_law"
+				"weapon"				"weapon_at4"
 			}
 			"allowed_items"
 			{
 				"weapon"				"weapon_kabar"
 				"weapon"				"weapon_akm"
-				"weapon"				"weapon_law"
+				"weapon"				"weapon_at4"
 			}
 		}
 		"template_tugvar_sapper_at4"
@@ -1776,6 +1743,157 @@
 	// TUG's file spells it; the definition itself is "weapon_M107".
 	"weapon_upgrades"
 	{
+		// ================================================================================
+		// TUG's upgrade templates, restated with "IsBase" "1"
+		// ================================================================================
+		//
+		// These are templates - other upgrades "import" them and nothing else names them - but TUG
+		// left IsBase off, so each was registered as an upgrade in its own right. With no
+		// allowed_weapons they fit nothing, yet each held one of the 254 upgrade ids that fit
+		// m_upgradeSlots (8 bits with a -1 flag). IsBase keeps a definition importable (TUG's
+		// base_ammo_ap and weapon_base work that way) while InitFromKV skips it before assigning an id.
+		//
+		// Restated in full, not stubbed: a definition here replaces TUG's, so a stub would leave every
+		// importer inheriting nothing. Each is TUG's text verbatim (theater_tug_39_base_weapon_upgrades
+		// .theater, base_brake_1 from theater_tug_39_default_weapon_upgrades.theater) plus IsBase.
+		// They sit at the top of this block so every one precedes everything that imports it, and a
+		// parent precedes its child (base_flashlight before base_flashlight_pistol, base_heavybarrel
+		// before base_brake_1) - see the note atop "weapons" on imports that resolve in definition
+		// order. If TUG Scripts is updated, re-extract rather than hand-edit.
+		//
+		// The three templates nothing imports - base_ammo_slugs, base_oilfiltersilencer and
+		// base_standard - are plain stubs further down, with the other removed upgrades.
+		"base_flashlight"
+		{
+			"IsBase"					"1"
+			"upgrade_slot"				"siderail"
+			"print_name"				"#weapon_upgrade_flashlight"
+			"print_desc"				"#weapon_upgrade_flashlight_desc"
+			"weapon_abilities"			"flashlight"
+			"particle_attach"			"Laser"
+
+			"world_attachments"
+			{
+				"Flashlight"
+				{
+					"model"					"models/weapons/upgrades/w_laser_sec.mdl"
+				}
+			}
+		}
+
+		"base_flashlight_pistol"
+		{
+			"IsBase"					"1"
+			"import"				"base_flashlight"
+			"print_name"				"#weapon_upgrade_flashlight"
+			"print_desc"				"#weapon_upgrade_flashlight_desc"
+		}
+
+		"base_lasersight"
+		{
+			"IsBase"					"1"
+			"upgrade_slot"				"siderail"
+			"print_name"				"#weapon_upgrade_lasersight"
+			"print_desc"				"#weapon_upgrade_lasersight_desc"
+			"weapon_abilities"			"lasersights"
+			"particle_attach"			"Laser"
+
+			"world_attachments"
+			{
+				"Laser"
+				{
+					"model"					"models/weapons/upgrades/w_laser_sec.mdl"
+				}
+			}
+		}
+
+		"base_lasersight_pistol"
+		{
+			"IsBase"					"1"
+			"import"				"base_lasersight"
+			"print_name"				"#weapon_upgrade_lasersight"
+			"print_desc"				"#weapon_upgrade_lasersight_desc"
+		}
+
+		"base_heavybarrel"
+		{
+			"IsBase"					"1"
+			"upgrade_slot"				"barrel"
+			"upgrade_cost"				"1"
+			"print_name"				"#weapon_upgrade_heavybarrel"
+			"print_desc"				"#weapon_upgrade_heavybarrel_desc"
+
+			"recoil"
+			{
+				"recoil_lateral_frac"			"0.8"
+				"recoil_vertical_frac"			"0.7"
+			}
+
+			"sway"
+			{
+				"sway_speed_frac"			"0.4"
+			}
+		}
+
+		"base_brake_1"		//heavy barrel
+		{
+			"IsBase"						"1"
+			"import"						"base_heavybarrel"
+			"upgrade_slot"					"barrel"
+			"print_name"					"#weapon_upgrade_muzzlebrake"
+			"print_desc"					"#weapon_upgrade_muzzlebrake_desc"
+			"recoil"
+			{
+				"recoil_lateral_frac"		"1.0"
+				"recoil_vertical_frac"		"0.8"
+			}
+			"sway"
+			{
+				"sway_speed_frac"			"0.6"
+			}
+		}
+
+		"base_recoilstock"
+		{
+			"IsBase"					"1"
+			"upgrade_slot"				"stock"
+			"upgrade_cost"				"2"
+			"print_name"				"#weapon_upgrade_recoilstock"
+			"print_desc"				"#weapon_upgrade_recoilstock_desc"
+
+			"recoil"
+			{
+				"recoil_lateral_frac"			"0.8"
+				"recoil_vertical_frac"			"0.5"
+			}
+
+			"sway"
+			{
+				"sway_speed_frac"			"1.0"
+			}
+		}
+
+		"base_silencer"
+		{
+			"IsBase"					"1"
+			"upgrade_slot"				"barrel"
+			"print_name"				"#weapon_upgrade_silencer"
+			"print_desc"				"#weapon_upgrade_silencer_desc"
+			"weapon_abilities"			"silencer"
+			"particle_1p"				"muzzleflash_suppressed_1p"
+			"particle_3p"				"muzzleflash_suppressed_1p"
+			"particle_attach"			"muzzle_supp"
+		}
+
+		"base_bipod"
+		{
+			"IsBase"					"1"
+			"upgrade_slot"				"underbarrel"
+			"print_name"				"#weapon_upgrade_bipod"
+			"print_desc"				"#weapon_upgrade_bipod_desc"
+			"weapon_abilities"			"bipod"
+		}
+
 		"ammo_mk211_m107"
 		{
 			"import"				"base_ammo_ap"
@@ -1800,6 +1918,140 @@
 				"weapon"			"weapon_m107"
 			}
 			"ammo_type_override"	"50_bmg_api_mag"
+		}
+
+		// ================================================================================
+		// Removed upgrades - see "Removed weapons" at the bottom of the "weapons" block
+		// ================================================================================
+		//
+		// Each of these fits only weapons removed there, so it could never be bought again - but it
+		// would still hold one of the 254 upgrade ids that fit m_upgradeSlots (8 bits with a -1 flag).
+		// Removed the same way as the weapons: a stub that replaces TUG's definition and carries only
+		// "IsBase" "1", which InitFromKV skips before assigning an id.
+		"magazine_extended_pistol_16rnd"	{ "IsBase" "1" }	// Extended Magazines - Combat Commander only
+		"ammo_ap_m1911"					{ "IsBase" "1" }	// AP Ammo - M1911 Series Pistol, Combat Commander
+		"ammo_hp_m1911"					{ "IsBase" "1" }	// HP Ammo - M1911 Series Pistol, Combat Commander
+		"m1911seriespistol_1"			{ "IsBase" "1" }	// D.O.I. Mod Edition skin
+		"m45seriespistol_1"				{ "IsBase" "1" }	// Kimber Desert Warrior skin
+		"ammo_ap_mini14"				{ "IsBase" "1" }	// AP Ammo - AC-556
+		"ammo_hp_mini14"				{ "IsBase" "1" }	// HP Ammo - AC-556
+		"ammo_tracer_mini14"			{ "IsBase" "1" }	// Tracer Ammo - AC-556
+		"barrel_silencer_sten"			{ "IsBase" "1" }	// Suppressor - Sten Mk. II
+
+		// No allowed_weapons at all, so these never fitted anything - they only held ids. The first
+		// three are TUG templates nothing imports (the imported ones are restated with IsBase at the
+		// top of this block); the Model 10 rounds are for a revolver this theater does not define.
+		"base_ammo_slugs"				{ "IsBase" "1" }
+		"base_oilfiltersilencer"		{ "IsBase" "1" }
+		"base_standard"					{ "IsBase" "1" }
+		"ammo_ap_model10"				{ "IsBase" "1" }	// AP Ammo - Model 10
+		"ammo_hp_model10"				{ "IsBase" "1" }	// HP Ammo - Model 10
+
+		// ================================================================================
+		// GP25 underbarrel rounds fire the M203's
+		// ================================================================================
+		//
+		// weapon_gp25_he / weapon_gp25_smoke were weapon_m203_he / weapon_m203_smoke under another
+		// name: the same definition apart from print_name and the GP-30 firing sound, and their
+		// explosives differ from the M203's only in the projectile's model. Pointing the GP25
+		// launchers at the M203 rounds frees two weapon slots (both are stubbed out in "weapons"). What
+		// is lost is the GP-30 shot sound and the VOG projectile model; the underbarrel itself - its
+		// model, name and price - is unchanged. Kills now log as grenade_m203_he rather than
+		// grenade_gp25_he, which bm2_respawn already treats identically.
+		//
+		// TUG's definitions verbatim (theater_tug_39_default_weapon_upgrades.theater), attach_weapon
+		// changed. Restated in full because a definition here replaces TUG's.
+		"underbarrel_gp25_he"
+		{
+			"import"				"underbarrel_gp25_base"
+			"upgrade_cost"				"4"
+			"print_name"				"#weapon_gp25_he"
+			"print_desc"				"#weapon_m203_he_desc"
+			"attach_weapon"				"weapon_m203_he"
+
+			"viewmodel_attachments"
+			{
+				"Launcher"
+				{
+					"skin"					"0"
+				}
+			}
+		}
+
+		"underbarrel_gp25_smoke"
+		{
+			"import"				"underbarrel_gp25_base"
+			"upgrade_cost"				"1"
+			"print_name"				"#weapon_gp25_smoke"
+			"print_desc"				"#weapon_m203_smoke_desc"
+			"attach_weapon"				"weapon_m203_smoke"
+
+			"viewmodel_attachments"
+			{
+				"Launcher"
+				{
+					"skin"					"1"
+				}
+			}
+		}
+
+		// ================================================================================
+		// M79 rounds - napalm and smoke as upgrades on the one M79
+		// ================================================================================
+		//
+		// weapon_m79_napalm and weapon_m79_smoke were weapon_m79 with a different explosive and ammo
+		// pool, nothing else (the smoke also carried one fewer clip, which the ammo pool's carry of 5
+		// made moot). They are stubbed out in "weapons" and come back as these two rounds, freeing two
+		// weapon slots for two upgrade ids.
+		//
+		// WHY THE MAGAZINE SLOT. CINSWeaponRocketBase::FireRocket - every "projectile" weapon, the M79
+		// included - asks for the upgrade in the magazine slot (GetUpgradeInSlot(2)) and fires its
+		// explosive_override if it has one. ammo_type_override is read from a different slot (the ammo
+		// slot, in CINSWeapon::GetPrimaryAmmoType), so one upgrade cannot switch both, and these do not
+		// try: every round draws on the M79's own grenade_m79 pool. The napalm used to have its own
+		// pool with a carry of 2 against grenade_m79's 5; maxcarry_override puts that cap back.
+		//
+		// TUG never uses explosive_override, so this is read out of the binary rather than copied from
+		// a working example - check in game that each round fires its own projectile and that the
+		// napalm stops at 2.
+		//
+		// Price: all three M79s cost 4, so the rounds cost nothing extra. Kills still log per
+		// projectile (grenade_m79_napalm, grenade_m79_smoke), so stats and gg2_burn are unaffected.
+		"magazine_m79_napalm"
+		{
+			"upgrade_slot"				"magazine"
+			"upgrade_cost"				"0"
+			"team_access"				"security, insurgent"
+			"weight"					"0"
+
+			"print_name"				"#weapon_m79_napalm"
+			"print_desc"				"#weapon_m79_desc"
+
+			"explosive_override"		"grenade_m79_napalm"
+			"maxcarry_override"			"2"
+
+			"allowed_weapons"
+			{
+				"weapon"				"weapon_m79"
+			}
+		}
+
+		"magazine_m79_smoke"
+		{
+			"upgrade_slot"				"magazine"
+			"upgrade_cost"				"0"
+			"team_access"				"security, insurgent"
+			"weight"					"0"
+
+			"print_name"				"#weapon_m79_smoke"
+			"print_desc"				"#weapon_m79_desc"
+
+			"explosive_override"		"grenade_m79_smoke"
+
+			"allowed_weapons"
+			{
+				"weapon"				"weapon_m79"
+			}
 		}
 
 		// ================================================================================
@@ -8843,6 +9095,53 @@
 			}
 			"team_access"				"security, insurgent"
 		}
+
+		// ---------------------------------------------------------------------------
+		// Removed weapons
+		// ---------------------------------------------------------------------------
+		// The engine loads at most 128 weapon definitions (CTheaterWeaponDefinitions::GetMaxDefinitions,
+		// on both server and client), and TUG plus this file filled all 128. Worse, a weapon's id is
+		// networked as m_hWeaponDefinitionHandle in 7 unsigned bits, so id 128 arrives at the client
+		// as 0 - only 127 are usable, and m_AddonModelWeaponIDs (7 bits with a -1 flag) stops at 126.
+		//
+		// A derived theater cannot delete an inherited definition, but it can replace one (see the note
+		// atop this block), and a definition carrying "IsBase" "1" is skipped by
+		// CTheaterItemBaseDefinition::InitFromKV before it is given an id - the same flag TUG's
+		// weapon_base and ballistic_base use. So each stub below replaces TUG's weapon and takes no
+		// slot. Nothing imports any of them; if something ever does, it will import an empty stub.
+		//
+		// Chosen from main-server stats, 2025-12-17 to 2026-09-25 (player kills / saved loadouts):
+		// unused, duplicated by a near-identical weapon, or both. Bot classes that carried one were
+		// changed with it: template_tugvar_submachinegunner_sterling is gone (its squad slots take the
+		// MP40 class), the LAW sapper became template_tugvar_sapper_at4_akm and the MP5 specialist
+		// template_tugvar_specialist_mp5a4. Upgrades that fitted only these weapons are removed the
+		// same way at the top of "weapon_upgrades".
+		//
+		// Names still appear in restated upgrade lists (allowed_weapons, optics_fov_override, ...).
+		// That is harmless: TUG's own lists already name weapons that were never defined (weapon_bar
+		// in ammo_ap_fal, weapon_wa2000 in weapon_mod_speed_reload), and those upgrades load and work.
+		"weapon_gurkha"				{ "IsBase" "1" }	// Khukuri - 0 / 0, no class gives it out
+		"weapon_m1911seriespistol"	{ "IsBase" "1" }	// M1911 Series Pistol - 66 / 18
+		"weapon_m45seriespistol"	{ "IsBase" "1" }	// M45 Series Pistol - 152 / 25
+		"weapon_combatcommander"	{ "IsBase" "1" }	// Combat Commander - 162 / 33
+		"weapon_mini14"				{ "IsBase" "1" }	// AC-556 - 336 / 7
+		"weapon_sten"				{ "IsBase" "1" }	// Sten Mk. II - 252 / 11
+		"weapon_sigp220"			{ "IsBase" "1" }	// SIG Sauer P220 - 135 / 17; the P226 stays
+		"weapon_sterling"			{ "IsBase" "1" }	// Sterling - 199 / 8; the MP40 stays
+
+		// Merged into a weapon that stays. The GP25 and M79 rounds come back as upgrades - see
+		// "weapon_upgrades". The rest are removed outright in favour of a near-identical weapon - except
+		// the MP5, which is not one: TUG's is the MP5K PDW (900 rpm, spread 0.40) against the MP5A4's
+		// full-size model (800 rpm, spread 0.30, its own suppressor and SD6 mod). It goes because the
+		// MP5A4 fills the same role and is used three times as much, not because nothing is lost.
+		"weapon_gp25_he"			{ "IsBase" "1" }	// = weapon_m203_he but for sound and projectile model
+		"weapon_gp25_smoke"			{ "IsBase" "1" }	// = weapon_m203_smoke, likewise
+		"weapon_m79_napalm"			{ "IsBase" "1" }	// now magazine_m79_napalm on the M79
+		"weapon_m79_smoke"			{ "IsBase" "1" }	// now magazine_m79_smoke on the M79
+		"weapon_law"				{ "IsBase" "1" }	// an AT4 with another model and sound, same rocket
+		"weapon_mp5"				{ "IsBase" "1" }	// MP5K PDW - 372 kills; the MP5A4 (1139) stays, see above
+		"weapon_glock17"			{ "IsBase" "1" }	// Glock 17 - 303; the Glock 18 has semi too
+		"weapon_l1a1"				{ "IsBase" "1" }	// L1A1 - a semi-only FAL, which stays
 	}
 	// ---------------------------------------------------------------------------
 	// M777 white phosphorus - the fire-support shell

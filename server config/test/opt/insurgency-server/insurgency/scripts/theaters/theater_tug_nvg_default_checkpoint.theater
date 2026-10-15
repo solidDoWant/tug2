@@ -65,14 +65,14 @@
 					"#Squad_Cell_MachineGunner"				"template_tugvar_machinegunner_pecheneg"	// Frag
 					"#Squad_Cell_SharpShooter"				"template_tugvar_sharpshooter_mosin"	// smokes
 					"#Squad_Cell_MachineGunner"				"template_tugvar_machinegunner_rpk"	// Frag
-					"#Squad_Cell_Sapper"					"template_tugvar_sapper_law"	// RPG
+					"#Squad_Cell_Sapper"					"template_tugvar_sapper_at4_akm"	// RPG
 					"#Squad_Cell_SharpShooter"				"template_tugvar_sharpshooter_sks"	// Frag
 				}
 				
 				"#Cell_Charlie"	// support team
 				{
 					// role name								preset
-					"#Squad_Cell_Leader_Specialist"			"template_tugvar_specialist_mp5"	// smokes
+					"#Squad_Cell_Leader_Specialist"			"template_tugvar_specialist_mp5a4"	// smokes
 					"#Squad_Cell_Specialist"				"template_tugvar_specialist_aks74u"	// incendiary
 					"#Squad_Cell_Bomber"					"template_coop_bomber"	// bomber
 					"#Squad_Cell_MachineGunner"				"template_tugvar_machinegunner_m240"	// Frag
@@ -89,7 +89,7 @@
 					"#Squad_Cell_Fighter"					"template_tugvar_fighter_fal"	// incendiary
 					"#Squad_Cell_Fighter"					"template_tugvar_fighter_galil"	// incendiary
 					"#Squad_Cell_MachineGunner"				"template_tugvar_machinegunner_rpk"	// RPG
-					"#Squad_Cell_Specialist"				"template_tugvar_specialist_mp5"	// smokes
+					"#Squad_Cell_Specialist"				"template_tugvar_specialist_mp5a4"	// smokes
 					"#Squad_Cell_Bomber"					"template_coop_bomber"	// bomber
 					"#Squad_Cell_Fighter"					"template_tugvar_fighter_stg44"	// incendiary
 					"#Squad_Cell_SharpShooter"				"template_tugvar_sharpshooter_svu"	// Frag
@@ -111,13 +111,13 @@
 				"#Cell_Foxtrot"
 				{
 					// role name								preset
-					"#Squad_Cell_Leader_Specialist"			"template_tugvar_specialist_mp5"	// smokes
+					"#Squad_Cell_Leader_Specialist"			"template_tugvar_specialist_mp5a4"	// smokes
 					"#Squad_Cell_Bomber"					"template_coop_bomber"	// bomber
 					"#Squad_Cell_Fighter"					"template_tugvar_fighter_fal"	// incendiary
 					"#Squad_Cell_MachineGunner"				"template_tugvar_machinegunner_m60"	// RPG
 					"#Squad_Cell_Specialist"				"template_tugvar_specialist_aks74u"	// smokes
 					"#Squad_Cell_HeavyGunner"				"template_tugvar_heavygunner_m249"	// RPG
-					"#Squad_Cell_SubmachineGunner"			"template_tugvar_submachinegunner_sterling"	// incendiary
+					"#Squad_Cell_SubmachineGunner"			"template_tugvar_submachinegunner_mp40"	// incendiary
 					"#Squad_Cell_SharpShooter"				"template_tugvar_sharpshooter_sks"	// Frag
 				}
 			}

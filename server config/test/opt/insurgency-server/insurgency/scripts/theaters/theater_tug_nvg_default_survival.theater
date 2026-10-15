@@ -58,14 +58,14 @@
 					"#Squad_Cell_Fighter"					"template_survival_ins_fighter_stg44"	// Incendiary
 					"#Squad_Cell_SubmachineGunner"			"template_survival_ins_submachinegunner_uzi"	// Incendiary
 					"#Squad_Cell_MachineGunner"				"template_survival_ins_machinegunner_m240"	// Frag
-					"#Squad_Cell_Sapper"					"template_survival_ins_sapper_law"	// RPG
+					"#Squad_Cell_Sapper"					"template_survival_ins_sapper_at4_akm"	// RPG
 					"#Squad_Cell_Bomber"					"template_survival_ins_bomber"	// bomber
 				}
 
 				"#Cell_Bravo"	// assault team #2
 				{
 					// role name								preset
-					"#Squad_Cell_Leader_Specialist"			"template_survival_ins_specialist_mp5"	// smokes
+					"#Squad_Cell_Leader_Specialist"			"template_survival_ins_specialist_mp5a4"	// smokes
 					"#Squad_Cell_Fighter"					"template_survival_ins_fighter_ak74"	// incendiary
 					"#Squad_Cell_SubmachineGunner"			"template_survival_ins_submachinegunner_mac10"	// incendiary
 					"#Squad_Cell_MachineGunner"				"template_survival_ins_machinegunner_pecheneg"	// Frag
@@ -117,7 +117,9 @@
 		// The kits are the stock escalation (pistol -> SMG -> rifle -> silenced/AP rifle) rebuilt from
 		// this theater's rack rather than stock's m9/mp5/ump45/m16a4/m4a1. Levels 1-5 are left light so
 		// a run can get going on a pistol; from tier _03 every bot has heavy armor, a chest carrier and
-		// two grenades, and the later tiers add optics, lasers and AP ammunition.
+		// two grenades, and the later tiers add optics, lasers and AP ammunition. The sidearm is the M9:
+		// these kits carried the Glock 17 until the base theater removed it to free a weapon slot, and
+		// the M9 is the semi-automatic 9mm that takes the same pistol flashlight.
 		//
 		// Every entry was checked programmatically against the MERGED theater before being written here:
 		// each weapon exists and has "security" in its team_access, each upgrade lists the weapon it is
@@ -146,13 +148,13 @@
 			{
 				"gear"					"sec_chest_rig"
 				"weapon"				"weapon_kabar"
-				"weapon"				"weapon_glock17"
+				"weapon"				"weapon_m9"
 				"weapon_upgrade"			"siderail_flashlight_pistol"
 				"weapon"				"weapon_m84"
 			}
 			"allowed_items"
 			{
-				"weapon"				"weapon_glock17"
+				"weapon"				"weapon_m9"
 				"weapon"				"weapon_kabar"
 				"weapon"				"weapon_m84"
 			}
@@ -180,14 +182,14 @@
 				"gear"					"sec_chest_rig"
 				"gear"					"sec_light_armor"
 				"weapon"				"weapon_kabar"
-				"weapon"				"weapon_glock17"
+				"weapon"				"weapon_m9"
 				"weapon"				"weapon_mp5a4"
 				"weapon_upgrade"			"siderail_flashlight_band"
 				"weapon"				"weapon_m18"
 			}
 			"allowed_items"
 			{
-				"weapon"				"weapon_glock17"
+				"weapon"				"weapon_m9"
 				"weapon"				"weapon_kabar"
 				"weapon"				"weapon_m18"
 				"weapon"				"weapon_mp5a4"
@@ -250,7 +252,7 @@
 				"gear"					"sec_chest_rig"
 				"gear"					"sec_light_armor"
 				"weapon"				"weapon_kabar"
-				"weapon"				"weapon_glock17"
+				"weapon"				"weapon_m9"
 				"weapon"				"weapon_p90"
 				"weapon_upgrade"			"siderail_lasersight_band"
 				"weapon_upgrade"			"ammo_ap_p90"
@@ -258,7 +260,7 @@
 			}
 			"allowed_items"
 			{
-				"weapon"				"weapon_glock17"
+				"weapon"				"weapon_m9"
 				"weapon"				"weapon_kabar"
 				"weapon"				"weapon_m18"
 				"weapon"				"weapon_p90"
@@ -324,7 +326,7 @@
 				"gear"					"sec_chest_carrier"
 				"gear"					"sec_heavy_armor"
 				"weapon"				"weapon_kabar"
-				"weapon"				"weapon_glock17"
+				"weapon"				"weapon_m9"
 				"weapon"				"weapon_g36c"
 				"weapon_upgrade"			"barrel_silencer_sec2"
 				"weapon_upgrade"			"siderail_lasersight_rail"
@@ -336,7 +338,7 @@
 			"allowed_items"
 			{
 				"weapon"				"weapon_g36c"
-				"weapon"				"weapon_glock17"
+				"weapon"				"weapon_m9"
 				"weapon"				"weapon_kabar"
 				"weapon"				"weapon_m18"
 				"weapon"				"weapon_m67"
@@ -404,7 +406,7 @@
 				"gear"					"sec_chest_carrier"
 				"gear"					"sec_heavy_armor"
 				"weapon"				"weapon_kabar"
-				"weapon"				"weapon_glock17"
+				"weapon"				"weapon_m9"
 				"weapon"				"weapon_sig553"
 				"weapon_upgrade"			"barrel_silencer_ins1"
 				"weapon_upgrade"			"siderail_lasersight_band"
@@ -415,7 +417,7 @@
 			}
 			"allowed_items"
 			{
-				"weapon"				"weapon_glock17"
+				"weapon"				"weapon_m9"
 				"weapon"				"weapon_kabar"
 				"weapon"				"weapon_m18"
 				"weapon"				"weapon_m67"
@@ -485,7 +487,7 @@
 				"gear"					"sec_chest_carrier"
 				"gear"					"sec_heavy_armor"
 				"weapon"				"weapon_kabar"
-				"weapon"				"weapon_glock17"
+				"weapon"				"weapon_m9"
 				"weapon"				"weapon_m4a1sopmod"
 				"weapon_upgrade"			"barrel_silencer_m4sopmod"
 				"weapon_upgrade"			"ammo_ap_m4"
@@ -497,7 +499,7 @@
 			}
 			"allowed_items"
 			{
-				"weapon"				"weapon_glock17"
+				"weapon"				"weapon_m9"
 				"weapon"				"weapon_kabar"
 				"weapon"				"weapon_m4a1sopmod"
 				"weapon"				"weapon_m67"
@@ -527,7 +529,7 @@
 				"gear"					"sec_chest_carrier"
 				"gear"					"sec_heavy_armor"
 				"weapon"				"weapon_kabar"
-				"weapon"				"weapon_glock17"
+				"weapon"				"weapon_m9"
 				"weapon"				"weapon_mk46"
 				"weapon_upgrade"			"optic_elcan"
 				"weapon_upgrade"			"ammo_ap_m249"
@@ -536,7 +538,7 @@
 			}
 			"allowed_items"
 			{
-				"weapon"				"weapon_glock17"
+				"weapon"				"weapon_m9"
 				"weapon"				"weapon_kabar"
 				"weapon"				"weapon_m67"
 				"weapon"				"weapon_mk46"
@@ -565,14 +567,14 @@
 				"gear"					"sec_chest_carrier"
 				"gear"					"sec_heavy_armor"
 				"weapon"				"weapon_kabar"
-				"weapon"				"weapon_glock17"
+				"weapon"				"weapon_m9"
 				"weapon"				"weapon_at4"
 				"weapon"				"weapon_m67"
 			}
 			"allowed_items"
 			{
 				"weapon"				"weapon_at4"
-				"weapon"				"weapon_glock17"
+				"weapon"				"weapon_m9"
 				"weapon"				"weapon_kabar"
 				"weapon"				"weapon_m67"
 			}
@@ -757,8 +759,8 @@
 			}
 		}
 
-		// template_tugvar_sapper_law from theater_tug_nvg_default.theater, with a free starting kit and the medpack allowed
-		"template_survival_ins_sapper_law"
+		// template_tugvar_sapper_at4_akm from theater_tug_nvg_default.theater, with a free starting kit and the medpack allowed
+		"template_survival_ins_sapper_at4_akm"
 		{
 			"team"					"security,insurgents"
 			"print_name"				"#Squad_Cell_Sapper"
@@ -790,7 +792,7 @@
 			{
 				"weapon"				"weapon_kabar"
 				"weapon"				"weapon_akm"
-				"weapon"				"weapon_law"
+				"weapon"				"weapon_at4"
 				"weapon"				"weapon_healthkit"
 				"weapon"				"weapon_m18_ins"
 				"gear"					"ins_nightvision"
@@ -833,8 +835,8 @@
 			}
 		}
 
-		// template_tugvar_specialist_mp5 from theater_tug_nvg_default.theater, with a free starting kit and the medpack allowed
-		"template_survival_ins_specialist_mp5"
+		// template_tugvar_specialist_mp5a4 from theater_tug_nvg_default.theater, with a free starting kit and the medpack allowed
+		"template_survival_ins_specialist_mp5a4"
 		{
 			"team"					"security,insurgents"
 			"print_name"				"#Squad_Cell_Specialist"
@@ -858,7 +860,7 @@
 			"allowed_items"
 			{
 				"weapon"				"weapon_kabar"
-				"weapon"				"weapon_mp5"
+				"weapon"				"weapon_mp5a4"
 				"weapon"				"weapon_makarov"
 				"weapon"				"weapon_m18_ins"
 				"weapon"				"weapon_healthkit"
@@ -2512,114 +2514,6 @@
 	   	}
 
 		// from theater_tug_39_custom_weapon.theater
-		"weapon_combatcommander"
-		{
-			"import"			     	"pistol_base"
-			"weapon_class"				"pistol"
-			"print_name"				"#weapon_combatcommander"
-			"print_desc"				"#weapon_combatcommander_desc"
-			"view_model"				"models/weapons/v_m19cc.mdl"
-			"world_model"				"models/weapons/w_19cc.mdl"
-			"rounds_per_minute"			"800"
-			"weapon_slot"				"secondary"
-			"act_table"				    "pistol"
-			"weapon_abilities"			"ironsight"
-			"weapon_weight"				"0"
-			"weapon_cost"				"0"
-			"class_restricted"			"0"
-			"barrel_length"				"0"		
-			
-			"viewmodel_attachments"
-			{
-				"standard_magazine"
-				{
-					"model"						"models/weapons/upgrades/a_magazine_19cc_8.mdl"
-					"fallback_for_slot"			"magazine"
-				}
-			}
-			
-			"world_attachments"
-			{
-				"standard_magazine"
-				{
-					"model"						"models/weapons/upgrades/w_magazine_19cc_8.mdl"
-					"fallback_for_slot"			"magazine"
-				}
-			}
-			
-			"fov"
-			{
-				"fov_plr_ironsight"			"-10"
-				"fov_plr_focus"				"-10"
-				"fov_wpn_default"			"74"
-				"fov_wpn_ironsight"			"74"
-				"fov_wpn_focus"				"79"
-			}
-			"viewmodel_offsets"
-			{
-				// x back, y left, z down
-				"VMOffsetStand"				"0.15 0.25 0.75"
-			}
-			"sounds"
-			{
-				"shot_single"				"Weapon_CombatCommander.Single"
-				"shot_single_local"			"Weapon_CombatCommander.SingleLocal"
-				"shot_silent"				"Weapon_CombatCommander.SingleSilenced"
-				"shot_silent_local"			"Weapon_CombatCommander.SingleSilencedLocal"
-				"empty"					"Weapon_M1911.Empty"
-				"magin"					"Weapon_M1911.Clipin"
-				"magout"				"Weapon_M1911.Clipout"
-				"slide_back"				"Weapon_M1911.slideback"
-				"slide_forward"				"Weapon_M1911.slideforward"
-				"safety"				"Weapon_M1911.safety"
-			}
-			"particles"
-			{
-				"particle_muzzleflash_1st"		"muzzleflash_m9_1p"
-				"particle_muzzleflash_3rd"		"muzzleflash_m9_3rd"
-			}
-			"recoil"
-			{
-				"recoil_lateral_range"			"-1.2 0.80"
-				"recoil_vertical_range"			"2.0 3.8"
-				"recoil_aim_punch"				"0.4 0.6"
-				"recoil_rest_rate"				"4"
-				"recoil_rest_delay"				"0.2"
-				"recoil_roll_range"				"-2.2 -1.6"
-				"recoil_roll_rest_rate"			"150"
-				"recoil_shot_reset_time"		"0.75"	// Time delay for resetting the shots fired counter for the above (default = 0.3)
-				"recoil_punch_additive_factor"		"1"	// How much of the view punch from the previous shot(s) get added to any additional shot fired (default 1.0)
-				"recoil_additional_rest_per_shot"	"0.5"
-				"recoil_freeaim_frac"			"0.6"
-				"recoil_ironsight_frac"			"0.8"
-			}
-			"ballistics"
-			{
-				"spread"				"0.3 0.3 0.3"
-				"FireModes"				"semi"
-				"bulletcount"				"1"
-				"maxrange"				"6000"
-			}
-			"ammo_clip"
-			{
-				"ammo_type"				"45acp_pistol"
-				"clip_max"				"12"
-				"clip_max_rounds"			"8"
-				"clip_default"				"4"
-				"magsize_override"			"8"
-			}
-			"attachments"
-			{
-				"attachment_addon"			"pistol"
-			}
-			"kitui_offset"
-			{
-				"position"				"12 -3 0"
-			}
-			"team_access"				"security, insurgent"
-		}
-
-		// from theater_tug_39_custom_weapon.theater
 		"weapon_deagle"
 		{
 			"import"				"pistol_base"
@@ -3967,137 +3861,6 @@
 			"team_access"				"security, insurgent"
 		}
 
-		// from theater_tug_39_default_weapon.theater
-		"weapon_gp25_he"
-		{
-			"weapon_cost"				"8"	// survival price, inherited value overridden
-			"import"				"weapon_m203_he"
-			"print_name"				"#weapon_gp25_he"
-			"print_desc"				"#weapon_m203_he_desc"	
-			
-			"explosives"
-			{
-				"entity"				"grenade_gp25_he"
-			}
-			"sounds"
-			{
-				"shot_single"				"Weapon_gp30.Single"
-				"shot_single_local"			"Weapon_gp30.SingleLocal"
-			}
-			"freeaim"
-			{
-				"freeaim_distance"			"13"
-				"freeaim_screenratio"			"0.8"
-			}
-			"fov"
-			{
-				"fov_plr_ironsight"			"-5"
-				"fov_plr_focus"				"-10"
-				"fov_wpn_default"			"20"
-				"fov_wpn_ironsight"			"74"
-				"fov_wpn_focus"				"74"
-			}
-		}
-
-		// from theater_tug_39_default_weapon.theater
-		"weapon_gp25_smoke"
-		{
-			"import"				"weapon_m203_smoke"
-			"weapon_cost"				"2"
-			"print_name"				"#weapon_gp25_smoke"
-			"print_desc"				"#weapon_m203_smoke_desc"		
-			
-			"explosives"
-			{
-				"entity"				"grenade_gp25_smoke"
-			}
-			"sounds"
-			{
-				"shot_single"				"Weapon_gp30.Single"
-				"shot_single_local"			"Weapon_gp30.SingleLocal"
-			}
-			"freeaim"
-			{
-				"freeaim_distance"			"13"
-				"freeaim_screenratio"			"0.8"
-			}
-			"fov"
-			{
-				"fov_plr_ironsight"			"-5"
-				"fov_plr_focus"				"-10"
-				"fov_wpn_default"			"20"
-				"fov_wpn_ironsight"			"74"
-				"fov_wpn_focus"				"74"
-			}
-		}
-
-		// from theater_tug_39_default_weapon.theater
-		"weapon_gurkha"
-		{
-			"import"				"weapon_base"
-			"weapon_class"				"melee"
-			"weapon_type"				"melee"
-			"print_name"				"#weapon_gurkha"
-			"view_model"				"models/weapons/v_gurkha.mdl"
-			"world_model"				"models/weapons/w_gurkha.mdl"
-			"weapon_slot"				"melee"
-			"act_table"				"knife"
-			"weapon_weight"				"0"
-			"weapon_cost"				"0"
-			"class_restricted"			"0"
-			"barrel_length"				"-1"
-			
-			"ammo_clip"
-			{
-				"ammo_type"				"invalid"
-				"clip_max_rounds"			"-1"	// no clips
-				"clip_default"				"0"
-			}
-			
-			"sounds"
-			{
-				"shot_single"				"Weapon_Knife.Single"
-				"melee_hit"				"Weapon_Knife.Melee_Hit"
-				"melee_hit_world"			"Weapon_Knife.Melee_HitWorld"
-			}
-			"melee"
-			{
-				"MeleeRange"				"75"
-				"MeleeDamage"				"60"
-				"MeleeDamageBehindBonus"		"200"
-				"MeleeDamageType"			"DMG_SLASH"
-				"MeleeWeaponIdleTime"			"2"
-				"SwingAttacks"
-				{
-					"slash1"
-					{
-						"Activity"				"ACT_VM_HITCENTER"
-						"PlayerAtivity"				"ACT_SHOOT_E2W_BAT"
-						"PlayerActivityIdle"			"ACT_SHOOT_E2W_IDLE_BAT"
-						"StartTime"				"0.1"
-						"EndTime"				"0.34"
-						"Duration"				"0.9"
-						"StartDirection"			"E"
-						"EndDirection"				"W"
-						"ForceDirection"			"15 -40 0"
-					}
-				}
-			}
-			"player_restrictions"
-			{
-				"allow_lean"				"1"
-				"allow_sprint"				"1"
-				"allow_jump"				"1"
-				"allow_sway"				"1"
-			}
-			"recoil"
-			{
-				"recoil_rest_rate"			"5"
-				"recoil_rest_delay"			"0.1"
-			}
-			"team_access"				"security, insurgent"
-		}
-
 		// from theater_tug_nvg_default.theater
 		"weapon_healthkit"
 		{
@@ -4692,187 +4455,6 @@
 			"kitui_offset"
 			{
 				"position"				"28 0 3"
-			}
-			"team_access"				"security, insurgent"
-		}
-
-		// from theater_tug_39_default_weapon.theater
-		"weapon_l1a1"
-		{
-			"import"				"ballistic_base"
-			"weapon_class"				"rifle_automatic_fire"
-			"print_name"				"#weapon_l1a1"
-			"print_desc"				"#weapon_l1a1_descinsg"
-			"view_model"				"models/weapons/v_l1a1.mdl"
-			"world_model"				"models/weapons/w_l1a1.mdl"
-			"rounds_per_minute"			"620"
-			"weapon_slot"				"primary"
-			"act_table"					"shortrifle"
-			"weapon_abilities"			"ironsight"
-			"weapon_weight"				"0"	// (3.5kg[weapon] + (0.8kg[ammo] * (1+4)[mags]) )*10[kg->hg for int]  +24[encumbrance]
-			"weapon_cost"				"10"
-			"barrel_length"				"0"
-			"class_restricted"			"0"	
-			
-			"viewmodel_attachments"
-			{
-				"optics"
-				{
-					"model"					"models/weapons/upgrades/a_standard_l1a1.mdl"
-					"fallback_for_slot"		"optics"
-				}
-				"magazine"
-				{
-					"model"					"models/weapons/upgrades/a_magazine_l1a1_20.mdl"
-					"fallback_for_slot"		"magazine"
-				}
-			}
-			
-			"fov"
-			{
-				"priority"				"0"
-				"fov_wpn_default"			"55"
-				"fov_wpn_ironsight"			"59"
-				"fov_wpn_focus"				"68"
-				"fov_plr_ironsight"			"-25"
-				"fov_plr_focus"				"-12"
-			}
-			"sounds"
-			{
-				"shot_single"				"Weapon_FnFAL.Single"
-				"shot_single_local"			"Weapon_FnFAL.SingleLocal"
-				"shot_silent"				"Weapon_FnFAL.SingleSilenced"
-				"shot_silent_local"			"Weapon_FnFAL.SingleSilencedLocal"
-				"empty"					"Weapon_FnFAL.Empty"
-				"clipin"				"Weapon_FnFAL.Magin"
-				"clipout"				"Weapon_FnFAL.Magout"
-				"boltback"				"Weapon_FnFAL.Boltback"
-				"boltrelease"				"Weapon_FnFAL.Boltrelease"
-				"rofdown"				"Weapon_FnFAL.ROF"
-				"rofup"					"Weapon_FnFAL.ROF"
-			}
-			"particles"
-			{
-				"particle_muzzleflash_1st"		"muzzleflash_fal_1p"
-				"particle_muzzleflash_3rd"		"muzzleflash_fal_3rd"
-				"particle_tracer"			"weapon_tracers"
-			}
-			"recoil"
-			{
-				"recoil_lateral_range"			"-0.5 0.8"
-				"recoil_vertical_range"			"3.225 3.6"
-				"recoil_aim_punch"			"0.5 0.8"
-				"recoil_rest_rate"			"7"
-				"recoil_rest_delay"			"0.12"
-				"recoil_roll_range"			"-1.8 -1.8"
-				"recoil_roll_rest_rate"			"200"
-				"recoil_freeaim_frac"			"0.5"
-				
-				"recoil_additional_rest_per_shot"	"2.5"	// Amount of rest per additional shot (added to rest rate) (default = 2.5)
-				"recoil_shot_reset_time"		"0.5"	// Time delay for resetting the shots fired counter for the above (default = 0.3)
-				"recoil_shot_max_shots"			"7"	// Max number of shots to account for for the additional rest (default = 5)
-				"recoil_punch_additive_factor"		"0.88"	// How much of the view punch from the previous shot(s) get added to any additional shot fired.
-				
-				"RecoilBipodFracByWeight"
-				{
-					"0"					"0.36"
-				}
-			}
-			"ballistics"
-			{
-				"spread"				"0.16 0.16 0.16"
-				"FireModes"				"semi"
-				"bulletcount"				"1"
-				"maxrange"				"10000"
-			}
-			"ammo_clip"
-			{
-				"ammo_type"				"762x51_box_20rnd"
-				"clip_max"				"12"
-				"clip_max_rounds"			"20"
-				"clip_default"				"4"
-			}
-			"attachments"
-			{
-				"attachment_addon"			"primary2"
-			}
-			"kitui_offset"
-			{
-				"position"				"23 -3 1"
-			}
-			"team_access"				"security, insurgent"
-		}
-
-		// from theater_tug_39_custom_weapon.theater
-		"weapon_law"
-		{
-			"import"				"weapon_base"
-			"weapon_class"				"launcher"
-			"weapon_type"				"projectile"
-			"print_name"				"#weapon_law"
-			"print_desc"				"#weapon_law_desc"
-			"single_use"				"1"
-			"view_model"				"models/weapons/v_law.mdl"
-			"world_model"				"models/weapons/w_law.mdl"
-			"weapon_slot"				"explosive"
-			"weapon_max_subslot"			"0"	// can only be in the first explosive slot
-			"act_table"				"launcher_at4"
-			"weapon_weight"				"0"
-			"weapon_cost"				"14"
-			"weapon_abilities"			"ironsight"
-			"barrel_length"				"0"
-			"class_restricted"			"0"	
-			
-			"sounds"
-			{
-				"shot_single"			"Weapon_Bazooka.Single"
-				"shot_single_local"		"Weapon_Bazooka.SingleLocal"
-				"empty"					"Weapon_RPG7.Empty"
-				"load"					"Weapon_RPG7.Load"
-				"unload"				"Weapon_RPG7.Unload"
-				"hit"					"Weapon_RPG7.Hit"
-			}
-			"recoil"
-			{
-				"recoil_lateral_range"			"-0.5 0.5"
-				"recoil_vertical_range"			"4.0 6.0"
-				"recoil_aim_punch"			"1.0 1.0"
-				"recoil_rest_rate"			"12"
-				"recoil_rest_delay"			"0"
-			}
-			"particles"
-			{
-				"particle_muzzleflash_1st"		"ins_weapon_at4_frontblast"
-				"particle_muzzleflash_3rd"		"ins_weapon_at4_frontblast"
-			}
-			"explosives"
-			{
-				"entity"				"rocket_at4"
-			}
-			"ammo_clip"
-			{
-				"ammo_type"				"no_carry"
-				"clip_max_rounds"			"1"	// 1 rpg per mag
-				"clip_default"				"1"
-			}
-			"player_restrictions"
-			{
-				"allow_lean"				"1"
-				"allow_sprint"				"1"
-				"allow_jump"				"1"
-				"allow_sway"				"1"
-			}
-			"fov"
-			{
-				"fov_plr_ironsight"			"-10"
-				"fov_plr_focus"				"-15"
-				"fov_wpn_default"			"60"
-				"fov_wpn_ironsight"			"48"
-				"fov_wpn_focus"				"48"
-			}
-			"attachments"
-			{
-				"attachment_addon"			"launcher" //New attachment for RPGs - Brightside
 			}
 			"team_access"				"security, insurgent"
 		}
@@ -5508,119 +5090,6 @@
 			}
 
 			"team_access"				"insurgent"
-		}
-
-		// from theater_tug_39_custom_weapon.theater
-		"weapon_m1911seriespistol"
-		{
-			"import"				"pistol_base"
-			"weapon_class"				"pistol"
-			"print_name"				"#weapon_m1911seriespistol"
-			"print_desc"				"#weapon_m1911seriespistol_desc"
-			"view_model"				"models/insgwep/v_m11sk.mdl"
-			"world_model"				"models/insgwep/w_11sk.mdl"
-			"rounds_per_minute"			"600"
-			"weapon_slot"				"secondary"
-			"act_table"					"pistol"
-			"weapon_abilities"			"ironsight"
-			"weapon_weight"				"64"
-			"weapon_cost"				"0"
-			"class_restricted"			"0"
-			"barrel_length"				"0"
-			"reload_speed"				"1.5"
-			
-			"viewmodel_attachments"
-			{
-				"standard_magazine"
-				{
-					"model"						"models/insgwep/upgrades/a_magazine_11sk_8.mdl"
-					"fallback_for_slot"			"magazine"
-				}
-			}
-			
-			"world_attachments"
-			{
-				"standard_magazine"
-				{
-					"model"						"models/insgwep/upgrades/w_magazine_11sk_8.mdl"
-					"fallback_for_slot"			"magazine"
-				}
-			}
-			
-			"fov"
-			{
-				"fov_plr_ironsight"			"-10"
-				"fov_plr_focus"				"-10"
-				"fov_wpn_default"			"74"
-				"fov_wpn_ironsight"			"74"
-				"fov_wpn_focus"				"79"
-			}
-			"viewmodel_offsets"
-			{
-				// x back, y left, z down
-				"VMOffsetStand"				"0.15 0.25 0.75"
-			}
-			"sounds"
-			{
-				"shot_single"				"Weapon_M1911.Single"
-				"shot_single_local"			"Weapon_M1911.SingleLocal"
-				"shot_silent"				"Weapon_M1911.SingleSilenced"
-				"shot_silent_local"			"Weapon_M1911.SingleSilencedLocal"
-				"empty"					"Weapon_M1911.Empty"
-				"magin"					"Weapon_M1911.Clipin"
-				"magout"				"Weapon_M1911.Clipout"
-				"slide_back"				"Weapon_M1911.slideback"
-				"slide_forward"				"Weapon_M1911.slideforward"
-				"safety"				"Weapon_M1911.safety"
-			}
-			"particles"
-			{
-				"particle_muzzleflash_1st"		"muzzleflash_m9_1p"
-				"particle_muzzleflash_3rd"		"muzzleflash_m9_3rd"
-			}
-			"recoil"
-			{
-				"recoil_lateral_range"			"-1.0 0.75"
-				"recoil_vertical_range"			"1.5 2.5"
-				"recoil_aim_punch"				"0.4 0.6"
-				"recoil_rest_rate"				"4"
-				"recoil_rest_delay"				"0.2"
-				"recoil_roll_range"				"-2.2 -1.6"
-				"recoil_roll_rest_rate"			"150"
-				"recoil_shot_reset_time"		"0.75"	// Time delay for resetting the shots fired counter for the above (default = 0.3)
-				"recoil_punch_additive_factor"		"1"	// How much of the view punch from the previous shot(s) get added to any additional shot fired (default 1.0)
-				"recoil_additional_rest_per_shot"	"0.5"
-				"recoil_freeaim_frac"			"0.6"
-				"recoil_ironsight_frac"			"0.8"
-			}
-			"ballistics"
-			{
-				"spread"				"0.4 0.4 0.4"
-				"FireModes"				"semi"
-				"bulletcount"				"1"
-				"maxrange"				"6000"
-			}
-			"ammo_clip"
-			{
-				"ammo_type"				"45acp_pistol"
-				"clip_max"				"10"
-				"clip_max_rounds"			"7"
-				"clip_default"				"2"
-			}
-			"attachments"
-			{
-				"attachment_addon"			"pistol"
-			}
-			"kitui_offset"
-			{
-				"position"				"12 -3 0"
-			}
-			"ironsights"
-			{
-				"in_time"				"0.1"
-				"out_time"				"0.10"
-			}			
-			"team_access"				"security, insurgent"
 		}
 
 		// from theater_tug_39_custom_weapon.theater
@@ -6477,119 +5946,6 @@
 			"team_access"				"security, insurgent"
 		}
 
-		// from theater_tug_39_custom_weapon.theater
-		"weapon_m45seriespistol"
-		{
-			"import"				"pistol_base"
-			"weapon_class"				"pistol"
-			"print_name"				"#weapon_m45seriespistol"
-			"print_desc"				"#weapon_m45seriespistol_desc"
-			"view_model"				"models/insgwep/m45/insguns_v_m45.mdl"
-			"world_model"				"models/insgwep/w_1sk.mdl"
-			"rounds_per_minute"			"600"
-			"weapon_slot"				"secondary"
-			"act_table"					"pistol"
-			"weapon_abilities"			"ironsight"
-			"weapon_weight"				"0"
-			"weapon_cost"				"0"
-			"class_restricted"			"0"
-			"barrel_length"				"0"
-			"reload_speed"				"1.5"			
-			
-			"viewmodel_attachments"
-			{
-				"standard_magazine"
-				{
-					"model"						"models/insgwep/upgrades/a_magazine_1sk_8.mdl"
-					"fallback_for_slot"			"magazine"
-				}
-			}
-			
-			"world_attachments"
-			{
-				"standard_magazine"
-				{
-					"model"						"models/insgwep/upgrades/w_magazine_1sk_8.mdl"
-					"fallback_for_slot"			"magazine"
-				}
-			}
-			
-			"fov"
-			{
-				"fov_plr_ironsight"			"-10"
-				"fov_plr_focus"				"-10"
-				"fov_wpn_default"			"74"
-				"fov_wpn_ironsight"			"74"
-				"fov_wpn_focus"				"79"
-			}
-			"viewmodel_offsets"
-			{
-				// x back, y left, z down
-				"VMOffsetStand"				"0.15 0.25 0.75"
-			}
-			"sounds"
-			{
-				"shot_single"				"Weapon_M45.Single"
-				"shot_single_local"			"Weapon_M45.SingleLocal"
-				"shot_silent"				"Weapon_M45.SingleSilenced"
-				"shot_silent_local"			"Weapon_M45.SingleSilencedLocal"
-				"empty"						"Weapon_M45.Empty"
-				"magin"						"Weapon_M45.Clipin"
-				"magout"					"Weapon_M45.Clipout"
-				"slide_back"				"Weapon_M45.slideback"
-				"slide_forward"				"Weapon_M45.slideforward"
-				"safety"					"Weapon_M45.safety"
-			}
-			"particles"
-			{
-				"particle_muzzleflash_1st"		"muzzleflash_m9_1p"
-				"particle_muzzleflash_3rd"		"muzzleflash_m9_3rd"
-			}
-			"recoil"
-			{
-				"recoil_lateral_range"			"-1.0 0.75"
-				"recoil_vertical_range"			"1.5 2.5"
-				"recoil_aim_punch"				"0.4 0.6"
-				"recoil_rest_rate"				"4"
-				"recoil_rest_delay"				"0.2"
-				"recoil_roll_range"				"-2.2 -1.6"
-				"recoil_roll_rest_rate"			"150"
-				"recoil_shot_reset_time"		"0.75"	// Time delay for resetting the shots fired counter for the above (default = 0.3)
-				"recoil_punch_additive_factor"		"1"	// How much of the view punch from the previous shot(s) get added to any additional shot fired (default 1.0)
-				"recoil_additional_rest_per_shot"	"0.5"
-				"recoil_freeaim_frac"			"0.6"
-				"recoil_ironsight_frac"			"0.8"
-			}
-			"ballistics"
-			{
-				"spread"				"0.4 0.4 0.4"
-				"FireModes"				"semi"
-				"bulletcount"				"1"
-				"maxrange"				"6000"
-			}
-			"ammo_clip"
-			{
-				"ammo_type"				"45acp_pistol"
-				"clip_max"				"12"
-				"clip_max_rounds"			"7"
-				"clip_default"				"4"
-			}
-			"attachments"
-			{
-				"attachment_addon"			"pistol"
-			}
-			"kitui_offset"
-			{
-				"position"				"12 -3 0"
-			}
-			"ironsights"
-			{
-				"in_time"				"0.1"
-				"out_time"				"0.10"
-			}			
-			"team_access"				"security, insurgent"
-		}
-
 		// from theater_tug_39_default_weapon.theater
 		"weapon_m4a1"
 		{
@@ -7280,198 +6636,6 @@
 			"team_access"				"security, insurgent"
 		}
 
-		// from theater_tug_39_custom_weapon.theater
-		"weapon_m79_napalm"    
-		{
-			"import"				"weapon_base"
-			"weapon_class"				"sniper_rifle"
-			"weapon_type"				"projectile"
-			"print_name"				"#weapon_m79_napalm"
-			"print_desc"				"#weapon_m79_desc"
-			"view_model"				"models/weapons/v_nam_m79.mdl"  
-			"world_model"				"models/weapons/w_m79.mdl" 
-			"rounds_per_minute"			"780"
-			"burst_delay"				"0.22"
-			"weapon_slot"				"explosive"
-			"weapon_max_subslot"			"0"	// can only be in the first explosive slot
-			"act_table"				"shot"
-			"weapon_abilities"			"ironsight"
-			"weapon_weight"				"0"	// (3.3kg[weapon] + (0.4kg[ammo] * (1+8)[mags]) )*10[kg->hg for int]  +24[encumbrance]
-			"weapon_cost"				"12"
-			"fire_instantly"			"1"
-			"class_restricted"			"0"
-			"barrel_length"				"0"
-			
-			
-		
-			
-			
-			
-			"fov"
-			{
-				"fov_plr_ironsight"			"-25"
-				"fov_plr_focus"				"-12"
-				"fov_wpn_default"			"68"
-				"fov_wpn_ironsight"			"72"
-				"fov_wpn_focus"				"75"
-			}
-			"viewmodel_offsets"
-			{
-				// x back, y left, z down
-				"VMOffsetStand"				"0.65 -0.10 0.5"
-			}
-			
-			
-			"sounds"
-			{
-				"shot_single"				"Weapon_m203.Single"
-				"shot_single_local"			"Weapon_m203.Single"
-				"shot_silent"				"Weapon_M16A4.SingleSilenced"
-				"shot_silent_local"			"Weapon_M16A4.SingleSilencedLocal"
-				"empty"					"Weapon_M16A4.Empty"
-				"clipin"				"Weapon_M16A4.Magin"
-				"clipout"				"Weapon_M16A4.Magout"
-				"boltback"				"Weapon_M16A4.Boltback"
-				"boltrelease"				"Weapon_M16A4.Boltrelease"
-				"rofdown"				"Weapon_M16A4.ROF"
-				"rofup"					"Weapon_M16A4.ROF"
-			}
-			"particles"
-			{
-				"particle_muzzleflash_1st"		"ins_weapon_m203"
-				"particle_muzzleflash_3rd"		"ins_weapon_m203"
-			}
-			"explosives"
-			{
-				"entity"				"grenade_m79_napalm"
-			}
-			"recoil"
-			{
-				"recoil_lateral_range"			"-1.0 1.0"
-				"recoil_vertical_range"			"4.0 6.0"
-				"recoil_aim_punch"			"1.0 1.0"
-				"recoil_rest_rate"			"12"
-				"recoil_rest_delay"			"0"
-				
-				"recoil_additional_rest_per_shot"	"2.5"	// Amount of rest per additional shot (added to rest rate) (default = 2.5)
-				"recoil_shot_reset_time"		"0.5"	// Time delay for resetting the shots fired counter for the above (default = 0.3)
-				"recoil_shot_max_shots"			"5"	// Max number of shots to account for for the additional rest (default = 5)
-				"recoil_punch_additive_factor"		"0.85"	// How much of the view punch from the previous shot(s) get added to any additional shot fired.
-				
-			}
-		
-			
-			"ammo_clip"
-			{
-				"ammo_type"				"grenade_m79_napalm"
-				"clip_max"				"9"
-				"clip_max_rounds"			"1"	// 1 rpg per mag
-				"clip_default"				"6"
-			}
-			
-			"kitui_offset"
-			{
-				"position"				"25 -2 -1"
-			}
-			"team_access"				"security, insurgent"
-		}
-
-		// from theater_tug_39_custom_weapon.theater
-		"weapon_m79_smoke"    
-		{
-			"import"				"weapon_base"
-			"weapon_class"				"sniper_rifle"
-			"weapon_type"				"projectile"
-			"print_name"				"#weapon_m79_smoke"
-			"print_desc"				"#weapon_m79_desc"
-			"view_model"				"models/weapons/v_nam_m79.mdl"  
-			"world_model"				"models/weapons/w_m79.mdl" 
-			"rounds_per_minute"			"780"
-			"burst_delay"				"0.22"
-			"weapon_slot"				"explosive"
-			"weapon_max_subslot"			"0"	// can only be in the first explosive slot
-			"act_table"				"shot"
-			"weapon_abilities"			"ironsight"
-			"weapon_weight"				"0"	// (3.3kg[weapon] + (0.4kg[ammo] * (1+8)[mags]) )*10[kg->hg for int]  +24[encumbrance]
-			"weapon_cost"				"4"
-			"fire_instantly"			"1"
-			"class_restricted"			"0"
-			"barrel_length"				"0"
-			
-			
-		
-			
-			
-			
-			"fov"
-			{
-				"fov_plr_ironsight"			"-25"
-				"fov_plr_focus"				"-12"
-				"fov_wpn_default"			"68"
-				"fov_wpn_ironsight"			"72"
-				"fov_wpn_focus"				"75"
-			}
-			"viewmodel_offsets"
-			{
-				// x back, y left, z down
-				"VMOffsetStand"				"0.65 -0.10 0.5"
-			}
-			
-			
-			"sounds"
-			{
-				"shot_single"				"Weapon_m203.Single"
-				"shot_single_local"			"Weapon_m203.Single"
-				"shot_silent"				"Weapon_M16A4.SingleSilenced"
-				"shot_silent_local"			"Weapon_M16A4.SingleSilencedLocal"
-				"empty"					"Weapon_M16A4.Empty"
-				"clipin"				"Weapon_M16A4.Magin"
-				"clipout"				"Weapon_M16A4.Magout"
-				"boltback"				"Weapon_M16A4.Boltback"
-				"boltrelease"				"Weapon_M16A4.Boltrelease"
-				"rofdown"				"Weapon_M16A4.ROF"
-				"rofup"					"Weapon_M16A4.ROF"
-			}
-			"particles"
-			{
-				"particle_muzzleflash_1st"		"ins_weapon_m203"
-				"particle_muzzleflash_3rd"		"ins_weapon_m203"
-			}
-			"explosives"
-			{
-				"entity"				"grenade_m79_smoke"
-			}
-			"recoil"
-			{
-				"recoil_lateral_range"			"-1.0 1.0"
-				"recoil_vertical_range"			"4.0 6.0"
-				"recoil_aim_punch"			"1.0 1.0"
-				"recoil_rest_rate"			"12"
-				"recoil_rest_delay"			"0"
-				
-				"recoil_additional_rest_per_shot"	"2.5"	// Amount of rest per additional shot (added to rest rate) (default = 2.5)
-				"recoil_shot_reset_time"		"0.5"	// Time delay for resetting the shots fired counter for the above (default = 0.3)
-				"recoil_shot_max_shots"			"5"	// Max number of shots to account for for the additional rest (default = 5)
-				"recoil_punch_additive_factor"		"0.85"	// How much of the view punch from the previous shot(s) get added to any additional shot fired.
-				
-			}
-		
-			
-			"ammo_clip"
-			{
-				"ammo_type"				"grenade_m79_smoke"
-				"clip_max"				"8"
-				"clip_max_rounds"			"1"	// 1 rpg per mag
-				"clip_default"				"6"
-			}
-			
-			"kitui_offset"
-			{
-				"position"				"25 -2 -1"
-			}
-			"team_access"				"security, insurgent"
-		}
-
 		// from theater_tug_39_default_weapon.theater
 		"weapon_m84"
 		{
@@ -7795,91 +6959,6 @@
 			{
 				"in_time"				"0.2"
 				"out_time"				"0.15"
-			}
-			"team_access"				"security, insurgent"
-		}
-
-		// from theater_tug_39_default_weapon.theater
-		"weapon_mini14"
-		{
-			"import"				"ballistic_base"
-			"weapon_class"				"rifle_controlled_fire"
-			"print_name"				"#weapon_mini14"
-			"print_desc"				"#weapon_mini14_descinsg"
-			"view_model"				"models/weapons/v_mini14.mdl"
-			"world_model"				"models/weapons/w_mini14.mdl"
-			"rounds_per_minute"			"720"
-			"weapon_slot"				"primary"
-			"act_table"				"shortrifle"
-			"weapon_abilities"			"ironsight"
-			"weapon_weight"				"0"	// (2.9kg[weapon] + (0.3kg[ammo] * (1+10)[mags]) )*10[kg->hg for int]  +16[encumbrance]
-			"weapon_cost"				"8"
-			"barrel_length"				"0"
-			"class_restricted"			"0"
-			
-			"fov"
-			{
-				"fov_plr_ironsight"			"-25"
-				"fov_plr_focus"				"-12"
-				"fov_wpn_default"			"60"
-				"fov_wpn_ironsight"			"66"
-				"fov_wpn_focus"				"71"
-			}
-			"sounds"
-			{
-				"shot_single"				"Weapon_Mini14.Single"
-				"shot_single_local"			"Weapon_Mini14.SingleLocal"
-				"shot_silent"				"Weapon_Mini14.SingleSilenced"
-				"shot_silent_local"			"Weapon_Mini14.SingleSilencedLocal"
-				"empty"					"Weapon_Mini14.Empty"
-				"clipin"				"Weapon_Mini14.Clipin"
-				"clipout"				"Weapon_Mini14.Clipout"
-				"boltback"				"Weapon_Mini14.Boltback"
-				"boltforward"				"Weapon_Mini14.Boltforward"
-				"hit"					"Weapon_Mini14.Hit"
-			}
-			"particles"
-			{
-				"particle_muzzleflash_1st"		"muzzleflash_m14_1p"
-				"particle_muzzleflash_3rd"		"muzzleflash_m14_3rd"
-				"particle_tracer"			"weapon_tracers"
-			}
-			"recoil"
-			{
-				"recoil_lateral_range"			"-0.7 1.4"
-				"recoil_vertical_range"			"2.7 2.9"
-				"recoil_aim_punch"			"0.7 0.9"
-				"recoil_rest_rate"			"5"
-				"recoil_rest_delay"			"0.12"
-				"recoil_roll_range"			"-2 -2"
-				"recoil_roll_rest_rate"			"180"
-				
-				"recoil_additional_rest_per_shot"	"2.5"	// Amount of rest per additional shot (added to rest rate) (default = 2.5)
-				"recoil_shot_reset_time"		"0.5"	// Time delay for resetting the shots fired counter for the above (default = 0.3)
-				"recoil_shot_max_shots"			"6"	// Max number of shots to account for for the additional rest (default = 5)
-				"recoil_punch_additive_factor"		"0.88"	// How much of the view punch from the previous shot(s) get added to any additional shot fired.
-			}
-			"ballistics"
-			{
-				"spread"				"0.19 0.19 0.19"
-				"FireModes"				"semi, burst, full"
-				"bulletcount"				"1"
-				"maxrange"				"10000"
-			}
-			"ammo_clip"
-			{
-				"ammo_type"				"556_box"
-				"clip_max"				"12"
-				"clip_max_rounds"			"20"
-				"clip_default"				"4"
-			}
-			"attachments"
-			{
-				"attachment_addon"			"primary"
-			}
-			"kitui_offset"
-			{
-				"position"				"28 0 3"
 			}
 			"team_access"				"security, insurgent"
 		}
@@ -8544,96 +7623,6 @@
 			{
 				"in_time"				"0.15"
 				"out_time"				"0.10"
-			}
-			"team_access"				"security, insurgent"
-		}
-
-		// from theater_tug_39_default_weapon.theater
-		"weapon_mp5"
-		{
-			"import"				"ballistic_base"
-			"weapon_class"				"smg"
-			"print_name"				"#weapon_mp5"
-			"print_desc"				"#weapon_mp5_descinsg"
-			"view_model"				"models/weapons/v_mp5kpdw.mdl"
-			"world_model"				"models/weapons/w_mp5k.mdl"
-			"rounds_per_minute"			"900"
-			"weapon_slot"				"secondary"
-			"weapon_max_subslot"			"1"	// Up to the 2nd subslot only
-			"act_table"					"pdw"
-			"weapon_abilities"			"ironsight"
-			"weapon_weight"				"0"	// (2.0kg[weapon] + (0.4kg[ammo] * (1+8)[mags]) )*10[kg->hg for int]  +8[encumbrance]
-			"weapon_cost"				"6"
-			"barrel_length"				"0"
-			"class_restricted"			"0"	
-			
-			"fov"
-			{
-				"fov_plr_ironsight"			"-25"
-				"fov_plr_focus"				"-12"
-				"fov_wpn_default"			"62"
-				"fov_wpn_ironsight"			"80"
-				"fov_wpn_focus"				"85"
-			}
-			"sounds"
-			{
-				"shot_single"				"Weapon_MP5K.Single"
-				"shot_single_local"			"Weapon_MP5K.SingleLocal"
-				"shot_silent"				"Weapon_MP5K.SingleSilenced"
-				"shot_silent_local"			"Weapon_MP5K.SingleSilencedLocal"
-				"empty"					"Weapon_MP5K.Empty"
-				"clipin"				"Weapon_MP5K.Magin"
-				"clipout"				"Weapon_MP5K.Magout"
-				"boltback"				"Weapon_MP5K.Boltback"
-				"boltrelease"				"Weapon_MP5K.Boltrelease"
-				"rofdown"				"Weapon_MP5K.ROF"
-				"rofup"					"Weapon_MP5K.ROF"
-				
-				"thirdperson_prefix"		"Weapon_MP5K"
-			}
-			"particles"
-			{
-				"particle_muzzleflash_1st"		"muzzleflash_mp5_1p"
-				"particle_muzzleflash_3rd"		"muzzleflash_mp5_3rd"
-				"particle_tracer"			"weapon_tracers"
-			}
-			"recoil"
-			{
-				"recoil_lateral_range"			"-0.55 0.85"
-				"recoil_vertical_range"			"1.725 1.95"
-				"recoil_aim_punch"			"0.3 0.5"
-				"recoil_rest_rate"			"5"
-				"recoil_rest_delay"			"0.14"
-				"recoil_roll_range"			"-1.25 -1.25"
-				"recoil_roll_rest_rate"			"150"
-				"recoil_freeaim_frac"			"0.25"
-				
-				"recoil_additional_rest_per_shot"	"2.5"	// Amount of rest per additional shot (added to rest rate) (default = 2.5)
-				"recoil_shot_reset_time"		"0.5"	// Time delay for resetting the shots fired counter for the above (default = 0.3)
-				"recoil_shot_max_shots"			"5"	// Max number of shots to account for for the additional rest (default = 5)
-				"recoil_punch_additive_factor"		"0.82"	// How much of the view punch from the previous shot(s) get added to any additional shot fired.
-			}
-			"ballistics"
-			{
-				"spread"				"0.40 0.40 0.40"
-				"FireModes"				"semi, burst, full"
-				"bulletcount"				"1"
-				"maxrange"				"8000"
-			}
-			"ammo_clip"
-			{
-				"ammo_type"				"9x19mm_smg"
-				"clip_max"				"12"
-				"clip_max_rounds"			"30"
-				"clip_default"				"4"
-			}
-			"attachments"
-			{
-				"attachment_addon"			"primary"
-			}
-			"kitui_offset"
-			{
-				"position"				"18 0 1"
 			}
 			"team_access"				"security, insurgent"
 		}
@@ -10086,115 +9075,6 @@
 		}
 
 		// from theater_tug_39_custom_weapon.theater
-		"weapon_sigp220"
-		{
-			"import"				"pistol_base"
-			"weapon_class"				"pistol"
-			"print_name"				"#weapon_sigp220"
-			"print_desc"				"#weapon_sigp220_desc"
-			"view_model"				"models/weapons/v_220.mdl"
-			"world_model"				"models/weapons/w_220.mdl"
-			"rounds_per_minute"			"600"
-			"weapon_slot"				"secondary"
-			"act_table"					"pistol"
-			"weapon_abilities"			"ironsight"
-			"weapon_weight"				"0"
-			"weapon_cost"				"0"
-			"class_restricted"			"0"
-			"barrel_length"				"0"		
-			
-			"viewmodel_attachments"
-			{
-				"standard_magazine"
-				{
-					"model"						"models/weapons/upgrades/a_magazine_220_8.mdl"
-					"fallback_for_slot"			"magazine"
-				}
-			}
-			
-			"world_attachments"
-			{
-				"standard_magazine"
-				{
-					"model"						"models/weapons/upgrades/w_magazine_220_8.mdl"
-					"fallback_for_slot"			"magazine"
-				}
-			}
-			
-			"fov"
-			{
-				"fov_plr_ironsight"			"-10"
-				"fov_plr_focus"				"-10"
-				"fov_wpn_default"			"74"
-				"fov_wpn_ironsight"			"74"
-				"fov_wpn_focus"				"79"
-			}
-			"viewmodel_offsets"
-			{
-				// x back, y left, z down
-				"VMOffsetStand"				"0.15 0.25 0.75"
-			}
-			"sounds"
-			{
-				"shot_single"				"Weapon_p220.Single"
-				"shot_single_local"			"Weapon_p220.SingleLocal"
-				"shot_silent"				"Weapon_Makarov.SingleSilenced"
-				"shot_silent_local"			"Weapon_Makarov.SingleSilencedLocal"
-				"empty"					"Weapon_Makarov.Empty"
-				"magin"					"Weapon_p220.Clipin"
-				"magout"				"Weapon_p220.Clipout"
-				"slide_back"				"Weapon_p220.slideback"
-				"slide_forward"				"Weapon_p220.slideforward"
-				"safety"				"Weapon_Makarov.safety"
-			}
-			"particles"
-			{
-				"particle_muzzleflash_1st"		"muzzleflash_m9_1p"
-				"particle_muzzleflash_3rd"		"muzzleflash_m9_3rd"
-			}
-			"recoil"
-			{
-				"recoil_lateral_range"			"-1.15 1.45"
-				"recoil_vertical_range"			"1.55 2.6"
-				"recoil_aim_punch"			"0.65 0.75"
-				"recoil_rest_rate"			"4"
-				"recoil_rest_delay"			"0.18"
-				"recoil_roll_range"			"-1.35 -1.35"
-				"recoil_roll_rest_rate"			"180"
-				"recoil_shot_reset_time"		"0.75"	// Time delay for resetting the shots fired counter for the above (default = 0.3)
-				"recoil_punch_additive_factor"		"0.85"	// How much of the view punch from the previous shot(s) get added to any additional shot fired (default 1.0)
-			}
-			"ballistics"
-			{
-				"spread"				"0.3 0.3 0.3"
-				"FireModes"				"semi"
-				"bulletcount"				"1"
-				"maxrange"				"6000"
-			}
-			"ammo_clip"
-			{
-				"ammo_type"				"45acp_pistol"
-				"clip_max"				"12"
-				"clip_max_rounds"			"7"
-				"clip_default"				"4"
-			}
-			"attachments"
-			{
-				"attachment_addon"			"pistol"
-			}
-			"kitui_offset"
-			{
-				"position"				"12 -3 0"
-			}
-			"ironsights"
-			{
-				"in_time"				"0.15"
-				"out_time"				"0.08"
-			}				
-			"team_access"				"security, insurgent"
-		}
-
-		// from theater_tug_39_custom_weapon.theater
 		"weapon_sigp226"
 		{
 			"import"				"pistol_base"
@@ -10647,112 +9527,6 @@
 				"in_time"				"0.15"
 				"out_time"				"0.08"
 			}							
-			"team_access"				"security, insurgent"
-		}
-
-		// from theater_tug_39_default_weapon.theater
-		"weapon_sterling"
-		{
-			"import"					"ballistic_base"
-			"weapon_class"				"smg"
-			"view_model"				"models/weapons/v_sterling.mdl"
-			"world_model"				"models/weapons/w_sterling.mdl"
-			"print_name"				"#weapon_sterling"
-			"print_desc"				"#weapon_sterling_descinsg"
-			"rounds_per_minute"			"600"
-			"closed_bolt"				"0"
-			"weapon_slot"				"secondary"
-			"weapon_max_subslot"			"1"	// Up to the 2nd subslot only
-			"act_table"					"sterling" // yes, its own special act_table
-			"weapon_abilities"			"ironsight"
-			"weapon_weight"				"0"
-			"weapon_cost"				"6"
-			"barrel_length"				"0"
-			"class_restricted"			"0"			
-			
-			"fov"
-			{
-				"fov_plr_ironsight"			"-25"
-				"fov_plr_focus"				"-12"
-				"fov_wpn_default"			"65"
-				"fov_wpn_ironsight"			"79"
-				"fov_wpn_focus"				"82"
-			}
-			"sounds"
-			{
-				"shot_single"				"Weapon_Sterling.Single"
-				"shot_single_local"			"Weapon_Sterling.SingleLocal"
-				"shot_silent"				"Weapon_Sterling.SingleSilenced"
-				"shot_silent_local"			"Weapon_Sterling.SingleSilencedLocal"
-				"empty"						"Weapon_Sterling.Empty"
-				"clipin"					"Weapon_Sterling.Magin"
-				"clipout"					"weapon_Sterling.Magout"
-				"boltback"					"weapon_Sterling.Boltback"
-				"boltrelease"				"weapon_Sterling.Boltrelease"
-				"rofdown"					"weapon_Sterling.ROF"
-				"rofup"						"weapon_Sterling.ROF"
-			}	
-			"particles"
-			{
-				"particle_muzzleflash_1st"		"muzzleflash_mp40_1p"
-				"particle_muzzleflash_3rd"		"muzzleflash_mp40_3rd"
-				"particle_tracer"			"weapon_tracers"
-			}
-			"recoil"
-			{
-				"recoil_lateral_range"			"-0.35 0.35"
-				"recoil_vertical_range"			"1.875 2.475"
-				"recoil_aim_punch"			"0.4 0.6"
-				"recoil_rest_rate"			"6"
-				"recoil_rest_delay"			"0.14"
-				"recoil_roll_range"			"-1.45 -1.45"
-				"recoil_roll_rest_rate"			"150"
-				"recoil_freeaim_frac"			"0.4"
-				
-				"recoil_additional_rest_per_shot"	"2.5"	// Amount of rest per additional shot (added to rest rate) (default = 2.5)
-				"recoil_shot_reset_time"		"0.5"	// Time delay for resetting the shots fired counter for the above (default = 0.3)
-				"recoil_shot_max_shots"			"5"	// Max number of shots to account for for the additional rest (default = 5)
-				"recoil_punch_additive_factor"		"0.82"	// How much of the view punch from the previous shot(s) get added to any additional shot fired.
-			}
-			"ballistics"
-			{
-				"spread"					"0.40 0.40 0.40"
-				"FireModes"					"full"
-				"bulletcount"				"1"
-				"maxrange"					"8000"
-			}
-			"ammo_clip"
-			{
-				"ammo_type"					"9x19mm_smg"
-				"magsize_override"			"34"
-				"clip_max"					"12"
-				"clip_max_rounds"			"34"
-				"clip_default"				"4"
-			}
-			"viewmodel_attachments"
-			{
-				"standard_barrel"
-				{
-					"model"					"models/weapons/upgrades/a_standard_sterling.mdl"
-					"fallback_for_slot"		"barrel"
-				}
-			}
-			"world_attachments"
-			{
-				"standard_barrel"
-				{
-					"model"					"models/weapons/upgrades/w_standard_sterling.mdl"
-					"fallback_for_slot"		"barrel"
-				}
-			}
-			"attachments"
-			{
-				"attachment_addon"			"primary"
-			}
-			"kitui_offset"
-			{
-				"position"				"22 -4 2"
-			}
 			"team_access"				"security, insurgent"
 		}
 
@@ -11832,19 +10606,6 @@
 		}
 
 		// from theater_tug_39_default_weapon_upgrades.theater
-		"ammo_ap_m1911"
-		{
-			"import"				"base_ammo_ap"
-			"upgrade_cost"				"6"
-			"allowed_weapons"
-			{
-				"weapon"				"weapon_m1911seriespistol"
-				"weapon"				"weapon_combatcommander"			
-			}
-			"ammo_type_override"			"45acp_ap_pistol"
-		}
-
-		// from theater_tug_39_default_weapon_upgrades.theater
 		"ammo_ap_m1a1"
 		{
 			"import"				"base_ammo_ap"
@@ -11931,20 +10692,6 @@
 		}
 
 		// from theater_tug_39_default_weapon_upgrades.theater
-		"ammo_ap_m45"
-		{
-			"import"				"base_ammo_ap"
-			"upgrade_cost"				"6"
-			"allowed_weapons"
-			{
-				"weapon"				"weapon_m45seriespistol"
-				"weapon"				"weapon_sigp220"
-				"weapon"				"weapon_hkusp"
-			}
-			"ammo_type_override"			"45acp_ap_pistol"
-		}
-
-		// from theater_tug_39_default_weapon_upgrades.theater
 		"ammo_ap_m9"
 		{
 			"import"				"base_ammo_ap"
@@ -11973,18 +10720,6 @@
 				"weapon"				"weapon_ots33"				
 			}
 			"ammo_type_override"			"9x18mm_ap"
-		}
-
-		// from theater_tug_39_default_weapon_upgrades.theater
-		"ammo_ap_mini14"
-		{
-			"import"				"base_ammo_ap"
-			"upgrade_cost"				"6"
-			"allowed_weapons"
-			{
-				"weapon"				"weapon_mini14"
-			}
-			"ammo_type_override"			"556_ap_box"
 		}
 
 		// from theater_tug_39_default_weapon_upgrades.theater
@@ -12353,19 +11088,6 @@
 		}
 
 		// from theater_tug_39_default_weapon_upgrades.theater
-		"ammo_hp_m1911"
-		{
-			"import"				"base_ammo_hp"
-			"upgrade_cost"				"3"
-			"allowed_weapons"
-			{
-				"weapon"				"weapon_m1911seriespistol"
-				"weapon"				"weapon_combatcommander"			
-			}
-			"ammo_type_override"			"45acp_hp_pistol"
-		}
-
-		// from theater_tug_39_default_weapon_upgrades.theater
 		"ammo_hp_m1a1"
 		{
 			"import"				"base_ammo_hp"
@@ -12438,20 +11160,6 @@
 		}
 
 		// from theater_tug_39_default_weapon_upgrades.theater
-		"ammo_hp_m45"
-		{
-			"import"				"base_ammo_hp"
-			"upgrade_cost"				"3"
-			"allowed_weapons"
-			{
-				"weapon"				"weapon_m45seriespistol"
-				"weapon"				"weapon_sigp220"
-				"weapon"				"weapon_hkusp"
-			}
-			"ammo_type_override"			"45acp_hp_pistol"
-		}
-
-		// from theater_tug_39_default_weapon_upgrades.theater
 		"ammo_hp_m9"
 		{
 			"import"				"base_ammo_hp"
@@ -12480,18 +11188,6 @@
 				"weapon"				"weapon_ots33"				
 			}
 			"ammo_type_override"			"9x18mm_hp"
-		}
-
-		// from theater_tug_39_default_weapon_upgrades.theater
-		"ammo_hp_mini14"
-		{
-			"import"				"base_ammo_hp"
-			"upgrade_cost"				"3"
-			"allowed_weapons"
-			{
-				"weapon"				"weapon_mini14"
-			}
-			"ammo_type_override"			"556_hp_box"
 		}
 
 		// from theater_tug_39_default_weapon_upgrades.theater
@@ -12820,18 +11516,6 @@
 				"weapon"				"weapon_steyraug"
 			}
 			"ammo_type_override"			"556_tracer_stanag_m4"
-		}
-
-		// from theater_tug_39_default_weapon_upgrades.theater
-		"ammo_tracer_mini14"
-		{
-			"import"				"base_ammo_tracer"
-			"upgrade_cost"				"0"
-			"allowed_weapons"
-			{
-				"weapon"				"weapon_mini14"
-			}
-			"ammo_type_override"			"556_tracer_box"
 		}
 
 		// from theater_tug_39_default_weapon_upgrades.theater
@@ -13954,72 +12638,6 @@
 			"team_access"				"security, insurgent"
 		}
 
-		// from theater_tug_39_default_weapon_upgrades.theater
-		"m1911seriespistol_1"
-		{
-			"print_name"				"#m1911seriespistol_1"
-			"print_desc"				"#m1911seriespistol_1_desc"
-			"upgrade_cost"				"0"
-			"upgrade_slot"				"aesthetic"	
-			"reload_speed"				"1.5"		
-			
-			"allowed_weapons"
-			{
-				"weapon"				"weapon_m1911seriespistol"
-			}
-
-			"viewmodel_attachments"
-			{
-				"darkenedm9"
-				{
-					"model"					"models/insgwep/v_m11dm.mdl"
-				}
-			}
-			
-			"world_attachments"
-			{
-				"darkenedm9"
-				{
-					"model"					"models/insgwep/w_11dm.mdl"
-				}
-			}
-			
-			"team_access"				"security, insurgent"
-		}
-
-		// from theater_tug_39_default_weapon_upgrades.theater
-		"m45seriespistol_1"
-		{
-			"print_name"				"#m45seriespistol_1"
-			"print_desc"				"#m45seriespistol_1_desc"
-			"upgrade_cost"				"0"
-			"upgrade_slot"				"aesthetic"		
-			"reload_speed"				"1.5"	
-			
-			"allowed_weapons"
-			{
-				"weapon"				"weapon_m45seriespistol"
-			}
-
-			"viewmodel_attachments"
-			{
-				"darkenedm9"
-				{
-					"model"					"models/insgwep/v_kdw.mdl"
-				}
-			}
-			
-			"world_attachments"
-			{
-				"darkenedm9"
-				{
-					"model"					"models/insgwep/w_kdw.mdl"
-				}
-			}
-			
-			"team_access"				"security, insurgent"
-		}
-
 		// from theater_tug_nvg_default.theater
 		"magazine_cmag_xm8"
 		{
@@ -14566,53 +13184,6 @@
 		}
 
 		// from theater_tug_39_default_weapon_upgrades.theater
-		"magazine_extended_pistol_16rnd"
-		{
-			"upgrade_slot"				"magazine"
-			"upgrade_cost"				"3"
-			"team_access"				"security, insurgent"
-
-			"print_name"				"#weapon_upgrade_magazine_extended"
-			"print_desc"				"#weapon_upgrade_magazine_extended_desc"
-
-			"magsize_override"			"16"
-
-			"allowed_weapons"
-			{
-				"weapon"				"weapon_combatcommander"
-			}
-			
-			"viewmodel_attachments"
-			{
-				"magazine_16_1911"
-				{
-					"ActSuffix"			"_MAG1"
-					"model"				"models/weapons/upgrades/a_magazine_19cc_15.mdl"
-
-					"weapons"
-					{
-						"weapon"		"weapon_combatcommander"
-					}
-				}
-				
-			}
-			
-			"world_attachments"
-			{
-				"magazine_16_1911"
-				{
-					"model"				"models/weapons/upgrades/w_magazine_19cc_15.mdl"
-					
-					"weapons"
-					{
-						"weapon"		"weapon_combatcommander"
-					}
-				}
-		
-			}
-		}
-
-		// from theater_tug_39_default_weapon_upgrades.theater
 		"magazine_extended_ppsh41"
 		{
 			"upgrade_slot"				"magazine"
@@ -14821,6 +13392,45 @@
 			"allowed_weapons"
 			{
 				"weapon"				"weapon_svd"
+			}
+		}
+
+		// from theater_tug_nvg_default.theater
+		"magazine_m79_napalm"
+		{
+			"upgrade_slot"				"magazine"
+			"upgrade_cost"				"0"
+			"team_access"				"security, insurgent"
+			"weight"					"0"
+
+			"print_name"				"#weapon_m79_napalm"
+			"print_desc"				"#weapon_m79_desc"
+
+			"explosive_override"		"grenade_m79_napalm"
+			"maxcarry_override"			"2"
+
+			"allowed_weapons"
+			{
+				"weapon"				"weapon_m79"
+			}
+		}
+
+		// from theater_tug_nvg_default.theater
+		"magazine_m79_smoke"
+		{
+			"upgrade_slot"				"magazine"
+			"upgrade_cost"				"0"
+			"team_access"				"security, insurgent"
+			"weight"					"0"
+
+			"print_name"				"#weapon_m79_smoke"
+			"print_desc"				"#weapon_m79_desc"
+
+			"explosive_override"		"grenade_m79_smoke"
+
+			"allowed_weapons"
+			{
+				"weapon"				"weapon_m79"
 			}
 		}
 

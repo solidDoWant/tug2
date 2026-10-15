@@ -258,6 +258,7 @@ RUN --mount=type=bind,source=./plugins/sourcemod,target=/plugin-source \
     /sourcemod/addons/sourcemod/scripting/spcomp --include=/plugin-source/scripting/include  /plugin-source/scripting/LoadoutSaverSlots.sp -o /insurgency/addons/sourcemod/plugins/LoadoutSaverSlots.smx && \
     mkdir -p /insurgency/addons/sourcemod/configs/sql-init-scripts/pgsql && \
     cp /plugin-source/configs/sql-init-scripts/pgsql/loadout_saver_slots.sql /insurgency/addons/sourcemod/configs/sql-init-scripts/pgsql/loadout_saver_slots.sql && \
+    cp /plugin-source/configs/sql-init-scripts/pgsql/loadout_saver_slots_theater_replacements.sql /insurgency/addons/sourcemod/configs/sql-init-scripts/pgsql/loadout_saver_slots_theater_replacements.sql && \
     mkdir -p /insurgency/cfg/sourcemod && \
     touch /insurgency/cfg/sourcemod/plugin.loadoutsaverslots.cfg && \
     # Fixup file permissions
