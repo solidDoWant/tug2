@@ -149,6 +149,85 @@ public void OnPluginStart()
     HookEvent("player_spawn", Event_PlayerSpawn);
     HookEvent("player_hurt", Event_PlayerHurt);
     HookEvent("player_death", Event_PlayerDeath);
+
+    RegAdminCmd("sm_bomber_status", Command_Status, ADMFLAG_GENERIC,
+                "List every bomber-class bot: state, active weapon, weapons held, nearest Security player and line of sight");
+}
+
+// Diagnostic: a bomber that "just stands there" looks the same from outside whatever the cause, so
+// this prints the things that tell the causes apart - whether it is armed at all, what it is holding
+// (no active weapon leaves the engine nothing to pick an attack behaviour from; a pistol means the
+// strip did not happen), and whether a Security player is near and visible to it.
+public Action Command_Status(int caller, int args)
+{
+    float now = GetGameTime();
+    int shown = 0;
+
+    for (int client = 1; client <= MaxClients; client++)
+    {
+        if (!IsClientInGame(client) || !IsFakeClient(client) || !g_isBomberClass[client]) continue;
+
+        static const char stateNames[][] = { "none", "armed", "lit", "detonated" };
+        int  state = view_as<int>(g_state[client]);
+        bool alive = IsPlayerAlive(client);
+
+        char active[64] = "<none>";
+        char held[256];
+        if (alive)
+        {
+            int weapon = GetEntPropEnt(client, Prop_Send, "m_hActiveWeapon");
+            if (weapon > 0 && IsValidEntity(weapon)) GetEntityClassname(weapon, active, sizeof(active));
+
+            int slots = GetEntPropArraySize(client, Prop_Send, "m_hMyWeapons");
+            for (int i = 0; i < slots; i++)
+            {
+                int w = GetEntPropEnt(client, Prop_Send, "m_hMyWeapons", i);
+                if (w <= 0 || !IsValidEntity(w)) continue;
+                char cls[64];
+                GetEntityClassname(w, cls, sizeof(cls));
+                Format(held, sizeof(held), "%s%s%s", held, held[0] == '\0' ? "" : ",", cls);
+            }
+        }
+
+        // Nearest living Security player, and whether the bomber has an unobstructed line to them.
+        float bomberEye[3], targetEye[3];
+        int   nearest = 0;
+        float best    = 0.0;
+        bool  visible = false;
+        if (alive)
+        {
+            GetClientEyePosition(client, bomberEye);
+            for (int target = 1; target <= MaxClients; target++)
+            {
+                if (!IsClientInGame(target) || !IsPlayerAlive(target) || GetClientTeam(target) != TEAM_SEC) continue;
+                GetClientEyePosition(target, targetEye);
+                float d = GetVectorDistance(bomberEye, targetEye);
+                if (nearest == 0 || d < best)
+                {
+                    nearest = target;
+                    best    = d;
+                    TR_TraceRayFilter(bomberEye, targetEye, MASK_SOLID, RayType_EndPoint, TraceFilter_IgnorePlayers);
+                    visible = !TR_DidHit();
+                }
+            }
+        }
+
+        float vel[3];
+        if (alive) GetEntPropVector(client, Prop_Data, "m_vecVelocity", vel);
+
+        ReplyToCommand(caller, "[Bomber] %N: %s, state=%s, alive %.0fs, speed=%.0f u/s, active=%s, held=[%s], nearest Security=%s %.0fu (%.0f ft) %s",
+                       client, alive ? "alive" : "dead",
+                       (state >= 0 && state < sizeof(stateNames)) ? stateNames[state] : "?",
+                       alive ? now - g_spawnTime[client] : 0.0,
+                       alive ? SquareRoot(vel[0] * vel[0] + vel[1] * vel[1]) : 0.0,
+                       active, held,
+                       nearest ? "" : "none", best, best / 16.0,
+                       nearest ? (visible ? "visible" : "not visible") : "");
+        shown++;
+    }
+
+    if (shown == 0) ReplyToCommand(caller, "[Bomber] No bomber-class bots in game.");
+    return Plugin_Handled;
 }
 
 public void OnMapStart()
