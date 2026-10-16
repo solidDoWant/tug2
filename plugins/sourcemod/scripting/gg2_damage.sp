@@ -30,6 +30,9 @@ ConVar gg_bomber_headshot_multiplier;
 ConVar gg_bomber_nonheadshot_value;
 ConVar gg_notification_cooldown;
 ConVar gg_defib_team_damage;
+ConVar gg_ied_falloff_factor;
+ConVar gg_ied_falloff_distance;
+ConVar gg_ied_falloff_debug;
 
 char   g_one_shot_weapons[][] = {
     "weapon_defib",
@@ -70,6 +73,16 @@ public void OnPluginStart()
     // Keep this below that cvar (and below sm_medic_moderate_revive_hp / sm_medic_minor_revive_hp,
     // 50 and 70) if any of them are ever retuned in plugin.respawn.cfg.
     gg_defib_team_damage          = CreateConVar("gg_defib_team_damage", "34.0", "Damage a defib does to a teammate. Must stay below sm_medic_critical_revive_hp so it cannot kill a just-revived player.");
+    // IED blast falloff, applied on top of the engine's own radius falloff to every grenade_ied hit
+    // (players' IEDs and gg2_bomber's alike): damage / factor ^ (distance / distance_step), distance
+    // measured origin to origin - from the IED to the victim's feet. The defaults are the values this
+    // plugin always hard-coded, which make the IED lethal (100 HP) only within about 7 ft; the stock
+    // game has no such falloff and kills out to roughly 55 ft.
+    gg_ied_falloff_factor         = CreateConVar("gg_ied_falloff_factor", "2.2", "IED damage is divided by this for every gg_ied_falloff_distance units from the blast. 1 disables the falloff.", _, true, 1.0);
+    gg_ied_falloff_distance       = CreateConVar("gg_ied_falloff_distance", "75.0", "Distance in units over which IED damage is divided by gg_ied_falloff_factor once.", _, true, 1.0);
+    // Logs distance, the damage the engine passed in (already after its own falloff) and the result,
+    // which is what calibrating the two cvars above against a target lethal distance needs.
+    gg_ied_falloff_debug          = CreateConVar("gg_ied_falloff_debug", "0", "Log every IED hit: distance, incoming damage, scaled damage.", _, true, 0.0, true, 1.0);
     AutoExecConfig(true, "gg2_damage");
 
     LoadTranslations("tug.phrases.txt");
@@ -242,9 +255,15 @@ float CalculateScaledIEDDamage(int victim, int inflictor, float baseDamage, int 
 
     float distanceFromIED = GetEntitiesDistance(inflictor, victim);
 
-    // y = baseDamage * 1/(2.2^(distance/75))
-    // Exponential damage falloff, cut by 2.2 every 75 units away. Max distance is determined by the IED damage radius.
-    return baseDamage / Pow(2.2, distanceFromIED / 75.0);
+    // y = baseDamage / (factor ^ (distance / step)) - exponential falloff, cut by the factor every
+    // step units away. Max distance is still bounded by the IED's theater damage radius.
+    float scaled = baseDamage / Pow(gg_ied_falloff_factor.FloatValue, distanceFromIED / gg_ied_falloff_distance.FloatValue);
+
+    if (gg_ied_falloff_debug.BoolValue)
+        LogMessage("[IED falloff] victim %d at %.0f units (%.1f ft): engine damage %.1f -> %.1f",
+                   victim, distanceFromIED, distanceFromIED / 16.0, baseDamage, scaled);
+
+    return scaled;
 }
 
 float CalculateTeamDamage(int victim, int attacker, char[] weapon, float baseDamage, int damagetype)
