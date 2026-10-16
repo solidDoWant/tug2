@@ -18437,6 +18437,86 @@
 			}
 			"team_access"	"security, insurgent"
 		}
+		"weapon_m79"
+		{
+			"import"	"weapon_base"
+			"weapon_class"	"sniper_rifle"
+			"weapon_type"	"projectile"
+			"print_name"	"#weapon_m79_launcher"
+			"print_desc"	"#weapon_m79_launcher_desc"
+			"view_model"	"models/weapons/v_nam_m79.mdl"
+			"world_model"	"models/weapons/w_m79.mdl"
+			"rounds_per_minute"	"780"
+			"burst_delay"	"0.22"
+			"weapon_slot"	"explosive"
+			"weapon_max_subslot"	"0"
+			"act_table"	"shot"
+			"weapon_abilities"	"ironsight"
+			"weapon_weight"	"0"
+			"weapon_cost"	"4"
+			"fire_instantly"	"1"
+			"class_restricted"	"0"
+			"barrel_length"	"0"
+			"fov"
+			{
+				"fov_plr_ironsight"	"-25"
+				"fov_plr_focus"	"-12"
+				"fov_wpn_default"	"68"
+				"fov_wpn_ironsight"	"72"
+				"fov_wpn_focus"	"75"
+			}
+			"viewmodel_offsets"
+			{
+				"VMOffsetStand"	"0.65 -0.10 0.5"
+			}
+			"sounds"
+			{
+				"shot_single"	"Weapon_m203.Single"
+				"shot_single_local"	"Weapon_m203.Single"
+				"shot_silent"	"Weapon_M16A4.SingleSilenced"
+				"shot_silent_local"	"Weapon_M16A4.SingleSilencedLocal"
+				"empty"	"Weapon_M16A4.Empty"
+				"clipin"	"Weapon_M16A4.Magin"
+				"clipout"	"Weapon_M16A4.Magout"
+				"boltback"	"Weapon_M16A4.Boltback"
+				"boltrelease"	"Weapon_M16A4.Boltrelease"
+				"rofdown"	"Weapon_M16A4.ROF"
+				"rofup"	"Weapon_M16A4.ROF"
+			}
+			"particles"
+			{
+				"particle_muzzleflash_1st"	"ins_weapon_m203"
+				"particle_muzzleflash_3rd"	"ins_weapon_m203"
+			}
+			"explosives"
+			{
+				"entity"	"grenade_m79"
+			}
+			"recoil"
+			{
+				"recoil_lateral_range"	"-1.0 1.0"
+				"recoil_vertical_range"	"4.0 6.0"
+				"recoil_aim_punch"	"1.0 1.0"
+				"recoil_rest_rate"	"12"
+				"recoil_rest_delay"	"0"
+				"recoil_additional_rest_per_shot"	"2.5"
+				"recoil_shot_reset_time"	"0.5"
+				"recoil_shot_max_shots"	"5"
+				"recoil_punch_additive_factor"	"0.85"
+			}
+			"ammo_clip"
+			{
+				"ammo_type"	"grenade_m79"
+				"clip_max"	"9"
+				"clip_max_rounds"	"1"
+				"clip_default"	"6"
+			}
+			"kitui_offset"
+			{
+				"position"	"25 -2 -1"
+			}
+			"team_access"	"security, insurgent"
+		}
 		"weapon_rpg7"
 		{
 			"import"	"weapon_base"
@@ -21921,86 +22001,6 @@
 			"sounds"
 			{
 				"special1"	"Weapon_stielhandgranate.Pin"
-			}
-			"team_access"	"security, insurgent"
-		}
-		"weapon_m79"
-		{
-			"import"	"weapon_base"
-			"weapon_class"	"sniper_rifle"
-			"weapon_type"	"projectile"
-			"print_name"	"#weapon_m79"
-			"print_desc"	"#weapon_m79_desc"
-			"view_model"	"models/weapons/v_nam_m79.mdl"
-			"world_model"	"models/weapons/w_m79.mdl"
-			"rounds_per_minute"	"780"
-			"burst_delay"	"0.22"
-			"weapon_slot"	"explosive"
-			"weapon_max_subslot"	"0"
-			"act_table"	"shot"
-			"weapon_abilities"	"ironsight"
-			"weapon_weight"	"0"
-			"weapon_cost"	"4"
-			"fire_instantly"	"1"
-			"class_restricted"	"0"
-			"barrel_length"	"0"
-			"fov"
-			{
-				"fov_plr_ironsight"	"-25"
-				"fov_plr_focus"	"-12"
-				"fov_wpn_default"	"68"
-				"fov_wpn_ironsight"	"72"
-				"fov_wpn_focus"	"75"
-			}
-			"viewmodel_offsets"
-			{
-				"VMOffsetStand"	"0.65 -0.10 0.5"
-			}
-			"sounds"
-			{
-				"shot_single"	"Weapon_m203.Single"
-				"shot_single_local"	"Weapon_m203.Single"
-				"shot_silent"	"Weapon_M16A4.SingleSilenced"
-				"shot_silent_local"	"Weapon_M16A4.SingleSilencedLocal"
-				"empty"	"Weapon_M16A4.Empty"
-				"clipin"	"Weapon_M16A4.Magin"
-				"clipout"	"Weapon_M16A4.Magout"
-				"boltback"	"Weapon_M16A4.Boltback"
-				"boltrelease"	"Weapon_M16A4.Boltrelease"
-				"rofdown"	"Weapon_M16A4.ROF"
-				"rofup"	"Weapon_M16A4.ROF"
-			}
-			"particles"
-			{
-				"particle_muzzleflash_1st"	"ins_weapon_m203"
-				"particle_muzzleflash_3rd"	"ins_weapon_m203"
-			}
-			"explosives"
-			{
-				"entity"	"grenade_m79"
-			}
-			"recoil"
-			{
-				"recoil_lateral_range"	"-1.0 1.0"
-				"recoil_vertical_range"	"4.0 6.0"
-				"recoil_aim_punch"	"1.0 1.0"
-				"recoil_rest_rate"	"12"
-				"recoil_rest_delay"	"0"
-				"recoil_additional_rest_per_shot"	"2.5"
-				"recoil_shot_reset_time"	"0.5"
-				"recoil_shot_max_shots"	"5"
-				"recoil_punch_additive_factor"	"0.85"
-			}
-			"ammo_clip"
-			{
-				"ammo_type"	"grenade_m79"
-				"clip_max"	"9"
-				"clip_max_rounds"	"1"
-				"clip_default"	"6"
-			}
-			"kitui_offset"
-			{
-				"position"	"25 -2 -1"
 			}
 			"team_access"	"security, insurgent"
 		}
