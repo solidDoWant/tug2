@@ -1,4 +1,5 @@
 build/
+__pycache__/
 
 # Generated from workshop.lock.json on every server build - see tools/workshop/README.md.
 /server config/*/opt/insurgency-server/steamapps/workshop/appworkshop_222880.acf

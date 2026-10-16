@@ -22,6 +22,14 @@ the item containing the map being loaded, so a scripts-only item is frozen at wh
 client first downloaded. That is what produced the `SERVER IS ENFORCING CONSISTENCY FOR THIS FILE`
 kicks.
 
+## These files are generated
+
+Every `.theater` here is **build output**: flattened by `tools/theater-build/build.py` from our
+sources in `theaters/src/` and the vendored TUG theaters they `#base` (`theaters/vendor/`). None of
+them contains a `#base` - the merge happens in the build, not in the engine. Edit the source, run
+`make theater-build`, and commit both. `make theater-check` (run by every fastdl and server image
+build) fails while an output is stale. See `theaters/README.md`.
+
 ## The rule
 
 **Any edit to a file in this directory has to reach clients before the server that enforces it.**

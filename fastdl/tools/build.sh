@@ -161,8 +161,9 @@ if [ -n "$(find "$THEATERS" -name '*.theater' -print -quit 2>/dev/null)" ]; then
   cp "$WORK/theaters"/*.theater "$OUT/scripts/theaters/"
 
   # Each theater also gets a copy whose name carries a hash of the whole set, so a changed theater
-  # is a filename no client has ever had.  The per-gamemode variants #base the base theater by
-  # name, so the copies have to point at the copy rather than back at the original.
+  # is a filename no client has ever had.  The theaters are flattened (tools/theater-build), so
+  # none #bases another any more; the rewrite below is kept so that a variant which did #base the
+  # base theater by name would still point at the copy rather than back at the original.
   cd "$OUT/scripts/theaters"
   base=$(ls *.theater | sed 's/\.theater$//' | awk '{ print length, $0 }' | LC_ALL=C sort -n | head -1 | cut -d' ' -f2-)
   thash=$(LC_ALL=C cat *.theater | sha256sum | cut -c1-12)

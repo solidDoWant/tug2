@@ -52,6 +52,16 @@ workshop-check:	## Fail if the committed Dockerfile does not match the lockfile.
 
 # Servers that ship player-downloadable content over fastdl. Only these get a fastdl image; every
 # other server runs stock content and needs neither the image nor the advertising plugin.
+# The theaters the servers load are flattened from theaters/src/ and the vendored TUG theaters they
+# #base (theaters/vendor/), and committed under server config/. See tools/theater-build/build.py.
+.PHONY: theater-build
+theater-build:	## Regenerate the flattened theaters from theaters/src/ and theaters/vendor/.
+	python3 "$(PROJECT_DIR)/tools/theater-build/build.py" build
+
+.PHONY: theater-check
+theater-check:	## Fail if a committed flattened theater does not match its sources.
+	python3 "$(PROJECT_DIR)/tools/theater-build/build.py" check
+
 FASTDL_SERVERS ?= test
 
 # The fast-download content image is its own project (fastdl/Makefile, fastdl/Dockerfile), built
@@ -59,6 +69,7 @@ FASTDL_SERVERS ?= test
 # entry points keep working.
 .PHONY: fastdl-image-%
 fastdl-image-%:	## Build the fast-download content image for a server. Usage: make fastdl-image-SERVER_NAME
+	@$(MAKE) theater-check
 	$(MAKE) -C "$(PROJECT_DIR)/fastdl" content SERVER=$* VERSION=$(VERSION) \
 	  CONTAINER_REGISTRY=$(CONTAINER_REGISTRY) EXTRA_DOCKER_ARGS="$(PUSH_ARG) $(EXTRA_DOCKER_ARGS)"
 
@@ -77,6 +88,7 @@ server-image-%: base-image Dockerfile	## Build the container image for the speci
 	@# from the lockfile here so it stays the only source of truth.
 	@$(MAKE) workshop-check
 	@$(MAKE) workshop-render
+	@$(MAKE) theater-check
 	docker build --target gameserver-$* -t "$(CONTAINER_REPOSITORY)-$*:$(VERSION)" $(PUSH_ARG) --load $(DOCKER_ARGS) $(EXTRA_DOCKER_ARGS) "$(PROJECT_DIR)"
 
 .PHONY: server-images
