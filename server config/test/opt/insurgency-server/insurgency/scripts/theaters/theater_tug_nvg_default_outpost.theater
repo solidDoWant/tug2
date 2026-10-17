@@ -28520,6 +28520,30 @@
 				"BounceSound"	"Weapon_M67.Bounce"
 			}
 		}
+		"grenade_ied"
+		{
+			"import"	"baseGrenade"
+			"entity_class"	"remote"
+			"Model"	"models/weapons/w_ied.mdl"
+			"DetonateDamage"	"380"
+			"DetonateDamageRadius"	"1200"
+			"DetonatePenetrationRadius"	"60"
+			"FuseTime"	"0.5"
+			"Health"	"50"
+			"ReactExplosions"	"1"
+			"ReactBullets"	"0"
+			"Particles"
+			{
+				"DetonateParticle"	"ins_c4_explosion"
+				"DetonateWaterParticle"	"ins_water_explosion"
+			}
+			"Sounds"
+			{
+				"DetonateSound"	"IED.Explode"
+				"DetonateWaterSound"	"IED.ExplodeWater"
+				"BounceSound"	"Weapon_IED.Bounce"
+			}
+		}
 		"grenade_m18"
 		{
 			"import"	"baseGrenade"
@@ -28874,30 +28898,6 @@
 				"DetonateSound"	"C4.Explode"
 				"DetonateWaterSound"	"C4.ExplodeWater"
 				"BounceSound"	"Weapon_C4.Bounce"
-			}
-		}
-		"grenade_ied"
-		{
-			"import"	"baseGrenade"
-			"entity_class"	"remote"
-			"Model"	"models/weapons/w_ied.mdl"
-			"DetonateDamage"	"380"
-			"DetonateDamageRadius"	"1200"
-			"DetonatePenetrationRadius"	"240"
-			"FuseTime"	"0.5"
-			"Health"	"50"
-			"ReactExplosions"	"1"
-			"ReactBullets"	"0"
-			"Particles"
-			{
-				"DetonateParticle"	"ins_c4_explosion"
-				"DetonateWaterParticle"	"ins_water_explosion"
-			}
-			"Sounds"
-			{
-				"DetonateSound"	"IED.Explode"
-				"DetonateWaterSound"	"IED.ExplodeWater"
-				"BounceSound"	"Weapon_IED.Bounce"
 			}
 		}
 		"grenade_m79"

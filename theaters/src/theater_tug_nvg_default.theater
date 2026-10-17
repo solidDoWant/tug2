@@ -9549,5 +9549,40 @@
 			}
 		}
 
+		// Bomber and player IEDs. RESTATED IN FULL - see the note at the top of this section. Copied
+		// verbatim from TUG's theater_tug_39_default_weapon.theater EXCEPT DetonatePenetrationRadius,
+		// which is 240 there. Within that radius a blast ignores walls entirely, and gg2_damage's
+		// falloff only looks at distance, so on test anyone within ~15 ft of a bomber died through
+		// concrete. 60 still reaches round a thin corner or doorframe at contact range, about what a
+		// frag's 40 does. Re-copy the rest from TUG if TUG Scripts is updated.
+		"grenade_ied"
+		{
+			"import"				"baseGrenade"
+			"entity_class"				"remote"
+			"Model"					"models/weapons/w_ied.mdl"
+
+			"DetonateDamage"			"380"
+			"DetonateDamageRadius"			"1200"
+			"DetonatePenetrationRadius"		"60"
+			"FuseTime"				"0.5"
+
+			"Health"				"50"
+			"ReactExplosions"			"1"
+			"ReactBullets"				"0"
+
+			"Particles"
+			{
+				"DetonateParticle"			"ins_c4_explosion"
+				"DetonateWaterParticle"			"ins_water_explosion"
+			}
+
+			"Sounds"
+			{
+				"DetonateSound"				"IED.Explode"
+				"DetonateWaterSound"		"IED.ExplodeWater"
+				"BounceSound"				"Weapon_IED.Bounce"
+			}
+		}
+
 	}
 }
