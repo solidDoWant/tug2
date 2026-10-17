@@ -560,6 +560,10 @@ int SpawnIED(int owner, const float pos[3])
     // Property order follows the original plugin, which is known to detonate on this game.
     TeleportEntity(ied, pos, NULL_VECTOR, NULL_VECTOR);
     SetEntPropEnt(ied, Prop_Data, "m_hOwnerEntity", owner);
+    // The blast's attacker is the grenade's thrower, not its owner. Without this the kill feed and
+    // every player_death listener see IED kills with no attacker instead of the bomber.
+    if (HasEntProp(ied, Prop_Data, "m_hThrower")) SetEntPropEnt(ied, Prop_Data, "m_hThrower", owner);
+    else LogError("grenade_ied has no m_hThrower - IED kills will not be credited to the bomber");
     SetEntProp(ied, Prop_Data, "m_takedamage", 2);    // DAMAGE_YES
     SetEntProp(ied, Prop_Data, "m_iHealth", 1);
     // Nice-to-haves (think promptly, collide with nothing). A missing property would throw and abort

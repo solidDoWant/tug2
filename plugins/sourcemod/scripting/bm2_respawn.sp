@@ -2458,10 +2458,18 @@ public Action Event_PlayerHurt_Pre(Event event, const char[] name, bool dontBroa
                      || StrEqual(weapon, "grenade_ied_fire", false)
                      || StrEqual(weapon, "grenade_ied_fire_bomber", false)
                      || StrEqual(weapon, "grenade_m79", false)) {
-                // IEDs (bombers included) are a quarter as likely to be fatal as other explosives
-                float fChance = g_fFatalChance;
-                if (StrContains(weapon, "grenade_ied", false) == 0) fChance *= 0.25;
-                if (dmg_taken >= g_iFatalExplosiveDmg && (fRandom <= fChance))
+                bool isIED = (StrContains(weapon, "grenade_ied", false) == 0);
+                if (isIED && IsFakeClient(attacker))
+                {
+                    // Bomber IEDs. Until gg2_bomber credited the bomber they had no attacker and took
+                    // the flat 25% branch above, with no damage floor - keep that, at a quarter.
+                    if (fRandom <= 0.25 * 0.25)
+                    {
+                        g_iHurtFatal[victim] = 1;    // Hurt fatally
+                    }
+                }
+                // Other IEDs are a quarter as likely to be fatal as other explosives
+                else if (dmg_taken >= g_iFatalExplosiveDmg && (fRandom <= (isIED ? g_fFatalChance * 0.25 : g_fFatalChance)))
                 {
                     g_iHurtFatal[victim] = 1;    // Hurt fatally
                 }
