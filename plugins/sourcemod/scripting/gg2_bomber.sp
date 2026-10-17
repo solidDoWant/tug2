@@ -29,6 +29,7 @@
 #include <sourcemod>
 #include <sdktools>
 #include <sdkhooks>
+#include <classtemplate>
 
 #define PLUGIN_VERSION "1.0.0"
 
@@ -133,10 +134,25 @@ float       g_spawnTime[MAXPLAYERS + 1];
 float       g_fuseEnd[MAXPLAYERS + 1];
 float       g_nextBeep[MAXPLAYERS + 1];
 float       g_nextRoam[MAXPLAYERS + 1];
+// When the last IED was spawned, by any bomber. A failed detonation logs the gap, to show whether
+// it happened inside another bomber's blast.
+float       g_lastIEDTime = -1000.0;
 int         g_lastHitgroup[MAXPLAYERS + 1];
 bool        g_speedChanged[MAXPLAYERS + 1];
 // The IED of a living bomber, kept on its body until it goes off.
 int         g_bombRef[MAXPLAYERS + 1] = { INVALID_ENT_REFERENCE, ... };
+// Every IED this plugin spawned, by entity index: its reference (so a reused index does not match)
+// and the bomber's userid. OnTakeDamage credits the blast to that bomber - see SpawnIED.
+int         g_iedRef[2048] = { INVALID_ENT_REFERENCE, ... };
+int         g_iedOwner[2048];
+// Loaded mid-map (a reload or hot patch) - see RestoreLateLoadState
+bool        g_bLateLoad = false;
+
+public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max)
+{
+    g_bLateLoad = late;
+    return APLRes_Success;
+}
 
 public void OnPluginStart()
 {
@@ -154,6 +170,8 @@ public void OnPluginStart()
     g_cvPanicExplosive = CreateConVar("gg_bomber_panic_explosive_chance", "0.75", "Chance explosive damage sets the bomb off (including another bomber's)", _, true, 0.0, true, 1.0);
     g_cvPanicFire      = CreateConVar("gg_bomber_panic_fire_chance", "0.15", "Chance fire damage sets the bomb off", _, true, 0.0, true, 1.0);
     AutoExecConfig(true, "gg2_bomber");
+
+    ClassTemplate_Init();
 
     HookEvent("player_pick_squad", Event_PlayerPickSquad);
     HookEvent("player_spawn", Event_PlayerSpawn);
@@ -248,8 +266,61 @@ public void OnMapStart()
     for (int i = 0; i < sizeof(g_roamYells); i++) PrecacheSound(g_roamYells[i]);
 
     for (int client = 1; client <= MaxClients; client++) ResetClient(client);
+    g_lastIEDTime = -1000.0;    // game time restarts with the map
 
     CreateTimer(LOOP_INTERVAL, Timer_BomberLoop, _, TIMER_REPEAT | TIMER_FLAG_NO_MAPCHANGE);
+}
+
+// A late load's restore waits for this: OnMapStart, which a late load also runs, resets every client.
+public void OnConfigsExecuted()
+{
+    if (!g_bLateLoad) return;
+    g_bLateLoad = false;
+    RestoreLateLoadState();
+}
+
+public void OnClientPutInServer(int client)
+{
+    SDKHook(client, SDKHook_OnTakeDamage, OnTakeDamage);
+}
+
+// Credit this plugin's IEDs to their bomber - see SpawnIED.
+public Action OnTakeDamage(int victim, int& attacker, int& inflictor, float& damage, int& damagetype)
+{
+    if (inflictor <= MaxClients || inflictor >= sizeof(g_iedRef)) return Plugin_Continue;
+    if (g_iedRef[inflictor] == INVALID_ENT_REFERENCE || EntRefToEntIndex(g_iedRef[inflictor]) != inflictor)
+        return Plugin_Continue;
+
+    int bomber = GetClientOfUserId(g_iedOwner[inflictor]);
+    if (bomber == 0 || attacker == bomber) return Plugin_Continue;
+
+    attacker = bomber;
+    return Plugin_Changed;
+}
+
+// A reload or hot patch misses every player_pick_squad and player_spawn already made, so every
+// bomber would carry on as an ordinary bot until it next died. Rebuild from the game instead.
+void RestoreLateLoadState()
+{
+    int armed = 0;
+    for (int client = 1; client <= MaxClients; client++)
+    {
+        if (!IsClientInGame(client)) continue;
+
+        OnClientPutInServer(client);
+        if (!IsFakeClient(client)) continue;
+
+        char classTemplate[64];
+        if (!ClassTemplate_Get(client, classTemplate, sizeof(classTemplate))) continue;
+        g_isBomberClass[client] = StrContains(classTemplate, "bomber") != -1;
+
+        if (IsPlayerAlive(client))
+        {
+            ArmBomber(client);
+            if (g_state[client] == Bomber_Armed) armed++;
+        }
+    }
+    LogMessage("late load: re-armed %d living bomber(s)", armed);
 }
 
 public void OnClientDisconnect(int client)
@@ -286,6 +357,12 @@ public void Event_PlayerSpawn(Event event, const char[] name, bool dontBroadcast
     // m_flLaggedMovementValue lives on the player entity and survives death.
     RestoreSpeed(client);
 
+    ArmBomber(client);
+}
+
+// Turn a freshly spawned (or, on a late load, already living) bomber-class bot into a bomber.
+void ArmBomber(int client)
+{
     if (!g_cvEnabled.BoolValue || !g_isBomberClass[client] || !IsFakeClient(client)) return;
     if (GetClientTeam(client) != TEAM_INS) return;
     if (GetURandomFloat() >= g_cvArmedChance.FloatValue) return;
@@ -321,11 +398,11 @@ public void Event_PlayerHurt(Event event, const char[] name, bool dontBroadcast)
     if (event.GetInt("health") > 0)
     {
         YellDetonate(victim);
-        DetonateOnBody(victim);
+        DetonateOnBody(victim, "panic");
     }
     else
     {
-        DetonateOnCorpse(victim);
+        DetonateOnCorpse(victim, "panic-kill");
     }
 }
 
@@ -339,7 +416,7 @@ public void Event_PlayerDeath(Event event, const char[] name, bool dontBroadcast
     char weapon[64];
     event.GetString("weapon", weapon, sizeof(weapon));
     if (g_state[victim] == Bomber_Lit && g_lastHitgroup[victim] != HITGROUP_HEAD && !IsMeleeDamage(weapon))
-        DetonateOnCorpse(victim);
+        DetonateOnCorpse(victim, "deadman");
 
     g_state[victim] = Bomber_None;
     RestoreSpeed(victim);
@@ -461,7 +538,7 @@ public Action Timer_BomberLoop(Handle timer)
         {
             if (now >= g_fuseEnd[client])
             {
-                DetonateOnBody(client);
+                DetonateOnBody(client, "fuse");
             }
             else if (now >= g_nextBeep[client])
             {
@@ -529,24 +606,24 @@ void YellDetonate(int client)
 
 // ---------------------------------------------------------------------------------------- detonation
 
-void DetonateOnBody(int client)
+void DetonateOnBody(int client, const char[] why)
 {
     float pos[3];
     GetClientEyePosition(client, pos);
-    int ied = SpawnIED(client, pos);
+    int ied = SpawnIED(client, pos, why);
     // The IED's own fuse is 0.5s. Keep it on the bomber meanwhile, or a running bomber leaves it behind.
     if (ied != -1) g_bombRef[client] = EntIndexToEntRef(ied);
 }
 
-void DetonateOnCorpse(int client)
+void DetonateOnCorpse(int client, const char[] why)
 {
     float pos[3];
     GetClientAbsOrigin(client, pos);
     pos[2] += CORPSE_BOMB_HEIGHT;
-    SpawnIED(client, pos);
+    SpawnIED(client, pos, why);
 }
 
-int SpawnIED(int owner, const float pos[3])
+int SpawnIED(int owner, const float pos[3], const char[] why)
 {
     g_state[owner] = Bomber_Detonated;
 
@@ -560,10 +637,6 @@ int SpawnIED(int owner, const float pos[3])
     // Property order follows the original plugin, which is known to detonate on this game.
     TeleportEntity(ied, pos, NULL_VECTOR, NULL_VECTOR);
     SetEntPropEnt(ied, Prop_Data, "m_hOwnerEntity", owner);
-    // The blast's attacker is the grenade's thrower, not its owner. Without this the kill feed and
-    // every player_death listener see IED kills with no attacker instead of the bomber.
-    if (HasEntProp(ied, Prop_Data, "m_hThrower")) SetEntPropEnt(ied, Prop_Data, "m_hThrower", owner);
-    else LogError("grenade_ied has no m_hThrower - IED kills will not be credited to the bomber");
     SetEntProp(ied, Prop_Data, "m_takedamage", 2);    // DAMAGE_YES
     SetEntProp(ied, Prop_Data, "m_iHealth", 1);
     // Nice-to-haves (think promptly, collide with nothing). A missing property would throw and abort
@@ -579,12 +652,30 @@ int SpawnIED(int owner, const float pos[3])
     }
     SetEntityRenderMode(ied, RENDER_NONE);
 
+    // Recorded before the trigger damage so a failed detonation can say which path and state it came
+    // from - see Timer_CheckDetonation.
+    bool  ownerAlive = IsPlayerAlive(owner);
+    float now        = GetGameTime();
+    float sinceLast  = now - g_lastIEDTime;
+    g_lastIEDTime    = now;
+
+    // The blast does not credit its owner: grenade_ied has no thrower field (CBaseDetonator networks
+    // only m_hOwnerEntity, already set above), so IED kills came out with no attacker. Remember
+    // whose it is and rewrite the attacker in OnTakeDamage instead.
+    g_iedRef[ied]   = EntIndexToEntRef(ied);
+    g_iedOwner[ied] = GetClientUserId(owner);
+
     SDKHooks_TakeDamage(ied, owner, owner, IED_TRIGGER_DAMAGE, DMG_BLAST);
 
     DataPack pack;
     CreateDataTimer(DETONATION_CHECK_DELAY, Timer_CheckDetonation, pack, TIMER_FLAG_NO_MAPCHANGE);
     pack.WriteCell(GetClientUserId(owner));
     pack.WriteCell(EntIndexToEntRef(ied));
+    pack.WriteString(why);
+    pack.WriteCell(ownerAlive);
+    pack.WriteFloat(sinceLast);
+    pack.WriteCell(GetEntProp(ied, Prop_Data, "m_iHealth"));
+    pack.WriteCell(GetEntProp(ied, Prop_Data, "m_takedamage"));
 
     return ied;
 }
@@ -600,10 +691,18 @@ public Action Timer_CheckDetonation(Handle timer, DataPack pack)
     int client = GetClientOfUserId(pack.ReadCell());
     int ied    = EntRefToEntIndex(pack.ReadCell());
 
+    char why[16];
+    pack.ReadString(why, sizeof(why));
+    bool  ownerAlive = pack.ReadCell();
+    float sinceLast  = pack.ReadFloat();
+    int   health     = pack.ReadCell();
+    int   takeDamage = pack.ReadCell();
+
     // A detonated grenade removes itself, so one still here means the damage did not set it off.
     if (ied != INVALID_ENT_REFERENCE)
     {
-        LogError("grenade_ied did not detonate; removing it");
+        LogError("grenade_ied did not detonate; removing it (path %s, bomber %s, %.2fs after the previous IED, after trigger damage health %d takedamage %d, now health %d)",
+                 why, ownerAlive ? "alive" : "dead", sinceLast, health, takeDamage, GetEntProp(ied, Prop_Data, "m_iHealth"));
         AcceptEntityInput(ied, "Kill");
     }
 

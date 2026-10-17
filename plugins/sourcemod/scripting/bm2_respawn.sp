@@ -23,6 +23,7 @@
 #include <insurgencydy>
 #include <smlib>
 #include <discord>
+#include <classtemplate>
 
 // enable/disable medic code and ammo bag resupply
 #define DOCTOR 1    // 1 = on | 0 = off
@@ -348,6 +349,15 @@ public Plugin myinfo =
 };
 
 // Start plugin
+// Loaded mid-map (a reload or hot patch) - see RestoreLateLoadState
+bool g_bLateLoad = false;
+
+public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max)
+{
+    g_bLateLoad = late;
+    return APLRes_Success;
+}
+
 public void OnPluginStart()
 {
     // Database.Connect(T_Connect, "insurgency_stats");
@@ -710,6 +720,9 @@ public void OnPluginStart()
     LoadTranslations("nearest_player.phrases.txt");
     LoadTranslations("tug.phrases.txt");
     AutoExecConfig(true, "plugin.respawn");
+
+    // A late load's restore runs at the end of Timer_MapStart, which resets the round flags it sets.
+    ClassTemplate_Init();
 }
 
 void UpdateRespawnCvars()
@@ -1018,6 +1031,12 @@ Action Timer_MapStart(Handle timer)
     g_iTimerCheckStaticEnemy        = g_iCheckStaticEnemy;
     g_iTimerCheckStaticEnemyCounter = g_iCheckStaticEnemyCounter;
     g_bCounterAttack                = false;
+
+    if (g_bLateLoad)
+    {
+        g_bLateLoad = false;
+        RestoreLateLoadState();
+    }
     return Plugin_Continue;
 }
 
@@ -1883,6 +1902,90 @@ public void OnClientPutInServer(int client)
     g_client_org_nickname[client] = sNickname;
 }
 
+// A reload loses everything the plugin learned from events it has now missed: every player's class
+// and squad pick (so nobody is a medic or eligible to respawn - counterattack respawns included)
+// and that the round is running. Rebuild those from the game itself. Spawn caches and
+// counterattack progress are not rebuilt; they pick up again from the next round or capture.
+void RestoreLateLoadState()
+{
+    int restored = 0;
+    for (int client = 1; client <= MaxClients; client++)
+    {
+        if (!IsClientInGame(client)) continue;
+
+        OnClientPutInServer(client);
+        // The name already carries the tags Event_PlayerPickSquad_Post adds; keep the bare one so
+        // the next pick does not stack them.
+        StripNicknameTags(g_client_org_nickname[client], sizeof(g_client_org_nickname[]));
+
+        char classTemplate[64];
+        if (!ClassTemplate_Get(client, classTemplate, sizeof(classTemplate))) continue;
+
+        g_client_last_classstring[client] = classTemplate;
+        if (!IsFakeClient(client))
+        {
+            g_playerPickSquad[client] = 1;
+            g_playersReady            = true;
+            restored++;
+        }
+    }
+
+    UpdateRespawnCvars();
+    if (GameRules_GetProp("m_iGameState") == 4)    // GAMESTATE_RND_RUNNING
+    {
+        g_iRoundStatus = 1;
+#if DOCTOR
+        g_iEnableRevive = 1;
+#endif
+        if (g_TeamSecCount > 0) g_botsReady = 1;
+    }
+
+    LogMessage("[BM2 RESPAWN] late load: restored the class of %d player(s), round %s",
+               restored, g_iRoundStatus ? "running" : "not running");
+}
+
+void StripNicknameTags(char[] name, int maxlen)
+{
+    static const char tags[][] = { "[ADMIN]", "[MEDIC]", "[SGT]", "[MG]" };
+
+    bool stripped = true;
+    while (stripped)
+    {
+        stripped = false;
+        for (int i = 0; i < sizeof(tags); i++)
+        {
+            int len = strlen(tags[i]);
+            if (strncmp(name, tags[i], len) != 0) continue;
+
+            if (name[len] == ' ') len++;
+            strcopy(name, maxlen, name[len]);
+            stripped = true;
+        }
+    }
+}
+
+// Cross-checks ClassTemplate_Get against the pick the game just announced, so a theater-layout
+// change that breaks the late-load restore is logged long before anyone needs it. A second later,
+// because the player resource copies squad and slot from the player on its own think.
+Action Timer_VerifyClassTemplate(Handle timer, DataPack pack)
+{
+    pack.Reset();
+    int  client = GetClientOfUserId(pack.ReadCell());
+    char expected[64];
+    pack.ReadString(expected, sizeof(expected));
+
+    if (client == 0 || expected[0] == '\0') return Plugin_Stop;
+
+    static bool warned = false;
+    char actual[64];
+    if (!ClassTemplate_Get(client, actual, sizeof(actual)) || !StrEqual(actual, expected))
+    {
+        if (!warned) LogError("ClassTemplate_Get read \"%s\" for %N, who picked \"%s\" - a reload will not restore classes correctly", actual, client, expected);
+        warned = true;
+    }
+    return Plugin_Stop;
+}
+
 public Action Event_PlayerConnect(Event event, const char[] name, bool dontBroadcast)
 {
     int client = GetClientOfUserId(event.GetInt("userid"));
@@ -2335,6 +2438,11 @@ public Action Event_PlayerPickSquad_Post(Event event, const char[] name, bool do
 
     if (client == 0 || !IsClientInGame(client) || IsFakeClient(client))
         return Plugin_Continue;
+
+    DataPack verify;
+    CreateDataTimer(1.0, Timer_VerifyClassTemplate, verify, TIMER_FLAG_NO_MAPCHANGE);
+    verify.WriteCell(GetClientUserId(client));
+    verify.WriteString(class_template);
 
     g_playerPickSquad[client] = 1;
 

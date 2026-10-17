@@ -3,6 +3,7 @@
 #include <sdkhooks>
 #include <discord>
 #include <weaponnames>
+#include <classtemplate>
 
 #pragma newdecls required
 
@@ -86,6 +87,19 @@ public void OnPluginStart()
     AutoExecConfig(true, "gg2_damage");
 
     LoadTranslations("tug.phrases.txt");
+
+    // Loaded mid-map (a reload or hot patch): OnClientPutInServer and player_pick_squad already
+    // happened for everyone here, so without this nobody's damage is hooked and no bot is a bomber.
+    ClassTemplate_Init();
+    for (int client = 1; client <= MaxClients; client++)
+    {
+        if (!IsClientInGame(client)) continue;
+        OnClientPutInServer(client);
+
+        char class_template[64];
+        if (IsFakeClient(client) && ClassTemplate_Get(client, class_template, sizeof(class_template)))
+            g_isBomber[client] = (StrContains(class_template, "bomber") != -1);
+    }
 }
 
 public void OnMapStart()

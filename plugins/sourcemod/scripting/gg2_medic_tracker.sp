@@ -1,6 +1,7 @@
 #include <sourcemod>
 #include <sdktools>
 #include <sdkhooks>
+#include <classtemplate>
 
 #pragma newdecls required
 
@@ -94,6 +95,29 @@ public void OnPluginStart()
     HookEvent("player_disconnect", Event_PlayerDisconnect, EventHookMode_Pre);
     HookEvent("round_end", Event_RoundEnd, EventHookMode_Pre);
     RegAdminCmd("medic_stats2", Cmd_GetCurrentMedicStats, ADMFLAG_GENERIC, "Show stats for the current medics (medic class)");
+
+    ClassTemplate_Init();
+}
+
+// Loaded mid-map (a reload or hot patch): OnClientPostAdminCheck and player_pick_squad already
+// happened for everyone here, so medic time would go untracked - or be saved against an empty
+// SteamID. Rebuilt here rather than in OnPluginStart because a late load also runs OnMapStart,
+// which clears the medic flags.
+public void OnConfigsExecuted()
+{
+    static bool restored = false;
+    if (restored) return;
+    restored = true;
+
+    for (int client = 1; client <= MaxClients; client++)
+    {
+        if (!IsClientInGame(client) || IsFakeClient(client)) continue;
+        if (IsClientAuthorized(client)) OnClientPostAdminCheck(client);
+
+        char class_template[64];
+        if (ClassTemplate_Get(client, class_template, sizeof(class_template)))
+            g_client_is_medic[client] = StrContains(class_template, "medic") != -1;
+    }
 }
 
 public void OnMapStart()
