@@ -1390,6 +1390,38 @@ static bool SkyTraceAt(int client, const float from[3], float vec[3])
     return hitSky;
 }
 
+// How far short of a blocking wall a pulled-in sky sample stops. Keeps the upward trace from
+// starting on, or inside, the wall's surface.
+const float SKY_SEARCH_WALL_MARGIN = 16.0;
+
+// Pull test[] back towards from[] if the world is in the way, so it stays on the marker's side
+// of any wall. False if there is no usable room before the wall.
+static bool ClampToReachable(int client, const float from[3], float test[3])
+{
+    Handle ray = TR_TraceRayFilterEx(from, test, MASK_SOLID_BRUSHONLY, RayType_EndPoint, TraceWorldOnly, client);
+
+    if (!TR_DidHit(ray))
+    {
+        CloseHandle(ray);
+        return true;
+    }
+
+    float hit[3];
+    TR_GetEndPosition(hit, ray);
+    CloseHandle(ray);
+
+    float dir[3];
+    SubtractVectors(test, from, dir);
+    NormalizeVector(dir, dir);
+
+    float dist = GetVectorDistance(from, hit) - SKY_SEARCH_WALL_MARGIN;
+    if (dist <= 0.0) return false;
+
+    ScaleVector(dir, dist);
+    AddVectors(from, dir, test);
+    return true;
+}
+
 // Find a spot near the target that the sky can actually reach.
 //
 // This used to be a single trace straight up from the marker. Anything overhead - a balcony, an
@@ -1432,6 +1464,11 @@ bool GetSkyPos(int client, const float pos[3], float vec[3])
             test[0] = pos[0] + Cosine(ang) * radius;
             test[1] = pos[1] + Sine(ang) * radius;
             test[2] = pos[2];
+
+            // The sample must be reachable from the marker without going through the world.
+            // A marker thrown against a wall would otherwise find sky on the far side of it and
+            // move the whole strike there.
+            if (!ClampToReachable(client, pos, test)) continue;
 
             if (SkyTraceAt(client, test, vec)) return true;
         }
