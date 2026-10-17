@@ -4,7 +4,7 @@
 // a Deagle, one slot in each insurgent squad) but nothing made it any different from a rifleman. This
 // is the missing half: an armed bomber drops its gun, runs at the nearest Security player, and when
 // one is in sight and in range it arms an IED - trigger click, a yell, a few beeps - and detonates.
-// Shooting it can set it off early; a headshot never does.
+// Shooting it can set it off early; a headshot or a melee kill never does.
 //
 // WHY THE BOT RUNS AT PLAYERS
 //
@@ -93,6 +93,16 @@ char g_meleeWeapons[][] = {
     "weapon_gurkha",
     "weapon_knife",
     "weapon_sandstorm_kabar"
+};
+
+// Damage from any of these never sets a bomb off - not as a panic hit, and not through the dead
+// man's switch. Matched as substrings so they hold whether an event names the weapon "weapon_kabar"
+// or "kabar". The defib is a melee-class weapon in the theater too.
+char g_meleeDamage[][] = {
+    "kabar",
+    "gurkha",
+    "knife",
+    "defib"
 };
 
 enum BomberState
@@ -302,6 +312,7 @@ public void Event_PlayerHurt(Event event, const char[] name, bool dontBroadcast)
 
     char weapon[64];
     event.GetString("weapon", weapon, sizeof(weapon));
+    if (IsMeleeDamage(weapon)) return;
 
     float chance = PanicChance(hitgroup, weapon);
     if (chance <= 0.0 || GetURandomFloat() >= chance) return;
@@ -324,8 +335,11 @@ public void Event_PlayerDeath(Event event, const char[] name, bool dontBroadcast
     if (victim == 0) return;
 
     // Dead man's switch: killed with the fuse already burning, the bomb goes off anyway - unless the
-    // kill was a headshot, which gg2_damage's hint message tells players to go for.
-    if (g_state[victim] == Bomber_Lit && g_lastHitgroup[victim] != HITGROUP_HEAD) DetonateOnCorpse(victim);
+    // kill was a headshot, which gg2_damage's hint message tells players to go for, or melee.
+    char weapon[64];
+    event.GetString("weapon", weapon, sizeof(weapon));
+    if (g_state[victim] == Bomber_Lit && g_lastHitgroup[victim] != HITGROUP_HEAD && !IsMeleeDamage(weapon))
+        DetonateOnCorpse(victim);
 
     g_state[victim] = Bomber_None;
     RestoreSpeed(victim);
@@ -402,6 +416,15 @@ void StripToMelee(int client)
 
     GetEntityClassname(melee, classname, sizeof(classname));
     FakeClientCommandEx(client, "use %s", classname);
+}
+
+bool IsMeleeDamage(const char[] weapon)
+{
+    for (int i = 0; i < sizeof(g_meleeDamage); i++)
+    {
+        if (StrContains(weapon, g_meleeDamage[i], false) != -1) return true;
+    }
+    return false;
 }
 
 bool IsMeleeWeapon(const char[] classname)
