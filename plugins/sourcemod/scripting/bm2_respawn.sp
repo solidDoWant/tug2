@@ -1109,8 +1109,12 @@ public Action Command_Respawn(int client, int args)
 // Respawn player
 void RespawnPlayer(int client, int target)
 {
+    // Bots first: IsClientTimingOut throws on them, and @all targets every dead bot, so one would
+    // abort the whole command after its "Respawned all players" message had already gone out.
+    if (!IsClientInGame(target) || IsFakeClient(target)) return;
+
     int team = GetClientTeam(target);
-    if (IsClientInGame(target) && !IsClientTimingOut(target) && g_client_last_classstring[target][0] && g_playerPickSquad[target] && !IsPlayerAlive(target) && team == PlayerTeam())
+    if (!IsClientTimingOut(target) && g_client_last_classstring[target][0] && g_playerPickSquad[target] && !IsPlayerAlive(target) && team == PlayerTeam())
     {
         // Write a log
         LogAction(client, target, "\"%L\" respawned \"%L\"", client, target);
