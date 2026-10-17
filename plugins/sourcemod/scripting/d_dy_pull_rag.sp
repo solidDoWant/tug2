@@ -67,8 +67,8 @@ public Plugin myinfo =
 
 public void OnPluginStart()
 {
-    // Off by default so main keeps the original hold-to-drag. The test server turns it on through
-    // cfg/sourcemod/d_dy_pull_rag.cfg.
+    // Off by default so main keeps the original hold-to-drag. With sm_pullrag_allow_choice on, this
+    // is only the mode for players who have not picked one with !dragmode.
     g_cvToggle = CreateConVar("sm_pullrag_toggle", "0",
                               "Sprint key behaviour for dragging bodies. 0 = hold to drag (default), 1 = press once to grab and again to let go.",
                               _, true, 0.0, true, 1.0);
