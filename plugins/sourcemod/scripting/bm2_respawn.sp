@@ -2458,7 +2458,10 @@ public Action Event_PlayerHurt_Pre(Event event, const char[] name, bool dontBroa
                      || StrEqual(weapon, "grenade_ied_fire", false)
                      || StrEqual(weapon, "grenade_ied_fire_bomber", false)
                      || StrEqual(weapon, "grenade_m79", false)) {
-                if (dmg_taken >= g_iFatalExplosiveDmg && (fRandom <= g_fFatalChance))
+                // IEDs (bombers included) are a quarter as likely to be fatal as other explosives
+                float fChance = g_fFatalChance;
+                if (StrContains(weapon, "grenade_ied", false) == 0) fChance *= 0.25;
+                if (dmg_taken >= g_iFatalExplosiveDmg && (fRandom <= fChance))
                 {
                     g_iHurtFatal[victim] = 1;    // Hurt fatally
                 }
