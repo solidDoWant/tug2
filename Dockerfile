@@ -5,9 +5,9 @@
 # Plugins and mods must be the Linux versions.
 
 ARG SERVER_RUNNER_IMAGE_NAME=ghcr.io/soliddowant/server-runner:latest
-ARG METAMOD_VERSION=1.12.0-git1219
-ARG SOURCEMOD_VERSION=1.12.0-git7217
-ARG SOURCEMOD_COMMIT=1059132fe9b390728743faf26b3f8a2 # SourceMod 1.12.0-git7217
+ARG METAMOD_VERSION=1.12.0-git1228
+ARG SOURCEMOD_VERSION=1.12.0-git7259
+ARG SOURCEMOD_COMMIT=3808e21eb842d8598cc8351a341dcbe661d21b58 # SourceMod 1.12.0.7259
 
 FROM ghcr.io/gameservermanagers/steamcmd:ubuntu-24.04 AS gameserver-builder
 
@@ -64,7 +64,7 @@ FROM gameserver-mods-base AS gameserver-mods-metamod
 # MetaMod Source (Linux version)
 ARG METAMOD_VERSION
 RUN \
-    curl -fsSL -o /tmp/mmsource.tar.gz https://mms.alliedmods.net/mmsdrop/1.12/mmsource-${METAMOD_VERSION}-linux.tar.gz && \
+    curl -fsSL -o /tmp/mmsource.tar.gz https://github.com/alliedmodders/metamod-source/releases/download/${METAMOD_VERSION/-git/.}/mmsource-${METAMOD_VERSION}-linux.tar.gz && \
     tar -xzf /tmp/mmsource.tar.gz -C /insurgency && \
     rm /tmp/mmsource.tar.gz && \
     # Remove extra files
@@ -105,7 +105,7 @@ ARG SOURCEMOD_VERSION
 RUN \
     --mount=type=bind,source=./plugins/sourcemod,target=/plugin-source \
     --mount=from=sourcemod-extensions-ripext,target=/plugin-extensions/ripext \
-    curl -fsSL -o /tmp/sourcemod.tar.gz https://sm.alliedmods.net/smdrop/1.12/sourcemod-${SOURCEMOD_VERSION}-linux.tar.gz && \
+    curl -fsSL -o /tmp/sourcemod.tar.gz https://github.com/alliedmodders/sourcemod/releases/download/${SOURCEMOD_VERSION/-git/.}/sourcemod-${SOURCEMOD_VERSION}-linux.tar.gz && \
     tar -xzf /tmp/sourcemod.tar.gz -C /insurgency && \
     rm /tmp/sourcemod.tar.gz && \
     # Disable auto updates
