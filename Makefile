@@ -8,6 +8,17 @@ CONTAINER_REPOSITORY = $(CONTAINER_REGISTRY)/insurgency
 PUSH_ARG = $(if $(findstring t,$(PUSH_ALL)),--push)
 DOCKER_ARGS = --build-arg SERVER_RUNNER_IMAGE_NAME=$(CONTAINER_REGISTRY)/server-runner:latest
 
+# Records which commit a pushed image was built from: after a successful push, HEAD is tagged with the
+# image name minus the "insurgency-" prefix plus its tag, e.g. test-0.0.27-dev. Forced, so pushing the
+# same VERSION again moves the tag along with the registry tag it mirrors. Annotated, with the full
+# image reference as the message, because tag.gpgsign makes git refuse a tag without one. Local only -
+# push tags yourself. Expands to nothing unless PUSH_ALL is set.
+# Usage: $(call tag-pushed-image,GIT_TAG,IMAGE_REFERENCE)
+define tag-pushed-image
+$(if $(PUSH_ARG),@git -C "$(PROJECT_DIR)" diff --quiet HEAD || echo "  warning: uncommitted changes are in the pushed image but not in $(1)"
+@git -C "$(PROJECT_DIR)" tag -f -a -m "$(2)" "$(1)" > /dev/null && echo "  tagged $$(git -C "$(PROJECT_DIR)" rev-parse --short HEAD) as $(1)")
+endef
+
 ##@ General
 
 .PHONY: help
@@ -72,6 +83,7 @@ fastdl-image-%:	## Build the fast-download content image for a server. Usage: ma
 	@$(MAKE) theater-check
 	$(MAKE) -C "$(PROJECT_DIR)/fastdl" content SERVER=$* VERSION=$(VERSION) \
 	  CONTAINER_REGISTRY=$(CONTAINER_REGISTRY) EXTRA_DOCKER_ARGS="$(PUSH_ARG) $(EXTRA_DOCKER_ARGS)"
+	$(call tag-pushed-image,$*-fastdl-$(VERSION),$(CONTAINER_REPOSITORY)-$*-fastdl:$(VERSION))
 
 .PHONY: fastdl-images
 fastdl-images: $(addprefix fastdl-image-,$(FASTDL_SERVERS))	## Build every fast-download content image.
@@ -90,6 +102,7 @@ server-image-%: base-image Dockerfile	## Build the container image for the speci
 	@$(MAKE) workshop-render
 	@$(MAKE) theater-check
 	docker build --target gameserver-$* -t "$(CONTAINER_REPOSITORY)-$*:$(VERSION)" $(PUSH_ARG) --load $(DOCKER_ARGS) $(EXTRA_DOCKER_ARGS) "$(PROJECT_DIR)"
+	$(call tag-pushed-image,$*-$(VERSION),$(CONTAINER_REPOSITORY)-$*:$(VERSION))
 
 .PHONY: server-images
 server-images: server-image-main server-image-test	## Build all server images.
