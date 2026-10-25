@@ -440,6 +440,21 @@ RUN --mount=type=bind,source=./plugins/sourcemod,target=/plugin-source \
     find /insurgency -type d -exec chmod 755 {} \; && \
     find /insurgency -type f -exec chmod 644 {} \;
 
+FROM sourcemod-plugins-base AS sourcemod-plugins-gg2-easter-eggs
+
+# Build the gg2_easter_eggs plugin. Like gg2_bomber, its sounds reach clients through fastdl and the
+# server gets its own copy so it can resolve what it precaches.
+RUN --mount=type=bind,source=./plugins/sourcemod,target=/plugin-source \
+    --mount=type=bind,source=./fastdl/src/sound/gg2_easter_eggs,target=/sound-source \
+    /sourcemod/addons/sourcemod/scripting/spcomp --include=/plugin-source/scripting/include  /plugin-source/scripting/gg2_easter_eggs.sp -o /insurgency/addons/sourcemod/plugins/gg2_easter_eggs.smx && \
+    mkdir -p /insurgency/sound/gg2_easter_eggs && \
+    cp /sound-source/*.ogg /insurgency/sound/gg2_easter_eggs/ && \
+    mkdir -p /insurgency/cfg/sourcemod && \
+    touch /insurgency/cfg/sourcemod/gg2_easter_eggs.cfg && \
+    # Fixup file permissions
+    find /insurgency -type d -exec chmod 755 {} \; && \
+    find /insurgency -type f -exec chmod 644 {} \;
+
 FROM sourcemod-plugins-base AS sourcemod-plugins-gg2-discord
 
 # Build the gg2_discord plugin
@@ -1494,6 +1509,8 @@ COPY --from=sourcemod-plugins-gg2-burn --chown=0:0 /insurgency /opt/insurgency-s
 COPY --from=sourcemod-plugins-gg2-theater-items --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
 COPY --from=sourcemod-plugins-gg2-heavy-ammo --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
 COPY --from=sourcemod-plugins-gg2-bomber --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
+# Test server only: needs gg2_theater_items, and is not wanted on main.
+COPY --from=sourcemod-plugins-gg2-easter-eggs --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
 COPY --from=sourcemod-plugins-gg2-cache-protect --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
 COPY --from=sourcemod-plugins-gg2-connection-tracker --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
 COPY --from=sourcemod-plugins-gg2-damage --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
