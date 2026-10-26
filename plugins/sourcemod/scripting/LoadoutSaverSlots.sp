@@ -1969,6 +1969,35 @@ void OnLoadoutRetrieved(Database db, DBResultSet results, const char[] error, Da
 // Apply Loadout - Execute Buy Commands
 // =====================================================
 
+bool IsGearWorn(int client, int gearId)
+{
+    if (!HasEntProp(client, Prop_Send, "m_EquippedGear")) return true;    // cannot tell; do not report it missing
+
+    int gearSlots = GetEntPropArraySize(client, Prop_Send, "m_EquippedGear");
+    for (int g = 0; g < gearSlots; g++)
+    {
+        if (GetEntProp(client, Prop_Send, "m_EquippedGear", 4, g) == gearId) return true;
+    }
+    return false;
+}
+
+// The other half of a medic / non-medic gear pair: sec_medic_heavy_armor <-> sec_heavy_armor.
+// Only the name is derived here; the caller checks the theater actually defines it.
+bool GearCounterpart(const char[] gear, char[] counterpart, int maxlen)
+{
+    if (StrContains(gear, "sec_medic_", false) == 0)
+    {
+        Format(counterpart, maxlen, "sec_%s", gear[10]);
+        return true;
+    }
+    if (StrContains(gear, "sec_", false) == 0)
+    {
+        Format(counterpart, maxlen, "sec_medic_%s", gear[4]);
+        return true;
+    }
+    return false;
+}
+
 void ApplyLoadout(int client, LoadoutItem[] items, int count, bool showMessages, const char[] name, const char[] savedClass)
 {
     if (!IsClientInGame(client)) return;
@@ -1993,6 +2022,11 @@ void ApplyLoadout(int client, LoadoutItem[] items, int count, bool showMessages,
     // Gear before weapons, and that ordering is load-bearing. GetWeaponSlotCapacity is 1 plus the
     // "weapon_slots" bonuses on the gear worn RIGHT NOW, so until the rig and slings are back on
     // every slot still has capacity 1 and the second primary or third grenade is refused.
+    //
+    // Gear the weapon read-back cannot see is counted here instead: inventory_buy_gear updates
+    // m_EquippedGear synchronously, so whether an item went on is known straight after the buy.
+    int  gearDropped = 0;
+    char gearMissing[256];
     for (int i = 0; i < count; i++)
     {
         if (items[i].category != view_as<int>(TheaterCategory_Gear)) continue;
@@ -2001,10 +2035,31 @@ void ApplyLoadout(int client, LoadoutItem[] items, int count, bool showMessages,
         if (id <= 0)
         {
             LogMessage("[LoadoutSaver] %L: gear \"%s\" is not in the loaded theater - skipped", client, items[i].name);
+            gearDropped++;
+            Format(gearMissing, sizeof(gearMissing), "%s%s%s", gearMissing, gearMissing[0] == '\0' ? "" : ",", items[i].name);
             continue;
         }
 
         FakeClientCommand(client, "inventory_buy_gear %d", id);
+        if (IsGearWorn(client, id)) continue;
+
+        // The medic's armor and vest are separate items from everyone else's (sec_medic_heavy_armor
+        // vs sec_heavy_armor), identical but for the model, and "class_restricted" so each class can
+        // only wear its own. A named loadout loads on any class, so one saved as a rifleman and
+        // loaded as a medic - or the reverse - asks for the variant this class refuses. Try the
+        // other one of the pair before calling it missing.
+        char counterpart[ITEM_NAME_SIZE];
+        int  counterpartId = GearCounterpart(items[i].name, counterpart, sizeof(counterpart))
+                                 ? TheaterItem_Find(TheaterCategory_Gear, counterpart)
+                                 : 0;
+        if (counterpartId > 0)
+        {
+            FakeClientCommand(client, "inventory_buy_gear %d", counterpartId);
+            if (IsGearWorn(client, counterpartId)) continue;
+        }
+
+        gearDropped++;
+        Format(gearMissing, sizeof(gearMissing), "%s%s%s", gearMissing, gearMissing[0] == '\0' ? "" : ",", items[i].name);
     }
 
     // What ended up worn, by slot. sec_tactical_carrier carries "weapon_slots { explosive 3 }", so
@@ -2164,9 +2219,11 @@ void ApplyLoadout(int client, LoadoutItem[] items, int count, bool showMessages,
     pack.WriteCell(GetClientUserId(client));
     pack.WriteCell(showMessages);
     pack.WriteCell(name[0] != '\0' && !StrEqual(savedClass, g_PlayerCurrentClass[client], false));
+    pack.WriteCell(gearDropped);
     pack.WriteString(name);
     pack.WriteString(savedClass);
     pack.WriteString(wanted);
+    pack.WriteString(gearMissing);
 
     // Delayed on purpose, but not because the buys are queued - FakeClientCommand dispatches them
     // synchronously. What is deferred is the weapon ENTITIES: the purchase list updates
@@ -2181,17 +2238,20 @@ public Action Timer_VerifyLoadout(Handle timer, DataPack pack)
     int  userid       = pack.ReadCell();
     bool showMessages = pack.ReadCell();
     bool crossClass   = pack.ReadCell();
+    int  gearDropped  = pack.ReadCell();
 
     char name[MAX_LOADOUT_NAME + 1];
     char savedClass[128];
     char wantedBuffer[512];
+    char gearMissing[256];
     pack.ReadString(name, sizeof(name));
     pack.ReadString(savedClass, sizeof(savedClass));
     pack.ReadString(wantedBuffer, sizeof(wantedBuffer));
+    pack.ReadString(gearMissing, sizeof(gearMissing));
 
     int client = GetClientOfUserId(userid);
     if (client < 1 || !IsClientInGame(client) || !IsPlayerAlive(client)) return Plugin_Handled;
-    if (wantedBuffer[0] == '\0') return Plugin_Handled;
+    if (wantedBuffer[0] == '\0' && gearDropped == 0) return Plugin_Handled;
 
     char wanted[MAX_WEAPON_ITEMS][ITEM_NAME_SIZE];
     int  wantedCount = ExplodeString(wantedBuffer, ",", wanted, sizeof(wanted), sizeof(wanted[]));
@@ -2250,6 +2310,8 @@ public Action Timer_VerifyLoadout(Handle timer, DataPack pack)
         if (!found) dropped++;
     }
 
+    dropped += gearDropped;
+
     // Remembered so a following save cannot overwrite the set this came from with the short version.
     g_LastLoadDropped[client] = dropped;
     strcopy(g_LastLoadName[client], sizeof(g_LastLoadName[]), name);
@@ -2257,9 +2319,9 @@ public Action Timer_VerifyLoadout(Handle timer, DataPack pack)
 
     if (dropped > 0 || crossClass)
     {
-        LogMessage("[LoadoutSaver] %L loaded \"%s\" (saved on %s) while playing %s: wanted [%s], %d missing",
+        LogMessage("[LoadoutSaver] %L loaded \"%s\" (saved on %s) while playing %s: wanted [%s], %d missing (gear not worn: [%s])",
                    client, name[0] == '\0' ? "<class loadout>" : name, savedClass,
-                   g_PlayerCurrentClass[client], wantedBuffer, dropped);
+                   g_PlayerCurrentClass[client], wantedBuffer, dropped, gearMissing);
     }
 
     if (dropped > 0 && showMessages)

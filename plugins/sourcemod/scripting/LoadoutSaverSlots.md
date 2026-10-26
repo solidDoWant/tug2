@@ -170,6 +170,7 @@ like anything else, so re-buying it is symmetric and costs what it originally co
 | `GetSlot` offset missing from gamedata | Saving refused with a chat message; loading still works. A save with no slot information would record every weapon as slot 0, which is worse than no loadout at all |
 | A stored item does not parse | That item is skipped and logged; the rest of the loadout still applies |
 | Database unavailable | Same as the original — failure message, reconnect on a timer |
+| Named loadout's armor or vest is the other class's variant (`sec_heavy_armor` saved as a rifleman, loaded as a medic, or the reverse) | The class refuses it (`class_restricted`), so the `sec_medic_` counterpart — or the plain `sec_` one — is bought instead. Gear that still doesn't go on counts toward "N item(s) could not be equipped" like a weapon would |
 
 ## Testing
 
