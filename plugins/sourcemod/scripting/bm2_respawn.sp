@@ -95,6 +95,10 @@ int g_iReviveEnabled,
     g_last_bot_respawn_time,
     g_iFreeLives[MAXPLAYERS + 1] = { 1, ... };
 
+// A CreateCounterRespawnTimer respawn is on its way, so the player must not spend another life on a
+// second one (sm_givelives checks this before using a life on a dead player).
+bool  g_bLifeRespawnPending[MAXPLAYERS + 1];
+
 char  ga_sPlayerBGroups[MAXPLAYERS + 1][32];
 
 float g_fLastHeight[2048] = { 0.0, ... },
@@ -394,7 +398,7 @@ public void OnPluginStart()
     // Event_PlayerDeath is, so with DOCTOR off the counter never moves and the number would lie.
     RegConsoleCmd("sm_lives", Command_Lives, "sm_lives [#userid|name|all] - show remaining extra lives");
     RegConsoleCmd("lives", Command_Lives, "lives [#userid|name|all] - show remaining extra lives");
-    RegAdminCmd("sm_givelives", Command_GiveLives, ADMFLAG_SLAY, "sm_givelives <#userid|name|@humans|@alive|...> [amount] - give extra lives for this round");
+    RegAdminCmd("sm_givelives", Command_GiveLives, ADMFLAG_SLAY, "sm_givelives <#userid|name|@humans|@alive|...> [amount] - give extra lives for this round; a dead target is respawned with one of them");
 
     // TUG medic_tracker
     MedicRevivedForward = new GlobalForward("Medic_Revived", ET_Event, Param_Cell, Param_Cell);
@@ -1886,6 +1890,7 @@ void SetNextAttack(int client)
 public void OnClientDisconnect(int client)
 {
     g_bHuntPending[client] = false;
+    g_bLifeRespawnPending[client] = false;
     ReleaseHealHold(client);
 }
 
@@ -5466,6 +5471,7 @@ public void CreateCounterRespawnTimer(int client)
         return;
     }
     PrintHintText(client, "Respawning you in 5 seconds");
+    g_bLifeRespawnPending[client] = true;
     CreateTimer(5.25, RespawnPlayerCounter, client);
 }
 
@@ -5491,6 +5497,8 @@ public Action pruneRagdollsAfterCounterStart(Handle Timer, any client)
 
 public Action RespawnPlayerCounter(Handle Timer, any client)
 {
+    g_bLifeRespawnPending[client] = false;
+
     // Exit if client is not in game
     if (!IsClientInGame(client))
     {
@@ -5593,6 +5601,7 @@ static void ReportFreeLives(int caller, int target)
 
 // Adds to g_iFreeLives, the same counter a death on the players' team spends and the one reviving
 // three players tops up. Like those, it lasts until the round ends (Event_RoundEnd_Pre resets it).
+// A target who is dead when they receive them is respawned straight away, spending one.
 public Action Command_GiveLives(int client, int args)
 {
     if (args < 1)
@@ -5631,8 +5640,9 @@ public Action Command_GiveLives(int client, int args)
     // Lives only do anything on the players' team (see ReportFreeLives), so a group like @humans
     // gives them to that team and skips spectators (and the other team in PvP) rather than handing
     // out a number that means nothing.
-    int team  = PlayerTeam();
-    int given = 0;
+    int team      = PlayerTeam();
+    int given     = 0;
+    int respawned = 0;
     for (int i = 0; i < target_count; i++)
     {
         int target = target_list[i];
@@ -5645,9 +5655,25 @@ public Action Command_GiveLives(int client, int args)
 
         g_iFreeLives[target] += amount;
         given++;
-        PrintToChat(target, "[SM] You were given %d extra %s (%d left this round).",
-                    amount, amount == 1 ? "life" : "lives", g_iFreeLives[target]);
-        LogAction(client, target, "\"%L\" gave \"%L\" %d extra lives (now %d)", client, target, amount, g_iFreeLives[target]);
+
+        // A dead player spends one of them straight away, through the same respawn a death with a
+        // free life left gets - unless that respawn is already on its way, which has paid for itself.
+        bool respawning = !IsPlayerAlive(target) && !g_bLifeRespawnPending[target] && g_iRoundStatus
+                       && g_client_last_classstring[target][0] && g_playerPickSquad[target] == 1;
+        if (respawning)
+        {
+            g_iFreeLives[target]--;
+            CreateCounterRespawnTimer(target);
+            respawned++;
+            PrintToChat(target, "[SM] You were given %d extra %s - one is respawning you now (%d left this round).",
+                        amount, amount == 1 ? "life" : "lives", g_iFreeLives[target]);
+        }
+        else {
+            PrintToChat(target, "[SM] You were given %d extra %s (%d left this round).",
+                        amount, amount == 1 ? "life" : "lives", g_iFreeLives[target]);
+        }
+        LogAction(client, target, "\"%L\" gave \"%L\" %d extra lives (now %d%s)", client, target, amount,
+                  g_iFreeLives[target], respawning ? ", one spent respawning them" : "");
     }
 
     if (given == 0)
@@ -5661,6 +5687,8 @@ public Action Command_GiveLives(int client, int args)
         ShowActivity2(client, "[SM] ", "Gave %t %d extra %s for this round.", target_name, amount, amount == 1 ? "life" : "lives");
     else
         ShowActivity2(client, "[SM] ", "Gave %s %d extra %s for this round.", target_name, amount, amount == 1 ? "life" : "lives");
+    if (respawned > 0)
+        ReplyToCommand(client, "[SM] Respawning %d dead player%s, using one of the lives.", respawned, respawned == 1 ? "" : "s");
     return Plugin_Handled;
 }
 
