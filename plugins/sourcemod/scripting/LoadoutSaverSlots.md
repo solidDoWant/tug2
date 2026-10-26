@@ -3,10 +3,9 @@
 `LoadoutSaverSlots.sp` — a sibling of `LoadoutSaver.sp` that saves **every** item a player is
 carrying, not just the three the stock buy menu happens to expose.
 
-The two plugins register the same commands and **must never be loaded together**. The test server
-runs this one; main runs the original. That is the same arrangement `gg2_forceretry_optout` has with
-`gg2_forceretry`, and it is enforced in the `Dockerfile`: each image copies one build stage or the
-other.
+The two plugins register the same commands and **must never be loaded together**. Both servers run
+this one; the original's build stage is kept in the `Dockerfile` for rolling back. Each image copies
+one stage or the other, never both.
 
 Player-facing behaviour is unchanged — `!savelo`, `!loadlo`, `!clearlo`, `!listlo`, `!dello`, named
 loadouts, the cap, the cooldowns and the supply check all work exactly as documented in
@@ -109,6 +108,38 @@ rather than by an id carried between them, which keeps each statement independen
 
 The named-loadout cap stays inside the set upsert, so two saves racing each other cannot both see
 room, with the database trigger as the hard backstop.
+
+## Importing LoadoutSaver's loadouts
+
+A server switching over brings its existing `loadouts` rows across once, by listing
+`loadout_saver_slots_import_legacy.sql` after `loadout_saver_slots.sql` in its
+`database-migrations.cfg`. Main does; test does not, because its old rows were saved against
+earlier versions of its theater.
+
+The old rows hold theater **ids**, and only the running server knows what they are called, so the
+work is split:
+
+1. The migration files an import request in `loadouts_slots_imports` and defines
+   `import_legacy_loadouts()`.
+2. When the theater has been read and the database is connected, the plugin asks whether an import
+   is pending. If one is, it stages the loaded theater's id → name table in
+   `loadouts_import_theater_ids` and calls the function, in **one transaction**. A failure changes
+   nothing and is retried on the next map.
+3. The function converts every row: gear first, then primary, secondary and explosive, each weapon
+   followed by its upgrades. Ordinals are numbered as items are written, so they stay contiguous even
+   when an unknown id is dropped. A dropped weapon takes its upgrades with it.
+4. A set that would conflict with one saved since the switch is skipped, so the newer one wins. So
+   is a named set for a player already at the cap. The counts are recorded in
+   `loadouts_slots_imports`. `loadouts` itself is only read.
+
+Verified against a copy of main's data (5,064 sets from 2,095 players, 2026-10-26) on PostgreSQL 18,
+staged with ids decoded from the live server's `listtheateritems`:
+
+- Every set was imported and no item was dropped. The only unresolved tokens were 36 `-1` gear
+  placeholders, which are empty slots.
+- Re-encoding the result into the old column format reproduced every source row exactly.
+- 64,221 of the 64,228 saved weapon+upgrade pairs fit their weapon's `allowed_weapons`. The other 7
+  look like loadouts saved under an older theater, and they come across unchanged.
 
 ## Melee is excluded, and the game is why
 

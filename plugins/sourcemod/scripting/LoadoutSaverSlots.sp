@@ -2,8 +2,9 @@
 // Insurgency (2014) Loadout Saving Plugin - every slot, not just the stock three.
 //
 // A sibling of LoadoutSaver.sp, not a replacement for it: the two register the same commands and
-// must never be loaded together. The test server runs this one, main runs the original, the same
-// way gg2_forceretry_optout stands in for gg2_forceretry.
+// must never be loaded together. Both servers run this one. A server switching over from the
+// original brings its saved loadouts across with loadout_saver_slots_import_legacy.sql - see the
+// one-time import below.
 //
 // WHAT IS DIFFERENT
 //
@@ -507,6 +508,8 @@ void OnDatabaseConnected(Database db, const char[] error, any data)
 
     g_Database = db;
     LogMessage("Successfully connected to database");
+
+    CheckPendingImports();
 }
 
 public Action Timer_RetryConnection(Handle timer)
@@ -587,6 +590,124 @@ public void TheaterItems_OnReady()
 {
     if (g_ClassByHandle != null)
         g_ClassByHandle.Clear();
+
+    CheckPendingImports();
+}
+
+// =====================================================
+// One-time import from older schemas
+// =====================================================
+// LoadoutSaver kept its loadouts as theater ids, and an id only means something against the theater
+// it was saved under, so the database cannot turn those rows into names by itself. This side
+// supplies what it is missing: the loaded theater's id -> name table, staged right before calling
+// import_legacy_loadouts() in the same transaction. See loadout_saver_slots_import_legacy.sql.
+//
+// Whether there is anything to import is the database's call - a server only has a pending import
+// if its database-migrations.cfg lists that script - so this asks every time the theater is read or
+// the database reconnects, until the answer is no. A failed attempt changes nothing and is retried
+// on the next map.
+
+bool g_ImportBusy = false;    // a check or an import is in flight
+bool g_ImportDone = false;    // the database said nothing is pending
+
+void CheckPendingImports()
+{
+    if (g_ImportDone || g_ImportBusy) return;
+    if (g_Database == null || !TheaterItem_Ready()) return;
+
+    g_ImportBusy = true;
+    g_Database.Query(OnPendingImportsChecked, "SELECT COUNT(*) FROM loadouts_slots_imports WHERE completed_at IS NULL");
+}
+
+void OnPendingImportsChecked(Database db, DBResultSet results, const char[] error, any data)
+{
+    if (results == null)
+    {
+        // Most likely the migrations have not created the table yet on a first boot.
+        LogError("[LoadoutSaver] Could not check for pending loadout imports, will retry next map: %s", error);
+        SQL_CheckError(db, results, error, 0);
+        g_ImportBusy = false;
+        return;
+    }
+
+    if (!results.FetchRow() || results.FetchInt(0) == 0)
+    {
+        g_ImportDone = true;
+        g_ImportBusy = false;
+        return;
+    }
+
+    RunLegacyImport();
+}
+
+void RunLegacyImport()
+{
+    if (g_Database == null || !TheaterItem_Ready())
+    {
+        g_ImportBusy = false;
+        return;
+    }
+
+    Transaction txn = new Transaction();
+    txn.AddQuery("DELETE FROM loadouts_import_theater_ids");
+
+    // Explosives are left out: LoadoutSaver only ever stored weapon, upgrade and gear ids.
+    TheaterCategory categories[3] = { TheaterCategory_Weapon, TheaterCategory_Upgrade, TheaterCategory_Gear };
+    char query[8192];
+    int  staged = 0;
+
+    for (int c = 0; c < sizeof(categories); c++)
+    {
+        int count   = TheaterItem_Count(categories[c]);
+        int inBatch = 0;
+
+        for (int id = 1; id <= count; id++)
+        {
+            char name[ITEM_NAME_SIZE];
+            if (!TheaterItem_Name(categories[c], id, name, sizeof(name))) continue;
+
+            char escaped[ITEM_NAME_SIZE * 2 + 4];
+            g_Database.Escape(name, escaped, sizeof(escaped));
+
+            if (inBatch == 0)
+                strcopy(query, sizeof(query), "INSERT INTO loadouts_import_theater_ids (category, theater_id, name) VALUES ");
+            Format(query, sizeof(query), "%s%s(%d,%d,'%s')", query, inBatch > 0 ? "," : "", view_as<int>(categories[c]), id, escaped);
+            inBatch++;
+            staged++;
+
+            // Well inside the buffer: a row is at most ~140 characters.
+            if (inBatch == 50)
+            {
+                txn.AddQuery(query);
+                inBatch = 0;
+            }
+        }
+
+        if (inBatch > 0) txn.AddQuery(query);
+    }
+
+    txn.AddQuery("SELECT import_legacy_loadouts()");
+
+    LogMessage("[LoadoutSaver] Importing old loadouts against the loaded theater (%d item ids staged)", staged);
+    g_Database.Execute(txn, OnLegacyImportSuccess, OnLegacyImportFailure);
+}
+
+public void OnLegacyImportSuccess(Database db, any data, int numQueries, DBResultSet[] results, any[] queryData)
+{
+    int imported = 0;
+    DBResultSet last = results[numQueries - 1];
+    if (last != null && last.FetchRow()) imported = last.FetchInt(0);
+
+    LogMessage("[LoadoutSaver] Old loadout import complete: %d set(s) imported - see loadouts_slots_imports for what was skipped or dropped", imported);
+    g_ImportDone = true;
+    g_ImportBusy = false;
+}
+
+public void OnLegacyImportFailure(Database db, any data, int numQueries, const char[] error, int failIndex, any[] queryData)
+{
+    LogError("[LoadoutSaver] Old loadout import failed at query %d of %d, nothing was changed, will retry next map: %s",
+             failIndex + 1, numQueries, error);
+    g_ImportBusy = false;
 }
 
 int GetPlayerClassHandle(int client)

@@ -2319,7 +2319,7 @@ void RemoveCommPunishmentFromDatabase(const char[] targetSteamID, const char[] p
 //
 // The pooled connection to this database is dropped when it sits idle, and nothing notices until
 // the next query fails with "server closed the connection unexpectedly" (seen on main 09/20, and
-// in gg2_messages, gg2_forceretry_optout and clientprefs). Punishments are written rarely, so the
+// in gg2_messages, gg2_forceretry and clientprefs). Punishments are written rarely, so the
 // first ban after a quiet stretch was exactly the one most likely to hit a dead connection - and
 // with only a LogError in the callback it was silently lost, while the engine ban still applied
 // and hid the problem until the next restart.

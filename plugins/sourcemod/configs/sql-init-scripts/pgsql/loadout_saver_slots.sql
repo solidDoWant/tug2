@@ -151,6 +151,38 @@ CREATE TRIGGER trg_named_loadout_slots_cap
     FOR EACH ROW EXECUTE FUNCTION enforce_named_loadout_slots_cap();
 
 -- =====================================================
+-- One-time imports from older schemas
+-- =====================================================
+-- Old rows store THEATER IDS, which only mean something against the theater they were saved under,
+-- so SQL alone cannot convert them to names - the running server has to say what each id is called.
+-- The plugin does that: when this table holds an import that has not completed, it writes the loaded
+-- theater's id -> name table into loadouts_import_theater_ids and calls the import function, in one
+-- transaction.
+--
+-- Only these two tables live here, so the plugin's "anything to import?" check works on every
+-- server. The request row and the import function itself are in a separate script that only a
+-- server with old rows to bring across lists in its database-migrations.cfg - see
+-- loadout_saver_slots_import_legacy.sql. Elsewhere this table stays empty and nothing is imported.
+
+CREATE TABLE IF NOT EXISTS loadouts_slots_imports (
+    source VARCHAR(64) PRIMARY KEY,
+    requested_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    completed_at TIMESTAMP,
+    sets_imported INTEGER,
+    sets_skipped INTEGER,
+    items_dropped INTEGER
+);
+
+-- Scratch space for the import: the loaded theater's ids, by category (the same numbering as
+-- theater_items.category). Emptied by the import when it completes.
+CREATE TABLE IF NOT EXISTS loadouts_import_theater_ids (
+    category SMALLINT NOT NULL,
+    theater_id INTEGER NOT NULL,
+    name VARCHAR(64) NOT NULL,
+    PRIMARY KEY (category, theater_id)
+);
+
+-- =====================================================
 -- Maintenance Queries
 -- =====================================================
 

@@ -11,6 +11,16 @@ CREATE TABLE IF NOT EXISTS players_smoke_cache (
 );
 
 -- =====================================================
+-- Migrations
+-- =====================================================
+
+-- Per-player opt-out from the automatic reconnect (!autoreconnect). Added after the table shipped;
+-- additive and idempotent, so it is safe to run against a database created before the column
+-- existed. Defaulting to FALSE means every existing player stays opted in, which is
+-- the behaviour they had before this column existed.
+ALTER TABLE players_smoke_cache ADD COLUMN IF NOT EXISTS auto_retry_opt_out BOOLEAN NOT NULL DEFAULT FALSE;
+
+-- =====================================================
 -- Indexes for Performance
 -- =====================================================
 
@@ -50,3 +60,11 @@ CREATE INDEX IF NOT EXISTS idx_players_smoke_cache_has_smoke ON players_smoke_ca
 -- Clean up old entries (players who haven't connected in 90 days)
 -- DELETE FROM players_smoke_cache
 -- WHERE updated_at < NOW() - INTERVAL '90 days';
+
+-- Players who have opted out of the automatic reconnect
+-- SELECT steam_id, has_smoke, updated_at
+-- FROM players_smoke_cache WHERE auto_retry_opt_out = TRUE ORDER BY updated_at DESC;
+
+-- Opted out AND missing the particle cache, i.e. smoke looks wrong for them by choice
+-- SELECT steam_id, updated_at
+-- FROM players_smoke_cache WHERE auto_retry_opt_out = TRUE AND has_smoke = FALSE;

@@ -1,7 +1,8 @@
 TUG 2 TUG 2 TUG 2 TUG 2 TUG 2 TUG 2
 
 If you're a medic, BE A MEDIC! Use smoke, revive folks.
-Crouch + Sprint + Direction (WASD) to drag bodies.
+Use !help to see command info.
+Use !dragmode to see body dragging info.
 
 Machine Guns available to the Machine Gunner Role
 

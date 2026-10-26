@@ -19,7 +19,14 @@
 2908499942 // tug voting images
 //utils
 //880051898 // Veteran Insurgents again maybe.....
-2905676416 // PFLP Insurgents
+// DISABLED 2026-09-13 - reskins the ENEMY team. pflp.vpk ships the complete stock insurgent
+// material set (ins_light_color, ins_light_shirt_color, ins_medium_color, ins_medium_armor_color,
+// ins_heavy_color, ins_attachments_color), so it overrides how insurgents look rather than adding
+// anything. Subscribing it here almost certainly did nothing anyway: content a client pulls from a
+// server lands in insurgency/download, which gameinfo.txt searches LAST and which cannot override a
+// base game file - the same reason the client-side mods at the bottom of this file are marked as
+// needing players to subscribe themselves. It still costs the server the download and the disk.
+//2905676416 // PFLP Insurgents
 //2598253212 // MARSOC - Critical Skills Operators
 2834243418 // spade icon MARSOC
 2300512394 // Sandstorm weapon cache

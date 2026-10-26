@@ -251,14 +251,15 @@ RUN --mount=type=bind,source=./plugins/sourcemod,target=/plugin-source \
 FROM sourcemod-plugins-base AS sourcemod-plugins-loadoutsaver-slots
 
 # Build the all-slots variant of the loadout saver. Registers the same commands as LoadoutSaver and
-# must never be deployed alongside it - the test image takes this one instead, the way it already
-# takes gg2_forceretry_optout instead of gg2_forceretry.
+# must never be deployed alongside it. Both servers run this one; the original stage is kept for
+# rolling back.
 COPY plugins/sourcemod/gamedata/ /insurgency/addons/sourcemod/gamedata/
 RUN --mount=type=bind,source=./plugins/sourcemod,target=/plugin-source \
     /sourcemod/addons/sourcemod/scripting/spcomp --include=/plugin-source/scripting/include  /plugin-source/scripting/LoadoutSaverSlots.sp -o /insurgency/addons/sourcemod/plugins/LoadoutSaverSlots.smx && \
     mkdir -p /insurgency/addons/sourcemod/configs/sql-init-scripts/pgsql && \
     cp /plugin-source/configs/sql-init-scripts/pgsql/loadout_saver_slots.sql /insurgency/addons/sourcemod/configs/sql-init-scripts/pgsql/loadout_saver_slots.sql && \
     cp /plugin-source/configs/sql-init-scripts/pgsql/loadout_saver_slots_theater_replacements.sql /insurgency/addons/sourcemod/configs/sql-init-scripts/pgsql/loadout_saver_slots_theater_replacements.sql && \
+    cp /plugin-source/configs/sql-init-scripts/pgsql/loadout_saver_slots_import_legacy.sql /insurgency/addons/sourcemod/configs/sql-init-scripts/pgsql/loadout_saver_slots_import_legacy.sql && \
     mkdir -p /insurgency/cfg/sourcemod && \
     touch /insurgency/cfg/sourcemod/plugin.loadoutsaverslots.cfg && \
     # Fixup file permissions
@@ -356,7 +357,8 @@ RUN --mount=type=bind,source=./plugins/sourcemod/scripting,target=/plugin-source
 FROM sourcemod-plugins-base AS sourcemod-plugins-gg2-theater-items
 
 # Build the theater item name/id lookup. Provides natives for other plugins, so it must be present
-# wherever a consumer is - currently gg2_heavy_ammo, on test only.
+# wherever a consumer is - LoadoutSaverSlots on both servers, plus gg2_heavy_ammo and gg2_easter_eggs
+# on test.
 COPY plugins/sourcemod/gamedata/ /insurgency/addons/sourcemod/gamedata/
 RUN --mount=type=bind,source=./plugins/sourcemod,target=/plugin-source \
     /sourcemod/addons/sourcemod/scripting/spcomp --include=/plugin-source/scripting/include  /plugin-source/scripting/gg2_theater_items.sp -o /insurgency/addons/sourcemod/plugins/gg2_theater_items.smx && \
@@ -489,22 +491,6 @@ RUN --mount=type=bind,source=./plugins/sourcemod,target=/plugin-source \
     touch /insurgency/cfg/sourcemod/gg2_forceretry.cfg && \
     mkdir -p /insurgency/addons/sourcemod/configs/sql-init-scripts/pgsql && \
     cp /plugin-source/configs/sql-init-scripts/pgsql/gg2_forceretry.sql /insurgency/addons/sourcemod/configs/sql-init-scripts/pgsql/gg2_forceretry.sql && \
-    # Fixup file permissions
-    find /insurgency -type d -exec chmod 755 {} \; && \
-    find /insurgency -type f -exec chmod 644 {} \;
-
-FROM sourcemod-plugins-base AS sourcemod-plugins-gg2-forceretry-optout
-
-# Build the gg2_forceretry_optout plugin. This is gg2_forceretry plus a player-facing
-# !autoreconnect opt-out, and it REPLACES that plugin on the test server - running both would mean
-# two plugins racing to force the same reconnect. Only the test server stage copies this one.
-COPY plugins/sourcemod/gamedata/ /insurgency/addons/sourcemod/gamedata/
-RUN --mount=type=bind,source=./plugins/sourcemod,target=/plugin-source \
-    /sourcemod/addons/sourcemod/scripting/spcomp --include=/plugin-source/scripting/include  /plugin-source/scripting/gg2_forceretry_optout.sp -o /insurgency/addons/sourcemod/plugins/gg2_forceretry_optout.smx && \
-    mkdir -p /insurgency/cfg/sourcemod && \
-    touch /insurgency/cfg/sourcemod/gg2_forceretry_optout.cfg && \
-    mkdir -p /insurgency/addons/sourcemod/configs/sql-init-scripts/pgsql && \
-    cp /plugin-source/configs/sql-init-scripts/pgsql/gg2_forceretry_optout.sql /insurgency/addons/sourcemod/configs/sql-init-scripts/pgsql/gg2_forceretry_optout.sql && \
     # Fixup file permissions
     find /insurgency -type d -exec chmod 755 {} \; && \
     find /insurgency -type f -exec chmod 644 {} \;
@@ -723,7 +709,7 @@ RUN --mount=type=bind,source=./plugins/sourcemod,target=/plugin-source \
     mkdir -p /insurgency/addons/sourcemod/translations && \
     cp /plugin-source/translations/nearest_player.phrases.txt /plugin-source/translations/respawn.phrases.txt /plugin-source/translations/tug.phrases.txt /insurgency/addons/sourcemod/translations && \
     /sourcemod/addons/sourcemod/scripting/spcomp --include=/plugin-source/scripting/include  /plugin-source/scripting/d_dy_pull_rag.sp -o /insurgency/addons/sourcemod/plugins/d_dy_pull_rag.smx && \
-    # Only migrated where sm_pullrag_allow_choice is on (test); harmless elsewhere.
+    # Only needed where sm_pullrag_allow_choice is on; harmless elsewhere.
     mkdir -p /insurgency/addons/sourcemod/configs/sql-init-scripts/pgsql && \
     cp /plugin-source/configs/sql-init-scripts/pgsql/d_dy_pull_rag.sql /insurgency/addons/sourcemod/configs/sql-init-scripts/pgsql/ && \
     # Fixup file permissions
@@ -945,12 +931,11 @@ RUN fetch-items /out \
     2168078889:3564784398022966987 \
     2832406643:3744120148318909398
 
-# 4 items, 288 MB
+# 3 items, 197 MB
 FROM workshop-downloader AS ws-main-07
 RUN fetch-items /out \
     2635219866:4826755711166472558 \
     2890756233:8357478366560277008 \
-    2905676416:7990779581717180623 \
     2980224364:8260778967173714576
 
 # 2 items, 238 MB
@@ -1360,7 +1345,7 @@ COPY --from=sourcemod-plugins-marquis-fix --chown=0:0 /insurgency /opt/insurgenc
 COPY --from=sourcemod-plugins-citadel-coop-spawn-fix --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
 COPY --from=sourcemod-plugins-firesupport --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
 COPY --from=sourcemod-plugins-databasemigrator --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
-COPY --from=sourcemod-plugins-loadoutsaver --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
+COPY --from=sourcemod-plugins-loadoutsaver-slots --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
 COPY --from=sourcemod-plugins-counterattack-countdown --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
 COPY --from=sourcemod-plugins-restrictedarea --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
 COPY --from=sourcemod-plugins-bot-flashlights --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
@@ -1371,6 +1356,8 @@ COPY --from=sourcemod-plugins-map-logger --chown=0:0 /insurgency /opt/insurgency
 COPY --from=sourcemod-plugins-gg2-weapon-spam --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
 COPY --from=sourcemod-plugins-gg2-admin-logger --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
 COPY --from=sourcemod-plugins-gg2-burn --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
+# Needed by LoadoutSaverSlots.
+COPY --from=sourcemod-plugins-gg2-theater-items --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
 COPY --from=sourcemod-plugins-gg2-cache-protect --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
 COPY --from=sourcemod-plugins-gg2-connection-tracker --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
 COPY --from=sourcemod-plugins-gg2-damage --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
@@ -1378,6 +1365,7 @@ COPY --from=sourcemod-plugins-gg2-discord --chown=0:0 /insurgency /opt/insurgenc
 COPY --from=sourcemod-plugins-gg2-forceauthorize --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
 COPY --from=sourcemod-plugins-gg2-forceretry --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
 COPY --from=sourcemod-plugins-gg2-fuckyeah --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
+COPY --from=sourcemod-plugins-gg2-hostname-rounds --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
 COPY --from=sourcemod-plugins-gg2-insurgency --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
 COPY --from=sourcemod-plugins-gg2-kill-entities --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
 # I don't want plugins writing to the config directory if I can avoid it, because this allows them to execute arbitrary commands.
@@ -1388,7 +1376,10 @@ COPY --from=sourcemod-plugins-gg2-mstats2 --chown=0:0 /insurgency /opt/insurgenc
 # This seems unnecessary for now
 # COPY --from=sourcemod-plugins-gg2-playlist-hax --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
 COPY --from=sourcemod-plugins-gg2-show-health-simp --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
+COPY --from=sourcemod-plugins-gg2-spectalk --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
 COPY --from=sourcemod-plugins-gg2-spectator --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
+# Its rules come from main's own configs/gg2_strip_entities.cfg, which replaces the plugin's default.
+COPY --from=sourcemod-plugins-gg2-strip-entities --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
 COPY --from=sourcemod-plugins-gg2-supply --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
 COPY --from=sourcemod-plugins-gg2-teamkill --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
 COPY --from=sourcemod-plugins-gg2-votekick-immunity --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
@@ -1493,7 +1484,6 @@ COPY --from=sourcemod-plugins-marquis-fix --chown=0:0 /insurgency /opt/insurgenc
 COPY --from=sourcemod-plugins-citadel-coop-spawn-fix --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
 COPY --from=sourcemod-plugins-firesupport --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
 COPY --from=sourcemod-plugins-databasemigrator --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
-# Test server runs the all-slots variant instead of LoadoutSaver (never both).
 COPY --from=sourcemod-plugins-loadoutsaver-slots --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
 COPY --from=sourcemod-plugins-counterattack-countdown --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
 COPY --from=sourcemod-plugins-restrictedarea --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
@@ -1516,8 +1506,7 @@ COPY --from=sourcemod-plugins-gg2-connection-tracker --chown=0:0 /insurgency /op
 COPY --from=sourcemod-plugins-gg2-damage --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
 COPY --from=sourcemod-plugins-gg2-discord --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
 COPY --from=sourcemod-plugins-gg2-forceauthorize --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
-# Test server runs the opt-out variant instead of gg2_forceretry (never both).
-COPY --from=sourcemod-plugins-gg2-forceretry-optout --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
+COPY --from=sourcemod-plugins-gg2-forceretry --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
 COPY --from=sourcemod-plugins-gg2-fuckyeah --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
 COPY --from=sourcemod-plugins-gg2-hostname-rounds --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
 COPY --from=sourcemod-plugins-gg2-insurgency --chown=0:0 /insurgency /opt/insurgency-server/insurgency/

@@ -130,14 +130,13 @@ char g_HelpPhrases[][] = {
 
 // Index-matched with g_HelpPhrases. An empty string means the line is always printed; otherwise
 // the line is only printed if that command is actually registered on this server. This plugin
-// ships to every server, but some commands do not - !autoreconnect comes from
-// gg2_forceretry_optout, which only the test server runs - and advertising a command that does
-// nothing is worse than not mentioning it.
+// ships to every server, but some commands do not - and advertising a command that does nothing is
+// worse than not mentioning it.
 //
 // A gate starting with "cvar:" names a convar instead, and the line is printed only while that
 // convar is non-zero. That is for a command every server registers but only some enable: !dragmode
 // comes from d_dy_pull_rag, which ships everywhere, but only lets players choose where
-// sm_pullrag_allow_choice is on (the test server) - elsewhere it just reports the fixed mode.
+// sm_pullrag_allow_choice is on - elsewhere it just reports the fixed mode.
 char g_HelpGateCommands[][] = {
     "",
     "",

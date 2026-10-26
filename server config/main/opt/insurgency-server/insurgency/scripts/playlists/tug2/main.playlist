@@ -38,7 +38,7 @@
 		"sv_deadvoice"				"1"	// enabling this will allow the dead and living to VOIP each other
 		"sv_deadtalk"				"1"	// enabling this will allow the dead and living to chat text each other
 		"sv_deadtalk_team"			"1"	// is deadchat limited to just your team?
-		"mp_coop_lobbysize"			"12"	// lobby size
+		"mp_coop_lobbysize"			"14"	// lobby size - 12 players + 2 spectators, see cfg/server.cfg
 		"mp_coop_min_bots"			"35"	// number of bots when there is 1 player on the server
 		"mp_coop_max_bots"			"224"	// number of bots when there are 14 players on the server
 		"ins_bot_count_checkpoint_max" "224"	// maximum number of bots for checkpoint
