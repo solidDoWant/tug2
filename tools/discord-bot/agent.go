@@ -30,21 +30,30 @@ type Turn struct {
 type Answer struct {
 	Text  string
 	Draft *IssueDraft
+	// Limit names the per-question limit the answer ran into ("rounds",
+	// "budget", "context", "output"), or is empty.
+	Limit string
+	// Refused is set when the model declined the request.
+	Refused bool
+	// Tokens is everything processed for the question across its calls.
+	Tokens int64
 }
 
 // Agent answers questions with the model and the toolset.
 type Agent struct {
-	client anthropic.Client
-	cfg    *Config
-	tools  *Toolset
-	system []anthropic.TextBlockParam
+	client  anthropic.Client
+	cfg     *Config
+	tools   *Toolset
+	system  []anthropic.TextBlockParam
+	metrics *Metrics
 }
 
-func NewAgent(cfg *Config, tools *Toolset, issuesEnabled bool) *Agent {
+func NewAgent(cfg *Config, tools *Toolset, issuesEnabled bool, metrics *Metrics) *Agent {
 	return &Agent{
-		client: anthropic.NewClient(), // reads ANTHROPIC_API_KEY
-		cfg:    cfg,
-		tools:  tools,
+		client:  anthropic.NewClient(), // reads ANTHROPIC_API_KEY
+		cfg:     cfg,
+		tools:   tools,
+		metrics: metrics,
 		system: []anthropic.TextBlockParam{{
 			Text: buildSystemPrompt(cfg, issuesEnabled),
 			// Cache the tools + system prompt; they never change at runtime.
@@ -143,13 +152,17 @@ func (a *Agent) Answer(ctx context.Context, guildID string, history []Turn) (Ans
 	// conversation so far, so a question that reads a lot grows quickly.
 	var spent int64
 	finishing := false
+	limit := "" // the per-question limit reached, if any
 
 	for round := 0; ; round++ {
 		params.Messages = messages
+		start := time.Now()
 		resp, err := a.client.Messages.New(ctx, params)
 		if err != nil {
-			return Answer{}, fmt.Errorf("calling the model: %w", err)
+			a.metrics.ModelRequest(a.cfg.Model, time.Since(start), nil, err)
+			return Answer{Tokens: spent}, fmt.Errorf("calling the model: %w", err)
 		}
+		a.metrics.ModelRequest(a.cfg.Model, time.Since(start), &resp.Usage, nil)
 		u := resp.Usage
 		spent += u.InputTokens + u.CacheReadInputTokens + u.CacheCreationInputTokens + u.OutputTokens
 		slog.Info("model response",
@@ -167,18 +180,19 @@ func (a *Agent) Answer(ctx context.Context, guildID string, history []Turn) (Ans
 
 		switch resp.StopReason {
 		case anthropic.StopReasonRefusal:
-			return Answer{Text: "Sorry, I can't help with that one."}, nil
+			return Answer{Text: "Sorry, I can't help with that one.", Refused: true, Tokens: spent}, nil
 		case anthropic.StopReasonToolUse:
 			// handled below
 		default:
 			text := collectText(resp)
 			if resp.StopReason == anthropic.StopReasonMaxTokens {
 				text = strings.TrimSpace(text + "\n\n_(My answer got cut off. Try asking for less at once.)_")
+				limit = "output"
 			}
 			if text == "" && tc.draft == nil {
 				text = "Sorry, I couldn't come up with an answer to that."
 			}
-			return Answer{Text: text, Draft: tc.draft}, nil
+			return Answer{Text: text, Draft: tc.draft, Limit: limit, Tokens: spent}, nil
 		}
 
 		if finishing {
@@ -188,7 +202,8 @@ func (a *Agent) Answer(ctx context.Context, guildID string, history []Turn) (Ans
 			if text == "" {
 				text = "That needed more lookups than I'm allowed for one question. Try narrowing it down."
 			}
-			return Answer{Text: text, Draft: tc.draft}, nil
+			a.skipTools(resp)
+			return Answer{Text: text, Draft: tc.draft, Limit: limit, Tokens: spent}, nil
 		}
 
 		// The next call resends everything so far plus the tool results. Run
@@ -218,6 +233,10 @@ func (a *Agent) Answer(ctx context.Context, guildID string, history []Turn) (Ans
 
 		if reason != "" {
 			slog.Warn("question limit reached", "limit", reason, "round", round, "question_tokens", spent)
+			limit = reason
+			if reason == "rounds" {
+				a.skipTools(resp) // never run; budget/context calls ran but are withheld
+			}
 			results = nil
 			for _, block := range resp.Content {
 				if use, ok := block.AsAny().(anthropic.ToolUseBlock); ok {
@@ -229,6 +248,15 @@ func (a *Agent) Answer(ctx context.Context, guildID string, history []Turn) (Ans
 			finishing = true
 		}
 		messages = append(messages, anthropic.NewUserMessage(results...))
+	}
+}
+
+// skipTools counts the tool calls in resp that are not being run.
+func (a *Agent) skipTools(resp *anthropic.Message) {
+	for _, block := range resp.Content {
+		if use, ok := block.AsAny().(anthropic.ToolUseBlock); ok {
+			a.metrics.ToolCall(use.Name, "skipped", 0)
+		}
 	}
 }
 
@@ -255,6 +283,7 @@ func (a *Agent) runTools(ctx context.Context, tc *toolContext, resp *anthropic.M
 			continue
 		}
 		if a.cfg.MaxToolCallsPerRound > 0 && ran >= a.cfg.MaxToolCallsPerRound {
+			a.metrics.ToolCall(use.Name, "skipped", 0)
 			add(use.ID, fmt.Sprintf("Not run: at most %d lookups at a time. Use the results you have, then ask for more if still needed.",
 				a.cfg.MaxToolCallsPerRound), true)
 			continue
@@ -266,6 +295,11 @@ func (a *Agent) runTools(ctx context.Context, tc *toolContext, resp *anthropic.M
 		out, err := a.tools.Run(ctx, tc, use.Name, input)
 		slog.Info("tool call", "tool", use.Name, "input", string(input),
 			"duration_ms", time.Since(start).Milliseconds(), "error", errString(err))
+		result := "ok"
+		if err != nil {
+			result = "error"
+		}
+		a.metrics.ToolCall(use.Name, result, time.Since(start))
 		if err != nil {
 			add(use.ID, "Error: "+err.Error(), true)
 			continue

@@ -33,6 +33,8 @@ func run(ctx context.Context) error {
 		return errors.New("configuration error: ANTHROPIC_API_KEY is required")
 	}
 
+	metrics := NewMetrics(cfg)
+
 	var issues *IssueTracker
 	if cfg.IssuesEnabled {
 		setupCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
@@ -50,8 +52,8 @@ func run(ctx context.Context) error {
 		return err
 	}
 	tools := NewToolset(cfg, NewStatsClient(cfg.Servers), issues, session)
-	agent := NewAgent(cfg, tools, issues != nil)
-	bot := NewBot(ctx, cfg, session, agent, issues)
+	agent := NewAgent(cfg, tools, issues != nil, metrics)
+	bot := NewBot(ctx, cfg, session, agent, issues, metrics)
 	if err := bot.Open(); err != nil {
 		return fmt.Errorf("connecting to Discord: %w", err)
 	}
@@ -72,20 +74,25 @@ func run(ctx context.Context) error {
 		w.Write([]byte("ok"))
 	})
 	health := &http.Server{Addr: cfg.HealthAddr, Handler: mux, ReadTimeout: 5 * time.Second, WriteTimeout: 5 * time.Second}
-	healthErr := make(chan error, 1)
-	go func() {
-		if err := health.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			healthErr <- err
+	metricsServer := &http.Server{Addr: cfg.MetricsAddr, Handler: metrics.Handler(), ReadTimeout: 5 * time.Second, WriteTimeout: 10 * time.Second}
+
+	serverErr := make(chan error, 2)
+	serve := func(name string, srv *http.Server) {
+		slog.Info("listening", "server", name, "addr", srv.Addr)
+		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			serverErr <- fmt.Errorf("%s server: %w", name, err)
 		}
-	}()
+	}
+	go serve("health", health)
+	go serve("metrics", metricsServer)
 
 	select {
-	case err := <-healthErr:
-		return fmt.Errorf("health server: %w", err)
+	case err := <-serverErr:
+		return err
 	case <-ctx.Done():
 		slog.Info("shutting down")
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
-		return health.Shutdown(shutdownCtx)
+		return errors.Join(health.Shutdown(shutdownCtx), metricsServer.Shutdown(shutdownCtx))
 	}
 }

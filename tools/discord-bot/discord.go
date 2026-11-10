@@ -20,6 +20,7 @@ type Bot struct {
 	issues  *IssueTracker // nil when issue filing is not configured
 	limits  *RateLimiter
 	busy    chan struct{} // global concurrency slots
+	metrics *Metrics
 
 	// ctx is cancelled on shutdown so in-flight answers stop promptly.
 	ctx context.Context
@@ -41,7 +42,7 @@ func NewSession(token string) (*discordgo.Session, error) {
 	return session, nil
 }
 
-func NewBot(ctx context.Context, cfg *Config, session *discordgo.Session, agent *Agent, issues *IssueTracker) *Bot {
+func NewBot(ctx context.Context, cfg *Config, session *discordgo.Session, agent *Agent, issues *IssueTracker, metrics *Metrics) *Bot {
 	b := &Bot{
 		cfg:      cfg,
 		session:  session,
@@ -49,11 +50,22 @@ func NewBot(ctx context.Context, cfg *Config, session *discordgo.Session, agent 
 		issues:   issues,
 		limits:   NewRateLimiter(cfg.QuestionsPerHour, cfg.IssuesPerDay, cfg.UserLimits),
 		busy:     make(chan struct{}, cfg.MaxConcurrent),
+		metrics:  metrics,
 		ctx:      ctx,
 		inFlight: map[string]bool{},
 	}
 	session.AddHandler(b.onMessage)
 	session.AddHandler(b.onInteraction)
+	session.AddHandler(func(s *discordgo.Session, _ *discordgo.Connect) {
+		metrics.DiscordConnection("connect", true)
+	})
+	session.AddHandler(func(s *discordgo.Session, _ *discordgo.Disconnect) {
+		slog.Warn("disconnected from Discord")
+		metrics.DiscordConnection("disconnect", false)
+	})
+	session.AddHandler(func(s *discordgo.Session, _ *discordgo.Resumed) {
+		metrics.DiscordConnection("resume", true)
+	})
 	session.AddHandler(func(s *discordgo.Session, r *discordgo.Ready) {
 		slog.Info("connected to Discord", "user", r.User.Username, "guilds", len(r.Guilds))
 		// Warn early about channels the bot was told to read but can't see.
@@ -112,6 +124,7 @@ func (b *Bot) onMessage(s *discordgo.Session, m *discordgo.MessageCreate) {
 
 	userID := m.Author.ID
 	if !b.startQuestion(userID) {
+		b.metrics.Question(outcomeBusy)
 		b.replyTo(m.Message, threadID, "I'm still working on your last question. One at a time, please!")
 		return
 	}
@@ -154,6 +167,7 @@ func (b *Bot) replyTo(m *discordgo.Message, threadID, text string) {
 
 func (b *Bot) answer(m *discordgo.Message, threadID string) {
 	if ok, wait := b.limits.AllowQuestion(m.Author.ID); !ok {
+		b.metrics.Question(outcomeRateLimited)
 		b.replyTo(m, threadID, fmt.Sprintf("You've hit the question limit. Try again in %s.", wait.Round(time.Minute)))
 		return
 	}
@@ -192,9 +206,27 @@ func (b *Bot) answer(m *discordgo.Message, threadID string) {
 	}
 
 	start := time.Now()
+	done := b.metrics.QuestionStarted()
 	ans, err := b.agent.Answer(ctx, m.GuildID, history)
+	done()
+	b.metrics.QuestionFinished(time.Since(start), ans.Tokens)
 	slog.Info("answered", "user", m.Author.ID, "thread", threadID,
-		"duration_ms", time.Since(start).Milliseconds(), "draft", ans.Draft != nil, "error", errString(err))
+		"duration_ms", time.Since(start).Milliseconds(), "tokens", ans.Tokens,
+		"limit", ans.Limit, "draft", ans.Draft != nil, "error", errString(err))
+	switch {
+	case err != nil:
+		b.metrics.Question(outcomeError)
+	case ans.Refused:
+		b.metrics.Question(outcomeRefused)
+	case ans.Limit != "":
+		b.metrics.Question(outcomeLimited)
+		b.metrics.QuestionLimit(ans.Limit)
+	default:
+		b.metrics.Question(outcomeAnswered)
+	}
+	if ans.Draft != nil {
+		b.metrics.Issue(ans.Draft.Kind, "drafted")
+	}
 	if err != nil {
 		b.replyTo(m, threadID, "Sorry, something went wrong while answering. Try again in a bit.")
 		return
@@ -428,6 +460,7 @@ func (b *Bot) onInteraction(s *discordgo.Session, i *discordgo.InteractionCreate
 	draft := IssueDraft{Kind: IssueKind(kind), Title: embed.Title, Body: embed.Description}
 
 	if action == cancelPrefix {
+		b.metrics.Issue(draft.Kind, "cancelled")
 		b.updateDraft(i, draft, "cancelled", nil)
 		return
 	}
@@ -437,6 +470,7 @@ func (b *Bot) onInteraction(s *discordgo.Session, i *discordgo.InteractionCreate
 		return
 	}
 	if ok, wait := b.limits.AllowIssue(user.ID); !ok {
+		b.metrics.Issue(draft.Kind, "rate_limited")
 		b.ephemeral(i, fmt.Sprintf("You've filed the maximum number of issues for today. Try again in %s.", wait.Round(time.Minute)))
 		return
 	}
@@ -458,6 +492,7 @@ func (b *Bot) onInteraction(s *discordgo.Session, i *discordgo.InteractionCreate
 	issueURL, err := b.issues.Create(ctx, draft, Reporter{Username: user.Username, UserID: user.ID, MessageLink: link})
 	if err != nil {
 		slog.Error("filing issue", "user", user.ID, "err", err)
+		b.metrics.Issue(draft.Kind, "failed")
 		b.limits.RefundIssue(user.ID)
 		enabled := draftButtons(draft.Kind, ownerID, false)
 		_, _ = s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{Components: &enabled})
@@ -467,6 +502,7 @@ func (b *Bot) onInteraction(s *discordgo.Session, i *discordgo.InteractionCreate
 		return
 	}
 	slog.Info("filed issue", "user", user.ID, "url", issueURL)
+	b.metrics.Issue(draft.Kind, "filed")
 	b.editDraft(i, draft, "filed: "+issueURL, &issueURL)
 }
 

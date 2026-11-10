@@ -110,7 +110,9 @@ type Config struct {
 	ReadableChannels []ReadableChannel
 
 	HealthAddr string
-	A2STimeout time.Duration
+	// MetricsAddr serves Prometheus /metrics, kept off the health listener.
+	MetricsAddr string
+	A2STimeout  time.Duration
 }
 
 func getEnv(key, fallback string) string {
@@ -155,6 +157,7 @@ func ParseConfig() (*Config, error) {
 		BugLabel:     getEnv("GITHUB_BUG_LABEL", "bug"),
 		FeatureLabel: getEnv("GITHUB_FEATURE_LABEL", "enhancement"),
 		HealthAddr:   getEnv("HEALTH_ADDR", ":8080"),
+		MetricsAddr:  getEnv("METRICS_ADDR", ":9090"),
 		Servers:      map[string]GameServer{},
 	}
 

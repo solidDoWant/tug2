@@ -25,8 +25,6 @@ type fakeModel struct {
 	toolsPerCall  int
 	toolChoices   []string
 	cacheControls []string
-	// sizes records each request's input_tokens as reported.
-	sizes []int
 }
 
 func (f *fakeModel) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -81,7 +79,7 @@ func newTestAgent(t *testing.T, model *fakeModel, cfg *Config) (*Agent, *int) {
 	})
 	p := ts.tools["probe"].param
 	ts.params = append(ts.params, anthropicToolUnion(&p))
-	return NewAgent(cfg, ts, false), &toolRuns
+	return NewAgent(cfg, ts, false, nil), &toolRuns
 }
 
 func TestAgentStopsAtTokenBudget(t *testing.T) {

@@ -161,6 +161,7 @@ liveness probe at `/livez` and readiness at `/readyz` on `HEALTH_ADDR`.
 | `READABLE_CHANNELS` / `_FILE`   | _(empty)_          | Extra channels the model may read; see [Reading other channels](#reading-other-channels).                           |
 | `A2S_TIMEOUT_MS`                | `3000`             | Timeout for server queries.                                                                                         |
 | `HEALTH_ADDR`                   | `:8080`            | Serves `/livez` (process up) and `/readyz` (connected to Discord).                                                  |
+| `METRICS_ADDR`                  | `:9090`            | Serves Prometheus `/metrics`; see [Metrics and dashboard](#metrics-and-dashboard).                                  |
 
 `SERVERS` example, with a separate stats-api instance per server:
 
@@ -273,6 +274,50 @@ total for the question (`question_tokens`), so cache hit rates can be checked
 from the logs. A question that hits a limit logs a warning saying which one.
 The token limits count cached tokens too, so they bound size and cost
 conservatively.
+
+## Metrics and dashboard
+
+Prometheus metrics are served on `METRICS_ADDR` (`:9090`), a separate port
+from the probes. Labels never include user IDs, names, question text or
+thread IDs, so series stay bounded and personal data stays out of Prometheus;
+per-user detail is in the logs.
+
+| Metric                                         | Type      | Labels             | Notes                                                                                                   |
+| ---------------------------------------------- | --------- | ------------------ | ------------------------------------------------------------------------------------------------------- |
+| `discordbot_questions_total`                   | counter   | `outcome`          | `answered`, `limited`, `refused`, `error`, `rate_limited` (user over limit), `busy` (one already running). |
+| `discordbot_question_limits_total`             | counter   | `limit`            | Which per-question limit was hit: `rounds`, `budget`, `context`, `output`.                              |
+| `discordbot_question_duration_seconds`         | histogram |                    | Time to answer, for questions that reached the model.                                                   |
+| `discordbot_question_tokens`                   | histogram |                    | Tokens processed per question, against `LLM_TOKENS_PER_QUESTION`.                                       |
+| `discordbot_questions_in_progress`             | gauge     |                    |                                                                                                         |
+| `discordbot_model_requests_total`              | counter   | `model`, `result`  | `ok`, `rate_limited` (429), `overloaded` (529), `server_error`, `client_error`, `network`.               |
+| `discordbot_model_request_duration_seconds`    | histogram | `model`            |                                                                                                         |
+| `discordbot_model_tokens_total`                | counter   | `model`, `type`    | Billed tokens: `input` (uncached), `cache_read`, `cache_write`, `output` (thinking included).            |
+| `discordbot_tool_calls_total`                  | counter   | `tool`, `result`   | `ok`, `error`, `skipped` (not run because of a limit).                                                  |
+| `discordbot_tool_call_duration_seconds`        | histogram | `tool`             |                                                                                                         |
+| `discordbot_issues_total`                      | counter   | `kind`, `action`   | `drafted`, `filed`, `cancelled`, `failed`, `rate_limited`.                                              |
+| `discordbot_discord_connected`                 | gauge     |                    | 1 while the gateway connection is up.                                                                   |
+| `discordbot_discord_connection_events_total`   | counter   | `event`            | `connect`, `disconnect`, `resume`.                                                                      |
+| `discordbot_info`                              | gauge     | `model`, `effort`, `tokens_per_question`, `issues_enabled` | Always 1; the running configuration.                       |
+| `go_*` / `process_*`                           | various   |                    | Go runtime and process collectors.                                                                      |
+
+[`grafana-dashboard.json`](grafana-dashboard.json) is a Grafana dashboard for
+these: spend, cost per question, cache hit rate, question outcomes and limits,
+time to answer, Claude API results and latency, tool calls and errors, issue
+filing, Discord connection, and runtime. Import it and pick the Prometheus
+data source.
+
+Spend is estimated from the token counters and four price variables at the
+top of the dashboard (USD per million tokens for input, cache reads, cache
+writes and output). They default to Claude Haiku 5.5's prices; change them if
+you change `LLM_MODEL`. Token counts come from the API's own usage figures,
+so the estimate tracks the bill closely, but the Anthropic Console is the
+source of truth.
+
+Useful alert signals: `discordbot_discord_connected == 0` for a few minutes;
+spend rate from `discordbot_model_tokens_total` above a threshold; a rising
+share of `discordbot_model_requests_total{result!="ok"}`; and
+`discordbot_tool_calls_total{result="error"}` by tool, which catches a stats
+API, game server or channel the bot can't reach.
 
 ## Safety notes
 

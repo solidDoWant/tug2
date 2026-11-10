@@ -1,4 +1,13 @@
-FROM mcr.microsoft.com/devcontainers/go:1-1.24-bookworm
+FROM mcr.microsoft.com/devcontainers/go:2-1.27-bookworm
+
+# The base image's Go can trail the patch release a module requires (go.mod
+# "go 1.27.4" on a 1.27.3 image). "auto" lets the go command fetch the exact
+# toolchain a module asks for, instead of refusing to build with "local".
+ENV GOTOOLCHAIN=auto
+
+# Keep in sync with SOURCEMOD_VERSION in the repository's root Dockerfile.
+ARG SOURCEMOD_VERSION=1.12.0-git7259
+ARG SOURCEMOD_RELEASE=1.12.0.7259
 
 RUN \
     # Agree to steamcmd license
@@ -12,8 +21,8 @@ RUN \
     ln -s /usr/games/steamcmd /usr/local/bin/steamcmd
 
 # Install linuxgsm for local use
-# This image should be kept in sync with the dockerfile source image
-COPY --from=ghcr.io/gameservermanagers/gameserver:ins@sha256:b99ed7c8d3cc8fcf6229380f5c82b3e96b1616e930449f6ec07d7a8463ccbd6b /app/linuxgsm.sh /usr/local/bin/linuxgsm
+# Pinned by digest; the server image no longer uses this base, so this is only for the local linuxgsm script.
+COPY --from=ghcr.io/gameservermanagers/gameserver:ins@sha256:59cbec3bf83fd068c4f415c66baf26690d95a6a8f57d58774ece6c439c4662a8 /app/linuxgsm.sh /usr/local/bin/linuxgsm
 
 RUN \
     # Install [Dive](https://github.com/wagoodman/dive) for inspecting container images
@@ -26,9 +35,9 @@ RUN \
     apt update && \
     DEBIAN_FRONTEND=noninteractive apt install --no-install-recommends -y \
     lib32gcc-s1 \
-    lib32stdc++6 \
+    lib32stdc++6 && \
     mkdir -p /opt/sourcemod && \
-    curl -fsSL -o - https://sm.alliedmods.net/smdrop/1.12/sourcemod-$äSOURCEMOD_VERSIONå-linux.tar.gz | \
-    tar -xvzf - -C /opt/sourcemod && \
+    curl -fsSL -o - https://github.com/alliedmodders/sourcemod/releases/download/${SOURCEMOD_RELEASE}/sourcemod-${SOURCEMOD_VERSION}-linux.tar.gz | \
+    tar -xzf - -C /opt/sourcemod && \
     ln -s /opt/sourcemod/addons/sourcemod/scripting/spcomp64 /usr/local/bin/smcompiler && \
     ln -s /opt/sourcemod/addons/sourcemod/scripting/spcomp64 /usr/local/bin/spcomp

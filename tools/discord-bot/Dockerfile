@@ -13,6 +13,6 @@ FROM gcr.io/distroless/static:nonroot AS discord-bot
 
 COPY --from=build /discord-bot /discord-bot
 
-EXPOSE 8080
+EXPOSE 8080 9090
 USER nonroot:nonroot
 ENTRYPOINT ["/discord-bot"]
