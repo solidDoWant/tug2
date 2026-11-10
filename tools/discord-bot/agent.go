@@ -50,7 +50,9 @@ type Agent struct {
 
 func NewAgent(cfg *Config, tools *Toolset, issuesEnabled bool, metrics *Metrics) *Agent {
 	return &Agent{
-		client:  anthropic.NewClient(), // reads ANTHROPIC_API_KEY
+		// The default client reads its credentials from the environment: an
+		// API key, or workload identity federation (see Config.AnthropicAuth).
+		client:  anthropic.NewClient(),
 		cfg:     cfg,
 		tools:   tools,
 		metrics: metrics,
@@ -60,6 +62,17 @@ func NewAgent(cfg *Config, tools *Toolset, issuesEnabled bool, metrics *Metrics)
 			CacheControl: anthropic.NewCacheControlEphemeralParam(),
 		}},
 	}
+}
+
+// CheckAccess makes one cheap, unbilled request (a model lookup) to prove the
+// credentials work, including any workload identity token exchange, and that
+// the configured model exists, so a misconfiguration fails at startup rather
+// than on the first question.
+func (a *Agent) CheckAccess(ctx context.Context) error {
+	if _, err := a.client.Models.Get(ctx, a.cfg.Model, anthropic.ModelGetParams{}); err != nil {
+		return fmt.Errorf("checking Claude API access for model %q: %w", a.cfg.Model, err)
+	}
+	return nil
 }
 
 // buildSystemPrompt is fixed for the life of the process, so it stays cacheable.

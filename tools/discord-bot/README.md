@@ -51,6 +51,54 @@ the reporter to press **Confirm**.
    [Reading other channels](#reading-other-channels).
 4. Copy the channel's ID (Developer Mode → right-click → Copy Channel ID).
 
+## Claude API authentication
+
+Use **one** of these:
+
+- **API key:** set `ANTHROPIC_API_KEY`.
+- **Workload identity federation (WIF):** no long-lived key. The Anthropic SDK
+  exchanges the workload's own OIDC token, such as a Kubernetes service
+  account token, for short-lived API access, and renews it automatically. Set
+  `ANTHROPIC_FEDERATION_RULE_ID`, `ANTHROPIC_ORGANIZATION_ID` and
+  `ANTHROPIC_IDENTITY_TOKEN_FILE`, plus `ANTHROPIC_SERVICE_ACCOUNT_ID` and
+  `ANTHROPIC_WORKSPACE_ID` if your federation rule needs them. The federation
+  rule is set up in the Claude Console and decides which issuer and token
+  claims it trusts. The token file is re-read on every exchange, so a rotated
+  Kubernetes token is picked up.
+
+At startup the bot refuses ambiguous or partial setups: both an API key and
+WIF settings, a missing WIF variable, an unreadable token file, or
+`ANTHROPIC_AUTH_TOKEN` or `ANTHROPIC_PROFILE` set alongside WIF. Each of those
+would otherwise make the SDK quietly use different credentials than intended.
+It then makes one model lookup, which isn't billed, to prove the credentials
+(including the token exchange) and `LLM_MODEL` work, and exits with the error
+if they don't. The startup log says which method is in use (`auth`), and so
+does the `auth` label on `discordbot_info`.
+
+Kubernetes example, with a projected service account token. Set the audience
+to what your federation rule expects:
+
+```yaml
+spec:
+  serviceAccountName: discord-bot
+  containers:
+    - name: discord-bot
+      env:
+        - { name: ANTHROPIC_FEDERATION_RULE_ID, value: "<rule id>" }
+        - { name: ANTHROPIC_ORGANIZATION_ID, value: "<organization id>" }
+        - { name: ANTHROPIC_IDENTITY_TOKEN_FILE, value: /var/run/secrets/anthropic/token }
+      volumeMounts:
+        - { name: anthropic-token, mountPath: /var/run/secrets/anthropic, readOnly: true }
+  volumes:
+    - name: anthropic-token
+      projected:
+        sources:
+          - serviceAccountToken:
+              path: token
+              audience: "<audience your federation rule expects>"
+              expirationSeconds: 3600
+```
+
 ## GitHub setup
 
 Issues are filed by a GitHub App, so they show up as `<app name>[bot]`, not as
@@ -152,7 +200,12 @@ liveness probe at `/livez` and readiness at `/readyz` on `HEALTH_ADDR`.
 | ------------------------------- | ------------------ | ------------------------------------------------------------------------------------------------------------------- |
 | `DISCORD_TOKEN`                 | _(required)_       | Bot token.                                                                                                          |
 | `DISCORD_CHANNEL_ID`            | _(required)_       | The channel the bot answers mentions in.                                                                            |
-| `ANTHROPIC_API_KEY`             | _(required)_       | Claude API key.                                                                                                     |
+| `ANTHROPIC_API_KEY`             | _(one of)_         | Claude API key. Alternatively use workload identity federation; see [Claude API authentication](#claude-api-authentication). |
+| `ANTHROPIC_FEDERATION_RULE_ID`  | _(one of)_         | Workload identity federation: the federation rule's ID.                                                             |
+| `ANTHROPIC_ORGANIZATION_ID`     | _(with WIF)_       | Workload identity federation: your Anthropic organization ID.                                                       |
+| `ANTHROPIC_IDENTITY_TOKEN_FILE` | _(with WIF)_       | Workload identity federation: path to the workload's OIDC token, re-read on every exchange. Or pass the token itself in `ANTHROPIC_IDENTITY_TOKEN`. |
+| `ANTHROPIC_SERVICE_ACCOUNT_ID`  | _(optional)_       | Workload identity federation: the service account to act as, if your rule needs it.                                 |
+| `ANTHROPIC_WORKSPACE_ID`        | _(optional)_       | Workload identity federation: the workspace, if the rule spans several.                                             |
 | `SERVERS`                       | _(required)_       | JSON array of servers; see below. The first is the default when a question doesn't name one.                        |
 | `LLM_MODEL`                     | `claude-haiku-5-5` | Model ID, e.g. `claude-sonnet-5-5` or `claude-opus-5-5` for better answers at higher cost.                          |
 | `LLM_EFFORT`                    | `low`              | `low`, `medium`, `high`, `xhigh` or `max`. Higher thinks harder and costs more.                                     |

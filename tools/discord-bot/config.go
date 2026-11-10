@@ -52,7 +52,11 @@ type Config struct {
 	Servers     map[string]GameServer
 	ServerOrder []string
 
-	// Anthropic API key is read by the SDK from ANTHROPIC_API_KEY.
+	// AnthropicAuth is how the bot authenticates to the Claude API:
+	// authAPIKey or authWorkloadIdentity. The SDK reads the credentials from
+	// the environment itself; this only records and validates the choice.
+	AnthropicAuth string
+
 	Model     string
 	Effort    string
 	MaxTokens int64
@@ -192,6 +196,7 @@ func ParseConfig() (*Config, error) {
 	errs = append(errs, err)
 	c.A2STimeout = time.Duration(timeoutMS) * time.Millisecond
 
+	errs = append(errs, c.parseAnthropicAuth())
 	errs = append(errs, c.parseGitHub())
 	errs = append(errs, c.parseUserLimits())
 	errs = append(errs, c.parseChannelDescriptions())
@@ -232,6 +237,84 @@ func ParseConfig() (*Config, error) {
 		return nil, err
 	}
 	return c, nil
+}
+
+// Claude API authentication modes.
+const (
+	authAPIKey           = "api_key"
+	authWorkloadIdentity = "workload_identity"
+)
+
+// Environment variables the SDK reads for workload identity federation.
+var wifRequired = []string{"ANTHROPIC_FEDERATION_RULE_ID", "ANTHROPIC_ORGANIZATION_ID"}
+
+// parseAnthropicAuth picks the Claude API credential: an API key, or workload
+// identity federation (WIF), where the SDK exchanges a workload's OIDC token
+// (e.g. a Kubernetes service account token) for short-lived API access.
+//
+// The SDK walks its own credential chain and the first source set wins: an
+// API key or auth token silently beats WIF, and a named profile beats it too.
+// So exactly one method must be configured, and WIF must be complete;
+// anything ambiguous or partial is a startup error rather than a surprise.
+func (c *Config) parseAnthropicAuth() error {
+	isSet := func(key string) bool { return strings.TrimSpace(os.Getenv(key)) != "" }
+
+	var wifSet, wifMissing []string
+	for _, key := range append(wifRequired, "ANTHROPIC_IDENTITY_TOKEN_FILE", "ANTHROPIC_IDENTITY_TOKEN",
+		"ANTHROPIC_SERVICE_ACCOUNT_ID", "ANTHROPIC_WORKSPACE_ID") {
+		if isSet(key) {
+			wifSet = append(wifSet, key)
+		}
+	}
+	for _, key := range wifRequired {
+		if !isSet(key) {
+			wifMissing = append(wifMissing, key)
+		}
+	}
+	tokenFile, tokenInline := os.Getenv("ANTHROPIC_IDENTITY_TOKEN_FILE"), os.Getenv("ANTHROPIC_IDENTITY_TOKEN")
+	if tokenFile == "" && tokenInline == "" {
+		wifMissing = append(wifMissing, "ANTHROPIC_IDENTITY_TOKEN_FILE (or ANTHROPIC_IDENTITY_TOKEN)")
+	}
+
+	apiKey := isSet("ANTHROPIC_API_KEY")
+	switch {
+	case len(wifSet) == 0 && !apiKey:
+		return errors.New("credentials for the Claude API are required: set ANTHROPIC_API_KEY, or configure workload identity federation " +
+			"(ANTHROPIC_FEDERATION_RULE_ID, ANTHROPIC_ORGANIZATION_ID and ANTHROPIC_IDENTITY_TOKEN_FILE)")
+	case len(wifSet) > 0 && apiKey:
+		return fmt.Errorf("both ANTHROPIC_API_KEY and workload identity settings (%s) are set; the API key would silently win, so set only one",
+			strings.Join(wifSet, ", "))
+	case apiKey:
+		c.AnthropicAuth = authAPIKey
+		return nil
+	}
+
+	var errs []error
+	if len(wifMissing) > 0 {
+		errs = append(errs, fmt.Errorf("workload identity federation is partly configured; missing %s", strings.Join(wifMissing, ", ")))
+	}
+	for _, key := range []string{"ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_PROFILE"} {
+		if isSet(key) {
+			errs = append(errs, fmt.Errorf("%s is set and would take precedence over workload identity federation; unset it", key))
+		}
+	}
+	if tokenFile != "" && tokenInline != "" {
+		errs = append(errs, errors.New("set only one of ANTHROPIC_IDENTITY_TOKEN_FILE and ANTHROPIC_IDENTITY_TOKEN"))
+	}
+	// The SDK reads the file on every token exchange (so a rotated
+	// Kubernetes token is picked up); check it is there at startup.
+	if tokenFile != "" {
+		if data, err := os.ReadFile(tokenFile); err != nil {
+			errs = append(errs, fmt.Errorf("reading ANTHROPIC_IDENTITY_TOKEN_FILE: %w", err))
+		} else if strings.TrimSpace(string(data)) == "" {
+			errs = append(errs, errors.New("ANTHROPIC_IDENTITY_TOKEN_FILE is empty"))
+		}
+	}
+	if len(errs) > 0 {
+		return errors.Join(errs...)
+	}
+	c.AnthropicAuth = authWorkloadIdentity
+	return nil
 }
 
 // parseGitHub reads the repository and GitHub App settings. Issue tools are

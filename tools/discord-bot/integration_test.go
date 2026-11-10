@@ -19,6 +19,7 @@ func TestToolsAgainstStatsAPI(t *testing.T) {
 		t.Skip("STATS_API_URL not set")
 	}
 	t.Setenv("DISCORD_TOKEN", "x")
+	t.Setenv("ANTHROPIC_API_KEY", "test")
 	t.Setenv("DISCORD_CHANNEL_ID", "1")
 	t.Setenv("SERVERS", `[{"name":"main","stats_api_url":"`+base+`"}]`)
 	cfg, err := ParseConfig()

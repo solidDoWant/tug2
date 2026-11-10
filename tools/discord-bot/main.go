@@ -29,9 +29,6 @@ func run(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("configuration error: %w", err)
 	}
-	if os.Getenv("ANTHROPIC_API_KEY") == "" {
-		return errors.New("configuration error: ANTHROPIC_API_KEY is required")
-	}
 
 	metrics := NewMetrics(cfg)
 
@@ -54,6 +51,14 @@ func run(ctx context.Context) error {
 	channels := &DiscordChannels{session: session, botChannelID: cfg.ChannelID, descriptions: cfg.ChannelDescriptions, refreshMember: true}
 	tools := NewToolset(cfg, NewStatsClient(cfg.Servers), issues, channels)
 	agent := NewAgent(cfg, tools, issues != nil, metrics)
+
+	checkCtx, cancelCheck := context.WithTimeout(ctx, 30*time.Second)
+	err = agent.CheckAccess(checkCtx)
+	cancelCheck()
+	if err != nil {
+		return err
+	}
+	slog.Info("Claude API access confirmed", "auth", cfg.AnthropicAuth, "model", cfg.Model)
 	bot := NewBot(ctx, cfg, session, agent, issues, metrics, channels)
 	if err := bot.Open(); err != nil {
 		return fmt.Errorf("connecting to Discord: %w", err)

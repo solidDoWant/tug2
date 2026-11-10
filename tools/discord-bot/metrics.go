@@ -123,9 +123,9 @@ func NewMetrics(cfg *Config) *Metrics {
 	info := prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "discordbot_info",
 		Help: "Always 1; labels carry the running configuration.",
-	}, []string{"model", "effort", "tokens_per_question", "issues_enabled"})
+	}, []string{"model", "effort", "tokens_per_question", "issues_enabled", "auth"})
 	reg.MustRegister(info)
-	info.WithLabelValues(cfg.Model, cfg.Effort, strconv.Itoa(cfg.TokensPerQuestion), strconv.FormatBool(cfg.IssuesEnabled)).Set(1)
+	info.WithLabelValues(cfg.Model, cfg.Effort, strconv.Itoa(cfg.TokensPerQuestion), strconv.FormatBool(cfg.IssuesEnabled), cfg.AnthropicAuth).Set(1)
 
 	// Pre-create the common series so rates start at 0 instead of absent.
 	for _, o := range []string{outcomeAnswered, outcomeLimited, outcomeRefused, outcomeError, outcomeRateLimited, outcomeBusy} {

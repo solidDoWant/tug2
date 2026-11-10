@@ -12,6 +12,7 @@ import (
 
 func TestAPIReferenceTool(t *testing.T) {
 	t.Setenv("DISCORD_TOKEN", "x")
+	t.Setenv("ANTHROPIC_API_KEY", "test")
 	t.Setenv("DISCORD_CHANNEL_ID", "1")
 	t.Setenv("SERVERS", `[
 		{"name":"main","stats_api_url":"http://internal","public_stats_api_url":"https://stats.example.com/"},

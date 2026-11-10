@@ -183,6 +183,7 @@ func TestRateLimiterOverrides(t *testing.T) {
 
 func TestParseConfigExtras(t *testing.T) {
 	t.Setenv("DISCORD_TOKEN", "x")
+	t.Setenv("ANTHROPIC_API_KEY", "test")
 	t.Setenv("DISCORD_CHANNEL_ID", "1")
 	t.Setenv("SERVERS", `[{"name":"main","query_address":"h:27000"}]`)
 	t.Setenv("USER_LIMITS", `{"100000000000000001": {"questions_per_hour": 0, "issues_per_day": 0, "note": "owner"},
@@ -232,6 +233,7 @@ func TestParseConfigExtras(t *testing.T) {
 
 func TestParseConfigGitHubApp(t *testing.T) {
 	t.Setenv("DISCORD_TOKEN", "x")
+	t.Setenv("ANTHROPIC_API_KEY", "test")
 	t.Setenv("DISCORD_CHANNEL_ID", "1")
 	t.Setenv("SERVERS", `[{"name":"main","query_address":"h:27000"}]`)
 
@@ -275,6 +277,7 @@ func TestParseConfigGitHubApp(t *testing.T) {
 
 func TestParseConfig(t *testing.T) {
 	t.Setenv("DISCORD_TOKEN", "x")
+	t.Setenv("ANTHROPIC_API_KEY", "test")
 	t.Setenv("DISCORD_CHANNEL_ID", "1")
 	t.Setenv("SERVERS", `[{"name":"Main","stats_api_url":"http://stats/","query_address":"h:27000"},{"name":"test","query_address":"h:27001"}]`)
 	cfg, err := ParseConfig()
