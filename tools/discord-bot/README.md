@@ -113,6 +113,24 @@ channel. At startup it logs a warning for any listed channel it can't read.
 Text and embeds are both read, since changelogs are often posted by webhooks.
 It can only read the channels listed here.
 
+## Deployment: run exactly one replica
+
+Run **one** replica, and in Kubernetes use the `Recreate` strategy rather
+than `RollingUpdate`, so an old and a new pod never run at the same time.
+
+Every connection made with the bot's token receives every message. Two
+running copies would both answer each mention. The second would fail to start
+a thread, which the first already made, and post an error. Both would answer
+every follow-up, and each keeps its own rate-limit counts, so limits would be
+doubled. Discord's sharding only splits *servers* between connections, so it
+doesn't help a bot that lives in one server.
+
+One replica is enough: the bot spends nearly all its time waiting on the
+model, and `MAX_CONCURRENT_QUESTIONS` controls how many questions it answers
+at once. It keeps no state that a restart loses, apart from rate-limit counts
+and any answer in progress, so a crashed pod just needs restarting. Point the
+liveness probe at `/livez` and readiness at `/readyz` on `HEALTH_ADDR`.
+
 ## Configuration
 
 | Variable                        | Default            | Description                                                                                                         |
