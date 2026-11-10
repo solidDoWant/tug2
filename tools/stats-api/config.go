@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"strings"
 	"time"
@@ -35,6 +36,12 @@ type Config struct {
 	// the header entirely. The default keeps shared caches no more than ~60s
 	// stale, which is the intended freshness floor for this data.
 	CacheControl string
+
+	// BasePath is the URL path prefix the API, docs, and spec are served under
+	// (e.g. "/test"), so several deployments can share one hostname. It is
+	// normalised to a leading slash and no trailing slash; empty means the root.
+	// The health probes are always served at the root regardless.
+	BasePath string
 }
 
 func getEnv(key, fallback string) string {
@@ -61,6 +68,11 @@ func ParseConfig() (*Config, error) {
 		cacheControl = ""
 	}
 
+	basePath, err := normaliseBasePath(os.Getenv("BASE_PATH"))
+	if err != nil {
+		return nil, err
+	}
+
 	return &Config{
 		ListenAddr:   getEnv("LISTEN_ADDR", ":8080"),
 		MetricsAddr:  getEnv("METRICS_ADDR", ":9090"),
@@ -68,5 +80,27 @@ func ParseConfig() (*Config, error) {
 		ReadTimeout:  15 * time.Second,
 		WriteTimeout: 30 * time.Second,
 		CacheControl: cacheControl,
+		BasePath:     basePath,
 	}, nil
+}
+
+// normaliseBasePath turns a BASE_PATH value into the form the router expects:
+// "" for the root, otherwise a leading slash and no trailing slash ("test/",
+// "/test" and "/test/" all become "/test"). Values that cannot be a plain path
+// prefix are rejected so a typo fails at startup instead of silently serving
+// nothing: a query or fragment, mux wildcard braces, or empty/dot segments.
+func normaliseBasePath(raw string) (string, error) {
+	trimmed := strings.Trim(strings.TrimSpace(raw), "/")
+	if trimmed == "" {
+		return "", nil
+	}
+	if strings.ContainsAny(trimmed, "?#{} ") {
+		return "", fmt.Errorf("invalid BASE_PATH %q: must be a plain URL path", raw)
+	}
+	for _, segment := range strings.Split(trimmed, "/") {
+		if segment == "" || segment == "." || segment == ".." {
+			return "", fmt.Errorf("invalid BASE_PATH %q: empty or dot path segment", raw)
+		}
+	}
+	return "/" + trimmed, nil
 }

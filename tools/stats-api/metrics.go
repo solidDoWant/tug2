@@ -3,6 +3,7 @@ package main
 import (
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -85,15 +86,21 @@ var probePatterns = map[string]struct{}{
 // the raw path, so high-cardinality path params like {steam_id} cannot explode
 // the metric series.
 //
+// The base path is removed from the label ("GET /test/api/v1/players" is
+// recorded as "GET /api/v1/players"), so every deployment reports the same
+// route names whatever prefix it is served under; the scrape's job/instance
+// labels already tell deployments apart.
+//
 // mux.Handler resolves the pattern for the label; the request is then served via
 // mux.ServeHTTP so the standard-library router still populates path values for
 // the huma handlers (calling the matched handler directly would skip that).
-func (m *Metrics) Instrument(mux *http.ServeMux) http.Handler {
+func (m *Metrics) Instrument(basePath string, mux *http.ServeMux) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, pattern := mux.Handler(r)
 		if pattern == "" {
 			pattern = "unmatched"
 		}
+		pattern = stripBasePath(pattern, basePath)
 
 		// Serve health probes without recording any metrics (count, latency, or
 		// in-flight) so they never appear in the series or skew aggregates.
@@ -113,6 +120,25 @@ func (m *Metrics) Instrument(mux *http.ServeMux) http.Handler {
 		m.requests.WithLabelValues(pattern, r.Method, strconv.Itoa(rec.status)).Inc()
 		m.duration.WithLabelValues(pattern, r.Method).Observe(elapsed)
 	})
+}
+
+// stripBasePath removes basePath from the path of a "METHOD /path" mux pattern.
+// The bare base path (the docs redirect registered at "GET /test") becomes "/".
+func stripBasePath(pattern, basePath string) string {
+	if basePath == "" {
+		return pattern
+	}
+	method, path, ok := strings.Cut(pattern, " ")
+	if !ok {
+		return pattern
+	}
+	if path == basePath {
+		return method + " /"
+	}
+	if rest, found := strings.CutPrefix(path, basePath+"/"); found {
+		return method + " /" + rest
+	}
+	return pattern
 }
 
 // statusRecorder captures the response status code for the request metrics,

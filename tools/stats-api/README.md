@@ -16,6 +16,7 @@ This tool only owns its HTTP settings:
 | `LISTEN_ADDR`   | `:8080`                                                                | Address the API HTTP server binds to.                                                                                                                     |
 | `METRICS_ADDR`  | `:9090`                                                                | Address the Prometheus metrics server binds to.                                                                                                           |
 | `CACHE_CONTROL` | `public, s-maxage=60, stale-while-revalidate=60, stale-if-error=86400` | `Cache-Control` header stamped on successful `GET /api/v1/*` responses so a shared cache/CDN can serve repeated anonymous reads. Set to `off` to disable. |
+| `BASE_PATH`     | _(empty)_                                                              | URL path prefix to serve the API, docs, and spec under (e.g. `/test`), so several deployments can share one hostname. See [Base path](#base-path).        |
 
 `CACHE_CONTROL` exists because this API is intended to sit behind a CDN (e.g.
 Cloudflare) on a public network. `s-maxage` targets the shared cache only (no
@@ -28,6 +29,29 @@ pages), set Postgres `statement_timeout` through the connection: either
 `DATABASE_URL=...?statement_timeout=5000` (milliseconds) or
 `PGOPTIONS="-c statement_timeout=5000"`. pgx forwards both as session startup
 parameters; the service does not set a default of its own.
+
+### Base path
+
+Setting `BASE_PATH=/test` moves every API, docs, and spec route under that
+prefix: `/test/api/v1/players`, `/test/docs`, `/test/openapi.yaml`, with
+`/test` and `/test/` redirecting to `/test/docs`. The unprefixed paths then
+return 404. Leading/trailing slashes are optional (`test`, `/test` and `/test/`
+are equivalent); an invalid value (query string, `{}` wildcards, empty or dot
+segments) fails startup.
+
+The spec's server URL, the docs UI's spec link, and the `$schema`/`Link`
+schema URLs all include the prefix, so the docs and "try it" requests work
+through the proxy. The proxy in front must therefore **forward the prefix
+intact rather than strip it**.
+
+What does not move:
+
+- `/livez` and `/readyz` stay at the root, since the orchestrator probes the
+  pod directly rather than through the proxy.
+- The metrics listener (`METRICS_ADDR`) is unaffected, and the `route` label
+  omits the prefix (`GET /api/v1/players`, not `GET /test/api/v1/players`), so
+  every deployment reports the same route names; `job`/`instance` tell them
+  apart.
 
 ### Database connection
 

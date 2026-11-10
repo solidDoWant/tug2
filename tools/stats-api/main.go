@@ -46,8 +46,11 @@ func run(ctx context.Context) error {
 	defer store.Close()
 
 	slog.Info("connected to database")
+	if config.BasePath != "" {
+		slog.Info("serving under base path", "base_path", config.BasePath)
+	}
 
-	server := NewServer(store)
+	server := NewServer(store, config.BasePath)
 	metrics := NewMetrics(store.Stat)
 
 	// Handler chain, outermost first: AccessLog logs each completed request,
@@ -58,7 +61,7 @@ func run(ctx context.Context) error {
 	// duration cover the whole chain.
 	httpServer := &http.Server{
 		Addr:         config.ListenAddr,
-		Handler:      AccessLog(CacheControl(config.CacheControl, metrics.Instrument(server.Routes()))),
+		Handler:      AccessLog(CacheControl(config.CacheControl, config.BasePath, metrics.Instrument(config.BasePath, server.Routes()))),
 		ReadTimeout:  config.ReadTimeout,
 		WriteTimeout: config.WriteTimeout,
 	}

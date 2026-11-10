@@ -5,14 +5,15 @@ import (
 	"strings"
 )
 
-// cacheablePrefix is the path prefix whose successful GET responses are safe to
-// stamp as cacheable: the versioned data API. Everything outside it — the
-// liveness/readiness probes, the OpenAPI docs/spec — is intentionally excluded
-// so health signals are never served stale and the spec stays revalidated.
+// cacheablePrefix is the path prefix (below the base path) whose successful GET
+// responses are safe to stamp as cacheable: the versioned data API. Everything
+// outside it — the liveness/readiness probes, the OpenAPI docs/spec — is
+// intentionally excluded so health signals are never served stale and the spec
+// stays revalidated.
 const cacheablePrefix = "/api/v1/"
 
 // CacheControl wraps next so that successful (2xx) responses to GET requests
-// under /api/v1/* carry the given Cache-Control header, letting a shared cache
+// under <basePath>/api/v1/* carry the given Cache-Control header, letting a shared cache
 // (e.g. a CDN such as Cloudflare) serve repeated anonymous reads without hitting
 // the origin. Because every data endpoint is a pure function of URL+query string
 // with no auth or cookies, the full request URL is a sound cache key.
@@ -21,13 +22,14 @@ const cacheablePrefix = "/api/v1/"
 // shared cache never holds an error in place of a real result. When value is
 // empty the wrapper is a pass-through, so caching can be disabled wholesale via
 // configuration.
-func CacheControl(value string, next http.Handler) http.Handler {
+func CacheControl(value, basePath string, next http.Handler) http.Handler {
 	if value == "" {
 		return next
 	}
+	prefix := basePath + cacheablePrefix
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, cacheablePrefix) {
+		if r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, prefix) {
 			w = &cacheWriter{ResponseWriter: w, cacheable: value}
 		}
 		next.ServeHTTP(w, r)

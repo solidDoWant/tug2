@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 
@@ -12,16 +13,25 @@ import (
 // Server holds the dependencies shared by the API operations.
 type Server struct {
 	store *Store
+	// basePath prefixes every API, docs, and spec route (see Config.BasePath).
+	basePath string
 }
 
-// NewServer wires the operations up to a data store.
-func NewServer(store *Store) *Server {
-	return &Server{store: store}
+// NewServer wires the operations up to a data store, serving them under
+// basePath ("" for the root; otherwise normalised as by normaliseBasePath).
+func NewServer(store *Store, basePath string) *Server {
+	return &Server{store: store, basePath: basePath}
 }
 
 // Routes builds the API router. A huma API is layered over the standard
 // library mux so the OpenAPI 3.1 spec and docs are generated from the Go types
 // registered below — served at /docs (UI), /openapi.yaml, and /openapi.json.
+//
+// With a base path, every API, docs, and spec route moves under it, and huma's
+// prefix support also points the docs UI, the spec's server URL, and the
+// $schema links at the prefixed paths. The request is expected to arrive with
+// the prefix intact: a reverse proxy in front must forward it, not strip it.
+// The health probes stay at the root (see registerProbes).
 //
 // The concrete *http.ServeMux is returned (rather than http.Handler) so the
 // metrics middleware can resolve each request's matched route pattern for its
@@ -31,9 +41,15 @@ func (s *Server) Routes() *http.ServeMux {
 
 	config := huma.DefaultConfig("stats-api", "1")
 	config.Info.Description = "Read-only REST API over the gg2_mstats2 player statistics database."
-	api := humago.New(mux, config)
+	var api huma.API
+	if s.basePath == "" {
+		api = humago.New(mux, config)
+	} else {
+		api = humago.NewWithPrefix(mux, s.basePath, config)
+	}
 
 	s.register(api)
+	s.registerProbes(mux)
 
 	// Send the bare root and common default-document paths to the API docs so a
 	// browser hitting the domain lands on something useful instead of a 404.
@@ -42,10 +58,16 @@ func (s *Server) Routes() *http.ServeMux {
 	// still 404 rather than being swallowed by a catch-all redirect.
 	// 302, not 301: a permanent redirect is cached by browsers indefinitely, which would strand
 	// anyone who has hit "/" once if it ever serves something other than a redirect to the docs.
-	docsRedirect := http.RedirectHandler("/docs", http.StatusFound)
-	mux.Handle("GET /{$}", docsRedirect)
-	mux.Handle("GET /index.html", docsRedirect)
-	mux.Handle("GET /index.htm", docsRedirect)
+	//
+	// Under a base path, the prefix itself (with and without a trailing slash)
+	// redirects too, so "/test" and "/test/" both land on "/test/docs".
+	docsRedirect := http.RedirectHandler(s.basePath+"/docs", http.StatusFound)
+	mux.Handle("GET "+s.basePath+"/{$}", docsRedirect)
+	mux.Handle("GET "+s.basePath+"/index.html", docsRedirect)
+	mux.Handle("GET "+s.basePath+"/index.htm", docsRedirect)
+	if s.basePath != "" {
+		mux.Handle("GET "+s.basePath, docsRedirect)
+	}
 
 	return mux
 }
@@ -55,12 +77,6 @@ func (s *Server) Routes() *http.ServeMux {
 // huma derives the request schema (query/path params, validation) and the
 // response schema from these struct types, so the spec stays in lockstep with
 // the handlers.
-
-type StatusOutput struct {
-	Body struct {
-		Status string `json:"status" example:"ok"`
-	}
-}
 
 // PageInput is the shared pagination query for list endpoints.
 //
@@ -144,30 +160,6 @@ type FireSupportOutput struct {
 // --- registration ----------------------------------------------------------
 
 func (s *Server) register(api huma.API) {
-	// The probes are served on the API listener (so they share fate with the
-	// path they vouch for) but kept out of the OpenAPI spec — the published
-	// contract is the data API only; these are infra endpoints for the
-	// orchestrator, not API consumers.
-	huma.Register(api, huma.Operation{
-		OperationID: "live",
-		Method:      http.MethodGet,
-		Path:        "/livez",
-		Summary:     "Liveness probe",
-		Description: "Returns 200 as long as the server can serve requests. Does not touch the database, so it is safe to use for restart decisions.",
-		Tags:        []string{"operational"},
-		Hidden:      true,
-	}, s.live)
-
-	huma.Register(api, huma.Operation{
-		OperationID: "ready",
-		Method:      http.MethodGet,
-		Path:        "/readyz",
-		Summary:     "Readiness probe",
-		Description: "Pings the database; use for load-balancer rotation.",
-		Tags:        []string{"operational"},
-		Hidden:      true,
-	}, s.ready)
-
 	huma.Register(api, huma.Operation{
 		OperationID: "list-players",
 		Method:      http.MethodGet,
@@ -265,22 +257,34 @@ func (s *Server) register(api huma.API) {
 	}, s.listFireSupport)
 }
 
+// registerProbes serves the liveness and readiness probes on the API listener
+// (so they share fate with the path they vouch for) but always at the root,
+// whatever the base path: the orchestrator calls the pod directly, not through
+// the proxy that the base path exists for. They are plain handlers rather than
+// huma operations so they stay out of the OpenAPI spec and outside the prefix —
+// the published contract is the data API only. Keep the paths in sync with
+// probePatterns (metrics.go) and isProbe (logging.go).
+func (s *Server) registerProbes(mux *http.ServeMux) {
+	mux.HandleFunc("GET /livez", func(w http.ResponseWriter, r *http.Request) {
+		writeStatus(w, http.StatusOK, "ok")
+	})
+	mux.HandleFunc("GET /readyz", func(w http.ResponseWriter, r *http.Request) {
+		if err := s.store.Ping(r.Context()); err != nil {
+			writeStatus(w, http.StatusServiceUnavailable, "database unavailable")
+			return
+		}
+		writeStatus(w, http.StatusOK, "ok")
+	})
+}
+
+// writeStatus writes a probe response body of the form {"status": "..."}.
+func writeStatus(w http.ResponseWriter, code int, status string) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(code)
+	_ = json.NewEncoder(w).Encode(map[string]string{"status": status})
+}
+
 // --- handlers --------------------------------------------------------------
-
-func (s *Server) live(ctx context.Context, _ *struct{}) (*StatusOutput, error) {
-	out := &StatusOutput{}
-	out.Body.Status = "ok"
-	return out, nil
-}
-
-func (s *Server) ready(ctx context.Context, _ *struct{}) (*StatusOutput, error) {
-	if err := s.store.Ping(ctx); err != nil {
-		return nil, huma.Error503ServiceUnavailable("database unavailable")
-	}
-	out := &StatusOutput{}
-	out.Body.Status = "ok"
-	return out, nil
-}
 
 func (s *Server) listPlayers(ctx context.Context, in *ListPlayersInput) (*PlayersOutput, error) {
 	players, total, err := s.store.ListPlayers(ctx, in.Sort, in.Limit, in.Offset)
