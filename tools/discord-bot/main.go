@@ -51,9 +51,10 @@ func run(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	tools := NewToolset(cfg, NewStatsClient(cfg.Servers), issues, session)
+	channels := &DiscordChannels{session: session, botChannelID: cfg.ChannelID, descriptions: cfg.ChannelDescriptions, refreshMember: true}
+	tools := NewToolset(cfg, NewStatsClient(cfg.Servers), issues, channels)
 	agent := NewAgent(cfg, tools, issues != nil, metrics)
-	bot := NewBot(ctx, cfg, session, agent, issues, metrics)
+	bot := NewBot(ctx, cfg, session, agent, issues, metrics, channels)
 	if err := bot.Open(); err != nil {
 		return fmt.Errorf("connecting to Discord: %w", err)
 	}
@@ -61,7 +62,7 @@ func run(ctx context.Context) error {
 
 	slog.Info("started", "model", cfg.Model, "effort", cfg.Effort, "servers", cfg.ServerOrder,
 		"channel", cfg.ChannelID, "issues", issues != nil,
-		"readable_channels", len(cfg.ReadableChannels), "user_limit_overrides", len(cfg.UserLimits))
+		"channel_descriptions", len(cfg.ChannelDescriptions), "user_limit_overrides", len(cfg.UserLimits))
 
 	// Probes: liveness is the process; readiness is the Discord gateway session.
 	mux := http.NewServeMux()

@@ -187,7 +187,7 @@ func TestParseConfigExtras(t *testing.T) {
 	t.Setenv("SERVERS", `[{"name":"main","query_address":"h:27000"}]`)
 	t.Setenv("USER_LIMITS", `{"100000000000000001": {"questions_per_hour": 0, "issues_per_day": 0, "note": "owner"},
 		"100000000000000002": {"questions_per_hour": 60}}`)
-	t.Setenv("READABLE_CHANNELS", `[{"name":"Changelog","id":"100000000000000003","description":"server update notes"}]`)
+	t.Setenv("CHANNEL_DESCRIPTIONS", `{"100000000000000003": " server update notes "}`)
 
 	cfg, err := ParseConfig()
 	if err != nil {
@@ -200,13 +200,13 @@ func TestParseConfigExtras(t *testing.T) {
 	if cfg.UserLimits["100000000000000002"].IssuesPerDay != nil {
 		t.Errorf("omitted limit should stay nil (use the default)")
 	}
-	if len(cfg.ReadableChannels) != 1 || cfg.ReadableChannels[0].Name != "changelog" {
-		t.Errorf("readable channels = %+v", cfg.ReadableChannels)
+	if cfg.ChannelDescriptions["100000000000000003"] != "server update notes" {
+		t.Errorf("channel descriptions = %+v", cfg.ChannelDescriptions)
 	}
 
 	bad := map[string]string{
-		"USER_LIMITS":       `{"not-an-id": {"questions_per_hour": 1}}`,
-		"READABLE_CHANNELS": `[{"name":"x","id":"123"}]`,
+		"USER_LIMITS":          `{"not-an-id": {"questions_per_hour": 1}}`,
+		"CHANNEL_DESCRIPTIONS": `{"changelog": "not an ID"}`,
 	}
 	for key, value := range bad {
 		t.Run(key, func(t *testing.T) {

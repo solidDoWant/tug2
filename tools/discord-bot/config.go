@@ -40,15 +40,6 @@ type UserLimit struct {
 	Note string `json:"note"`
 }
 
-// ReadableChannel is a Discord channel the model may read, such as a changelog.
-type ReadableChannel struct {
-	// Name is how the model refers to it ("changelog").
-	Name string `json:"name"`
-	ID   string `json:"id"`
-	// Description tells the model what the channel holds and when to read it.
-	Description string `json:"description"`
-}
-
 // Config is the bot's runtime configuration, read from the environment.
 type Config struct {
 	DiscordToken string
@@ -105,9 +96,10 @@ type Config struct {
 	// UserLimits overrides the per-user limits, keyed by Discord user ID.
 	UserLimits map[string]UserLimit
 
-	// ReadableChannels are the extra channels the model may read, in
-	// configured order.
-	ReadableChannels []ReadableChannel
+	// ChannelDescriptions describe channels for the model, keyed by channel
+	// ID. They are optional: the bot reads every channel it can access, and
+	// falls back to the channel's topic when there is no description here.
+	ChannelDescriptions map[string]string
 
 	HealthAddr string
 	// MetricsAddr serves Prometheus /metrics, kept off the health listener.
@@ -202,7 +194,7 @@ func ParseConfig() (*Config, error) {
 
 	errs = append(errs, c.parseGitHub())
 	errs = append(errs, c.parseUserLimits())
-	errs = append(errs, c.parseReadableChannels())
+	errs = append(errs, c.parseChannelDescriptions())
 
 	// SERVERS is a JSON array of GameServer objects.
 	raw := getEnv("SERVERS", "")
@@ -366,32 +358,23 @@ func (c *Config) parseUserLimits() error {
 	return errors.Join(errs...)
 }
 
-// parseReadableChannels reads READABLE_CHANNELS: a JSON array of the extra
-// channels the model may read.
-func (c *Config) parseReadableChannels() error {
-	raw, err := readJSONSetting("READABLE_CHANNELS")
+// parseChannelDescriptions reads CHANNEL_DESCRIPTIONS: a JSON object mapping
+// Discord channel IDs to descriptions for the model.
+func (c *Config) parseChannelDescriptions() error {
+	c.ChannelDescriptions = map[string]string{}
+	raw, err := readJSONSetting("CHANNEL_DESCRIPTIONS")
 	if err != nil || raw == nil {
 		return err
 	}
-	var channels []ReadableChannel
-	dec := json.NewDecoder(strings.NewReader(string(raw)))
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(&channels); err != nil {
-		return fmt.Errorf("READABLE_CHANNELS is not valid: %w", err)
+	if err := json.Unmarshal(raw, &c.ChannelDescriptions); err != nil {
+		return fmt.Errorf("CHANNEL_DESCRIPTIONS is not valid (want {\"<channel id>\": \"description\"}): %w", err)
 	}
 	var errs []error
-	seen := map[string]bool{}
-	for _, ch := range channels {
-		ch.Name = strings.ToLower(strings.TrimSpace(ch.Name))
-		switch {
-		case ch.Name == "" || !isSnowflake(ch.ID):
-			errs = append(errs, fmt.Errorf("READABLE_CHANNELS: each channel needs a name and a Discord channel id (got %q, %q)", ch.Name, ch.ID))
-		case seen[ch.Name]:
-			errs = append(errs, fmt.Errorf("READABLE_CHANNELS: duplicate name %q", ch.Name))
-		default:
-			seen[ch.Name] = true
-			c.ReadableChannels = append(c.ReadableChannels, ch)
+	for id, desc := range c.ChannelDescriptions {
+		if !isSnowflake(id) {
+			errs = append(errs, fmt.Errorf("CHANNEL_DESCRIPTIONS: %q is not a Discord channel ID", id))
 		}
+		c.ChannelDescriptions[id] = strings.TrimSpace(desc)
 	}
 	return errors.Join(errs...)
 }

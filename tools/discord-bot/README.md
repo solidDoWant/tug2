@@ -20,8 +20,9 @@ the reporter to press **Confirm**.
   curl examples. These come from a built-in endpoint reference that a test
   checks against the stats API's OpenAPI spec, so the bot doesn't invent
   paths or parameters.
-- **Other channels:** reads channels you list, such as a changelog, to
-  answer "what changed in the last update?" or "was this already fixed?".
+- **Other channels:** reads any channel the bot has access to, such as a
+  changelog, to answer "what changed in the last update?" or "was this
+  already fixed?".
 - **Bug reports / feature requests:** the model asks for missing detail,
   searches existing issues, then posts a draft with **Confirm and file** and
   **Cancel** buttons. Only the person who asked can press them. Filed issues
@@ -45,7 +46,9 @@ the reporter to press **Confirm**.
    lets the bot read follow-ups in its threads that don't mention it.
 3. Invite it with the `bot` scope and these permissions in the bot channel:
    View Channel, Send Messages, Send Messages in Threads, Create Public
-   Threads, Read Message History, Embed Links.
+   Threads, Read Message History, Embed Links. In every other channel it
+   should read, it needs View Channel and Read Message History. See
+   [Reading other channels](#reading-other-channels).
 4. Copy the channel's ID (Developer Mode → right-click → Copy Channel ID).
 
 ## GitHub setup
@@ -96,22 +99,34 @@ a time and shares `MAX_CONCURRENT_QUESTIONS`.
 
 ## Reading other channels
 
-`READABLE_CHANNELS` lists extra channels the model may read with its
-`read_channel` tool. The model sees each channel's name and description,
-reads recent messages (optionally before or after a date), and links what it
-cites:
+The model can read **every text and announcement channel the bot has access
+to**, without configuration. Access is decided by Discord permissions:
+
+- A channel is readable when the bot has **View Channel** and **Read Message
+  History** in it. Grant or revoke these on the bot's role or on the channel,
+  and the change applies to the next question. No restart is needed.
+- The bot's own question channel is never read. Voice channels, forums and
+  threads aren't read either.
+- `list_channels` gives the model the readable channels with their
+  category and topic. `read_channel` reads recent messages from one of them,
+  by name or ID, optionally before or after a date, and links what it cites.
+  Text and embeds are both read, since changelogs are often posted by webhooks.
+- At startup the bot logs which channels it can read (`readable channels`), so
+  access is easy to check.
+
+**Only give the bot access to channels everyone may see.** Anything the bot
+can read, anyone who asks it can read through it, and its answers go into
+public threads.
+
+`CHANNEL_DESCRIPTIONS` optionally tells the model what a channel is for,
+keyed by channel ID. It replaces the channel's topic, which is used when no
+description is given. A description helps the model pick the right channel:
 
 ```json
-[
-  { "name": "changelog", "id": "100000000000000003",
-    "description": "Server update notes: what changed in each update, newest first" }
-]
+{ "100000000000000003": "Server update notes: what changed in each update, newest first" }
 ```
 
-The bot needs **View Channel** and **Read Message History** in each listed
-channel. At startup it logs a warning for any listed channel it can't read.
-Text and embeds are both read, since changelogs are often posted by webhooks.
-It can only read the channels listed here.
+Pass it inline or as a file with `CHANNEL_DESCRIPTIONS_FILE`.
 
 ## Deployment: run exactly one replica
 
@@ -158,7 +173,7 @@ liveness probe at `/livez` and readiness at `/readyz` on `HEALTH_ADDR`.
 | `RATE_LIMIT_ISSUES_PER_DAY`     | `5`                | Issues each user can file per day; `0` disables.                                                                    |
 | `MAX_CONCURRENT_QUESTIONS`      | `4`                | Questions answered at once across everyone; others wait. Each user also gets one question at a time.                |
 | `USER_LIMITS` / `_FILE`         | _(empty)_          | Per-user overrides of the two limits above; see [Per-user limits](#per-user-limits).                                |
-| `READABLE_CHANNELS` / `_FILE`   | _(empty)_          | Extra channels the model may read; see [Reading other channels](#reading-other-channels).                           |
+| `CHANNEL_DESCRIPTIONS` / `_FILE` | _(empty)_         | Optional descriptions of channels for the model; see [Reading other channels](#reading-other-channels).              |
 | `A2S_TIMEOUT_MS`                | `3000`             | Timeout for server queries.                                                                                         |
 | `HEALTH_ADDR`                   | `:8080`            | Serves `/livez` (process up) and `/readyz` (connected to Discord).                                                  |
 | `METRICS_ADDR`                  | `:9090`            | Serves Prometheus `/metrics`; see [Metrics and dashboard](#metrics-and-dashboard).                                  |
@@ -329,8 +344,9 @@ API, game server or channel the bot can't reach.
   has to confirm.
 - GitHub access is a GitHub App limited to issues on one repository. Nothing
   is filed as a person.
-- `read_channel` can only read the channels in `READABLE_CHANNELS`. Their
-  text is treated as data, like everything else the tools return.
+- The model can only read channels where the bot has View Channel and Read
+  Message History, so keep the bot out of private channels. Channel text is
+  treated as data, like everything else the tools return.
 
 ## Development
 

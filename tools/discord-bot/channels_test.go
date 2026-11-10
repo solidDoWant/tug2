@@ -98,3 +98,147 @@ func TestParseToolTime(t *testing.T) {
 		t.Error("free text accepted")
 	}
 }
+
+// testSession builds a discordgo session whose state holds one guild, for
+// exercising permission-based channel discovery without a connection.
+func testSession(t *testing.T) *discordgo.Session {
+	t.Helper()
+	const (
+		guildID  = "200000000000000000"
+		botID    = "200000000000000001"
+		everyone = guildID // the @everyone role shares the guild's ID
+		botRole  = "200000000000000002"
+		modRole  = "200000000000000003"
+		view     = discordgo.PermissionViewChannel
+		history  = discordgo.PermissionReadMessageHistory
+		sendMsg  = discordgo.PermissionSendMessages
+	)
+	deny := func(id string, perms int64) *discordgo.PermissionOverwrite {
+		return &discordgo.PermissionOverwrite{ID: id, Type: discordgo.PermissionOverwriteTypeRole, Deny: perms}
+	}
+	allow := func(id string, perms int64) *discordgo.PermissionOverwrite {
+		return &discordgo.PermissionOverwrite{ID: id, Type: discordgo.PermissionOverwriteTypeRole, Allow: perms}
+	}
+	text := func(id, name, parent string, pos int, topic string, ow ...*discordgo.PermissionOverwrite) *discordgo.Channel {
+		return &discordgo.Channel{ID: id, GuildID: guildID, Name: name, Type: discordgo.ChannelTypeGuildText,
+			ParentID: parent, Position: pos, Topic: topic, PermissionOverwrites: ow}
+	}
+
+	s := &discordgo.Session{State: discordgo.NewState()}
+	s.State.User = &discordgo.User{ID: botID}
+	guild := &discordgo.Guild{
+		ID: guildID, OwnerID: "209999999999999999",
+		Roles: []*discordgo.Role{
+			{ID: everyone, Permissions: view | history | sendMsg},
+			{ID: botRole, Permissions: 0},
+			{ID: modRole, Permissions: 0},
+		},
+		Members: []*discordgo.Member{{GuildID: guildID, User: &discordgo.User{ID: botID}, Roles: []string{botRole}}},
+		Channels: []*discordgo.Channel{
+			{ID: "300000000000000001", GuildID: guildID, Name: "Info", Type: discordgo.ChannelTypeGuildCategory, Position: 0},
+			{ID: "300000000000000002", GuildID: guildID, Name: "Staff", Type: discordgo.ChannelTypeGuildCategory, Position: 1},
+			text("400000000000000001", "general", "300000000000000001", 2, "chat about anything"),
+			text("400000000000000002", "changelog", "300000000000000001", 1, "", deny(everyone, sendMsg)),
+			// Hidden from @everyone, opened to mods only: the bot can't read it.
+			text("400000000000000003", "mod-chat", "300000000000000002", 0, "", deny(everyone, view), allow(modRole, view|history)),
+			// Visible but history denied to the bot's role: not readable.
+			text("400000000000000004", "no-history", "300000000000000001", 3, "", deny(botRole, history)),
+			// Hidden from @everyone but opened to the bot's role: readable.
+			text("400000000000000005", "bot-feed", "300000000000000002", 1, "", deny(everyone, view), allow(botRole, view|history)),
+			// The bot's own question channel is never offered.
+			text("400000000000000006", "ask-the-bot", "", 0, ""),
+			{ID: "400000000000000007", GuildID: guildID, Name: "Voice", Type: discordgo.ChannelTypeGuildVoice},
+		},
+	}
+	if err := s.State.GuildAdd(guild); err != nil {
+		t.Fatal(err)
+	}
+	return s
+}
+
+func TestDiscordChannelsReadable(t *testing.T) {
+	d := &DiscordChannels{
+		session:      testSession(t),
+		botChannelID: "400000000000000006",
+		descriptions: map[string]string{"400000000000000002": "Server update notes, newest first"},
+	}
+	got, err := d.Readable("200000000000000000")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var names []string
+	for _, ch := range got {
+		names = append(names, ch.Category+"/"+ch.Name)
+	}
+	// Category order, then position; mod-chat, no-history, the bot's own
+	// channel and the voice channel are excluded.
+	want := []string{"Info/changelog", "Info/general", "Staff/bot-feed"}
+	if strings.Join(names, ",") != strings.Join(want, ",") {
+		t.Fatalf("readable = %v, want %v", names, want)
+	}
+	if got[0].Description != "Server update notes, newest first" || got[1].Description != "chat about anything" {
+		t.Errorf("descriptions: configured should win, topic is the fallback: %+v", got)
+	}
+}
+
+func TestResolveChannel(t *testing.T) {
+	readable := []ReadableChannel{
+		{Name: "changelog", ID: "1", Category: "Info"},
+		{Name: "general", ID: "2", Category: "Info"},
+		{Name: "general", ID: "3", Category: "Off-topic"},
+	}
+	for _, ref := range []string{"changelog", "#Changelog", "1"} {
+		if ch, err := resolveChannel(readable, ref); err != nil || ch.ID != "1" {
+			t.Errorf("%q -> %+v, %v", ref, ch, err)
+		}
+	}
+	if ch, err := resolveChannel(readable, "3"); err != nil || ch.ID != "3" {
+		t.Errorf("by ID among duplicates: %+v, %v", ch, err)
+	}
+	if _, err := resolveChannel(readable, "general"); err == nil || !strings.Contains(err.Error(), "use an ID") {
+		t.Errorf("ambiguous name: %v", err)
+	}
+	if _, err := resolveChannel(readable, "mod-chat"); err == nil || !strings.Contains(err.Error(), "list_channels") {
+		t.Errorf("unknown channel: %v", err)
+	}
+}
+
+// fakeChannels is a channelSource for tool tests.
+type fakeChannels struct {
+	fakeReader
+	readable []ReadableChannel
+	fetched  []string
+}
+
+func (f *fakeChannels) Readable(string) ([]ReadableChannel, error) { return f.readable, nil }
+
+func (f *fakeChannels) ChannelMessages(channelID string, limit int, beforeID, afterID, aroundID string, options ...discordgo.RequestOption) ([]*discordgo.Message, error) {
+	f.fetched = append(f.fetched, channelID)
+	return f.fakeReader.ChannelMessages(channelID, limit, beforeID, afterID, aroundID, options...)
+}
+
+func TestChannelTools(t *testing.T) {
+	src := &fakeChannels{
+		readable:   []ReadableChannel{{Name: "changelog", ID: "11"}},
+		fakeReader: fakeReader{msgs: []*discordgo.Message{msgAt("5", time.Now(), "Update 0.0.112")}},
+	}
+	cfg := &Config{Servers: map[string]GameServer{}}
+	ts := NewToolset(cfg, NewStatsClient(cfg.Servers), nil, src)
+	tc := &toolContext{guildID: "42"}
+
+	out, err := ts.Run(context.Background(), tc, "list_channels", []byte(`{}`))
+	if err != nil || len(out.([]ReadableChannel)) != 1 {
+		t.Fatalf("list_channels = %v, %v", out, err)
+	}
+	if _, err := ts.Run(context.Background(), tc, "read_channel", []byte(`{"channel":"#changelog"}`)); err != nil {
+		t.Fatal(err)
+	}
+	// A channel outside the readable list is refused without being fetched,
+	// even by a valid-looking ID.
+	if _, err := ts.Run(context.Background(), tc, "read_channel", []byte(`{"channel":"400000000000000003"}`)); err == nil {
+		t.Error("read a channel outside the readable list")
+	}
+	if strings.Join(src.fetched, ",") != "11" {
+		t.Errorf("fetched channels = %v, want only 11", src.fetched)
+	}
+}

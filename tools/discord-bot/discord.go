@@ -14,13 +14,14 @@ import (
 
 // Bot connects Discord to the agent.
 type Bot struct {
-	cfg     *Config
-	session *discordgo.Session
-	agent   *Agent
-	issues  *IssueTracker // nil when issue filing is not configured
-	limits  *RateLimiter
-	busy    chan struct{} // global concurrency slots
-	metrics *Metrics
+	cfg      *Config
+	session  *discordgo.Session
+	agent    *Agent
+	issues   *IssueTracker // nil when issue filing is not configured
+	limits   *RateLimiter
+	channels *DiscordChannels
+	busy     chan struct{} // global concurrency slots
+	metrics  *Metrics
 
 	// ctx is cancelled on shutdown so in-flight answers stop promptly.
 	ctx context.Context
@@ -42,7 +43,7 @@ func NewSession(token string) (*discordgo.Session, error) {
 	return session, nil
 }
 
-func NewBot(ctx context.Context, cfg *Config, session *discordgo.Session, agent *Agent, issues *IssueTracker, metrics *Metrics) *Bot {
+func NewBot(ctx context.Context, cfg *Config, session *discordgo.Session, agent *Agent, issues *IssueTracker, metrics *Metrics, channels *DiscordChannels) *Bot {
 	b := &Bot{
 		cfg:      cfg,
 		session:  session,
@@ -51,6 +52,7 @@ func NewBot(ctx context.Context, cfg *Config, session *discordgo.Session, agent 
 		limits:   NewRateLimiter(cfg.QuestionsPerHour, cfg.IssuesPerDay, cfg.UserLimits),
 		busy:     make(chan struct{}, cfg.MaxConcurrent),
 		metrics:  metrics,
+		channels: channels,
 		ctx:      ctx,
 		inFlight: map[string]bool{},
 	}
@@ -66,14 +68,22 @@ func NewBot(ctx context.Context, cfg *Config, session *discordgo.Session, agent 
 	session.AddHandler(func(s *discordgo.Session, _ *discordgo.Resumed) {
 		metrics.DiscordConnection("resume", true)
 	})
+	// Log which channels the model can read once each guild's data has
+	// arrived (after Ready), so access is easy to check from the logs.
+	session.AddHandler(func(s *discordgo.Session, g *discordgo.GuildCreate) {
+		chans, err := b.channels.Readable(g.ID)
+		if err != nil {
+			slog.Warn("listing readable channels", "guild", g.ID, "err", err)
+			return
+		}
+		names := make([]string, 0, len(chans))
+		for _, ch := range chans {
+			names = append(names, "#"+ch.Name)
+		}
+		slog.Info("readable channels", "guild", g.ID, "count", len(chans), "channels", names)
+	})
 	session.AddHandler(func(s *discordgo.Session, r *discordgo.Ready) {
 		slog.Info("connected to Discord", "user", r.User.Username, "guilds", len(r.Guilds))
-		// Warn early about channels the bot was told to read but can't see.
-		for _, ch := range cfg.ReadableChannels {
-			if _, err := s.ChannelMessages(ch.ID, 1, "", "", ""); err != nil {
-				slog.Warn("cannot read a configured channel", "channel", ch.Name, "id", ch.ID, "err", err)
-			}
-		}
 	})
 	return b
 }

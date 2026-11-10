@@ -75,14 +75,7 @@ func buildSystemPrompt(cfg *Config, issuesEnabled bool) string {
 		servers.WriteString("\n")
 	}
 
-	channels := ""
-	if len(cfg.ReadableChannels) > 0 {
-		var names []string
-		for _, ch := range cfg.ReadableChannels {
-			names = append(names, "#"+ch.Name)
-		}
-		channels = "\n- Read " + strings.Join(names, ", ") + " with read_channel, e.g. to say what changed in an update or whether a reported bug was already fixed. Link the message you're citing."
-	}
+	channels := "\n- Read the server's other Discord channels, e.g. a changelog or announcements, to say what changed in an update or whether a reported bug was already fixed. Use list_channels to see which you can read, then read_channel. Link the message you're citing."
 
 	api := ""
 	if cfg.hasPublicStatsAPI() {
