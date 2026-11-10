@@ -100,12 +100,25 @@ type WeaponsOutput struct {
 	Body ListResponse[WeaponTotals]
 }
 
+type ListMapsInput struct {
+	Sort string `query:"sort" default:"rounds" enum:"rounds,play_time,last_played" doc:"Order by total logged rounds, total playtime, or most recent activity; descending."`
+	PageInput
+}
+
 type MapsOutput struct {
 	Body ListResponse[MapStats]
 }
 
 type MatchesOutput struct {
 	Body ListResponse[MatchResult]
+}
+
+type BotNameInput struct {
+	BotName string `path:"bot_name" example:"Bot Adams" doc:"Bot name as recorded by gg2_mstats2 (URL-encode spaces and special characters)."`
+}
+
+type BotWeaponsOutput struct {
+	Body []WeaponKills
 }
 
 type BotsOutput struct {
@@ -118,6 +131,14 @@ type MedicsOutput struct {
 
 type TeamKillsOutput struct {
 	Body ListResponse[TeamKillStats]
+}
+
+type TeamKillWeaponsOutput struct {
+	Body ListResponse[TeamKillWeaponStats]
+}
+
+type FireSupportOutput struct {
+	Body ListResponse[FireSupportStats]
 }
 
 // --- registration ----------------------------------------------------------
@@ -183,7 +204,7 @@ func (s *Server) register(api huma.API) {
 		OperationID: "list-maps",
 		Method:      http.MethodGet,
 		Path:        "/api/v1/maps",
-		Summary:     "Per-map win/loss summary",
+		Summary:     "Per-map win/loss and playtime summary",
 		Tags:        []string{"maps"},
 	}, s.listMaps)
 
@@ -204,6 +225,14 @@ func (s *Server) register(api huma.API) {
 	}, s.listBots)
 
 	huma.Register(api, huma.Operation{
+		OperationID: "get-bot-weapons",
+		Method:      http.MethodGet,
+		Path:        "/api/v1/bots/{bot_name}/weapons",
+		Summary:     "Per-weapon kill breakdown for a bot",
+		Tags:        []string{"bots"},
+	}, s.getBotWeapons)
+
+	huma.Register(api, huma.Operation{
 		OperationID: "list-medics",
 		Method:      http.MethodGet,
 		Path:        "/api/v1/medics",
@@ -218,6 +247,22 @@ func (s *Server) register(api huma.API) {
 		Summary:     "Players ranked by team kills",
 		Tags:        []string{"teamkills"},
 	}, s.listTeamKills)
+
+	huma.Register(api, huma.Operation{
+		OperationID: "list-teamkill-weapons",
+		Method:      http.MethodGet,
+		Path:        "/api/v1/teamkills/weapons",
+		Summary:     "Weapons ranked by logged team kills",
+		Tags:        []string{"teamkills"},
+	}, s.listTeamKillWeapons)
+
+	huma.Register(api, huma.Operation{
+		OperationID: "list-fire-support",
+		Method:      http.MethodGet,
+		Path:        "/api/v1/fire-support",
+		Summary:     "Players ranked by fire-support (artillery) calls",
+		Tags:        []string{"fire-support"},
+	}, s.listFireSupport)
 }
 
 // --- handlers --------------------------------------------------------------
@@ -272,12 +317,12 @@ func (s *Server) listWeapons(ctx context.Context, in *PageInput) (*WeaponsOutput
 	return &WeaponsOutput{Body: page(weapons, total, *in)}, nil
 }
 
-func (s *Server) listMaps(ctx context.Context, in *PageInput) (*MapsOutput, error) {
-	maps, total, err := s.store.ListMaps(ctx, in.Limit, in.Offset)
+func (s *Server) listMaps(ctx context.Context, in *ListMapsInput) (*MapsOutput, error) {
+	maps, total, err := s.store.ListMaps(ctx, in.Sort, in.Limit, in.Offset)
 	if err != nil {
 		return nil, huma.Error500InternalServerError("failed to list maps")
 	}
-	return &MapsOutput{Body: page(maps, total, *in)}, nil
+	return &MapsOutput{Body: page(maps, total, in.PageInput)}, nil
 }
 
 func (s *Server) listMatches(ctx context.Context, in *PageInput) (*MatchesOutput, error) {
@@ -296,6 +341,14 @@ func (s *Server) listBots(ctx context.Context, in *PageInput) (*BotsOutput, erro
 	return &BotsOutput{Body: page(bots, total, *in)}, nil
 }
 
+func (s *Server) getBotWeapons(ctx context.Context, in *BotNameInput) (*BotWeaponsOutput, error) {
+	weapons, err := s.store.GetBotWeapons(ctx, in.BotName)
+	if err != nil {
+		return nil, huma.Error500InternalServerError("failed to fetch bot weapons")
+	}
+	return &BotWeaponsOutput{Body: weapons}, nil
+}
+
 func (s *Server) listMedics(ctx context.Context, in *PageInput) (*MedicsOutput, error) {
 	medics, total, err := s.store.ListMedics(ctx, in.Limit, in.Offset)
 	if err != nil {
@@ -310,6 +363,22 @@ func (s *Server) listTeamKills(ctx context.Context, in *PageInput) (*TeamKillsOu
 		return nil, huma.Error500InternalServerError("failed to list team kills")
 	}
 	return &TeamKillsOutput{Body: page(teamKills, total, *in)}, nil
+}
+
+func (s *Server) listTeamKillWeapons(ctx context.Context, in *PageInput) (*TeamKillWeaponsOutput, error) {
+	weapons, total, err := s.store.ListTeamKillWeapons(ctx, in.Limit, in.Offset)
+	if err != nil {
+		return nil, huma.Error500InternalServerError("failed to list team kill weapons")
+	}
+	return &TeamKillWeaponsOutput{Body: page(weapons, total, *in)}, nil
+}
+
+func (s *Server) listFireSupport(ctx context.Context, in *PageInput) (*FireSupportOutput, error) {
+	players, total, err := s.store.ListFireSupport(ctx, in.Limit, in.Offset)
+	if err != nil {
+		return nil, huma.Error500InternalServerError("failed to list fire support")
+	}
+	return &FireSupportOutput{Body: page(players, total, *in)}, nil
 }
 
 // page wraps a slice and total into the standard pagination envelope.

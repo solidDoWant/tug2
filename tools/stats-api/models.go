@@ -33,13 +33,24 @@ type WeaponTotals struct {
 	UniquePlayers int    `json:"unique_players"`
 }
 
-// MapStats summarises win/loss outcomes for a single map.
+// MapStats summarises a single map: win/loss outcomes (from gg2_mstats2's
+// win_loss_log) and accumulated playtime (from map_logger's maps table). A map
+// can appear in either source alone, so each half is zero/null when the other
+// source has no record of it.
 type MapStats struct {
-	MapName     string  `json:"map_name"`
-	Wins        int     `json:"wins"`
-	Losses      int     `json:"losses"`
-	TotalRounds int     `json:"total_rounds"`
-	WinRate     float64 `json:"win_rate"`
+	MapName     string `json:"map_name"`
+	Wins        int    `json:"wins"`
+	Losses      int    `json:"losses"`
+	TotalRounds int    `json:"total_rounds"`
+	// WinRate is a percentage (0-100), or null when no rounds are logged.
+	WinRate *float64 `json:"win_rate"`
+	// PlayTimeSeconds is the total time played on the map. map_logger adds the
+	// elapsed time at each round end, so time after the final round (e.g. the
+	// map vote) is not counted.
+	PlayTimeSeconds int64 `json:"play_time_seconds"`
+	// LastPlayedAt is when map_logger last recorded activity on the map (a map
+	// start or a round end), or null if it has never seen the map.
+	LastPlayedAt *time.Time `json:"last_played_at"`
 }
 
 // MatchResult is a single entry from the win/loss log.
@@ -69,10 +80,32 @@ type TeamKillStats struct {
 	SteamID string `json:"steam_id"`
 	// Kills is the player's total kills, joined in from player_stats, so it can
 	// be compared against TKGiven as a kill/teamkill ratio.
-	Kills    int        `json:"kills"`
-	TKGiven  int        `json:"tk_given"`
-	TKTaken  int        `json:"tk_taken"`
-	LastSeen *time.Time `json:"last_seen"`
+	Kills   int `json:"kills"`
+	TKGiven int `json:"tk_given"`
+	TKTaken int `json:"tk_taken"`
+	// TKForgiven is how many of the player's logged team kills their victim
+	// forgave. It counts player_tk_logs rows, so team kills from before that
+	// log existed are included in TKGiven but can never count as forgiven.
+	TKForgiven int        `json:"tk_forgiven"`
+	LastSeen   *time.Time `json:"last_seen"`
+}
+
+// TeamKillWeaponStats aggregates logged team kills by the weapon used (from
+// gg2_teamkill's player_tk_logs).
+type TeamKillWeaponStats struct {
+	Weapon    string `json:"weapon"`
+	TeamKills int    `json:"team_kills"`
+	Forgiven  int    `json:"forgiven"`
+}
+
+// FireSupportStats is a player ranked by fire-support (artillery) calls, from
+// the FireSupport plugin's fire_support table.
+type FireSupportStats struct {
+	SteamID    string `json:"steam_id"`
+	ArtyThrown int    `json:"arty_thrown"`
+	// LastUsedAt is when the player last called fire support, or null if the
+	// plugin never recorded a time.
+	LastUsedAt *time.Time `json:"last_used_at"`
 }
 
 // ListResponse is the envelope for every paginated list endpoint. Total is the

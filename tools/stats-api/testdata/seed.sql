@@ -1,6 +1,6 @@
 -- Dummy data for local testing of stats-api. The keyed tables use
--- ON CONFLICT DO NOTHING so re-applying is safe; win_loss_log is an append-only
--- match log with no unique key, so re-running adds more match rows to it.
+-- ON CONFLICT DO NOTHING so re-applying is safe; win_loss_log and player_tk_logs
+-- are append-only logs with no unique key, so re-running adds more rows to them.
 
 -- Players ------------------------------------------------------------------
 INSERT INTO player_stats
@@ -37,6 +37,7 @@ INSERT INTO bot_kills (bot_name, weapon_id, kill_count)
 SELECT v.bot_name, w.weapon_id, v.kill_count
 FROM (VALUES
     ('Bot Adams',  'ak47',  120),
+    ('Bot Adams',  'm9',     30),
     ('Bot Baker',  'm16a4',  85),
     ('Bot Carter', 'm24',    50)
 ) AS v(bot_name, weapon_name, kill_count)
@@ -81,3 +82,33 @@ VALUES
     (76561198000000001, 12,  4, CURRENT_TIMESTAMP),
     (76561198000000002,  7, 15, CURRENT_TIMESTAMP)
 ON CONFLICT (steam_id) DO NOTHING;
+
+-- Team kill log (gg2_teamkill) -- per-incident rows behind tk_forgiven and
+-- /teamkills/weapons. Deliberately fewer rows than player_tks.tk_given, as on
+-- production where the totals predate the log.
+INSERT INTO player_tk_logs (attacker_steam_id, victim_steam_id, weapon, forgiven)
+VALUES
+    (76561198000000004, 76561198000000002, 'weapon_m1014', FALSE),
+    (76561198000000004, 76561198000000002, 'weapon_m1014', TRUE),
+    (76561198000000004, 76561198000000001, 'grenade_m67',  FALSE),
+    (76561198000000001, 76561198000000002, 'weapon_m16a4', TRUE),
+    (76561198000000002, 76561198000000004, 'grenade_m67',  TRUE),
+    (76561198000000002, 76561198000000001, NULL,           FALSE);
+
+-- Map playtime (map_logger) -- 'district' has playtime but no logged rounds,
+-- and 'peak' has rounds (above) but no playtime, to exercise the full join.
+INSERT INTO maps (map_name, play_time, last_start)
+VALUES
+    ('ministry', '5 hours 30 minutes'::INTERVAL, CURRENT_TIMESTAMP - INTERVAL '2 hours'),
+    ('sinjar',   '2 hours'::INTERVAL,            CURRENT_TIMESTAMP - INTERVAL '1 day'),
+    ('buhriz',   '45 minutes'::INTERVAL,         CURRENT_TIMESTAMP - INTERVAL '3 days'),
+    ('district', '20 minutes'::INTERVAL,         CURRENT_TIMESTAMP)
+ON CONFLICT (map_name) DO NOTHING;
+
+-- Fire support (FireSupport) -- last_used is a Unix timestamp; 0 means unset.
+INSERT INTO fire_support (steamId, arty_thrown, last_used)
+VALUES
+    ('76561198000000003', 42, EXTRACT(EPOCH FROM NOW())::INTEGER),
+    ('76561198000000001', 17, EXTRACT(EPOCH FROM NOW() - INTERVAL '5 days')::INTEGER),
+    ('76561198000000002',  3, 0)
+ON CONFLICT (steamId) DO NOTHING;

@@ -220,19 +220,49 @@ func (s *Store) ListWeapons(ctx context.Context, limit, offset int) ([]WeaponTot
 	return weapons, total, nil
 }
 
-// ListMaps returns a page of per-map win/loss summaries plus the total number of
-// maps with recorded rounds.
-func (s *Store) ListMaps(ctx context.Context, limit, offset int) ([]MapStats, int, error) {
+// validMapSortColumns maps the sort values accepted on /maps to output column
+// aliases of the ListMaps query, guarding against SQL injection.
+var validMapSortColumns = map[string]string{
+	"rounds":      "total_rounds",
+	"play_time":   "play_time_seconds",
+	"last_played": "last_played_at",
+}
+
+// ListMaps returns a page of per-map summaries plus the total number of maps
+// known to either source.
+//
+// Win/loss counts come from gg2_mstats2 (win_loss_log keyed by map_stats) and
+// playtime from map_logger (maps). Both plugins key maps by GetCurrentMap(), so
+// the names join directly. It is a FULL OUTER JOIN because each source can hold
+// maps the other lacks: map_logger records a map at map start, before any round
+// result exists, and win_loss_log predates map_logger on older data.
+func (s *Store) ListMaps(ctx context.Context, sort string, limit, offset int) ([]MapStats, int, error) {
+	column, ok := validMapSortColumns[sort]
+	if !ok {
+		column = "total_rounds"
+	}
+
+	// #nosec G201 -- column is whitelisted via validMapSortColumns above.
 	query := `
-		SELECT m.map_name,
-		       COUNT(*) FILTER (WHERE wll.win) AS wins,
-		       COUNT(*) FILTER (WHERE NOT wll.win) AS losses,
-		       COUNT(*) AS total_rounds,
-		       ROUND(100.0 * COUNT(*) FILTER (WHERE wll.win) / NULLIF(COUNT(*), 0), 2) AS win_rate
-		FROM win_loss_log wll
-		JOIN map_stats m ON m.map_id = wll.map_id
-		GROUP BY m.map_name
-		ORDER BY total_rounds DESC
+		WITH rounds AS (
+			SELECT m.map_name,
+			       COUNT(*) FILTER (WHERE wll.win) AS wins,
+			       COUNT(*) FILTER (WHERE NOT wll.win) AS losses,
+			       COUNT(*) AS total_rounds
+			FROM win_loss_log wll
+			JOIN map_stats m ON m.map_id = wll.map_id
+			GROUP BY m.map_name
+		)
+		SELECT COALESCE(r.map_name, mp.map_name) AS name,
+		       COALESCE(r.wins, 0) AS wins,
+		       COALESCE(r.losses, 0) AS losses,
+		       COALESCE(r.total_rounds, 0) AS total_rounds,
+		       ROUND(100.0 * r.wins / NULLIF(r.total_rounds, 0), 2) AS win_rate,
+		       COALESCE(EXTRACT(EPOCH FROM mp.play_time), 0)::bigint AS play_time_seconds,
+		       mp.last_start AS last_played_at
+		FROM rounds r
+		FULL OUTER JOIN maps mp ON mp.map_name = r.map_name
+		ORDER BY ` + column + ` DESC NULLS LAST, name
 		LIMIT $1 OFFSET $2`
 
 	rows, err := s.pool.Query(ctx, query, limit, offset)
@@ -245,7 +275,8 @@ func (s *Store) ListMaps(ctx context.Context, limit, offset int) ([]MapStats, in
 	for rows.Next() {
 		var mapStats MapStats
 		if err := rows.Scan(&mapStats.MapName, &mapStats.Wins, &mapStats.Losses,
-			&mapStats.TotalRounds, &mapStats.WinRate); err != nil {
+			&mapStats.TotalRounds, &mapStats.WinRate, &mapStats.PlayTimeSeconds,
+			&mapStats.LastPlayedAt); err != nil {
 			return nil, 0, err
 		}
 		maps = append(maps, mapStats)
@@ -254,7 +285,12 @@ func (s *Store) ListMaps(ctx context.Context, limit, offset int) ([]MapStats, in
 		return nil, 0, err
 	}
 
-	total, err := s.count(ctx, `SELECT COUNT(DISTINCT map_id) FROM win_loss_log`)
+	total, err := s.count(ctx, `
+		SELECT COUNT(*) FROM (
+			SELECT m.map_name FROM win_loss_log wll JOIN map_stats m ON m.map_id = wll.map_id
+			UNION
+			SELECT map_name FROM maps
+		) AS known_maps`)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -334,6 +370,35 @@ func (s *Store) ListBots(ctx context.Context, limit, offset int) ([]BotStats, in
 	return bots, total, nil
 }
 
+// GetBotWeapons returns the per-weapon kill breakdown for a single bot. Like
+// GetPlayerWeapons it is a naturally bounded sub-resource, so it is not
+// paginated, and an unknown bot yields an empty list rather than a 404.
+func (s *Store) GetBotWeapons(ctx context.Context, botName string) ([]WeaponKills, error) {
+	query := `
+		SELECT w.weapon_name, bk.kill_count
+		FROM bot_kills bk
+		JOIN weapon_stats w ON w.weapon_id = bk.weapon_id
+		WHERE bk.bot_name = $1
+		ORDER BY bk.kill_count DESC, w.weapon_name`
+
+	rows, err := s.pool.Query(ctx, query, botName)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	weapons := []WeaponKills{}
+	for rows.Next() {
+		var weapon WeaponKills
+		if err := rows.Scan(&weapon.WeaponName, &weapon.KillCount); err != nil {
+			return nil, err
+		}
+		weapons = append(weapons, weapon)
+	}
+
+	return weapons, rows.Err()
+}
+
 // ListMedics returns a page of medics ranked by time spent as medic, plus the
 // total number of (non-banned) medics. Data comes from the gg2_medic_tracker
 // schema. Banned medics are excluded from the leaderboard.
@@ -381,15 +446,24 @@ func (s *Store) ListMedics(ctx context.Context, limit, offset int) ([]MedicStats
 // since been removed. The join is a LEFT JOIN so a player with a teamkill
 // record but no stats row still appears, with 0 kills.
 //
+// TKForgiven counts the player's forgiven entries in player_tk_logs (where they
+// are the attacker); a player with no log rows gets 0.
+//
 // player_tks.steam_id is a BIGINT; it is cast to text because a SteamID64
 // exceeds JavaScript's safe-integer range and would lose precision as a JSON
 // number. That cast is also what joins it to player_stats.steam_id, which is
 // text.
 func (s *Store) ListTeamKills(ctx context.Context, limit, offset int) ([]TeamKillStats, int, error) {
 	query := `
-		SELECT pt.steam_id::text, COALESCE(ps.kills, 0), pt.tk_given, pt.tk_taken, pt.last_seen
+		SELECT pt.steam_id::text, COALESCE(ps.kills, 0), pt.tk_given, pt.tk_taken,
+		       COALESCE(f.forgiven, 0), pt.last_seen
 		FROM player_tks pt
 		LEFT JOIN player_stats ps ON ps.steam_id = pt.steam_id::text
+		LEFT JOIN (
+			SELECT attacker_steam_id, COUNT(*) FILTER (WHERE forgiven) AS forgiven
+			FROM player_tk_logs
+			GROUP BY attacker_steam_id
+		) f ON f.attacker_steam_id = pt.steam_id
 		ORDER BY pt.tk_given DESC
 		LIMIT $1 OFFSET $2`
 
@@ -402,7 +476,7 @@ func (s *Store) ListTeamKills(ctx context.Context, limit, offset int) ([]TeamKil
 	teamKills := []TeamKillStats{}
 	for rows.Next() {
 		var tk TeamKillStats
-		if err := rows.Scan(&tk.SteamID, &tk.Kills, &tk.TKGiven, &tk.TKTaken, &tk.LastSeen); err != nil {
+		if err := rows.Scan(&tk.SteamID, &tk.Kills, &tk.TKGiven, &tk.TKTaken, &tk.TKForgiven, &tk.LastSeen); err != nil {
 			return nil, 0, err
 		}
 		teamKills = append(teamKills, tk)
@@ -417,6 +491,85 @@ func (s *Store) ListTeamKills(ctx context.Context, limit, offset int) ([]TeamKil
 	}
 
 	return teamKills, total, nil
+}
+
+// ListTeamKillWeapons returns a page of weapons ranked by logged team kills,
+// with how many of those were forgiven, plus the total number of distinct
+// weapons. It aggregates player_tk_logs (gg2_teamkill) and deliberately exposes
+// no attacker/victim pairs. A NULL or empty weapon is reported as "unknown".
+func (s *Store) ListTeamKillWeapons(ctx context.Context, limit, offset int) ([]TeamKillWeaponStats, int, error) {
+	query := `
+		SELECT COALESCE(NULLIF(weapon, ''), 'unknown') AS weapon_name,
+		       COUNT(*) AS team_kills,
+		       COUNT(*) FILTER (WHERE forgiven) AS forgiven
+		FROM player_tk_logs
+		GROUP BY weapon_name
+		ORDER BY team_kills DESC, weapon_name
+		LIMIT $1 OFFSET $2`
+
+	rows, err := s.pool.Query(ctx, query, limit, offset)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	weapons := []TeamKillWeaponStats{}
+	for rows.Next() {
+		var weapon TeamKillWeaponStats
+		if err := rows.Scan(&weapon.Weapon, &weapon.TeamKills, &weapon.Forgiven); err != nil {
+			return nil, 0, err
+		}
+		weapons = append(weapons, weapon)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, 0, err
+	}
+
+	total, err := s.count(ctx, `SELECT COUNT(DISTINCT COALESCE(NULLIF(weapon, ''), 'unknown')) FROM player_tk_logs`)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	return weapons, total, nil
+}
+
+// ListFireSupport returns a page of players ranked by fire-support calls, plus
+// the total number of players who have called it. Data comes from the
+// FireSupport plugin's fire_support table, whose last_used is a Unix timestamp
+// (0 when unset, reported as null).
+func (s *Store) ListFireSupport(ctx context.Context, limit, offset int) ([]FireSupportStats, int, error) {
+	query := `
+		SELECT steamId, arty_thrown,
+		       CASE WHEN last_used > 0 THEN to_timestamp(last_used) END
+		FROM fire_support
+		WHERE arty_thrown > 0
+		ORDER BY arty_thrown DESC, steamId
+		LIMIT $1 OFFSET $2`
+
+	rows, err := s.pool.Query(ctx, query, limit, offset)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	players := []FireSupportStats{}
+	for rows.Next() {
+		var player FireSupportStats
+		if err := rows.Scan(&player.SteamID, &player.ArtyThrown, &player.LastUsedAt); err != nil {
+			return nil, 0, err
+		}
+		players = append(players, player)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, 0, err
+	}
+
+	total, err := s.count(ctx, `SELECT COUNT(*) FROM fire_support WHERE arty_thrown > 0`)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	return players, total, nil
 }
 
 // scanPlayers reads a full set of player_stats rows into a slice.

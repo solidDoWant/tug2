@@ -29,6 +29,8 @@ services:
       - ../../plugins/sourcemod/configs/sql-init-scripts/pgsql/gg2_mstats2.sql:/docker-entrypoint-initdb.d/10-gg2_mstats2.sql:ro
       - ../../plugins/sourcemod/configs/sql-init-scripts/pgsql/gg2_medic_tracker.sql:/docker-entrypoint-initdb.d/20-gg2_medic_tracker.sql:ro
       - ../../plugins/sourcemod/configs/sql-init-scripts/pgsql/gg2_teamkill.sql:/docker-entrypoint-initdb.d/30-gg2_teamkill.sql:ro
+      - ../../plugins/sourcemod/configs/sql-init-scripts/pgsql/map_logger.sql:/docker-entrypoint-initdb.d/40-map_logger.sql:ro
+      - ../../plugins/sourcemod/configs/sql-init-scripts/pgsql/firesupport.sql:/docker-entrypoint-initdb.d/50-firesupport.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U insurgency -d sourcemod-insurgency-stats"]
       interval: 5s

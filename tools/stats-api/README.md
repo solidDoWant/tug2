@@ -116,11 +116,14 @@ endpoints are unversioned.
 | `GET /api/v1/players/{steam_id}`         | Single player's stats.                                             |
 | `GET /api/v1/players/{steam_id}/weapons` | Per-weapon kill breakdown for a player (unpaginated sub-resource). |
 | `GET /api/v1/weapons`                    | Most-used weapons across all players. `?limit=&offset=`.           |
-| `GET /api/v1/maps`                       | Per-map win/loss summary. `?limit=&offset=`.                       |
+| `GET /api/v1/maps`                       | Per-map win/loss and playtime summary. `?sort=&limit=&offset=`.    |
 | `GET /api/v1/matches`                    | Recent match results. `?limit=&offset=`.                           |
 | `GET /api/v1/bots`                       | Bots ranked by total kills. `?limit=&offset=`.                     |
+| `GET /api/v1/bots/{bot_name}/weapons`    | Per-weapon kill breakdown for a bot (unpaginated sub-resource).    |
 | `GET /api/v1/medics`                     | Players ranked by time spent as medic. `?limit=&offset=`.          |
 | `GET /api/v1/teamkills`                  | Players ranked by team kills. `?limit=&offset=`.                   |
+| `GET /api/v1/teamkills/weapons`          | Weapons ranked by logged team kills. `?limit=&offset=`.            |
+| `GET /api/v1/fire-support`               | Players ranked by fire-support calls. `?limit=&offset=`.           |
 
 ### Pagination
 
@@ -137,6 +140,12 @@ Every list endpoint returns a paginated envelope so clients can build pagers:
 `killstreak`, `caps`, `kd`, `updated_at` (default `score`). Results are
 descending. Query parameters are validated by huma — an invalid `sort` or an
 out-of-range `limit`/`offset` returns `422` with a problem-detail body.
+
+`sort` for `/api/v1/maps` accepts: `rounds` (logged round results, the
+default), `play_time` (total playtime from map_logger), and `last_played`
+(most recent map_logger activity). Results are descending; maps known to only
+one of the two sources report zero/null for the other source's fields
+(`win_rate` is `null` when no rounds are logged).
 
 > Bots, medics, and team kills are sourced from the `bot_kills`,
 > `gg2_medic_tracker`, and `gg2_teamkill` tables, which share the
