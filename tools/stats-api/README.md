@@ -136,7 +136,7 @@ endpoints are unversioned.
 | ---------------------------------------- | ------------------------------------------------------------------ |
 | `GET /livez`                             | Liveness probe. Does not touch the DB; use for restart decisions.  |
 | `GET /readyz`                            | Readiness probe. Pings the DB; use for load-balancer rotation.     |
-| `GET /api/v1/players`                    | List players. `?sort=&limit=&offset=`.                             |
+| `GET /api/v1/players`                    | List players. `?sort=&name=&limit=&offset=`.                       |
 | `GET /api/v1/players/{steam_id}`         | Single player's stats.                                             |
 | `GET /api/v1/players/{steam_id}/weapons` | Per-weapon kill breakdown for a player (unpaginated sub-resource). |
 | `GET /api/v1/weapons`                    | Most-used weapons across all players. `?limit=&offset=`.           |
@@ -164,6 +164,12 @@ Every list endpoint returns a paginated envelope so clients can build pagers:
 `killstreak`, `caps`, `kd`, `updated_at` (default `score`). Results are
 descending. Query parameters are validated by huma — an invalid `sort` or an
 out-of-range `limit`/`offset` returns `422` with a problem-detail body.
+
+`name` for `/api/v1/players` keeps only players whose most recent in-game name
+contains it, case-insensitively (`%` and `_` are matched literally). Names are
+recorded by `gg2_mstats2` whenever it records a player, so `name` is `null` for
+players who haven't connected since that started. The medic, team-kill and
+fire-support leaderboards include each player's `name` too.
 
 `sort` for `/api/v1/maps` accepts: `rounds` (logged round results, the
 default), `play_time` (total playtime from map_logger), and `last_played`

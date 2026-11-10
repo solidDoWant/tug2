@@ -93,6 +93,7 @@ type PageInput struct {
 
 type ListPlayersInput struct {
 	Sort string `query:"sort" default:"score" enum:"kills,deaths,score,wins,killstreak,caps,kd,updated_at" doc:"Column to order by, descending."`
+	Name string `query:"name" maxLength:"128" doc:"Only players whose most recent in-game name contains this text (case-insensitive)."`
 	PageInput
 }
 
@@ -287,7 +288,7 @@ func writeStatus(w http.ResponseWriter, code int, status string) {
 // --- handlers --------------------------------------------------------------
 
 func (s *Server) listPlayers(ctx context.Context, in *ListPlayersInput) (*PlayersOutput, error) {
-	players, total, err := s.store.ListPlayers(ctx, in.Sort, in.Limit, in.Offset)
+	players, total, err := s.store.ListPlayers(ctx, in.Sort, in.Name, in.Limit, in.Offset)
 	if err != nil {
 		return nil, huma.Error500InternalServerError("failed to list players")
 	}

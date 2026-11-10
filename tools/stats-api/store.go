@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"strings"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -95,22 +96,32 @@ var validSortColumns = map[string]string{
 }
 
 // ListPlayers returns a page of players ordered by the given column (descending)
-// along with the total number of players.
-func (s *Store) ListPlayers(ctx context.Context, sort string, limit, offset int) ([]PlayerStats, int, error) {
+// along with the total number of matching players. A non-empty name keeps only
+// players whose recorded name contains it, case-insensitively; LIKE wildcards
+// in it are matched literally.
+func (s *Store) ListPlayers(ctx context.Context, sort, name string, limit, offset int) ([]PlayerStats, int, error) {
 	column, ok := validSortColumns[sort]
 	if !ok {
 		column = "score"
 	}
 
+	// $3 is NULL when no name filter is given, which matches every row.
+	var pattern *string
+	if name != "" {
+		p := "%" + likeEscaper.Replace(name) + "%"
+		pattern = &p
+	}
+
 	// #nosec G201 -- column is whitelisted via validSortColumns above.
 	query := `
-		SELECT steam_id, kills, deaths, suicides, headshot_given, headshot_taken,
+		SELECT steam_id, name, kills, deaths, suicides, headshot_given, headshot_taken,
 		       suppressions, caps, killstreak, score, wins, losses, created_at, updated_at
 		FROM player_stats
-		ORDER BY ` + column + ` DESC
+		WHERE $3::text IS NULL OR name ILIKE $3
+		ORDER BY ` + column + ` DESC, steam_id
 		LIMIT $1 OFFSET $2`
 
-	rows, err := s.pool.Query(ctx, query, limit, offset)
+	rows, err := s.pool.Query(ctx, query, limit, offset, pattern)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -121,7 +132,7 @@ func (s *Store) ListPlayers(ctx context.Context, sort string, limit, offset int)
 		return nil, 0, err
 	}
 
-	total, err := s.count(ctx, `SELECT COUNT(*) FROM player_stats`)
+	total, err := s.count(ctx, `SELECT COUNT(*) FROM player_stats WHERE $1::text IS NULL OR name ILIKE $1`, pattern)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -129,10 +140,14 @@ func (s *Store) ListPlayers(ctx context.Context, sort string, limit, offset int)
 	return players, total, nil
 }
 
+// likeEscaper escapes the LIKE metacharacters (with the default backslash
+// escape) so user input is matched literally inside a %...% pattern.
+var likeEscaper = strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
+
 // GetPlayer returns a single player by Steam ID.
 func (s *Store) GetPlayer(ctx context.Context, steamID string) (*PlayerStats, error) {
 	query := `
-		SELECT steam_id, kills, deaths, suicides, headshot_given, headshot_taken,
+		SELECT steam_id, name, kills, deaths, suicides, headshot_given, headshot_taken,
 		       suppressions, caps, killstreak, score, wins, losses, created_at, updated_at
 		FROM player_stats
 		WHERE steam_id = $1`
@@ -404,10 +419,11 @@ func (s *Store) GetBotWeapons(ctx context.Context, botName string) ([]WeaponKill
 // schema. Banned medics are excluded from the leaderboard.
 func (s *Store) ListMedics(ctx context.Context, limit, offset int) ([]MedicStats, int, error) {
 	query := `
-		SELECT steamId, medic_time
-		FROM medics
-		WHERE banned = FALSE
-		ORDER BY medic_time DESC
+		SELECT m.steamId, ps.name, m.medic_time
+		FROM medics m
+		LEFT JOIN player_stats ps ON ps.steam_id = m.steamId
+		WHERE m.banned = FALSE
+		ORDER BY m.medic_time DESC, m.steamId
 		LIMIT $1 OFFSET $2`
 
 	rows, err := s.pool.Query(ctx, query, limit, offset)
@@ -419,7 +435,7 @@ func (s *Store) ListMedics(ctx context.Context, limit, offset int) ([]MedicStats
 	medics := []MedicStats{}
 	for rows.Next() {
 		var medic MedicStats
-		if err := rows.Scan(&medic.SteamID, &medic.MedicTime); err != nil {
+		if err := rows.Scan(&medic.SteamID, &medic.Name, &medic.MedicTime); err != nil {
 			return nil, 0, err
 		}
 		medics = append(medics, medic)
@@ -455,7 +471,7 @@ func (s *Store) ListMedics(ctx context.Context, limit, offset int) ([]MedicStats
 // text.
 func (s *Store) ListTeamKills(ctx context.Context, limit, offset int) ([]TeamKillStats, int, error) {
 	query := `
-		SELECT pt.steam_id::text, COALESCE(ps.kills, 0), pt.tk_given, pt.tk_taken,
+		SELECT pt.steam_id::text, ps.name, COALESCE(ps.kills, 0), pt.tk_given, pt.tk_taken,
 		       COALESCE(f.forgiven, 0), pt.last_seen
 		FROM player_tks pt
 		LEFT JOIN player_stats ps ON ps.steam_id = pt.steam_id::text
@@ -476,7 +492,7 @@ func (s *Store) ListTeamKills(ctx context.Context, limit, offset int) ([]TeamKil
 	teamKills := []TeamKillStats{}
 	for rows.Next() {
 		var tk TeamKillStats
-		if err := rows.Scan(&tk.SteamID, &tk.Kills, &tk.TKGiven, &tk.TKTaken, &tk.TKForgiven, &tk.LastSeen); err != nil {
+		if err := rows.Scan(&tk.SteamID, &tk.Name, &tk.Kills, &tk.TKGiven, &tk.TKTaken, &tk.TKForgiven, &tk.LastSeen); err != nil {
 			return nil, 0, err
 		}
 		teamKills = append(teamKills, tk)
@@ -539,11 +555,12 @@ func (s *Store) ListTeamKillWeapons(ctx context.Context, limit, offset int) ([]T
 // (0 when unset, reported as null).
 func (s *Store) ListFireSupport(ctx context.Context, limit, offset int) ([]FireSupportStats, int, error) {
 	query := `
-		SELECT steamId, arty_thrown,
-		       CASE WHEN last_used > 0 THEN to_timestamp(last_used) END
-		FROM fire_support
-		WHERE arty_thrown > 0
-		ORDER BY arty_thrown DESC, steamId
+		SELECT fs.steamId, ps.name, fs.arty_thrown,
+		       CASE WHEN fs.last_used > 0 THEN to_timestamp(fs.last_used) END
+		FROM fire_support fs
+		LEFT JOIN player_stats ps ON ps.steam_id = fs.steamId
+		WHERE fs.arty_thrown > 0
+		ORDER BY fs.arty_thrown DESC, fs.steamId
 		LIMIT $1 OFFSET $2`
 
 	rows, err := s.pool.Query(ctx, query, limit, offset)
@@ -555,7 +572,7 @@ func (s *Store) ListFireSupport(ctx context.Context, limit, offset int) ([]FireS
 	players := []FireSupportStats{}
 	for rows.Next() {
 		var player FireSupportStats
-		if err := rows.Scan(&player.SteamID, &player.ArtyThrown, &player.LastUsedAt); err != nil {
+		if err := rows.Scan(&player.SteamID, &player.Name, &player.ArtyThrown, &player.LastUsedAt); err != nil {
 			return nil, 0, err
 		}
 		players = append(players, player)
@@ -578,7 +595,7 @@ func scanPlayers(rows pgx.Rows) ([]PlayerStats, error) {
 	for rows.Next() {
 		var player PlayerStats
 		if err := rows.Scan(
-			&player.SteamID, &player.Kills, &player.Deaths, &player.Suicides,
+			&player.SteamID, &player.Name, &player.Kills, &player.Deaths, &player.Suicides,
 			&player.HeadshotGiven, &player.HeadshotTaken, &player.Suppressions,
 			&player.Caps, &player.Killstreak, &player.Score, &player.Wins,
 			&player.Losses, &player.CreatedAt, &player.UpdatedAt,

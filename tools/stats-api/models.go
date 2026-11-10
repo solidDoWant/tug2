@@ -4,7 +4,10 @@ import "time"
 
 // PlayerStats mirrors a row in the player_stats table.
 type PlayerStats struct {
-	SteamID       string    `json:"steam_id"`
+	SteamID string `json:"steam_id"`
+	// Name is the player's most recent in-game name, or null if they have not
+	// connected since gg2_mstats2 started recording names.
+	Name          *string   `json:"name"`
 	Kills         int       `json:"kills"`
 	Deaths        int       `json:"deaths"`
 	Suicides      int       `json:"suicides"`
@@ -69,15 +72,17 @@ type BotStats struct {
 // MedicStats is a player ranked by time spent as medic, in seconds (from the
 // gg2_medic_tracker schema).
 type MedicStats struct {
-	SteamID   string `json:"steam_id"`
-	MedicTime int    `json:"medic_time"`
+	SteamID   string  `json:"steam_id"`
+	Name      *string `json:"name"`
+	MedicTime int     `json:"medic_time"`
 }
 
 // TeamKillStats is a player's team-kill record (from the gg2_teamkill schema).
 // SteamID is serialized as a string because a SteamID64 exceeds JavaScript's
 // safe-integer range.
 type TeamKillStats struct {
-	SteamID string `json:"steam_id"`
+	SteamID string  `json:"steam_id"`
+	Name    *string `json:"name"`
 	// Kills is the player's total kills, joined in from player_stats, so it can
 	// be compared against TKGiven as a kill/teamkill ratio.
 	Kills   int `json:"kills"`
@@ -101,8 +106,9 @@ type TeamKillWeaponStats struct {
 // FireSupportStats is a player ranked by fire-support (artillery) calls, from
 // the FireSupport plugin's fire_support table.
 type FireSupportStats struct {
-	SteamID    string `json:"steam_id"`
-	ArtyThrown int    `json:"arty_thrown"`
+	SteamID    string  `json:"steam_id"`
+	Name       *string `json:"name"`
+	ArtyThrown int     `json:"arty_thrown"`
 	// LastUsedAt is when the player last called fire support, or null if the
 	// plugin never recorded a time.
 	LastUsedAt *time.Time `json:"last_used_at"`

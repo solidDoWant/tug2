@@ -495,10 +495,24 @@ public void RecordPlayer(int client)
     // one last check for bawtness //
     if (StrEqual(g_SteamID[client], bawt_steam_id)) return;
 
-    char query[512];
-    g_Database.Format(query, sizeof(query),
-                      "INSERT INTO player_stats (steam_id) VALUES ('%s') ON CONFLICT (steam_id) DO UPDATE SET updated_at = CURRENT_TIMESTAMP",
-                      g_SteamID[client]);
+    // Keep the player's latest name so the stats can be looked up by name. Database.Format escapes
+    // %s, and the buffer allows for a name made entirely of characters that escaping doubles.
+    char name[MAX_NAME_LENGTH];
+    if (!GetClientName(client, name, sizeof(name))) name[0] = '\0';
+
+    char query[1024];
+    if (name[0])
+    {
+        g_Database.Format(query, sizeof(query),
+                          "INSERT INTO player_stats (steam_id, name) VALUES ('%s', '%s') ON CONFLICT (steam_id) DO UPDATE SET name = EXCLUDED.name, updated_at = CURRENT_TIMESTAMP",
+                          g_SteamID[client], name);
+    }
+    else
+    {
+        g_Database.Format(query, sizeof(query),
+                          "INSERT INTO player_stats (steam_id) VALUES ('%s') ON CONFLICT (steam_id) DO UPDATE SET updated_at = CURRENT_TIMESTAMP",
+                          g_SteamID[client]);
+    }
     ExecuteQueryWithRetry(OnPlayerUpserted, query, client);
 }
 

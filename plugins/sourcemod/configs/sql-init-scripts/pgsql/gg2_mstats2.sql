@@ -20,6 +20,11 @@ CREATE TABLE IF NOT EXISTS player_stats (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+-- The player's most recent in-game name, refreshed whenever the plugin records them, so the stats
+-- can be searched and shown by name rather than only by SteamID. NULL for players last seen before
+-- this column existed, until they next connect.
+ALTER TABLE player_stats ADD COLUMN IF NOT EXISTS name VARCHAR(128);
+
 CREATE TABLE IF NOT EXISTS weapon_stats (
     weapon_id SERIAL PRIMARY KEY,
     weapon_name VARCHAR(64) UNIQUE NOT NULL,

@@ -4,12 +4,12 @@
 
 -- Players ------------------------------------------------------------------
 INSERT INTO player_stats
-    (steam_id, kills, deaths, suicides, headshot_given, headshot_taken, suppressions, caps, killstreak, score, wins, losses)
+    (steam_id, name, kills, deaths, suicides, headshot_given, headshot_taken, suppressions, caps, killstreak, score, wins, losses)
 VALUES
-    ('76561198000000001', 1500, 800,  12, 420, 210, 95, 60, 18, 45000, 125, 75),
-    ('76561198000000002',  980, 1020, 30, 180, 260, 40, 35,  9, 21000,  60, 90),
-    ('76561198000000003',  250, 140,   3,  70,  40, 12, 88,  6, 12000,  40, 20),
-    ('76561198000000004',   40, 310,  22,   5,  90,  2,  4,  2,   900,   5, 35)
+    ('76561198000000001', 'TestPlayerAlpha', 1500, 800,  12, 420, 210, 95, 60, 18, 45000, 125, 75),
+    ('76561198000000002', 'TestPlayerBravo', 980, 1020, 30, 180, 260, 40, 35,  9, 21000,  60, 90),
+    ('76561198000000003', 'test_medic_100%', 250, 140,   3,  70,  40, 12, 88,  6, 12000,  40, 20),
+    ('76561198000000004', NULL,             40, 310,  22,   5,  90,  2,  4,  2,   900,   5, 35)
 ON CONFLICT (steam_id) DO NOTHING;
 
 -- Weapons ------------------------------------------------------------------
