@@ -73,7 +73,7 @@ var leaderboards = map[string]struct {
 	sorts []string
 }{
 	"players":          {"/api/v1/players", []string{"score", "kills", "deaths", "wins", "killstreak", "caps", "kd", "play_time", "accuracy", "updated_at"}},
-	"weapons":          {"/api/v1/weapons", nil},
+	"weapons":          {"/api/v1/weapons", []string{"kills", "shots", "accuracy"}},
 	"maps":             {"/api/v1/maps", []string{"rounds", "play_time", "last_played"}},
 	"bots":             {"/api/v1/bots", nil},
 	"medics":           {"/api/v1/medics", nil},
@@ -291,13 +291,13 @@ func (ts *Toolset) addStatsTools(serverProp map[string]any, defaultServer string
 	boardNames := sortedKeys(leaderboards)
 	ts.add("leaderboard",
 		"Read a ranked leaderboard. Boards: players (sort: score, kills, deaths, wins, killstreak, caps, kd, play_time, accuracy (enemy hit rate, players with 500+ shots first), updated_at), "+
-			"weapons (most kills across all players), maps (win/loss and playtime; sort: rounds, play_time, last_played), "+
+			"weapons (all players' totals per weapon: kills, rounds fired, enemy/friendly hits and enemy hit rate; sort: kills, shots, accuracy (weapons with 1000+ shots first)), maps (win/loss and playtime; sort: rounds, play_time, last_played), "+
 			"bots (bots ranked by kills on players), medics (time spent as medic, seconds), teamkills (players by team kills given, with forgiven count), "+
 			"teamkill_weapons (weapons by team kills), fire_support (players by artillery calls). "+
 			"Results are descending and paginated; the response's total is the number of entries on the whole board.",
 		map[string]any{
 			"board":  enumProp("Which leaderboard.", boardNames),
-			"sort":   prop("string", "Order, only for the players and maps boards (see the description). Omit for the default."),
+			"sort":   prop("string", "Order, only for the players, weapons and maps boards (see the description). Omit for the default."),
 			"limit":  intProp("How many entries (default 10).", 1, maxPageSize),
 			"offset": intProp("Entries to skip, for later pages.", 0, 100000),
 			"server": serverProp,
@@ -344,6 +344,37 @@ func (ts *Toolset) addStatsTools(serverProp map[string]any, defaultServer string
 				return nil, err
 			}
 			return stats.Get(ctx, pickServer(in.Server, defaultServer), "/api/v1/matches", pageQuery(clampPage(in.Limit, in.Offset)))
+		})
+
+	ts.add("weapon_accuracy",
+		"The most accurate players with one weapon: enemy hit rate (rounds that damaged an enemy / rounds fired, %), with shots and friendly hits. "+
+			"Only players with at least min_shots recorded shots with it are ranked. Shots and hits have only been recorded since November 2026. "+
+			"Use a weapon name as the weapons board or a player's weapons list it (e.g. m4a1).",
+		map[string]any{
+			"weapon":    prop("string", "Weapon name, e.g. m4a1."),
+			"min_shots": intProp("Minimum recorded shots with the weapon to be ranked (default 100).", 1, 100000),
+			"limit":     intProp("How many players (default 10).", 1, maxPageSize),
+			"offset":    intProp("Players to skip, for later pages.", 0, 100000),
+			"server":    serverProp,
+		}, []string{"weapon"},
+		func(ctx context.Context, _ *toolContext, raw json.RawMessage) (any, error) {
+			var in struct {
+				Weapon, Server string
+				MinShots       int `json:"min_shots"`
+				Limit, Offset  int
+			}
+			if err := decode(raw, &in); err != nil {
+				return nil, err
+			}
+			weapon := strings.TrimPrefix(strings.ToLower(strings.TrimSpace(in.Weapon)), "weapon_")
+			if weapon == "" {
+				return nil, errors.New("weapon must not be empty")
+			}
+			q := pageQuery(clampPage(in.Limit, in.Offset))
+			if in.MinShots > 0 {
+				q.Set("min_shots", strconv.Itoa(in.MinShots))
+			}
+			return stats.Get(ctx, pickServer(in.Server, defaultServer), "/api/v1/weapons/"+url.PathEscape(weapon)+"/accuracy", q)
 		})
 
 	ts.add("get_bot_weapons",

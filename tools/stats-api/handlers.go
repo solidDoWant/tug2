@@ -113,8 +113,23 @@ type PlayerWeaponsOutput struct {
 	Body []PlayerWeapon
 }
 
+type ListWeaponsInput struct {
+	Sort string `query:"sort" default:"kills" enum:"kills,shots,accuracy" doc:"Order by total kills, rounds fired, or enemy hit rate (weapons with at least 1000 recorded shots first, then the rest); descending."`
+	PageInput
+}
+
 type WeaponsOutput struct {
 	Body ListResponse[WeaponTotals]
+}
+
+type WeaponAccuracyInput struct {
+	WeaponName string `path:"weapon_name" example:"m4a1" maxLength:"64" doc:"Weapon name as in /api/v1/weapons (no weapon_ prefix)."`
+	MinShots   int    `query:"min_shots" default:"100" minimum:"1" maximum:"100000" doc:"Only players with at least this many recorded shots with the weapon, so a few lucky shots don't top the list."`
+	PageInput
+}
+
+type WeaponAccuracyOutput struct {
+	Body ListResponse[WeaponAccuracy]
 }
 
 type ListMapsInput struct {
@@ -189,9 +204,17 @@ func (s *Server) register(api huma.API) {
 		OperationID: "list-weapons",
 		Method:      http.MethodGet,
 		Path:        "/api/v1/weapons",
-		Summary:     "Most-used weapons across all players",
+		Summary:     "Weapons across all players: kills, rounds fired and hit rate",
 		Tags:        []string{"weapons"},
 	}, s.listWeapons)
+
+	huma.Register(api, huma.Operation{
+		OperationID: "get-weapon-accuracy",
+		Method:      http.MethodGet,
+		Path:        "/api/v1/weapons/{weapon_name}/accuracy",
+		Summary:     "Most accurate players with one weapon (enemy hit rate)",
+		Tags:        []string{"weapons"},
+	}, s.getWeaponAccuracy)
 
 	huma.Register(api, huma.Operation{
 		OperationID: "list-maps",
@@ -314,12 +337,23 @@ func (s *Server) getPlayerWeapons(ctx context.Context, in *SteamIDInput) (*Playe
 	return &PlayerWeaponsOutput{Body: weapons}, nil
 }
 
-func (s *Server) listWeapons(ctx context.Context, in *PageInput) (*WeaponsOutput, error) {
-	weapons, total, err := s.store.ListWeapons(ctx, in.Limit, in.Offset)
+func (s *Server) listWeapons(ctx context.Context, in *ListWeaponsInput) (*WeaponsOutput, error) {
+	weapons, total, err := s.store.ListWeapons(ctx, in.Sort, in.Limit, in.Offset)
 	if err != nil {
 		return nil, huma.Error500InternalServerError("failed to list weapons")
 	}
-	return &WeaponsOutput{Body: page(weapons, total, *in)}, nil
+	return &WeaponsOutput{Body: page(weapons, total, in.PageInput)}, nil
+}
+
+func (s *Server) getWeaponAccuracy(ctx context.Context, in *WeaponAccuracyInput) (*WeaponAccuracyOutput, error) {
+	players, total, err := s.store.GetWeaponAccuracy(ctx, in.WeaponName, in.MinShots, in.Limit, in.Offset)
+	if errors.Is(err, ErrNotFound) {
+		return nil, huma.Error404NotFound("weapon not found")
+	}
+	if err != nil {
+		return nil, huma.Error500InternalServerError("failed to fetch weapon accuracy")
+	}
+	return &WeaponAccuracyOutput{Body: page(players, total, in.PageInput)}, nil
 }
 
 func (s *Server) listMaps(ctx context.Context, in *ListMapsInput) (*MapsOutput, error) {

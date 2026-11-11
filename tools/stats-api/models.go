@@ -57,9 +57,30 @@ type WeaponKills struct {
 
 // WeaponTotals aggregates kills for a weapon across all players.
 type WeaponTotals struct {
-	WeaponName    string `json:"weapon_name"`
-	TotalKills    int    `json:"total_kills"`
-	UniquePlayers int    `json:"unique_players"`
+	WeaponName string `json:"weapon_name"`
+	TotalKills int    `json:"total_kills"`
+	// UniquePlayers is how many players have a kill with the weapon.
+	UniquePlayers int `json:"unique_players"`
+	// TotalShots, EnemyHits and FriendlyHits sum player_shots across all
+	// players (rounds fired, and rounds that damaged an enemy or teammate);
+	// 0 for weapons that aren't firearms or haven't been fired since 2026-11.
+	TotalShots   int64 `json:"total_shots"`
+	EnemyHits    int64 `json:"enemy_hits"`
+	FriendlyHits int64 `json:"friendly_hits"`
+	// EnemyHitRate is enemy_hits / total_shots as a percentage, or null with
+	// no shots recorded.
+	EnemyHitRate *float64 `json:"enemy_hit_rate"`
+}
+
+// WeaponAccuracy is one player's accuracy with one weapon.
+type WeaponAccuracy struct {
+	SteamID      string  `json:"steam_id"`
+	Name         *string `json:"name"`
+	Shots        int     `json:"shots"`
+	EnemyHits    int     `json:"enemy_hits"`
+	FriendlyHits int     `json:"friendly_hits"`
+	// EnemyHitRate is enemy_hits / shots as a percentage.
+	EnemyHitRate float64 `json:"enemy_hit_rate"`
 }
 
 // MapStats summarises a single map: win/loss outcomes (from gg2_mstats2's

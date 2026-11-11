@@ -226,16 +226,49 @@ func (s *Store) GetPlayerWeapons(ctx context.Context, steamID string) ([]PlayerW
 	return weapons, rows.Err()
 }
 
-// ListWeapons returns a page of weapons aggregated across all players, plus the
-// total number of distinct weapons with kills.
-func (s *Store) ListWeapons(ctx context.Context, limit, offset int) ([]WeaponTotals, int, error) {
+// validWeaponSortColumns maps the sort values accepted on /weapons to output
+// column aliases of the ListWeapons query, guarding against SQL injection.
+var validWeaponSortColumns = map[string]string{
+	"kills":    "total_kills",
+	"shots":    "total_shots",
+	"accuracy": "COALESCE(CASE WHEN total_shots >= " + minWeaponAccuracyShots + " THEN enemy_hits::numeric / total_shots END, -1)",
+}
+
+// minWeaponAccuracyShots is how many shots, across all players, a weapon needs
+// before sort=accuracy ranks it.
+const minWeaponAccuracyShots = "1000"
+
+// ListWeapons returns a page of weapons with their totals across all players:
+// kills from player_kills and rounds fired and hit from player_shots. A weapon
+// in either table appears.
+func (s *Store) ListWeapons(ctx context.Context, sort string, limit, offset int) ([]WeaponTotals, int, error) {
+	column, ok := validWeaponSortColumns[sort]
+	if !ok {
+		column = "total_kills"
+	}
+
+	// #nosec G201 -- column is whitelisted via validWeaponSortColumns above.
 	query := `
-		SELECT w.weapon_name, SUM(pk.kill_count) AS total_kills,
-		       COUNT(DISTINCT pk.steam_id) AS unique_players
-		FROM player_kills pk
-		JOIN weapon_stats w ON w.weapon_id = pk.weapon_id
-		GROUP BY w.weapon_name
-		ORDER BY total_kills DESC
+		WITH kills AS (
+			SELECT weapon_id, SUM(kill_count) AS total_kills, COUNT(DISTINCT steam_id) AS unique_players
+			FROM player_kills GROUP BY weapon_id
+		), shots AS (
+			SELECT weapon_id, SUM(shots) AS total_shots, SUM(enemy_hits) AS enemy_hits,
+			       SUM(friendly_hits) AS friendly_hits
+			FROM player_shots GROUP BY weapon_id
+		), totals AS (
+			SELECT w.weapon_name, COALESCE(k.total_kills, 0) AS total_kills,
+			       COALESCE(k.unique_players, 0) AS unique_players,
+			       COALESCE(sh.total_shots, 0) AS total_shots, COALESCE(sh.enemy_hits, 0) AS enemy_hits,
+			       COALESCE(sh.friendly_hits, 0) AS friendly_hits
+			FROM kills k
+			FULL JOIN shots sh USING (weapon_id)
+			JOIN weapon_stats w USING (weapon_id)
+		)
+		SELECT weapon_name, total_kills, unique_players, total_shots, enemy_hits, friendly_hits,
+		       ` + hitRateSQL("enemy_hits", "total_shots") + `
+		FROM totals
+		ORDER BY ` + column + ` DESC, weapon_name
 		LIMIT $1 OFFSET $2`
 
 	rows, err := s.pool.Query(ctx, query, limit, offset)
@@ -247,7 +280,8 @@ func (s *Store) ListWeapons(ctx context.Context, limit, offset int) ([]WeaponTot
 	weapons := []WeaponTotals{}
 	for rows.Next() {
 		var weapon WeaponTotals
-		if err := rows.Scan(&weapon.WeaponName, &weapon.TotalKills, &weapon.UniquePlayers); err != nil {
+		if err := rows.Scan(&weapon.WeaponName, &weapon.TotalKills, &weapon.UniquePlayers,
+			&weapon.TotalShots, &weapon.EnemyHits, &weapon.FriendlyHits, &weapon.EnemyHitRate); err != nil {
 			return nil, 0, err
 		}
 		weapons = append(weapons, weapon)
@@ -256,12 +290,57 @@ func (s *Store) ListWeapons(ctx context.Context, limit, offset int) ([]WeaponTot
 		return nil, 0, err
 	}
 
-	total, err := s.count(ctx, `SELECT COUNT(DISTINCT weapon_id) FROM player_kills`)
+	total, err := s.count(ctx, `SELECT COUNT(*) FROM (SELECT weapon_id FROM player_kills UNION SELECT weapon_id FROM player_shots) w`)
 	if err != nil {
 		return nil, 0, err
 	}
 
 	return weapons, total, nil
+}
+
+// GetWeaponAccuracy ranks the players with at least minShots recorded shots
+// with one weapon by enemy hit rate. An unknown weapon is ErrNotFound; a known
+// one nobody qualifies for is an empty page.
+func (s *Store) GetWeaponAccuracy(ctx context.Context, weaponName string, minShots, limit, offset int) ([]WeaponAccuracy, int, error) {
+	var weaponID int
+	err := s.pool.QueryRow(ctx, `SELECT weapon_id FROM weapon_stats WHERE weapon_name = $1`, weaponName).Scan(&weaponID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, 0, ErrNotFound
+	}
+	if err != nil {
+		return nil, 0, err
+	}
+
+	rows, err := s.pool.Query(ctx, `
+		SELECT ps.steam_id, p.name, ps.shots, ps.enemy_hits, ps.friendly_hits,
+		       round(100.0 * ps.enemy_hits / ps.shots, 1)::float8
+		FROM player_shots ps
+		LEFT JOIN player_stats p USING (steam_id)
+		WHERE ps.weapon_id = $1 AND ps.shots >= $2
+		ORDER BY ps.enemy_hits::numeric / ps.shots DESC, ps.shots DESC, ps.steam_id
+		LIMIT $3 OFFSET $4`, weaponID, minShots, limit, offset)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	players := []WeaponAccuracy{}
+	for rows.Next() {
+		var a WeaponAccuracy
+		if err := rows.Scan(&a.SteamID, &a.Name, &a.Shots, &a.EnemyHits, &a.FriendlyHits, &a.EnemyHitRate); err != nil {
+			return nil, 0, err
+		}
+		players = append(players, a)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, 0, err
+	}
+
+	total, err := s.count(ctx, `SELECT COUNT(*) FROM player_shots WHERE weapon_id = $1 AND shots >= $2`, weaponID, minShots)
+	if err != nil {
+		return nil, 0, err
+	}
+	return players, total, nil
 }
 
 // validMapSortColumns maps the sort values accepted on /maps to output column

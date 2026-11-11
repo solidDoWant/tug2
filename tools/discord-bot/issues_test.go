@@ -77,7 +77,7 @@ func TestIssueTrackerGitHubApp(t *testing.T) {
 		GitHubAppID: 12345, GitHubAppPrivateKey: keyPEM,
 		GitHubOwner: "example", GitHubRepo: "repo",
 		IssueLabels: []string{"from-discord"}, BugLabel: "bug", FeatureLabel: "enhancement",
-		ServerOrder: []string{"main", "test"},
+		ServerOrder:  []string{"main", "test"},
 		githubAPIURL: server.URL + "/",
 	}
 	tracker, err := NewIssueTracker(context.Background(), cfg)

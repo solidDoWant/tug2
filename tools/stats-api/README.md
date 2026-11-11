@@ -138,8 +138,9 @@ endpoints are unversioned.
 | `GET /readyz`                            | Readiness probe. Pings the DB; use for load-balancer rotation.     |
 | `GET /api/v1/players`                    | List players. `?sort=&name=&limit=&offset=`.                       |
 | `GET /api/v1/players/{steam_id}`         | Single player's stats.                                             |
-| `GET /api/v1/players/{steam_id}/weapons` | Per-weapon kill breakdown for a player (unpaginated sub-resource). |
-| `GET /api/v1/weapons`                    | Most-used weapons across all players. `?limit=&offset=`.           |
+| `GET /api/v1/players/{steam_id}/weapons` | Per-weapon kills, shots and hits for a player (unpaginated sub-resource). |
+| `GET /api/v1/weapons`                    | Weapons across all players: kills, shots, hits. `?sort=&limit=&offset=`. |
+| `GET /api/v1/weapons/{weapon_name}/accuracy` | Most accurate players with one weapon. `?min_shots=&limit=&offset=`. |
 | `GET /api/v1/maps`                       | Per-map win/loss and playtime summary. `?sort=&limit=&offset=`.    |
 | `GET /api/v1/matches`                    | Recent match results. `?limit=&offset=`.                           |
 | `GET /api/v1/bots`                       | Bots ranked by total kills. `?limit=&offset=`.                     |
@@ -180,6 +181,13 @@ rounds that damaged at least one enemy or teammate; `enemy_hit_rate` is
 `enemy_hits / shots` as a percentage (null with no shots). A shotgun shell is one
 round. Counted since 2026-11. `sort=accuracy` ranks players with at least 500
 shots by `enemy_hit_rate`; everyone else follows.
+
+`/api/v1/weapons` totals each weapon across all players, including weapons that
+have shots but no kills. `sort` accepts `kills` (default), `shots` and
+`accuracy`, which ranks weapons with at least 1000 shots by `enemy_hit_rate`,
+then the rest. `/api/v1/weapons/{weapon_name}/accuracy` ranks the players with at
+least `min_shots` (default 100) shots with that weapon by `enemy_hit_rate`; an
+unknown weapon is `404`.
 
 `sort` for `/api/v1/maps` accepts: `rounds` (logged round results, the
 default), `play_time` (total playtime from map_logger), and `last_played`

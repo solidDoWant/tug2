@@ -32,8 +32,13 @@ var (
 			{"name", "only players whose latest in-game name contains this, case-insensitive"},
 		}, pageParams...)},
 		{"/api/v1/players/{steam_id}", "One player's lifetime stats by SteamID64; 404 if unknown.", nil},
-		{"/api/v1/players/{steam_id}/weapons", "One player's kills per weapon (a plain array, not paginated).", nil},
-		{"/api/v1/weapons", "Weapons by total kills across all players, with how many players used each.", pageParams},
+		{"/api/v1/players/{steam_id}/weapons", "One player's kills, rounds fired, enemy/friendly hits and enemy hit rate per weapon (a plain array, not paginated).", nil},
+		{"/api/v1/weapons", "Weapons across all players: total kills, players with a kill, rounds fired, enemy/friendly hits and enemy hit rate.", append([]apiParam{
+			{"sort", "kills (default), shots, accuracy (weapons with 1000+ shots, by enemy hit rate)"},
+		}, pageParams...)},
+		{"/api/v1/weapons/{weapon_name}/accuracy", "Players ranked by enemy hit rate with one weapon (e.g. m4a1); 404 for an unknown weapon.", append([]apiParam{
+			{"min_shots", "only players with at least this many shots with it, 1-100000, default 100"},
+		}, pageParams...)},
 		{"/api/v1/maps", "Per-map wins, losses, win rate, playtime and last played.", append([]apiParam{
 			{"sort", "rounds (default), play_time, last_played"},
 		}, pageParams...)},
