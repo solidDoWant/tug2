@@ -72,17 +72,89 @@ the reporter to press **Confirm**.
 
 ## Discord setup
 
-1. Create an application and bot in the Discord developer portal.
-2. Under **Bot**, enable the **Message Content** privileged intent. It is what
-   lets the bot read follow-ups in its threads that don't mention it.
-3. Invite it with the `bot` and `applications.commands` scopes (the second
-   is what lets it add `/ask`; without it, `/ask` is missing and the log says
-   so) and these permissions in the bot channel:
-   View Channel, Send Messages, Send Messages in Threads, Create Public
-   Threads, Read Message History, Embed Links. In every other channel it
-   should read, it needs View Channel and Read Message History. See
-   [Reading other channels](#reading-other-channels).
-4. Copy the channel's ID (Developer Mode → right-click → Copy Channel ID).
+### 1. Create the application
+
+In the [Discord developer portal](https://discord.com/developers/applications),
+create an application, then:
+
+- **Bot** tab:
+  - **Message Content Intent: on.** Required: without it the bot can't read
+    follow-ups that don't mention it, forwarded messages, or other channels.
+  - **Server Members Intent** and **Presence Intent: off.** Not used.
+  - **Public Bot: off**, so only you can add it to servers.
+  - Reset and copy the token for `DISCORD_TOKEN`.
+- **Installation** tab (if shown): **Guild Install** on, **User Install** off.
+  `/ask` is a server-only command.
+- Note the **Application ID** on **General Information** for the invite URL.
+
+### 2. Scopes and permissions
+
+| Scope                   | Why                                          |
+| ----------------------- | -------------------------------------------- |
+| `bot`                   | Adds the bot user to the server.             |
+| `applications.commands` | Lets it register `/ask`. Without it, `/ask` is missing and the log warns at startup. |
+
+| Permission               | Where                                    | Used for                                                                 |
+| ------------------------ | ---------------------------------------- | ------------------------------------------------------------------------ |
+| View Channels            | The bot channel and every channel to read | Seeing messages. Channels without it are invisible to the bot.          |
+| Read Message History     | Same                                     | Rebuilding thread history, reading other channels, replying to messages |
+| Send Messages            | The bot channel                          | Error and limit replies in the channel, and the typing indicator         |
+| Create Public Threads    | The bot channel                          | One thread per question, including `/ask` questions                      |
+| Send Messages in Threads | The bot channel                          | Answers, the typing indicator, "Filed as issue" links                    |
+| Embed Links              | The bot channel                          | Issue drafts (embeds with Confirm and Cancel buttons)                    |
+
+Not needed:
+- **Manage Threads:** the bot only renames threads it created, which a
+  thread's creator may do.
+- **Mention Everyone:** replies never ping anyone.
+- **Manage Messages, Attach Files and Add Reactions:** nothing uses them.
+- **Button clicks and `/ask` responses** use interaction responses, which
+  need no permissions.
+- **Never give it Administrator.** That bypasses channel permissions, so it
+  could read private channels.
+
+### 3. Invite it
+
+Recommended: grant the read permissions server-wide and the posting
+permissions only in the bot channel. The bot only ever posts in the bot channel
+and its threads, and this way its role can't post anywhere else.
+
+1. Invite it with View Channels and Read Message History server-wide
+   (permissions `66560`):
+
+   ```
+   https://discord.com/oauth2/authorize?client_id=<APP_ID>&scope=bot+applications.commands&permissions=66560
+   ```
+
+2. In the bot channel's settings → **Permissions**, add the bot's role and
+   allow Send Messages, Create Public Threads, Send Messages in Threads and
+   Embed Links.
+
+Simpler, with all six permissions server-wide (`309237730304`):
+
+```
+https://discord.com/oauth2/authorize?client_id=<APP_ID>&scope=bot+applications.commands&permissions=309237730304
+```
+
+With server-wide read permissions, the bot can read every channel @everyone
+can see, plus any channel where its role is explicitly allowed. Channels that
+deny @everyone stay hidden. To keep it out of a public channel, deny View
+Channels for its role there. See [Reading other channels](#reading-other-channels).
+
+Already invited? Open the invite URL again with the new scopes or
+permissions. Discord updates the existing bot in place.
+
+### 4. Configure and check
+
+1. Copy the bot channel's ID (User Settings → Advanced → Developer Mode, then
+   right-click the channel → **Copy Channel ID**) for `DISCORD_CHANNEL_ID`.
+2. Start the bot and check its log:
+   - `registered slash commands`: `/ask` is available. A warning that mentions
+     `applications.commands` means the scope is missing; re-invite with it.
+   - `readable channels`: exactly which channels the model can read.
+3. Optionally, limit where `/ask` shows in the `/` menu: Server Settings →
+   **Integrations** → the bot → `/ask`. Elsewhere, the bot already points the
+   asker to the bot channel.
 
 ## Claude API authentication
 
