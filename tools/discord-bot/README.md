@@ -26,8 +26,9 @@ the reporter to press **Confirm**.
 - **Bug reports / feature requests:** the model asks for missing detail,
   searches existing issues, then posts a draft with **Confirm and file** and
   **Cancel** buttons. Only the person who asked can press them. Filed issues
-  get the configured labels and a footer naming the Discord reporter and
-  linking the Discord thread. Once filed, the draft's title links to the
+  get the configured labels and a footer linking the Discord thread. The
+  reporter isn't named in the issue, since issues are public; the thread shows
+  who it was, and the bot logs their user ID with the issue URL. Once filed, the draft's title links to the
   issue and the bot posts the link as a reply to it. Issues are public, so
   the model is told to replace player names, SteamIDs and profile links with
   placeholders unless the bug is about that player.

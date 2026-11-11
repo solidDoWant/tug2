@@ -594,7 +594,7 @@ func (b *Bot) onInteraction(s *discordgo.Session, i *discordgo.InteractionCreate
 	defer cancel()
 	// Drafts are only posted in threads, so this links the whole conversation.
 	link := fmt.Sprintf("https://discord.com/channels/%s/%s", i.GuildID, i.ChannelID)
-	issueURL, err := b.issues.Create(ctx, draft, Reporter{Username: user.Username, UserID: user.ID, ThreadLink: link})
+	issueURL, err := b.issues.Create(ctx, draft, link)
 	if err != nil {
 		slog.Error("filing issue", "user", user.ID, "err", err)
 		b.metrics.Issue(draft.Kind, "failed")

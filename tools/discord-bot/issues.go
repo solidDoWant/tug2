@@ -125,15 +125,11 @@ func (t *IssueTracker) Search(ctx context.Context, query string) ([]IssueSummary
 	return out, nil
 }
 
-// Reporter identifies who asked for the issue, for the issue body.
-type Reporter struct {
-	Username   string
-	UserID     string
-	ThreadLink string
-}
-
-// Create files the draft and returns the new issue's URL.
-func (t *IssueTracker) Create(ctx context.Context, draft IssueDraft, reporter Reporter) (string, error) {
+// Create files the draft and returns the new issue's URL. threadLink is the
+// Discord thread it came from. Issues are public, so the reporter is not
+// named; the thread shows who it was to anyone in the Discord server, and the
+// bot's log records their user ID with the issue URL.
+func (t *IssueTracker) Create(ctx context.Context, draft IssueDraft, threadLink string) (string, error) {
 	labels := append([]string{}, t.labels...)
 	switch draft.Kind {
 	case IssueBug:
@@ -147,8 +143,7 @@ func (t *IssueTracker) Create(ctx context.Context, draft IssueDraft, reporter Re
 	}
 
 	body := strings.TrimSpace(draft.Body) + fmt.Sprintf(
-		"\n\n---\n_Reported on Discord by %s (user ID %s) via the stats bot. Discussion: [Discord thread](%s)_",
-		reporter.Username, reporter.UserID, reporter.ThreadLink)
+		"\n\n---\n_Reported on Discord via the stats bot. Discussion: [Discord thread](%s)_", threadLink)
 
 	issue, _, err := t.client.Issues.Create(ctx, t.owner, t.repo, &github.IssueRequest{
 		Title:  github.Ptr(draft.Title),
