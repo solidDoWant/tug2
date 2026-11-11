@@ -108,3 +108,27 @@ func TestLeadIn(t *testing.T) {
 		t.Errorf("reply to run member = %s, want 9", got)
 	}
 }
+
+func TestAddressesBot(t *testing.T) {
+	const bot = "900"
+	botMsg := &discordgo.Message{ID: "1", Author: &discordgo.User{ID: bot}}
+	userMsg := &discordgo.Message{ID: "2", Author: &discordgo.User{ID: "u2"}}
+	tests := []struct {
+		name string
+		m    *discordgo.Message
+		want bool
+	}{
+		{"mention", &discordgo.Message{Mentions: []*discordgo.User{{ID: bot}}}, true},
+		{"plain", &discordgo.Message{Content: "hi"}, false},
+		{"reply to bot, ping off", &discordgo.Message{Type: discordgo.MessageTypeReply, ReferencedMessage: botMsg}, true},
+		{"reply to someone else", &discordgo.Message{Type: discordgo.MessageTypeReply, ReferencedMessage: userMsg}, false},
+		{"reply to a deleted message", &discordgo.Message{Type: discordgo.MessageTypeReply}, false},
+		{"forward of a bot message", &discordgo.Message{ReferencedMessage: botMsg,
+			MessageReference: &discordgo.MessageReference{Type: discordgo.MessageReferenceTypeForward}}, false},
+	}
+	for _, tt := range tests {
+		if got := addressesBot(tt.m, bot); got != tt.want {
+			t.Errorf("%s: addressesBot = %v, want %v", tt.name, got, tt.want)
+		}
+	}
+}

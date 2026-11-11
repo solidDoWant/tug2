@@ -107,13 +107,24 @@ func (b *Bot) channel(id string) (*discordgo.Channel, error) {
 }
 
 func (b *Bot) mentionsMe(m *discordgo.Message) bool {
-	me := b.session.State.User.ID
-	return slices.ContainsFunc(m.Mentions, func(u *discordgo.User) bool { return u.ID == me })
+	return addressesBot(m, b.session.State.User.ID)
 }
 
-// onMessage answers an @mention in the configured channel by starting a
-// thread, any message in a thread the bot started there, and an @mention in a
-// thread someone else started there.
+// addressesBot reports whether a message is meant for the bot: it @mentions
+// the bot, or it is a Discord reply to one of the bot's messages. A reply with
+// its ping switched off doesn't list the bot in Mentions, so replies are
+// checked separately.
+func addressesBot(m *discordgo.Message, botID string) bool {
+	if slices.ContainsFunc(m.Mentions, func(u *discordgo.User) bool { return u.ID == botID }) {
+		return true
+	}
+	ref := m.ReferencedMessage
+	return m.Type == discordgo.MessageTypeReply && ref != nil && ref.Author != nil && ref.Author.ID == botID
+}
+
+// onMessage answers an @mention or reply to the bot in the configured channel
+// by starting a thread, any message in a thread the bot started there, and an
+// @mention or reply to the bot in a thread someone else started there.
 func (b *Bot) onMessage(s *discordgo.Session, m *discordgo.MessageCreate) {
 	if m.Author == nil || m.Author.Bot || m.GuildID == "" {
 		return
@@ -145,11 +156,12 @@ func (b *Bot) onMessage(s *discordgo.Session, m *discordgo.MessageCreate) {
 }
 
 // route decides whether a message gets an answer and in which thread. ch is
-// the message's channel, nil when it is the bot channel itself. In the bot
-// channel it answers @mentions in a new thread (threadID ""). In a thread of
-// the bot channel it answers every message if the bot started the thread, and
-// only @mentions if someone else did, since people may be talking among
-// themselves there. Elsewhere it ignores the message.
+// the message's channel, nil when it is the bot channel itself. mentioned
+// means the message is addressed to the bot: an @mention or a reply to it. In
+// the bot channel it answers those in a new thread (threadID ""). In a thread
+// of the bot channel it answers every message if the bot started the thread,
+// and only those addressed to it if someone else did, since people may be
+// talking among themselves there. Elsewhere it ignores the message.
 func route(botChannelID, botUserID, channelID string, ch *discordgo.Channel, mentioned bool) (threadID string, ok bool) {
 	if channelID == botChannelID {
 		return "", mentioned
@@ -374,14 +386,15 @@ const (
 // before it (each within leadInGap of the next), such as a forward followed by
 // "@bot what's wrong with this?". before is the parent channel's messages
 // preceding the starter, newest first. The run stops at anyone else's message
-// and at a message that mentions the bot, which is a question of its own.
+// and at a message addressed to the bot (an @mention or a reply to it),
+// which is a question of its own.
 func leadIn(starter *discordgo.Message, before []*discordgo.Message, botID string) []*discordgo.Message {
 	var run []*discordgo.Message
 	next := starter.Timestamp
 	for _, m := range before {
 		if m.Author == nil || starter.Author == nil || m.Author.ID != starter.Author.ID ||
 			next.Sub(m.Timestamp) > leadInGap ||
-			slices.ContainsFunc(m.Mentions, func(u *discordgo.User) bool { return u.ID == botID }) {
+			addressesBot(m, botID) {
 			break
 		}
 		run = append(run, m)

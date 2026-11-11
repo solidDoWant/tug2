@@ -30,19 +30,20 @@ the reporter to press **Confirm**.
 
 ## How conversations work
 
-- Mention the bot in the configured channel. It starts a thread named after
+- Mention the bot in the configured channel, or use Discord's reply on one of
+  its messages (with or without the ping). It starts a thread named after
   the question and answers there.
 - Follow-ups in that thread don't need a mention. The thread itself is the
   conversation history: the bot re-reads it on every message (up to
   `HISTORY_MESSAGES`), so nothing is stored and restarts lose nothing.
 - In a thread someone else started in the configured channel, the bot answers
-  only when mentioned, since people may be talking among themselves there.
+  only when mentioned or replied to, since people may be talking among themselves there.
   It still reads the whole thread (and the message it was started from) as
   context. Threads in other channels are ignored.
 - The bot also reads what a thread's first message builds on: the message it
   replies to, and the messages its author posted just before it in the
   channel (each within 5 minutes of the next, up to 5, stopping at anyone
-  else's message or an earlier question to the bot). So "forward a message,
+  else's message or an earlier question to the bot: a mention or reply). So "forward a message,
   then `@bot what's wrong with this?`" works.
 - Forwarded messages are read from their snapshot: raw text (markup
   included, so rendering problems stay visible), embeds, attachment names,
