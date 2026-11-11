@@ -82,6 +82,20 @@ func (s *Store) count(ctx context.Context, query string, args ...any) (int, erro
 	return total, nil
 }
 
+// playerShotTotals sums each player's player_shots rows over their weapons.
+const playerShotTotals = `(SELECT steam_id, SUM(shots) AS shots, SUM(enemy_hits) AS enemy_hits,
+		SUM(friendly_hits) AS friendly_hits FROM player_shots GROUP BY steam_id)`
+
+// minAccuracyShots is how many shots a player needs before sort=accuracy
+// ranks them: below it a handful of lucky shots would top the board.
+const minAccuracyShots = "500"
+
+// hitRateSQL is hits / shots as a percentage to one decimal place, or NULL
+// with no shots.
+func hitRateSQL(hits, shots string) string {
+	return "CASE WHEN " + shots + " > 0 THEN round(100.0 * " + hits + " / " + shots + ", 1)::float8 END"
+}
+
 // validSortColumns maps the sort values accepted on the API to SQL expressions,
 // guarding against SQL injection via the query string.
 var validSortColumns = map[string]string{
@@ -92,6 +106,7 @@ var validSortColumns = map[string]string{
 	"killstreak": "killstreak",
 	"caps":       "caps",
 	"play_time":  "play_time_seconds",
+	"accuracy":   "COALESCE(CASE WHEN sh.shots >= " + minAccuracyShots + " THEN sh.enemy_hits::numeric / sh.shots END, -1)",
 	"updated_at": "updated_at",
 	"kd":         "(CASE WHEN deaths > 0 THEN kills::numeric / deaths ELSE kills END)",
 }
@@ -116,8 +131,12 @@ func (s *Store) ListPlayers(ctx context.Context, sort, name string, limit, offse
 	// #nosec G201 -- column is whitelisted via validSortColumns above.
 	query := `
 		SELECT steam_id, name, kills, deaths, suicides, headshot_given, headshot_taken,
-		       suppressions, caps, killstreak, score, wins, losses, play_time_seconds, created_at, updated_at
+		       suppressions, caps, killstreak, score, wins, losses, play_time_seconds,
+		       COALESCE(sh.shots, 0), COALESCE(sh.enemy_hits, 0), COALESCE(sh.friendly_hits, 0),
+		       ` + hitRateSQL("sh.enemy_hits", "sh.shots") + `,
+		       created_at, updated_at
 		FROM player_stats
+		LEFT JOIN ` + playerShotTotals + ` sh USING (steam_id)
 		WHERE $3::text IS NULL OR name ILIKE $3
 		ORDER BY ` + column + ` DESC, steam_id
 		LIMIT $1 OFFSET $2`
@@ -149,8 +168,12 @@ var likeEscaper = strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
 func (s *Store) GetPlayer(ctx context.Context, steamID string) (*PlayerStats, error) {
 	query := `
 		SELECT steam_id, name, kills, deaths, suicides, headshot_given, headshot_taken,
-		       suppressions, caps, killstreak, score, wins, losses, play_time_seconds, created_at, updated_at
+		       suppressions, caps, killstreak, score, wins, losses, play_time_seconds,
+		       COALESCE(sh.shots, 0), COALESCE(sh.enemy_hits, 0), COALESCE(sh.friendly_hits, 0),
+		       ` + hitRateSQL("sh.enemy_hits", "sh.shots") + `,
+		       created_at, updated_at
 		FROM player_stats
+		LEFT JOIN ` + playerShotTotals + ` sh USING (steam_id)
 		WHERE steam_id = $1`
 
 	rows, err := s.pool.Query(ctx, query, steamID)
@@ -170,15 +193,19 @@ func (s *Store) GetPlayer(ctx context.Context, steamID string) (*PlayerStats, er
 	return &players[0], nil
 }
 
-// GetPlayerWeapons returns the per-weapon kill breakdown for a single player.
-// It is a naturally bounded sub-resource, so it is not paginated.
-func (s *Store) GetPlayerWeapons(ctx context.Context, steamID string) ([]WeaponKills, error) {
+// GetPlayerWeapons returns the per-weapon breakdown for a single player: kills,
+// and rounds fired and hit. It is a naturally bounded sub-resource, so it is
+// not paginated.
+func (s *Store) GetPlayerWeapons(ctx context.Context, steamID string) ([]PlayerWeapon, error) {
 	query := `
-		SELECT w.weapon_name, pk.kill_count
-		FROM player_kills pk
-		JOIN weapon_stats w ON w.weapon_id = pk.weapon_id
-		WHERE pk.steam_id = $1
-		ORDER BY pk.kill_count DESC`
+		SELECT w.weapon_name, COALESCE(pk.kill_count, 0), COALESCE(ps.shots, 0),
+		       COALESCE(ps.enemy_hits, 0), COALESCE(ps.friendly_hits, 0),
+		       ` + hitRateSQL("ps.enemy_hits", "ps.shots") + `
+		FROM (SELECT weapon_id, kill_count FROM player_kills WHERE steam_id = $1) pk
+		FULL JOIN (SELECT weapon_id, shots, enemy_hits, friendly_hits FROM player_shots WHERE steam_id = $1) ps
+		     USING (weapon_id)
+		JOIN weapon_stats w USING (weapon_id)
+		ORDER BY COALESCE(pk.kill_count, 0) DESC, COALESCE(ps.shots, 0) DESC, w.weapon_name`
 
 	rows, err := s.pool.Query(ctx, query, steamID)
 	if err != nil {
@@ -186,10 +213,11 @@ func (s *Store) GetPlayerWeapons(ctx context.Context, steamID string) ([]WeaponK
 	}
 	defer rows.Close()
 
-	weapons := []WeaponKills{}
+	weapons := []PlayerWeapon{}
 	for rows.Next() {
-		var weapon WeaponKills
-		if err := rows.Scan(&weapon.WeaponName, &weapon.KillCount); err != nil {
+		var weapon PlayerWeapon
+		if err := rows.Scan(&weapon.WeaponName, &weapon.KillCount, &weapon.Shots,
+			&weapon.EnemyHits, &weapon.FriendlyHits, &weapon.EnemyHitRate); err != nil {
 			return nil, err
 		}
 		weapons = append(weapons, weapon)
@@ -599,7 +627,8 @@ func scanPlayers(rows pgx.Rows) ([]PlayerStats, error) {
 			&player.SteamID, &player.Name, &player.Kills, &player.Deaths, &player.Suicides,
 			&player.HeadshotGiven, &player.HeadshotTaken, &player.Suppressions,
 			&player.Caps, &player.Killstreak, &player.Score, &player.Wins,
-			&player.Losses, &player.PlayTimeSeconds, &player.CreatedAt, &player.UpdatedAt,
+			&player.Losses, &player.PlayTimeSeconds, &player.Shots, &player.EnemyHits,
+			&player.FriendlyHits, &player.EnemyHitRate, &player.CreatedAt, &player.UpdatedAt,
 		); err != nil {
 			return nil, err
 		}

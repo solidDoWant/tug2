@@ -28,7 +28,7 @@ var (
 	}
 	apiEndpoints = []apiEndpoint{
 		{"/api/v1/players", "Players with lifetime stats, descending.", append([]apiParam{
-			{"sort", "score (default), kills, deaths, wins, killstreak, caps, kd, play_time, updated_at"},
+			{"sort", "score (default), kills, deaths, wins, killstreak, caps, kd, play_time, accuracy (players with 500+ shots, by enemy hit rate), updated_at"},
 			{"name", "only players whose latest in-game name contains this, case-insensitive"},
 		}, pageParams...)},
 		{"/api/v1/players/{steam_id}", "One player's lifetime stats by SteamID64; 404 if unknown.", nil},

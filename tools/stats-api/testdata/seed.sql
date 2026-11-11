@@ -32,6 +32,19 @@ FROM (VALUES
 JOIN weapon_stats w ON w.weapon_name = v.weapon_name
 ON CONFLICT (steam_id, weapon_id) DO NOTHING;
 
+-- Per-player shots and hits --------------------------------------------------
+INSERT INTO player_shots (steam_id, weapon_id, shots, enemy_hits, friendly_hits)
+SELECT v.steam_id, w.weapon_id, v.shots, v.enemy_hits, v.friendly_hits
+FROM (VALUES
+    ('76561198000000001', 'm16a4', 4200, 1890, 12),
+    ('76561198000000001', 'ak47',  1500,  610,  3),
+    ('76561198000000002', 'ak47',  3100,  980, 25),
+    ('76561198000000002', 'm1014',  300,  150,  0),
+    ('76561198000000003', 'm24',    450,  260,  1)
+) AS v(steam_id, weapon_name, shots, enemy_hits, friendly_hits)
+JOIN weapon_stats w ON w.weapon_name = v.weapon_name
+ON CONFLICT (steam_id, weapon_id) DO NOTHING;
+
 -- Per-bot weapon kills -----------------------------------------------------
 INSERT INTO bot_kills (bot_name, weapon_id, kill_count)
 SELECT v.bot_name, w.weapon_id, v.kill_count

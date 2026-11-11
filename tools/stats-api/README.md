@@ -174,6 +174,13 @@ fire-support leaderboards include each player's `name` too.
 `play_time_seconds` on a player is their time on the Security team. It has only
 been counted since 2026-11, so it is low or 0 for earlier play.
 
+`shots`, `enemy_hits` and `friendly_hits` on a player (totals) and on each weapon
+in `/api/v1/players/{steam_id}/weapons` count rounds fired from firearms and
+rounds that damaged at least one enemy or teammate; `enemy_hit_rate` is
+`enemy_hits / shots` as a percentage (null with no shots). A shotgun shell is one
+round. Counted since 2026-11. `sort=accuracy` ranks players with at least 500
+shots by `enemy_hit_rate`; everyone else follows.
+
 `sort` for `/api/v1/maps` accepts: `rounds` (logged round results, the
 default), `play_time` (total playtime from map_logger), and `last_played`
 (most recent map_logger activity). Results are descending; maps known to only

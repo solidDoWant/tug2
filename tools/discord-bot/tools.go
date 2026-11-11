@@ -72,7 +72,7 @@ var leaderboards = map[string]struct {
 	path  string
 	sorts []string
 }{
-	"players":          {"/api/v1/players", []string{"score", "kills", "deaths", "wins", "killstreak", "caps", "kd", "play_time", "updated_at"}},
+	"players":          {"/api/v1/players", []string{"score", "kills", "deaths", "wins", "killstreak", "caps", "kd", "play_time", "accuracy", "updated_at"}},
 	"weapons":          {"/api/v1/weapons", nil},
 	"maps":             {"/api/v1/maps", []string{"rounds", "play_time", "last_played"}},
 	"bots":             {"/api/v1/bots", nil},
@@ -255,8 +255,8 @@ func (ts *Toolset) addStatsTools(serverProp map[string]any, defaultServer string
 		})
 
 	ts.add("get_player",
-		"Get one player's full lifetime stats (kills, deaths, suicides, headshots given/taken, suppressions, caps, best killstreak, score, wins, losses, playtime (play_time_seconds, time on the Security team, only counted since November 2026), first/last seen) "+
-			"and their kills per weapon. Times are UTC.",
+		"Get one player's full lifetime stats (kills, deaths, suicides, headshots given/taken, suppressions, caps, best killstreak, score, wins, losses, playtime (play_time_seconds, time on the Security team, only counted since November 2026), accuracy (shots = rounds fired, enemy_hits / friendly_hits = rounds that damaged an enemy / a teammate, enemy_hit_rate = enemy_hits/shots in %; only counted since November 2026), first/last seen) "+
+			"and their kills, shots and hits per weapon. Times are UTC.",
 		map[string]any{
 			"steam_id": prop("string", "The player's 64-bit SteamID (17 digits), e.g. from find_players."),
 			"server":   serverProp,
@@ -290,7 +290,7 @@ func (ts *Toolset) addStatsTools(serverProp map[string]any, defaultServer string
 
 	boardNames := sortedKeys(leaderboards)
 	ts.add("leaderboard",
-		"Read a ranked leaderboard. Boards: players (sort: score, kills, deaths, wins, killstreak, caps, kd, play_time, updated_at), "+
+		"Read a ranked leaderboard. Boards: players (sort: score, kills, deaths, wins, killstreak, caps, kd, play_time, accuracy (enemy hit rate, players with 500+ shots first), updated_at), "+
 			"weapons (most kills across all players), maps (win/loss and playtime; sort: rounds, play_time, last_played), "+
 			"bots (bots ranked by kills on players), medics (time spent as medic, seconds), teamkills (players by team kills given, with forgiven count), "+
 			"teamkill_weapons (weapons by team kills), fire_support (players by artillery calls). "+

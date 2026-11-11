@@ -21,9 +21,32 @@ type PlayerStats struct {
 	Losses        int     `json:"losses"`
 	// PlayTimeSeconds is time spent on the Security team. gg2_mstats2 only
 	// started counting it in 2026-11, so earlier play is missing.
-	PlayTimeSeconds int64     `json:"play_time_seconds"`
-	CreatedAt       time.Time `json:"created_at"`
-	UpdatedAt       time.Time `json:"updated_at"`
+	PlayTimeSeconds int64 `json:"play_time_seconds"`
+	// Shots, EnemyHits and FriendlyHits total player_shots over every
+	// firearm: rounds fired, and rounds that damaged at least one enemy or
+	// teammate. Counted since 2026-11.
+	Shots        int64 `json:"shots"`
+	EnemyHits    int64 `json:"enemy_hits"`
+	FriendlyHits int64 `json:"friendly_hits"`
+	// EnemyHitRate is enemy_hits / shots as a percentage, or null with no
+	// shots recorded.
+	EnemyHitRate *float64  `json:"enemy_hit_rate"`
+	CreatedAt    time.Time `json:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at"`
+}
+
+// PlayerWeapon is one weapon in a player's breakdown: kills (player_kills)
+// and rounds fired and hit (player_shots). A weapon appears if either has a
+// row, so the other half may be zero.
+type PlayerWeapon struct {
+	WeaponName   string `json:"weapon_name"`
+	KillCount    int    `json:"kill_count"`
+	Shots        int    `json:"shots"`
+	EnemyHits    int    `json:"enemy_hits"`
+	FriendlyHits int    `json:"friendly_hits"`
+	// EnemyHitRate is enemy_hits / shots as a percentage, or null with no
+	// shots recorded.
+	EnemyHitRate *float64 `json:"enemy_hit_rate"`
 }
 
 // WeaponKills represents how many kills a player has with a single weapon.

@@ -16,6 +16,7 @@ DECLARE
     allowed text[] := ARRAY[
         'player_stats',
         'player_kills',
+        'player_shots',
         'weapon_stats',
         'bot_kills',
         'map_stats',

@@ -33,6 +33,33 @@ int       g_cache_killstreak_max[MAXPLAYERS + 1];
 // Per-player and per-bot weapon kill tracking: weapon_name -> kill_count
 StringMap g_cache_weapon_kills[MAXPLAYERS + 1];
 
+// Accuracy (issue #9): rounds fired and rounds that hit, per weapon -> {shots, enemy_hits, friendly_hits}.
+// Read from the game's server code (server_srv.so):
+// - CINSWeaponBallistic::FireBullet raises weapon_fire once per round fired, with a "shots" key;
+//   grenades, rockets and melee raise it through CINSWeapon::EmitWeaponGameEvent, without one.
+// - Before raising it, in the same call (CINSPlayer::FireBullet -> FireGenericBullets ->
+//   ApplyMultiDamage), the round's damage is applied, so each victim's player_hurt comes first, in the
+//   same tick, with the bullet damage type and the shooter's active weapon.
+// So bullet hits are noted as they arrive and claimed by the next weapon_fire in the same tick.
+// weapon_fire is hooked pre: gg2_heavy_ammo deals the M107's area damage (also bullet damage) in its
+// own weapon_fire hook, after this one, so it is left for the tick check to discard.
+#define   DMG_BULLET (1 << 1)    // as in sdkhooks.inc, without needing the extension here
+#define   SHOT_STATS 3    // shots, enemy_hits, friendly_hits
+StringMap g_cache_shots[MAXPLAYERS + 1];
+int       g_hit_tick[MAXPLAYERS + 1] = { -1, ... };    // tick of the unclaimed bullet hits below
+bool      g_hit_enemy[MAXPLAYERS + 1];
+bool      g_hit_friendly[MAXPLAYERS + 1];
+
+// sm_mstats2_shot_check: checks the assumptions above against live play and logs the results at each
+// round end, so they can be confirmed on the test server without anyone testing by hand.
+ConVar    g_cvShotCheck;
+int       g_check_last_weapon[MAXPLAYERS + 1];    // entity ref of the weapon that fired last
+int       g_check_last_clip[MAXPLAYERS + 1];
+int       g_check_clip_ok[MAXPLAYERS + 1];        // consecutive shots one round apart, as expected
+int       g_check_clip_bad[MAXPLAYERS + 1];       // consecutive shots that weren't
+int       g_check_name_bad[MAXPLAYERS + 1];       // player_hurt weapon differs from the active weapon
+int       g_check_unclaimed[MAXPLAYERS + 1];      // bullet hits no shot claimed (expected for the M107)
+
 // Killstreaks run until the player dies, across round ends and map changes (issue #8). A map change
 // disconnects every client slot and reconnects it, which resets the per-slot cache, so the current
 // streak is parked here by SteamID on disconnect and picked up again when the player comes back.
@@ -68,6 +95,9 @@ public void OnPluginStart()
     HookEvent("object_destroyed", Event_ObjectDestroyed);
     HookEvent("player_suppressed", Event_PlayerSuppressed);
     HookEvent("player_team", Event_PlayerTeam);
+    HookEvent("weapon_fire", Event_WeaponFirePre, EventHookMode_Pre);
+
+    g_cvShotCheck = CreateConVar("sm_mstats2_shot_check", "0", "Check the shot and hit counting against live play and log the results at each round end.", _, true, 0.0, true, 1.0);
 
     g_saved_streaks = new StringMap();
 
@@ -342,6 +372,13 @@ void InitPlayerCache(int client)
     g_cache_killstreak_max[client] = 0;
     RestoreKillstreak(client);
 
+    if (g_cache_shots[client] != null)
+        g_cache_shots[client].Clear();
+    else
+        g_cache_shots[client] = new StringMap();
+    g_hit_tick[client] = -1;
+    ResetShotCheck(client);
+
     // Clear or create weapon kills map
     if (g_cache_weapon_kills[client] != null)
     {
@@ -492,6 +529,7 @@ void FlushAllPlayerStats(int client, int wins = 0, int losses = 0)
 {
     FlushPlayTime(client);
     FlushPlayerStats(client);
+    FlushPlayerShots(client);
     FlushPlayerWeaponKills(client);
     FlushPlayerScore(client, wins, losses);
 }
@@ -609,6 +647,8 @@ public Action Event_PlayerDeath(Event event, const char[] name, bool dontBroadca
 
 public Action Event_PlayerHurt(Event event, const char[] name, bool dontBroadcast)
 {
+    NoteBulletHit(event);
+
     int hitgroup = GetEventInt(event, "hitgroup");
     // Hitgroup 1 is head
     if (hitgroup != 1) return Plugin_Continue;
@@ -833,6 +873,7 @@ public void OnClientDisconnect(int client)
     if (IsFakeClient(client)) return;
 
     FlushPlayTime(client);
+    FlushPlayerShots(client);    // the player_disconnect event's flush doesn't run on a map change
     g_play_start[client]   = 0;
     g_play_seconds[client] = 0;    // a failed flush must not pass time on to the slot's next player
 
@@ -846,4 +887,184 @@ public void OnClientDisconnect(int client)
         saved[1] = GetTime();
         g_saved_streaks.SetArray(g_SteamID[client], saved, sizeof(saved));
     }
+}
+
+// Notes a bullet hit by a human for the shot that fired it (see g_cache_shots).
+void NoteBulletHit(Event event)
+{
+    if (GetGameState() != 4) return;
+    if (!(event.GetInt("damagebits") & DMG_BULLET)) return;
+
+    int attacker = GetClientOfUserId(event.GetInt("attacker"));
+    if (!IsValidPlayer(attacker) || IsFakeClient(attacker)) return;
+    int victim = GetClientOfUserId(event.GetInt("userid"));
+    if (!IsValidPlayer(victim) || victim == attacker) return;
+
+    int tick = GetGameTickCount();
+    if (g_hit_tick[attacker] != tick)
+    {
+        if (g_hit_tick[attacker] != -1) g_check_unclaimed[attacker]++;
+        g_hit_tick[attacker]     = tick;
+        g_hit_enemy[attacker]    = false;
+        g_hit_friendly[attacker] = false;
+    }
+    if (GetClientTeam(victim) == GetClientTeam(attacker))
+        g_hit_friendly[attacker] = true;
+    else
+        g_hit_enemy[attacker] = true;
+
+    if (g_cvShotCheck.BoolValue)
+    {
+        char hurt_weapon[64], hurt_name[64], active[64];
+        event.GetString("weapon", hurt_weapon, sizeof(hurt_weapon));
+        StripWeaponPrefix(hurt_weapon, hurt_name, sizeof(hurt_name));
+        ActiveWeaponName(attacker, active, sizeof(active));
+        if (!StrEqual(hurt_name, active, false))
+        {
+            if (g_check_name_bad[attacker]++ < 3)
+                LogMessage("[GG2 MSTATS2] shot check: %N hurt with \"%s\" while holding \"%s\"", attacker, hurt_weapon, active);
+        }
+    }
+}
+
+public Action Event_WeaponFirePre(Event event, const char[] name, bool dontBroadcast)
+{
+    if (GetGameState() != 4) return Plugin_Continue;
+    if (event.GetInt("shots", -1) == -1) return Plugin_Continue;    // not a firearm round
+
+    int client = GetClientOfUserId(event.GetInt("userid"));
+    if (!IsValidPlayer(client) || IsFakeClient(client)) return Plugin_Continue;
+
+    char weapon[64];
+    if (!ActiveWeaponName(client, weapon, sizeof(weapon))) return Plugin_Continue;
+
+    if (g_cache_shots[client] == null) g_cache_shots[client] = new StringMap();
+    int counts[SHOT_STATS];
+    g_cache_shots[client].GetArray(weapon, counts, sizeof(counts));
+    counts[0]++;
+
+    int tick = GetGameTickCount();
+    if (g_hit_tick[client] == tick)
+    {
+        if (g_hit_enemy[client]) counts[1]++;
+        if (g_hit_friendly[client]) counts[2]++;
+    }
+    else if (g_hit_tick[client] != -1)
+    {
+        g_check_unclaimed[client]++;
+    }
+    g_hit_tick[client] = -1;
+    g_cache_shots[client].SetArray(weapon, counts, sizeof(counts));
+
+    if (g_cvShotCheck.BoolValue) CheckClip(client);
+    return Plugin_Continue;
+}
+
+// The active weapon's name as kills record it: the classname without "weapon_".
+bool ActiveWeaponName(int client, char[] name, int maxlen)
+{
+    char classname[64];
+    if (!GetClientWeapon(client, classname, sizeof(classname)) || classname[0] == '\0') return false;
+    StripWeaponPrefix(classname, name, maxlen);
+    return true;
+}
+
+void StripWeaponPrefix(const char[] weapon, char[] out, int maxlen)
+{
+    if (StrContains(weapon, "weapon_", false) == 0)
+        strcopy(out, maxlen, weapon[7]);
+    else
+        strcopy(out, maxlen, weapon);
+}
+
+// One weapon_fire per round means the magazine drops by exactly one between consecutive shots of the
+// same weapon (a rise is a reload, and doesn't count either way).
+void CheckClip(int client)
+{
+    int weapon = GetEntPropEnt(client, Prop_Send, "m_hActiveWeapon");
+    if (weapon == -1 || !HasEntProp(weapon, Prop_Send, "m_iClip1")) return;
+
+    int ref  = EntIndexToEntRef(weapon);
+    int clip = GetEntProp(weapon, Prop_Send, "m_iClip1");
+    if (ref == g_check_last_weapon[client] && clip < g_check_last_clip[client])
+    {
+        if (clip == g_check_last_clip[client] - 1)
+            g_check_clip_ok[client]++;
+        else if (g_check_clip_bad[client]++ < 3)
+            LogMessage("[GG2 MSTATS2] shot check: %N's magazine went %d -> %d between two shots", client, g_check_last_clip[client], clip);
+    }
+    g_check_last_weapon[client] = ref;
+    g_check_last_clip[client]   = clip;
+}
+
+void ResetShotCheck(int client)
+{
+    g_check_last_weapon[client] = INVALID_ENT_REFERENCE;
+    g_check_last_clip[client]   = 0;
+    g_check_clip_ok[client]     = 0;
+    g_check_clip_bad[client]    = 0;
+    g_check_name_bad[client]    = 0;
+    g_check_unclaimed[client]   = 0;
+}
+
+void FlushPlayerShots(int client)
+{
+    if (g_cache_shots[client] == null || g_cache_shots[client].Size == 0) return;
+    if (g_Database == null) return;    // kept for the next flush
+    if (StrEqual(g_SteamID[client], "") || StrEqual(g_SteamID[client], bawt_steam_id)) return;
+
+    if (g_cvShotCheck.BoolValue) LogShotCheck(client);
+
+    StringMapSnapshot snap = g_cache_shots[client].Snapshot();
+    char weapons_values[4096] = "";
+    char shots_values[8192]   = "";
+    int  count                = 0;
+    for (int i = 0; i < snap.Length; i++)
+    {
+        char weapon[64], escaped[129];
+        snap.GetKey(i, weapon, sizeof(weapon));
+        int counts[SHOT_STATS];
+        if (!g_cache_shots[client].GetArray(weapon, counts, sizeof(counts))) continue;
+        if (!g_Database.Escape(weapon, escaped, sizeof(escaped))) continue;
+
+        char weapon_value[160], shot_value[256];
+        Format(weapon_value, sizeof(weapon_value), "%s('%s')", count > 0 ? ", " : "", escaped);
+        Format(shot_value, sizeof(shot_value), "%s('%s', %d, %d, %d)", count > 0 ? ", " : "", escaped, counts[0], counts[1], counts[2]);
+        if (strlen(weapons_values) + strlen(weapon_value) >= sizeof(weapons_values)
+            || strlen(shots_values) + strlen(shot_value) >= sizeof(shots_values))
+        {
+            LogError("[GG2 MSTATS2] Shot buffer full, dropping the rest after %d weapons", count);
+            break;
+        }
+        StrCat(weapons_values, sizeof(weapons_values), weapon_value);
+        StrCat(shots_values, sizeof(shots_values), shot_value);
+        count++;
+    }
+    delete snap;
+    g_cache_shots[client].Clear();
+    if (count == 0) return;
+
+    char query[16384];
+    Format(query, sizeof(query),
+           "WITH upserted_weapons AS (INSERT INTO weapon_stats (weapon_name) VALUES %s ON CONFLICT (weapon_name) DO UPDATE SET weapon_name = EXCLUDED.weapon_name RETURNING weapon_id, weapon_name), shot_counts AS (SELECT * FROM (VALUES %s) AS t(weapon_name, shots, enemy_hits, friendly_hits)) INSERT INTO player_shots (steam_id, weapon_id, shots, enemy_hits, friendly_hits) SELECT '%s', uw.weapon_id, sc.shots, sc.enemy_hits, sc.friendly_hits FROM shot_counts sc JOIN upserted_weapons uw ON uw.weapon_name = sc.weapon_name ON CONFLICT (steam_id, weapon_id) DO UPDATE SET shots = player_shots.shots + EXCLUDED.shots, enemy_hits = player_shots.enemy_hits + EXCLUDED.enemy_hits, friendly_hits = player_shots.friendly_hits + EXCLUDED.friendly_hits, updated_at = CURRENT_TIMESTAMP",
+           weapons_values, shots_values, g_SteamID[client]);
+    ExecuteQueryWithRetry(OnQueryComplete, query, client);
+}
+
+void LogShotCheck(int client)
+{
+    char  line[1024] = "";
+    StringMapSnapshot snap = g_cache_shots[client].Snapshot();
+    for (int i = 0; i < snap.Length; i++)
+    {
+        char weapon[64];
+        snap.GetKey(i, weapon, sizeof(weapon));
+        int counts[SHOT_STATS];
+        g_cache_shots[client].GetArray(weapon, counts, sizeof(counts));
+        Format(line, sizeof(line), "%s %s=%d/%d/%d", line, weapon, counts[0], counts[1], counts[2]);
+    }
+    delete snap;
+    LogMessage("[GG2 MSTATS2] shot check: %N shots/enemy/friendly:%s | magazine steps ok %d, off %d | name mismatches %d | unclaimed bullet hits %d",
+               client, line, g_check_clip_ok[client], g_check_clip_bad[client], g_check_name_bad[client], g_check_unclaimed[client]);
+    ResetShotCheck(client);
 }

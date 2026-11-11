@@ -606,6 +606,7 @@ RUN --mount=type=bind,source=./plugins/sourcemod,target=/plugin-source \
     touch /insurgency/cfg/sourcemod/gg2_mstats2.cfg && \
     mkdir -p /insurgency/addons/sourcemod/configs/sql-init-scripts/pgsql && \
     cp /plugin-source/configs/sql-init-scripts/pgsql/gg2_mstats2.sql /insurgency/addons/sourcemod/configs/sql-init-scripts/pgsql/gg2_mstats2.sql && \
+    cp /plugin-source/configs/sql-init-scripts/pgsql/gg2_mstats2_shots.sql /insurgency/addons/sourcemod/configs/sql-init-scripts/pgsql/gg2_mstats2_shots.sql && \
     # Fixup file permissions
     find /insurgency -type d -exec chmod 755 {} \; && \
     find /insurgency -type f -exec chmod 644 {} \;
