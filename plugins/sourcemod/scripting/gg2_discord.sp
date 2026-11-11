@@ -265,14 +265,40 @@ void gen_steam_link(int client, char[] url_safe, int max_size)
 // client's current name is stale, e.g. player_changename fires before the new name is applied.
 void gen_steam_link_named(int client, const char[] name, char[] url_safe, int max_size)
 {
+    char escaped[MAX_NAME_LENGTH * 2];
+    escape_discord_markdown(name, escaped, sizeof(escaped));
+
     char authID[32];
     if (!GetClientAuthId(client, AuthId_SteamID64, authID, sizeof(authID)) || StrEqual(BAWT_AUTH_ID, authID))
     {
-        strcopy(url_safe, max_size, name);
+        strcopy(url_safe, max_size, escaped);
         return;
     }
 
-    Format(url_safe, max_size, "[%s](<https://steamcommunity.com/profiles/%s>)", name, authID);
+    Format(url_safe, max_size, "[%s](<https://steamcommunity.com/profiles/%s>)", escaped, authID);
+}
+
+// Backslash-escapes the characters Discord treats as markdown, so a player name shows as typed.
+//
+// Clan tags put brackets in a lot of names ("[MEDIC] [TAG]Name[X]"), and inside the masked link
+// above an unescaped "]" ends the link text early: Discord then shows part of the name as plain
+// text with stray brackets and links only the tail. That read as "garbled characters" in the
+// relay (issue #5), though the non-ASCII letters themselves were fine. Discord drops the backslash
+// before any ASCII punctuation, so escaping more than strictly needed shows nothing extra.
+// Multi-byte UTF-8 is never touched: every byte of it is >= 0x80.
+void escape_discord_markdown(const char[] input, char[] output, int maxlen)
+{
+    int j = 0;
+    for (int i = 0; input[i] != '\0'; i++)
+    {
+        bool special = FindCharInString("\\*_~`|[]()<>#-", input[i]) != -1;
+        if (j + (special ? 2 : 1) >= maxlen)
+            break;
+        if (special)
+            output[j++] = '\\';
+        output[j++] = input[i];
+    }
+    output[j] = '\0';
 }
 
 void gen_tug_link(int client, char[] url_safe, int max_size)
