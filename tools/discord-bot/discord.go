@@ -276,9 +276,13 @@ func (b *Bot) answer(m *discordgo.Message, threadID string) {
 	log.Info("answered",
 		"duration_ms", time.Since(start).Milliseconds(), "tokens", ans.Tokens,
 		"limit", ans.Limit, "draft", ans.Draft != nil, "error", errString(err))
+	declined := err == nil && ans.Draft == nil && strings.TrimSpace(ans.Text) == noReplyMarker
+	addressed := b.mentionsMe(m) || isAsk(m)
 	switch {
 	case err != nil:
 		b.metrics.Question(outcomeError)
+	case declined && !addressed:
+		b.metrics.Question(outcomeSilent)
 	case ans.Refused:
 		b.metrics.Question(outcomeRefused)
 	case ans.Limit != "":
@@ -295,6 +299,17 @@ func (b *Bot) answer(m *discordgo.Message, threadID string) {
 		return
 	}
 	stopTyping()
+	if declined {
+		if !addressed {
+			// Talk among others in the thread: say nothing, and don't
+			// count it against the poster's questions.
+			b.limits.RefundQuestion(m.Author.ID)
+			log.Info("not addressed to the bot; staying silent")
+			return
+		}
+		log.Warn("model chose not to reply to a message addressed to it")
+		ans.Text = "Did you mean to ask me something? I'm not sure what you'd like me to do."
+	}
 	b.sendAnswer(log, threadID, m.Author.ID, ans)
 }
 
@@ -421,7 +436,8 @@ func (b *Bot) history(threadID string) ([]Turn, error) {
 		if m.Author.Bot {
 			continue
 		}
-		turns = append(turns, Turn{Author: b.authorName(thread.GuildID, m), Text: withForwarded(b.cleanContent(m), m, b.channelName), Posted: m.Timestamp})
+		turns = append(turns, Turn{Author: b.authorName(thread.GuildID, m), Text: withForwarded(b.cleanContent(m), m, b.channelName), Posted: m.Timestamp,
+			ToBot: addressesBot(m, me) || isAsk(m)})
 	}
 	return turns, nil
 }

@@ -46,6 +46,8 @@ const (
 	outcomeError       = "error"
 	outcomeRateLimited = "rate_limited"
 	outcomeBusy        = "busy"
+	// outcomeSilent: a message in a bot thread that wasn't for the bot.
+	outcomeSilent = "silent"
 )
 
 func NewMetrics(cfg *Config) *Metrics {
@@ -128,7 +130,7 @@ func NewMetrics(cfg *Config) *Metrics {
 	info.WithLabelValues(cfg.Model, cfg.Effort, strconv.Itoa(cfg.TokensPerQuestion), strconv.FormatBool(cfg.IssuesEnabled), cfg.AnthropicAuth).Set(1)
 
 	// Pre-create the common series so rates start at 0 instead of absent.
-	for _, o := range []string{outcomeAnswered, outcomeLimited, outcomeRefused, outcomeError, outcomeRateLimited, outcomeBusy} {
+	for _, o := range []string{outcomeAnswered, outcomeLimited, outcomeRefused, outcomeError, outcomeRateLimited, outcomeBusy, outcomeSilent} {
 		m.questions.WithLabelValues(o)
 	}
 	for _, t := range []string{"input", "cache_read", "cache_write", "output"} {

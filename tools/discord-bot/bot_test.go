@@ -404,3 +404,34 @@ func TestUsageLimitsPrompt(t *testing.T) {
 		t.Errorf("no limits: %q", got)
 	}
 }
+
+func TestBuildMessagesMarksAddressed(t *testing.T) {
+	at := time.Date(2026, 11, 10, 12, 0, 0, 0, time.UTC)
+	raw, err := json.Marshal(buildMessages([]Turn{
+		{Author: "TestUserOne", Text: "top killer on main?", Posted: at, ToBot: true},
+		{FromBot: true, Text: "TestPlayerAlpha."},
+		{Author: "TestUserTwo", Text: "wow that's a lot", Posted: at},
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(raw)
+	for _, want := range []string{"[TestUserOne] [to you]: top killer", "[TestUserTwo]: wow"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("missing %q in %s", want, got)
+		}
+	}
+	prompt := buildSystemPrompt(&Config{}, false)
+	if !strings.Contains(prompt, "reply with exactly "+noReplyMarker) || !strings.Contains(prompt, "[to you]") {
+		t.Error("the system prompt doesn't explain how to stay silent")
+	}
+}
+
+func TestRefundQuestion(t *testing.T) {
+	r := NewRateLimiter(1, 1, nil)
+	r.AllowQuestion("u")
+	r.RefundQuestion("u")
+	if ok, _ := r.AllowQuestion("u"); !ok {
+		t.Error("refunded question slot not returned")
+	}
+}

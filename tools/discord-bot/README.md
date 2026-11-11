@@ -58,6 +58,13 @@ the reporter to press **Confirm**.
   `HISTORY_MESSAGES`), so nothing is stored and restarts lose nothing.
 - In a thread someone else started in the configured channel, the bot answers
   only when mentioned or replied to, since people may be talking among themselves there.
+- In its own threads the bot sees every message, but people often discuss its
+  results among themselves there. Messages that @mention or reply to the bot
+  (or use `/ask`) are always answered. For any other message the model judges
+  from the conversation whether it's meant for the bot, and when it clearly
+  isn't, the bot stays silent (beyond a moment of "typing"). Those don't count
+  against the poster's question limit; they're logged (`not addressed to the
+  bot; staying silent`) and counted as `silent`.
   It still reads the whole thread (and the message it was started from) as
   context. Threads in other channels are ignored.
 - The bot also reads what a thread's first message builds on: the message it
@@ -578,7 +585,7 @@ per-user detail is in the logs.
 
 | Metric                                         | Type      | Labels             | Notes                                                                                                   |
 | ---------------------------------------------- | --------- | ------------------ | ------------------------------------------------------------------------------------------------------- |
-| `discordbot_questions_total`                   | counter   | `outcome`          | `answered`, `limited`, `refused`, `error`, `rate_limited` (user over limit), `busy` (one already running). |
+| `discordbot_questions_total`                   | counter   | `outcome`          | `answered`, `limited`, `refused`, `error`, `rate_limited` (user over limit), `busy` (one already running), `silent` (a thread message not meant for the bot). |
 | `discordbot_question_limits_total`             | counter   | `limit`            | Which per-question limit was hit: `rounds`, `budget`, `context`, `output`.                              |
 | `discordbot_question_duration_seconds`         | histogram |                    | Time to answer, for questions that reached the model.                                                   |
 | `discordbot_question_tokens`                   | histogram |                    | Tokens processed per question, against `LLM_TOKENS_PER_QUESTION`.                                       |

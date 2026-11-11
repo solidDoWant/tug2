@@ -103,6 +103,16 @@ func countWithin(events []time.Time, now time.Time, window time.Duration) int {
 	return n
 }
 
+// RefundQuestion gives back the most recent question slot, for a message the
+// bot decided wasn't meant for it.
+func (r *RateLimiter) RefundQuestion(user string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if n := len(r.questions[user]); n > 0 {
+		r.questions[user] = r.questions[user][:n-1]
+	}
+}
+
 // RefundIssue gives back the most recent issue slot, for a filing that failed.
 func (r *RateLimiter) RefundIssue(user string) {
 	r.mu.Lock()

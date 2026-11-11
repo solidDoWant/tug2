@@ -154,7 +154,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum(increase(discordbot_questions_total{job=~\"$job\", instance=~\"$instance\", outcome=~\"answered|limited|refused|error\"}[$__range]))",
+          "expr": "sum(increase(discordbot_questions_total{job=~\"$job\", instance=~\"$instance\", outcome=~\"answered|limited|refused|error|silent\"}[$__range]))",
           "legendFormat": "__auto",
           "refId": "A",
           "range": true
@@ -216,7 +216,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "(sum(increase(discordbot_model_tokens_total{job=~\"$job\", instance=~\"$instance\", type=\"input\"}[$__range])) * $price_input + sum(increase(discordbot_model_tokens_total{job=~\"$job\", instance=~\"$instance\", type=\"cache_read\"}[$__range])) * $price_cache_read + sum(increase(discordbot_model_tokens_total{job=~\"$job\", instance=~\"$instance\", type=\"cache_write\"}[$__range])) * $price_cache_write + sum(increase(discordbot_model_tokens_total{job=~\"$job\", instance=~\"$instance\", type=\"output\"}[$__range])) * $price_output) / 1e6 / sum(increase(discordbot_questions_total{job=~\"$job\", instance=~\"$instance\", outcome=~\"answered|limited|refused|error\"}[$__range]))",
+          "expr": "(sum(increase(discordbot_model_tokens_total{job=~\"$job\", instance=~\"$instance\", type=\"input\"}[$__range])) * $price_input + sum(increase(discordbot_model_tokens_total{job=~\"$job\", instance=~\"$instance\", type=\"cache_read\"}[$__range])) * $price_cache_read + sum(increase(discordbot_model_tokens_total{job=~\"$job\", instance=~\"$instance\", type=\"cache_write\"}[$__range])) * $price_cache_write + sum(increase(discordbot_model_tokens_total{job=~\"$job\", instance=~\"$instance\", type=\"output\"}[$__range])) * $price_output) / 1e6 / sum(increase(discordbot_questions_total{job=~\"$job\", instance=~\"$instance\", outcome=~\"answered|limited|refused|error|silent\"}[$__range]))",
           "legendFormat": "__auto",
           "refId": "A",
           "range": true
