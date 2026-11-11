@@ -33,6 +33,19 @@ int       g_cache_killstreak_max[MAXPLAYERS + 1];
 // Per-player and per-bot weapon kill tracking: weapon_name -> kill_count
 StringMap g_cache_weapon_kills[MAXPLAYERS + 1];
 
+// Killstreaks run until the player dies, across round ends and map changes (issue #8). A map change
+// disconnects every client slot and reconnects it, which resets the per-slot cache, so the current
+// streak is parked here by SteamID on disconnect and picked up again when the player comes back.
+// A player who leaves and rejoins within the window keeps it too (a crash or a quick reconnect);
+// anyone gone longer starts again from 0.
+#define   STREAK_CARRY_SECONDS 300
+StringMap g_saved_streaks;    // steam_id -> {streak, GetTime() when saved}
+
+// Playtime (issue #11): time on the Security team. g_play_start is the GetTime() the current stretch
+// began, or 0 when the player isn't on Security; g_play_seconds is time not yet written to the DB.
+int       g_play_start[MAXPLAYERS + 1];
+int       g_play_seconds[MAXPLAYERS + 1];
+
 public Plugin myinfo =
 {
     name        = "[GG2 MSTATS2] Simplified",
@@ -54,6 +67,9 @@ public void OnPluginStart()
     HookEvent("controlpoint_captured", Event_ControlPointCaptured);
     HookEvent("object_destroyed", Event_ObjectDestroyed);
     HookEvent("player_suppressed", Event_PlayerSuppressed);
+    HookEvent("player_team", Event_PlayerTeam);
+
+    g_saved_streaks = new StringMap();
 
     CreateTimer(3.0, LoadPlayerIDs);
 
@@ -288,6 +304,8 @@ public Action Timer_RetryQuery(Handle timer, DataPack pack)
 
 public void OnMapStart()
 {
+    PruneSavedStreaks();
+
     // Check if database connection is ready
     if (g_Database != null) return;
 
@@ -305,6 +323,7 @@ public Action LoadPlayerIDs(Handle timer)
 
         GetClientAuthId(client, AuthId_SteamID64, g_SteamID[client], 32);
         RecordPlayer(client);
+        if (g_play_start[client] == 0) g_play_start[client] = GetTime();
     }
 
     return Plugin_Continue;
@@ -321,6 +340,7 @@ void InitPlayerCache(int client)
     g_cache_caps[client]           = 0;
     g_cache_killstreak[client]     = 0;
     g_cache_killstreak_max[client] = 0;
+    RestoreKillstreak(client);
 
     // Clear or create weapon kills map
     if (g_cache_weapon_kills[client] != null)
@@ -362,7 +382,7 @@ void FlushPlayerStats(int client)
     g_cache_headshot_taken[client] = 0;
     g_cache_suppressions[client]   = 0;
     g_cache_caps[client]           = 0;
-    g_cache_killstreak[client]     = 0;
+    // The current streak carries on into the next round; only the recorded best is reset.
     g_cache_killstreak_max[client] = 0;
 }
 
@@ -470,6 +490,7 @@ void FlushPlayerWeaponKills(int client)
 
 void FlushAllPlayerStats(int client, int wins = 0, int losses = 0)
 {
+    FlushPlayTime(client);
     FlushPlayerStats(client);
     FlushPlayerWeaponKills(client);
     FlushPlayerScore(client, wins, losses);
@@ -555,7 +576,7 @@ public Action Event_PlayerDeath(Event event, const char[] name, bool dontBroadca
         if (victim_team == TEAM_2_INS) return Plugin_Continue;
 
         g_cache_suicides[victim]++;
-        g_cache_killstreak[victim] = 0;
+        EndKillstreak(victim);
         return Plugin_Continue;
     }
 
@@ -581,7 +602,7 @@ public Action Event_PlayerDeath(Event event, const char[] name, bool dontBroadca
     g_cache_kills[attacker]++;
     g_cache_killstreak[attacker]++;
     g_cache_deaths[victim]++;
-    g_cache_killstreak[victim] = 0;
+    EndKillstreak(victim);
 
     return Plugin_Continue;
 }
@@ -728,4 +749,101 @@ public Action Event_RoundEnd(Event event, const char[] name, bool dontBroadcast)
     ExecuteQueryWithRetry(OnQueryComplete, map_win_loss_query, 0);
 
     return Plugin_Continue;
+}
+
+// A death or suicide ends the victim's streak. Record it as their best first: the best was otherwise
+// only taken at a round end, so any streak that ended in a death mid-round was never recorded.
+void EndKillstreak(int client)
+{
+    if (g_cache_killstreak[client] > g_cache_killstreak_max[client])
+        g_cache_killstreak_max[client] = g_cache_killstreak[client];
+    g_cache_killstreak[client] = 0;
+}
+
+void RestoreKillstreak(int client)
+{
+    int saved[2];
+    if (StrEqual(g_SteamID[client], "") || !g_saved_streaks.GetArray(g_SteamID[client], saved, sizeof(saved))) return;
+
+    g_saved_streaks.Remove(g_SteamID[client]);
+    if (GetTime() - saved[1] <= STREAK_CARRY_SECONDS)
+        g_cache_killstreak[client] = saved[0];
+}
+
+void PruneSavedStreaks()
+{
+    if (g_saved_streaks == null) return;
+
+    StringMapSnapshot snap = g_saved_streaks.Snapshot();
+    char              steam_id[32];
+    int               saved[2];
+    int               now = GetTime();
+    for (int i = 0; i < snap.Length; i++)
+    {
+        snap.GetKey(i, steam_id, sizeof(steam_id));
+        if (g_saved_streaks.GetArray(steam_id, saved, sizeof(saved)) && now - saved[1] > STREAK_CARRY_SECONDS)
+            g_saved_streaks.Remove(steam_id);
+    }
+    delete snap;
+}
+
+public Action Event_PlayerTeam(Event event, const char[] name, bool dontBroadcast)
+{
+    int client = GetClientOfUserId(event.GetInt("userid"));
+    if (!IsValidPlayer(client) || IsFakeClient(client)) return Plugin_Continue;
+
+    // Close the current stretch on Security, if any, and open a new one if they're (still) on it.
+    int now = GetTime();
+    if (g_play_start[client] != 0)
+    {
+        g_play_seconds[client] += now - g_play_start[client];
+        g_play_start[client] = 0;
+    }
+    if (event.GetInt("team") == TEAM_1_SEC)
+        g_play_start[client] = now;
+
+    return Plugin_Continue;
+}
+
+// Adds the player's time on Security since the last flush to player_stats.play_time_seconds.
+void FlushPlayTime(int client)
+{
+    if (g_play_start[client] != 0)
+    {
+        int now = GetTime();
+        g_play_seconds[client] += now - g_play_start[client];
+        g_play_start[client] = now;
+    }
+
+    if (g_play_seconds[client] <= 0) return;
+    if (g_Database == null) return;    // kept for the next flush
+    if (StrEqual(g_SteamID[client], "") || StrEqual(g_SteamID[client], bawt_steam_id)) return;
+
+    char query[512];
+    Format(query, sizeof(query),
+           "INSERT INTO player_stats (steam_id, play_time_seconds) VALUES ('%s', %i) ON CONFLICT (steam_id) DO UPDATE SET play_time_seconds = player_stats.play_time_seconds + %i, updated_at = CURRENT_TIMESTAMP",
+           g_SteamID[client], g_play_seconds[client], g_play_seconds[client]);
+    ExecuteQueryWithRetry(OnQueryComplete, query, client);
+    g_play_seconds[client] = 0;
+}
+
+// Runs when a player leaves and, unlike the player_disconnect event, for every player on a map change.
+public void OnClientDisconnect(int client)
+{
+    if (IsFakeClient(client)) return;
+
+    FlushPlayTime(client);
+    g_play_start[client]   = 0;
+    g_play_seconds[client] = 0;    // a failed flush must not pass time on to the slot's next player
+
+    // Park the streak for RestoreKillstreak. It isn't cleared here: on a real leave the
+    // player_disconnect event may still flush the slot's stats, and InitPlayerCache resets the slot
+    // for whoever connects next.
+    if (g_cache_killstreak[client] > 0 && !StrEqual(g_SteamID[client], ""))
+    {
+        int saved[2];
+        saved[0] = g_cache_killstreak[client];
+        saved[1] = GetTime();
+        g_saved_streaks.SetArray(g_SteamID[client], saved, sizeof(saved));
+    }
 }

@@ -25,6 +25,11 @@ CREATE TABLE IF NOT EXISTS player_stats (
 -- this column existed, until they next connect.
 ALTER TABLE player_stats ADD COLUMN IF NOT EXISTS name VARCHAR(128);
 
+-- Seconds the player has spent on the Security team, flushed at each round end and when they leave
+-- or the map changes. Only counted since this column was added (2026-11), so it is 0 or short for
+-- time played before then.
+ALTER TABLE player_stats ADD COLUMN IF NOT EXISTS play_time_seconds BIGINT NOT NULL DEFAULT 0;
+
 CREATE TABLE IF NOT EXISTS weapon_stats (
     weapon_id SERIAL PRIMARY KEY,
     weapon_name VARCHAR(64) UNIQUE NOT NULL,
@@ -291,10 +296,11 @@ COMMENT ON COLUMN player_stats.headshot_given IS 'Headshots landed on enemies.';
 COMMENT ON COLUMN player_stats.headshot_taken IS 'Headshots taken from enemies.';
 COMMENT ON COLUMN player_stats.suppressions IS 'Times the player suppressed an enemy.';
 COMMENT ON COLUMN player_stats.caps IS 'Objectives taken: control points captured plus caches destroyed.';
-COMMENT ON COLUMN player_stats.killstreak IS 'Best killstreak ever (a maximum, not a total).';
+COMMENT ON COLUMN player_stats.killstreak IS 'Best killstreak: most kills without dying, carried across rounds and map changes (a maximum, not a total). Before 2026-11 only streaks still alive at a round end were recorded, so older values may be low.';
 COMMENT ON COLUMN player_stats.score IS 'In-game score earned, summed over all rounds.';
 COMMENT ON COLUMN player_stats.wins IS 'Rounds the player was in when the players won.';
 COMMENT ON COLUMN player_stats.losses IS 'Rounds the player was in when the players lost.';
+COMMENT ON COLUMN player_stats.play_time_seconds IS 'Seconds spent on the Security team (in game, alive or dead). Only counted since 2026-11; earlier play is missing.';
 COMMENT ON COLUMN player_stats.created_at IS 'First seen (UTC).';
 COMMENT ON COLUMN player_stats.updated_at IS 'Last stats update, roughly last seen (UTC).';
 

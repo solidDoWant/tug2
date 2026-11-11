@@ -92,7 +92,7 @@ type PageInput struct {
 }
 
 type ListPlayersInput struct {
-	Sort string `query:"sort" default:"score" enum:"kills,deaths,score,wins,killstreak,caps,kd,updated_at" doc:"Column to order by, descending."`
+	Sort string `query:"sort" default:"score" enum:"kills,deaths,score,wins,killstreak,caps,kd,play_time,updated_at" doc:"Column to order by, descending."`
 	Name string `query:"name" maxLength:"128" doc:"Only players whose most recent in-game name contains this text (case-insensitive)."`
 	PageInput
 }

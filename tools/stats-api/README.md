@@ -161,7 +161,7 @@ Every list endpoint returns a paginated envelope so clients can build pagers:
 (max 200); `offset` defaults to 0.
 
 `sort` for `/api/v1/players` accepts: `kills`, `deaths`, `score`, `wins`,
-`killstreak`, `caps`, `kd`, `updated_at` (default `score`). Results are
+`killstreak`, `caps`, `kd`, `play_time`, `updated_at` (default `score`). Results are
 descending. Query parameters are validated by huma — an invalid `sort` or an
 out-of-range `limit`/`offset` returns `422` with a problem-detail body.
 
@@ -170,6 +170,9 @@ contains it, case-insensitively (`%` and `_` are matched literally). Names are
 recorded by `gg2_mstats2` whenever it records a player, so `name` is `null` for
 players who haven't connected since that started. The medic, team-kill and
 fire-support leaderboards include each player's `name` too.
+
+`play_time_seconds` on a player is their time on the Security team. It has only
+been counted since 2026-11, so it is low or 0 for earlier play.
 
 `sort` for `/api/v1/maps` accepts: `rounds` (logged round results, the
 default), `play_time` (total playtime from map_logger), and `last_played`

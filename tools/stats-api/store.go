@@ -91,6 +91,7 @@ var validSortColumns = map[string]string{
 	"wins":       "wins",
 	"killstreak": "killstreak",
 	"caps":       "caps",
+	"play_time":  "play_time_seconds",
 	"updated_at": "updated_at",
 	"kd":         "(CASE WHEN deaths > 0 THEN kills::numeric / deaths ELSE kills END)",
 }
@@ -115,7 +116,7 @@ func (s *Store) ListPlayers(ctx context.Context, sort, name string, limit, offse
 	// #nosec G201 -- column is whitelisted via validSortColumns above.
 	query := `
 		SELECT steam_id, name, kills, deaths, suicides, headshot_given, headshot_taken,
-		       suppressions, caps, killstreak, score, wins, losses, created_at, updated_at
+		       suppressions, caps, killstreak, score, wins, losses, play_time_seconds, created_at, updated_at
 		FROM player_stats
 		WHERE $3::text IS NULL OR name ILIKE $3
 		ORDER BY ` + column + ` DESC, steam_id
@@ -148,7 +149,7 @@ var likeEscaper = strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
 func (s *Store) GetPlayer(ctx context.Context, steamID string) (*PlayerStats, error) {
 	query := `
 		SELECT steam_id, name, kills, deaths, suicides, headshot_given, headshot_taken,
-		       suppressions, caps, killstreak, score, wins, losses, created_at, updated_at
+		       suppressions, caps, killstreak, score, wins, losses, play_time_seconds, created_at, updated_at
 		FROM player_stats
 		WHERE steam_id = $1`
 
@@ -598,7 +599,7 @@ func scanPlayers(rows pgx.Rows) ([]PlayerStats, error) {
 			&player.SteamID, &player.Name, &player.Kills, &player.Deaths, &player.Suicides,
 			&player.HeadshotGiven, &player.HeadshotTaken, &player.Suppressions,
 			&player.Caps, &player.Killstreak, &player.Score, &player.Wins,
-			&player.Losses, &player.CreatedAt, &player.UpdatedAt,
+			&player.Losses, &player.PlayTimeSeconds, &player.CreatedAt, &player.UpdatedAt,
 		); err != nil {
 			return nil, err
 		}

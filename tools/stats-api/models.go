@@ -7,20 +7,23 @@ type PlayerStats struct {
 	SteamID string `json:"steam_id"`
 	// Name is the player's most recent in-game name, or null if they have not
 	// connected since gg2_mstats2 started recording names.
-	Name          *string   `json:"name"`
-	Kills         int       `json:"kills"`
-	Deaths        int       `json:"deaths"`
-	Suicides      int       `json:"suicides"`
-	HeadshotGiven int       `json:"headshot_given"`
-	HeadshotTaken int       `json:"headshot_taken"`
-	Suppressions  int       `json:"suppressions"`
-	Caps          int       `json:"caps"`
-	Killstreak    int       `json:"killstreak"`
-	Score         int       `json:"score"`
-	Wins          int       `json:"wins"`
-	Losses        int       `json:"losses"`
-	CreatedAt     time.Time `json:"created_at"`
-	UpdatedAt     time.Time `json:"updated_at"`
+	Name          *string `json:"name"`
+	Kills         int     `json:"kills"`
+	Deaths        int     `json:"deaths"`
+	Suicides      int     `json:"suicides"`
+	HeadshotGiven int     `json:"headshot_given"`
+	HeadshotTaken int     `json:"headshot_taken"`
+	Suppressions  int     `json:"suppressions"`
+	Caps          int     `json:"caps"`
+	Killstreak    int     `json:"killstreak"`
+	Score         int     `json:"score"`
+	Wins          int     `json:"wins"`
+	Losses        int     `json:"losses"`
+	// PlayTimeSeconds is time spent on the Security team. gg2_mstats2 only
+	// started counting it in 2026-11, so earlier play is missing.
+	PlayTimeSeconds int64     `json:"play_time_seconds"`
+	CreatedAt       time.Time `json:"created_at"`
+	UpdatedAt       time.Time `json:"updated_at"`
 }
 
 // WeaponKills represents how many kills a player has with a single weapon.
