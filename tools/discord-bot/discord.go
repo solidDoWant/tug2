@@ -112,24 +112,23 @@ func (b *Bot) mentionsMe(m *discordgo.Message) bool {
 }
 
 // onMessage answers an @mention in the configured channel by starting a
-// thread, and any message in a thread the bot started there.
+// thread, any message in a thread the bot started there, and an @mention in a
+// thread someone else started there.
 func (b *Bot) onMessage(s *discordgo.Session, m *discordgo.MessageCreate) {
 	if m.Author == nil || m.Author.Bot || m.GuildID == "" {
 		return
 	}
 
-	var threadID string
-	switch {
-	case m.ChannelID == b.cfg.ChannelID:
-		if !b.mentionsMe(m.Message) {
+	var ch *discordgo.Channel
+	if m.ChannelID != b.cfg.ChannelID {
+		var err error
+		if ch, err = b.channel(m.ChannelID); err != nil {
 			return
 		}
-	default:
-		ch, err := b.channel(m.ChannelID)
-		if err != nil || !ch.IsThread() || ch.ParentID != b.cfg.ChannelID || ch.OwnerID != s.State.User.ID {
-			return
-		}
-		threadID = ch.ID
+	}
+	threadID, ok := route(b.cfg.ChannelID, s.State.User.ID, m.ChannelID, ch, b.mentionsMe(m.Message))
+	if !ok {
+		return
 	}
 
 	userID := m.Author.ID
@@ -143,6 +142,22 @@ func (b *Bot) onMessage(s *discordgo.Session, m *discordgo.MessageCreate) {
 		defer b.finishQuestion(userID)
 		b.answer(m.Message, threadID)
 	}()
+}
+
+// route decides whether a message gets an answer and in which thread. ch is
+// the message's channel, nil when it is the bot channel itself. In the bot
+// channel it answers @mentions in a new thread (threadID ""). In a thread of
+// the bot channel it answers every message if the bot started the thread, and
+// only @mentions if someone else did, since people may be talking among
+// themselves there. Elsewhere it ignores the message.
+func route(botChannelID, botUserID, channelID string, ch *discordgo.Channel, mentioned bool) (threadID string, ok bool) {
+	if channelID == botChannelID {
+		return "", mentioned
+	}
+	if ch == nil || !ch.IsThread() || ch.ParentID != botChannelID {
+		return "", false
+	}
+	return ch.ID, ch.OwnerID == botUserID || mentioned
 }
 
 func (b *Bot) startQuestion(userID string) bool {

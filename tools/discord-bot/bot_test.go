@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"github.com/bwmarrin/discordgo"
 	"os"
 	"strings"
 	"testing"
@@ -302,5 +303,37 @@ func TestParseConfig(t *testing.T) {
 	t.Setenv("GITHUB_REPO", "nope")
 	if _, err := ParseConfig(); err == nil || !strings.Contains(err.Error(), "LLM_EFFORT") || !strings.Contains(err.Error(), "GITHUB_REPO must be") {
 		t.Errorf("expected both errors reported, got %v", err)
+	}
+}
+
+func TestRoute(t *testing.T) {
+	const botChan, bot, user = "100", "900", "901"
+	thread := func(id, parent, owner string) *discordgo.Channel {
+		return &discordgo.Channel{ID: id, ParentID: parent, OwnerID: owner, Type: discordgo.ChannelTypeGuildPublicThread}
+	}
+	tests := []struct {
+		name      string
+		channelID string
+		ch        *discordgo.Channel
+		mentioned bool
+		thread    string
+		ok        bool
+	}{
+		{"bot channel mention starts a thread", botChan, nil, true, "", true},
+		{"bot channel without mention", botChan, nil, false, "", false},
+		{"bot thread follow-up", "200", thread("200", botChan, bot), false, "200", true},
+		{"user thread mention", "201", thread("201", botChan, user), true, "201", true},
+		{"user thread without mention", "201", thread("201", botChan, user), false, "201", false},
+		{"private user thread mention", "202", &discordgo.Channel{ID: "202", ParentID: botChan, OwnerID: user, Type: discordgo.ChannelTypeGuildPrivateThread}, true, "202", true},
+		{"thread in another channel", "203", thread("203", "555", user), true, "", false},
+		{"other channel", "555", &discordgo.Channel{ID: "555", Type: discordgo.ChannelTypeGuildText}, true, "", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, ok := route(botChan, bot, tt.channelID, tt.ch, tt.mentioned)
+			if got != tt.thread || ok != tt.ok {
+				t.Errorf("route = (%q, %v), want (%q, %v)", got, ok, tt.thread, tt.ok)
+			}
+		})
 	}
 }

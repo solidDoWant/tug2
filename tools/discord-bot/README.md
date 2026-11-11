@@ -35,6 +35,10 @@ the reporter to press **Confirm**.
 - Follow-ups in that thread don't need a mention. The thread itself is the
   conversation history: the bot re-reads it on every message (up to
   `HISTORY_MESSAGES`), so nothing is stored and restarts lose nothing.
+- In a thread someone else started in the configured channel, the bot answers
+  only when mentioned, since people may be talking among themselves there.
+  It still reads the whole thread (and the message it was started from) as
+  context. Threads in other channels are ignored.
 - Drafts live in the message embed. Confirming reads the draft back from the
   message, so pending drafts survive restarts too.
 - Replies never ping anyone (`allowed_mentions` is empty), whatever the text.
