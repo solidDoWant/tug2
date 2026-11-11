@@ -553,13 +553,32 @@ func draftEmbed(d IssueDraft, state string) *discordgo.MessageEmbed {
 	if d.Kind == IssueFeature {
 		color = 0xa2eeef
 	}
-	return &discordgo.MessageEmbed{
+	embed := &discordgo.MessageEmbed{
 		Author:      &discordgo.MessageEmbedAuthor{Name: kindLabel(d.Kind)},
 		Title:       d.Title,
 		Description: d.Body,
 		Color:       color,
 		Footer:      &discordgo.MessageEmbedFooter{Text: draftFooterPrefix + state},
 	}
+	if len(d.Labels) > 0 {
+		embed.Fields = []*discordgo.MessageEmbedField{{Name: draftLabelsField, Value: "`" + strings.Join(d.Labels, "` `") + "`"}}
+	}
+	return embed
+}
+
+// draftLabelsField is the embed field that shows, and carries, a draft's
+// labels: the draft lives only in its message until it is confirmed.
+const draftLabelsField = "Labels"
+
+// draftLabels reads the labels back from a draft's embed. Create checks them
+// against the allowed labels.
+func draftLabels(embed *discordgo.MessageEmbed) []string {
+	for _, f := range embed.Fields {
+		if f.Name == draftLabelsField {
+			return strings.Fields(strings.ReplaceAll(f.Value, "`", " "))
+		}
+	}
+	return nil
 }
 
 // draftButtons carry the kind and the reporter's ID, so only they can act.
@@ -608,7 +627,7 @@ func (b *Bot) onInteraction(s *discordgo.Session, i *discordgo.InteractionCreate
 		return
 	}
 	embed := i.Message.Embeds[0]
-	draft := IssueDraft{Kind: IssueKind(kind), Title: embed.Title, Body: embed.Description}
+	draft := IssueDraft{Kind: IssueKind(kind), Title: embed.Title, Body: embed.Description, Labels: draftLabels(embed)}
 
 	if action == cancelPrefix {
 		b.metrics.Issue(draft.Kind, "cancelled")

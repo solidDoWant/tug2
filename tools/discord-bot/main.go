@@ -40,6 +40,11 @@ func run(ctx context.Context) error {
 		if err != nil {
 			return fmt.Errorf("setting up GitHub: %w", err)
 		}
+		labelCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+		if err := issues.EnsureLabels(labelCtx); err != nil {
+			slog.Warn("couldn't check or create the issue labels; filing still works", "err", err)
+		}
+		cancel()
 	} else {
 		slog.Warn("GitHub App or GITHUB_REPO not configured; bug reports and feature requests are disabled")
 	}

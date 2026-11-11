@@ -9,6 +9,7 @@ import (
 	"encoding/pem"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -53,6 +54,22 @@ func TestIssueTrackerGitHubApp(t *testing.T) {
 		w.WriteHeader(http.StatusCreated)
 		w.Write([]byte(`{"number": 6, "html_url": "https://github.com/example/repo/issues/6"}`))
 	})
+	var createdLabels []string
+	mux.HandleFunc("GET /repos/example/repo/labels", func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(`[{"name":"bug"},{"name":"Area:Maps"}]`))
+	})
+	mux.HandleFunc("POST /repos/example/repo/labels", func(w http.ResponseWriter, r *http.Request) {
+		var l map[string]string
+		json.NewDecoder(r.Body).Decode(&l)
+		mu.Lock()
+		createdLabels = append(createdLabels, l["name"])
+		mu.Unlock()
+		if l["description"] == "" || len(l["color"]) != 6 {
+			t.Errorf("label created without a description or color: %v", l)
+		}
+		w.WriteHeader(http.StatusCreated)
+		w.Write([]byte(`{}`))
+	})
 	server := httptest.NewServer(mux)
 	defer server.Close()
 
@@ -60,11 +77,23 @@ func TestIssueTrackerGitHubApp(t *testing.T) {
 		GitHubAppID: 12345, GitHubAppPrivateKey: keyPEM,
 		GitHubOwner: "example", GitHubRepo: "repo",
 		IssueLabels: []string{"from-discord"}, BugLabel: "bug", FeatureLabel: "enhancement",
+		ServerOrder: []string{"main", "test"},
 		githubAPIURL: server.URL + "/",
 	}
 	tracker, err := NewIssueTracker(context.Background(), cfg)
 	if err != nil {
 		t.Fatal(err)
+	}
+
+	if err := tracker.EnsureLabels(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	// Existing labels match case-insensitively, as on GitHub.
+	if want := []string{"area:gameplay", "area:stats", "area:discord-relay", "area:discord-bot", "server:main", "server:test"}; !slices.Equal(createdLabels, want) {
+		t.Errorf("created labels %v, want %v", createdLabels, want)
+	}
+	if _, err := tracker.Create(context.Background(), IssueDraft{Kind: IssueBug, Title: "x", Body: "y", Labels: []string{"wontfix"}}, ""); err == nil {
+		t.Error("a label outside the list was accepted")
 	}
 
 	hits, err := tracker.Search(context.Background(), "medic revive")
@@ -76,7 +105,7 @@ func TestIssueTrackerGitHubApp(t *testing.T) {
 	}
 
 	url, err := tracker.Create(context.Background(),
-		IssueDraft{Kind: IssueBug, Title: "Medics can't revive", Body: "Steps..."},
+		IssueDraft{Kind: IssueBug, Title: "Medics can't revive", Body: "Steps...", Labels: []string{"server:test", "area:gameplay"}},
 		"https://discord.com/channels/1/2")
 	if err != nil {
 		t.Fatal(err)
@@ -99,10 +128,29 @@ func TestIssueTrackerGitHubApp(t *testing.T) {
 		t.Errorf("search query = %q", authSeen["query"])
 	}
 	labels, _ := json.Marshal(created["labels"])
-	if string(labels) != `["from-discord","bug"]` {
+	if string(labels) != `["from-discord","bug","area:gameplay","server:test"]` {
 		t.Errorf("labels = %s", labels)
 	}
 	if body, _ := created["body"].(string); !strings.Contains(body, "[Discord thread](https://discord.com/channels/1/2)") || strings.Contains(body, "Reported on Discord by") {
 		t.Errorf("body footer wrong: %q", body)
+	}
+}
+
+func TestDraftLabelsRoundTrip(t *testing.T) {
+	d := IssueDraft{Kind: IssueFeature, Title: "t", Body: "b", Labels: []string{"area:stats", "server:main"}}
+	embed := draftEmbed(d, "awaiting confirmation")
+	if got := draftLabels(embed); !slices.Equal(got, d.Labels) {
+		t.Errorf("labels read back as %v", got)
+	}
+	if e := draftEmbed(IssueDraft{Kind: IssueBug, Title: "t", Body: "b"}, "x"); len(e.Fields) != 0 || draftLabels(e) != nil {
+		t.Error("a draft without labels got a labels field")
+	}
+
+	choices := issueLabelChoices(&Config{ServerOrder: []string{"main"}})
+	if got, err := checkLabels([]string{"server:main", "area:maps", "server:main"}, choices); err != nil || !slices.Equal(got, []string{"area:maps", "server:main"}) {
+		t.Errorf("checkLabels = %v, %v", got, err)
+	}
+	if _, err := checkLabels([]string{"server:test"}, choices); err == nil {
+		t.Error("a server that isn't configured was accepted")
 	}
 }

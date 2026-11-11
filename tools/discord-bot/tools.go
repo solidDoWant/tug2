@@ -429,10 +429,22 @@ func (ts *Toolset) addIssueTools(issues *IssueTracker) {
 			"title": prop("string", fmt.Sprintf("Short, specific issue title (max %d characters).", maxIssueTitle)),
 			"body": prop("string", fmt.Sprintf("Issue body in GitHub Markdown (max %d characters): a summary, then the details the user gave, "+
 				"under headings such as Steps to reproduce / Expected / Actual / Context. The issue is public: don't name the reporter (the issue links back to the Discord thread), and use placeholders for player names, SteamIDs and profile links unless the bug is about that specific player.", maxIssueBody)),
-		}, []string{"kind", "title", "body"},
+			"labels": map[string]any{
+				"type":        "array",
+				"items":       map[string]any{"type": "string", "enum": labelNames(issues.labelChoices)},
+				"description": "Labels for what the issue is about: " + describeLabels(issues.labelChoices) + ". Pick every area that applies (usually one), and the server label for each server the bug was seen on or the change is for; leave server labels out when it isn't about particular servers.",
+			},
+		}, []string{"kind", "title", "body", "labels"},
 		func(ctx context.Context, tc *toolContext, raw json.RawMessage) (any, error) {
-			var in struct{ Kind, Title, Body string }
+			var in struct {
+				Kind, Title, Body string
+				Labels            []string
+			}
 			if err := decode(raw, &in); err != nil {
+				return nil, err
+			}
+			labels, err := checkLabels(in.Labels, issues.labelChoices)
+			if err != nil {
 				return nil, err
 			}
 			in.Title, in.Body = strings.TrimSpace(in.Title), strings.TrimSpace(in.Body)
@@ -448,7 +460,7 @@ func (ts *Toolset) addIssueTools(issues *IssueTracker) {
 			case len([]rune(in.Body)) > maxIssueBody:
 				return nil, fmt.Errorf("body is longer than %d characters", maxIssueBody)
 			}
-			tc.draft = &IssueDraft{Kind: IssueKind(in.Kind), Title: in.Title, Body: in.Body}
+			tc.draft = &IssueDraft{Kind: IssueKind(in.Kind), Title: in.Title, Body: in.Body, Labels: labels}
 			return map[string]any{
 				"status": "draft shown to the user with Confirm/Cancel buttons; NOT filed yet",
 			}, nil

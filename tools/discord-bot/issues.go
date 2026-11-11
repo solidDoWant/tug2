@@ -25,6 +25,10 @@ type IssueDraft struct {
 	Kind  IssueKind
 	Title string
 	Body  string
+	// Labels are the area and server labels the model chose; see
+	// issuelabels.go. The kind's label and GITHUB_ISSUE_LABELS are added
+	// when filing.
+	Labels []string
 }
 
 // Limits keep a draft inside a single Discord embed (title 256, description
@@ -41,6 +45,7 @@ type IssueTracker struct {
 	labels       []string
 	bugLabel     string
 	featureLabel string
+	labelChoices []labelChoice
 }
 
 // NewIssueTracker authenticates as the GitHub App's installation on the
@@ -91,6 +96,7 @@ func NewIssueTracker(ctx context.Context, cfg *Config) (*IssueTracker, error) {
 		labels:       cfg.IssueLabels,
 		bugLabel:     cfg.BugLabel,
 		featureLabel: cfg.FeatureLabel,
+		labelChoices: issueLabelChoices(cfg),
 	}, nil
 }
 
@@ -131,6 +137,10 @@ func (t *IssueTracker) Search(ctx context.Context, query string) ([]IssueSummary
 // bot's log records their user ID with the issue URL.
 func (t *IssueTracker) Create(ctx context.Context, draft IssueDraft, threadLink string) (string, error) {
 	labels := append([]string{}, t.labels...)
+	chosen, err := checkLabels(draft.Labels, t.labelChoices)
+	if err != nil {
+		return "", err
+	}
 	switch draft.Kind {
 	case IssueBug:
 		if t.bugLabel != "" {
@@ -141,6 +151,8 @@ func (t *IssueTracker) Create(ctx context.Context, draft IssueDraft, threadLink 
 			labels = append(labels, t.featureLabel)
 		}
 	}
+
+	labels = append(labels, chosen...)
 
 	body := strings.TrimSpace(draft.Body) + fmt.Sprintf(
 		"\n\n---\n_Reported on Discord via the stats bot. Discussion: [Discord thread](%s)_", threadLink)

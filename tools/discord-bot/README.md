@@ -234,6 +234,26 @@ short-lived installation tokens as needed.
 Without the app settings the bot still runs: the issue tools are not offered,
 and it says reporting isn't set up.
 
+### Issue labels
+
+Every filed issue gets `GITHUB_ISSUE_LABELS` and its kind's label (`bug` or
+`enhancement`). The model also picks labels from a fixed list, so issues can
+be selected by area and server, e.g. `is:open label:bug label:server:test`:
+
+- `area:gameplay`: weapons and balance, bots/AI, classes, game modes,
+  in-game plugins and commands. A balance change is an `enhancement` here.
+- `area:maps`: map rotation and votes, custom/workshop maps and downloads.
+- `area:stats`: stats recording, the stats API and leaderboards.
+- `area:discord-relay`: game events and chat posted to Discord channels.
+- `area:discord-bot`: this bot.
+- `server:<name>` for each configured game server, when the issue is about
+  particular servers.
+
+The list lives in `issuelabels.go`. The reporter sees the chosen labels on the
+draft before confirming. At startup the bot creates any of these labels the
+repository doesn't have yet, with descriptions; if that fails it logs a
+warning and carries on.
+
 ## Per-user limits
 
 Everyone gets the default limits (`RATE_LIMIT_QUESTIONS_PER_HOUR`,
