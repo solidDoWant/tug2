@@ -264,6 +264,14 @@ to**, without configuration. Access is decided by Discord permissions:
   category and topic. `read_channel` reads recent messages from one of them,
   by name or ID, optionally before or after a date, and links what it cites.
   Text and embeds are both read, since changelogs are often posted by webhooks.
+- `search_channels` searches the full history of readable channels with
+  Discord's own message search (the app's search box), newest, oldest or most
+  relevant first, 25 matches a page. `read_channel` only pages back from a
+  point in time, which in a busy game-log channel covers a few minutes, so
+  search is how the model finds older events, e.g. when a player last joined
+  or was kicked. Searches are always limited to readable channels. It needs no
+  extra permissions; when Discord hasn't indexed the server yet, the tool
+  says so and the model falls back to `read_channel`.
 - At startup the bot logs which channels it can read (`readable channels`), so
   access is easy to check.
 
@@ -386,7 +394,7 @@ with each step. These limits bound one question:
 | Time                                | 3 min   | -                              |
 
 Individual tools are bounded too: `read_channel` returns at most 50 messages
-and about 40,000 characters, leaderboard pages are at most 25 rows, and any
+and `search_channels` 25, each at most about 40,000 characters, leaderboard pages are at most 25 rows, and any
 stats response is cut at 64 KB.
 
 After running a round's tools, the bot estimates the next call's size

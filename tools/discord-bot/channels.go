@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/url"
 	"sort"
 	"strconv"
 	"strings"
@@ -17,10 +18,12 @@ type messageReader interface {
 	ChannelMessages(channelID string, limit int, beforeID, afterID, aroundID string, options ...discordgo.RequestOption) ([]*discordgo.Message, error)
 }
 
-// channelSource lists the channels the model may read and reads them.
+// channelSource lists the channels the model may read, reads them and
+// searches them.
 type channelSource interface {
 	messageReader
 	Readable(guildID string) ([]ReadableChannel, error)
+	SearchMessages(ctx context.Context, guildID string, q url.Values) (*messageSearch, error)
 }
 
 // ReadableChannel is a channel the model may read, as list_channels shows it.
@@ -173,6 +176,8 @@ func resolveChannel(readable []ReadableChannel, ref string) (ReadableChannel, er
 
 // ChannelMessage is one message as the model sees it.
 type ChannelMessage struct {
+	// Channel names the channel in search results, which span several.
+	Channel   string   `json:"channel,omitempty"`
 	PostedUTC string   `json:"posted_utc"`
 	Author    string   `json:"author"`
 	Content   string   `json:"content,omitempty"`
@@ -250,40 +255,51 @@ func readChannel(ctx context.Context, reader messageReader, guildID string, ch R
 		if !after.IsZero() && !m.Timestamp.After(after) {
 			continue
 		}
-		cm := ChannelMessage{
-			PostedUTC: m.Timestamp.UTC().Format("2006-01-02 15:04"),
-			Content:   withForwarded(truncate(strings.TrimSpace(m.Content), maxMessageChars), m, channelName),
-			Link:      fmt.Sprintf("https://discord.com/channels/%s/%s/%s", guildID, ch.ID, m.ID),
-		}
-		if m.Author != nil {
-			cm.Author = m.Author.Username
-			if m.Author.GlobalName != "" {
-				cm.Author = m.Author.GlobalName
-			}
-		}
-		// Changelogs are often posted by webhooks or bots as embeds.
-		for _, e := range m.Embeds {
-			if text := embedText(e); text != "" {
-				cm.Embeds = append(cm.Embeds, truncate(text, maxMessageChars))
-			}
-		}
-		for _, a := range m.Attachments {
-			cm.Files = append(cm.Files, a.Filename)
-		}
-		if cm.Content == "" && len(cm.Embeds) == 0 && len(cm.Files) == 0 {
+		cm, ok := toChannelMessage(m, guildID, ch.ID, channelName)
+		if !ok {
 			continue
 		}
-		size := len(cm.Content)
-		for _, e := range cm.Embeds {
-			size += len(e)
-		}
-		if total+size > maxChannelReadChars && len(out) > 0 {
+		if total += cm.size(); total > maxChannelReadChars && len(out) > 0 {
 			break // keep the newest messages that fit
 		}
-		total += size
 		out = append(out, cm)
 	}
 	return out, nil
+}
+
+// toChannelMessage renders a message for the model. It reports false for a
+// message with nothing to show.
+func toChannelMessage(m *discordgo.Message, guildID, channelID string, channelName func(string) string) (ChannelMessage, bool) {
+	cm := ChannelMessage{
+		PostedUTC: m.Timestamp.UTC().Format("2006-01-02 15:04"),
+		Content:   withForwarded(truncate(strings.TrimSpace(m.Content), maxMessageChars), m, channelName),
+		Link:      fmt.Sprintf("https://discord.com/channels/%s/%s/%s", guildID, channelID, m.ID),
+	}
+	if m.Author != nil {
+		cm.Author = m.Author.Username
+		if m.Author.GlobalName != "" {
+			cm.Author = m.Author.GlobalName
+		}
+	}
+	// Changelogs and game logs are often posted by webhooks or bots as embeds.
+	for _, e := range m.Embeds {
+		if text := embedText(e); text != "" {
+			cm.Embeds = append(cm.Embeds, truncate(text, maxMessageChars))
+		}
+	}
+	for _, a := range m.Attachments {
+		cm.Files = append(cm.Files, a.Filename)
+	}
+	return cm, cm.Content != "" || len(cm.Embeds) > 0 || len(cm.Files) > 0
+}
+
+// size is roughly how much of the context budget a message uses.
+func (cm ChannelMessage) size() int {
+	n := len(cm.Content)
+	for _, e := range cm.Embeds {
+		n += len(e)
+	}
+	return n
 }
 
 // embedText flattens an embed's readable parts.

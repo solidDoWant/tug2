@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -208,6 +209,21 @@ type fakeChannels struct {
 	fakeReader
 	readable []ReadableChannel
 	fetched  []string
+	// searched is the last search query; found is what searches return.
+	searched  url.Values
+	found     *messageSearch
+	searchErr error
+}
+
+func (f *fakeChannels) SearchMessages(_ context.Context, _ string, q url.Values) (*messageSearch, error) {
+	f.searched = q
+	if f.searchErr != nil {
+		return nil, f.searchErr
+	}
+	if f.found == nil {
+		return &messageSearch{}, nil
+	}
+	return f.found, nil
 }
 
 func (f *fakeChannels) Readable(string) ([]ReadableChannel, error) { return f.readable, nil }
