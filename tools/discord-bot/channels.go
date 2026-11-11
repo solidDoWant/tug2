@@ -242,7 +242,7 @@ func readChannel(ctx context.Context, reader messageReader, guildID string, ch R
 		}
 		cm := ChannelMessage{
 			PostedUTC: m.Timestamp.UTC().Format("2006-01-02 15:04"),
-			Content:   truncate(strings.TrimSpace(m.Content), maxMessageChars),
+			Content:   withForwarded(truncate(strings.TrimSpace(m.Content), maxMessageChars), m),
 			Link:      fmt.Sprintf("https://discord.com/channels/%s/%s/%s", guildID, ch.ID, m.ID),
 		}
 		if m.Author != nil {

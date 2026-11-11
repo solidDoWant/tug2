@@ -39,6 +39,15 @@ the reporter to press **Confirm**.
   only when mentioned, since people may be talking among themselves there.
   It still reads the whole thread (and the message it was started from) as
   context. Threads in other channels are ignored.
+- The bot also reads what a thread's first message builds on: the message it
+  replies to, and the messages its author posted just before it in the
+  channel (each within 5 minutes of the next, up to 5, stopping at anyone
+  else's message or an earlier question to the bot). So "forward a message,
+  then `@bot what's wrong with this?`" works.
+- Forwarded messages are read from their snapshot: raw text (markup
+  included, so rendering problems stay visible), embeds, attachment names,
+  and the source channel and a link to the original. `read_channel` sees
+  forwards the same way. Discord doesn't include the original author.
 - Drafts live in the message embed. Confirming reads the draft back from the
   message, so pending drafts survive restarts too.
 - Replies never ping anyone (`allowed_mentions` is empty), whatever the text.

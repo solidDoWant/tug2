@@ -321,6 +321,15 @@ func (b *Bot) history(threadID string) ([]Turn, error) {
 
 	var msgs []*discordgo.Message
 	if starter, err := b.session.ChannelMessage(thread.ParentID, threadID); err == nil {
+		// What the first message builds on, e.g. a forward posted just
+		// before "@bot this isn't rendering properly".
+		var before []*discordgo.Message
+		if prev, err := b.session.ChannelMessages(thread.ParentID, maxLeadIn, threadID, "", ""); err == nil {
+			before = prev
+		} else {
+			slog.Warn("reading messages before thread start", "thread", threadID, "err", err)
+		}
+		msgs = append(msgs, leadIn(starter, before, b.session.State.User.ID)...)
 		msgs = append(msgs, starter)
 	}
 
@@ -348,9 +357,43 @@ func (b *Bot) history(threadID string) ([]Turn, error) {
 		if m.Author.Bot {
 			continue
 		}
-		turns = append(turns, Turn{Author: displayName(m), Text: b.cleanContent(m), Posted: m.Timestamp})
+		turns = append(turns, Turn{Author: displayName(m), Text: withForwarded(b.cleanContent(m), m), Posted: m.Timestamp})
 	}
 	return turns, nil
+}
+
+// Bounds on the messages before a thread's first message that count as part of
+// it.
+const (
+	maxLeadIn = 5
+	leadInGap = 5 * time.Minute
+)
+
+// leadIn returns the context a thread's first message builds on, oldest first:
+// the message it replies to, and the run of messages its author posted just
+// before it (each within leadInGap of the next), such as a forward followed by
+// "@bot what's wrong with this?". before is the parent channel's messages
+// preceding the starter, newest first. The run stops at anyone else's message
+// and at a message that mentions the bot, which is a question of its own.
+func leadIn(starter *discordgo.Message, before []*discordgo.Message, botID string) []*discordgo.Message {
+	var run []*discordgo.Message
+	next := starter.Timestamp
+	for _, m := range before {
+		if m.Author == nil || starter.Author == nil || m.Author.ID != starter.Author.ID ||
+			next.Sub(m.Timestamp) > leadInGap ||
+			slices.ContainsFunc(m.Mentions, func(u *discordgo.User) bool { return u.ID == botID }) {
+			break
+		}
+		run = append(run, m)
+		next = m.Timestamp
+	}
+	slices.Reverse(run)
+
+	if ref := starter.ReferencedMessage; ref != nil && starter.Type == discordgo.MessageTypeReply &&
+		!slices.ContainsFunc(run, func(m *discordgo.Message) bool { return m.ID == ref.ID }) {
+		run = append([]*discordgo.Message{ref}, run...)
+	}
+	return run
 }
 
 // botMessageText is what the model sees of one of the bot's own messages,
