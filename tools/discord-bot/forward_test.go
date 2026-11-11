@@ -25,7 +25,7 @@ func forwardOf(id string, ts time.Time, content string) *discordgo.Message {
 func TestForwardedText(t *testing.T) {
 	ts := time.Date(2026, 11, 11, 2, 0, 0, 0, time.UTC)
 	raw := "[[MEDIC] [TAG]TestPlayerAlpha](<https://steamcommunity.com/profiles/1>): revived [TestPlayerBravo](<https://steamcommunity.com/profiles/2>)"
-	got := forwardedText(forwardOf("9", ts, raw))
+	got := forwardedText(forwardOf("9", ts, raw), nil)
 	for _, want := range []string{
 		"[Forwarded message from channel ID 777, originally posted 2026-11-11 01:00 UTC, original: https://discord.com/channels/42/777/555]",
 		raw, // raw markup, so rendering problems stay visible
@@ -39,22 +39,28 @@ func TestForwardedText(t *testing.T) {
 	}
 
 	plain := &discordgo.Message{Content: "hi", MessageReference: &discordgo.MessageReference{MessageID: "1"}}
-	if forwardedText(plain) != "" || withForwarded("hi", plain) != "hi" {
+	if forwardedText(plain, nil) != "" || withForwarded("hi", plain, nil) != "hi" {
 		t.Error("a reply was treated as a forward")
 	}
-	if w := withForwarded("look at this", forwardOf("9", ts, "x")); !strings.HasPrefix(w, "look at this\n[Forwarded") {
+	if w := withForwarded("look at this", forwardOf("9", ts, "x"), nil); !strings.HasPrefix(w, "look at this\n[Forwarded") {
 		t.Errorf("withForwarded = %q", w)
+	}
+
+	names := func(id string) string { return map[string]string{"777": "main-ingame"}[id] }
+	if got := forwardedText(forwardOf("9", ts, "x"), names); !strings.HasPrefix(got, "[Forwarded message from #main-ingame (channel ID 777), ") {
+		t.Errorf("named forward = %q", got)
 	}
 }
 
 func TestReadChannelForward(t *testing.T) {
 	ts := time.Date(2026, 11, 11, 2, 0, 0, 0, time.UTC)
 	reader := &fakeReader{msgs: []*discordgo.Message{forwardOf("9", ts, "forwarded text")}}
-	got, err := readChannel(context.Background(), reader, "42", ReadableChannel{Name: "bugs", ID: "100"}, 0, time.Time{}, time.Time{})
+	got, err := readChannel(context.Background(), reader, "42", ReadableChannel{Name: "bugs", ID: "100"},
+		[]ReadableChannel{{Name: "bugs", ID: "100"}, {Name: "main-ingame", ID: "777"}}, 0, time.Time{}, time.Time{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(got) != 1 || !strings.Contains(got[0].Content, "forwarded text") {
+	if len(got) != 1 || !strings.Contains(got[0].Content, "forwarded text") || !strings.Contains(got[0].Content, "#main-ingame") {
 		t.Errorf("forward dropped or empty: %+v", got)
 	}
 }

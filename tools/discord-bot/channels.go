@@ -204,7 +204,17 @@ func snowflakeAt(t time.Time) string {
 // readChannel returns up to limit messages from a channel, newest first,
 // optionally only those posted before and/or after the given times. Message
 // text is cut to keep a single read within the context budget.
-func readChannel(ctx context.Context, reader messageReader, guildID string, ch ReadableChannel, limit int, before, after time.Time) ([]ChannelMessage, error) {
+//
+// Forwards name their source channel when it is in readable.
+func readChannel(ctx context.Context, reader messageReader, guildID string, ch ReadableChannel, readable []ReadableChannel, limit int, before, after time.Time) ([]ChannelMessage, error) {
+	channelName := func(id string) string {
+		for _, c := range readable {
+			if c.ID == id {
+				return c.Name
+			}
+		}
+		return ""
+	}
 	if limit <= 0 {
 		limit = defaultChannelRead
 	}
@@ -242,7 +252,7 @@ func readChannel(ctx context.Context, reader messageReader, guildID string, ch R
 		}
 		cm := ChannelMessage{
 			PostedUTC: m.Timestamp.UTC().Format("2006-01-02 15:04"),
-			Content:   withForwarded(truncate(strings.TrimSpace(m.Content), maxMessageChars), m),
+			Content:   withForwarded(truncate(strings.TrimSpace(m.Content), maxMessageChars), m, channelName),
 			Link:      fmt.Sprintf("https://discord.com/channels/%s/%s/%s", guildID, ch.ID, m.ID),
 		}
 		if m.Author != nil {

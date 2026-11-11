@@ -462,6 +462,6 @@ func (ts *Toolset) addChannelTools(channels channelSource) {
 			if err != nil {
 				return nil, err
 			}
-			return readChannel(ctx, channels, tc.guildID, ch, in.Limit, before, after)
+			return readChannel(ctx, channels, tc.guildID, ch, readable, in.Limit, before, after)
 		})
 }

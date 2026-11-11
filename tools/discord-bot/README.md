@@ -47,7 +47,8 @@ the reporter to press **Confirm**.
   then `@bot what's wrong with this?`" works.
 - Forwarded messages are read from their snapshot: raw text (markup
   included, so rendering problems stay visible), embeds, attachment names,
-  and the source channel and a link to the original. `read_channel` sees
+  the source channel (by name when the bot can see it) and a link to the
+  original. `read_channel` sees
   forwards the same way. Discord doesn't include the original author.
 - Drafts live in the message embed. Confirming reads the draft back from the
   message, so pending drafts survive restarts too.

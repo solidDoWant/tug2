@@ -106,6 +106,15 @@ func (b *Bot) channel(id string) (*discordgo.Channel, error) {
 	return b.session.Channel(id)
 }
 
+// channelName is a channel's name from the state cache, or "" if unknown.
+// Cache only, so the same history renders the same way on every turn.
+func (b *Bot) channelName(id string) string {
+	if ch, err := b.session.State.Channel(id); err == nil {
+		return ch.Name
+	}
+	return ""
+}
+
 func (b *Bot) mentionsMe(m *discordgo.Message) bool {
 	return addressesBot(m, b.session.State.User.ID)
 }
@@ -369,7 +378,7 @@ func (b *Bot) history(threadID string) ([]Turn, error) {
 		if m.Author.Bot {
 			continue
 		}
-		turns = append(turns, Turn{Author: displayName(m), Text: withForwarded(b.cleanContent(m), m), Posted: m.Timestamp})
+		turns = append(turns, Turn{Author: displayName(m), Text: withForwarded(b.cleanContent(m), m, b.channelName), Posted: m.Timestamp})
 	}
 	return turns, nil
 }

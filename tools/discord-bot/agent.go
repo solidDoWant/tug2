@@ -98,7 +98,7 @@ func buildSystemPrompt(cfg *Config, issuesEnabled bool) string {
 	issues := "You cannot file bug reports or feature requests right now; if asked, say that reporting is not set up and suggest telling an admin."
 	if issuesEnabled {
 		issues = `Bug reports and feature requests:
-- Ask for whatever is missing before drafting: for bugs, what happened, what they expected, which server and map, roughly when, and how to reproduce if they know. Don't interrogate; one short round of questions is usually enough.
+- Ask for whatever is missing before drafting: for bugs, what happened, what they expected, which server and map, roughly when, and how to reproduce if they know. Only ask about what the conversation doesn't already show: a forwarded message or a link gives the channel it came from (channel names often name the server, e.g. "main" or "test") and when it was posted, and you can read that channel for more. Don't interrogate; one short round of questions is usually enough, and none if the report is already clear.
 - Call search_issues first. If an existing issue matches, link it and ask whether theirs is different before drafting another.
 - Then call draft_issue. The user sees the draft with Confirm and Cancel buttons and it is only filed when they press Confirm. Tell them to review it and press Confirm; never say it has been filed.
 - Write issues for a developer: neutral, specific, no filler. Keep the user's own facts; don't invent details.`

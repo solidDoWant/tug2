@@ -10,9 +10,10 @@ import (
 // forwardedText renders the messages a Discord forward carries. A forward has
 // no content of its own: the original is in MessageSnapshots and its location
 // in MessageReference. Snapshots carry no author. The result names the source
-// channel's ID and links the original, so the model can read that channel
-// (read_channel takes an ID) and compare. It returns "" for other messages.
-func forwardedText(m *discordgo.Message) string {
+// channel (by name when channelName knows it, which may be nil) and links the
+// original, so the model can tell where it came from and read that channel to
+// compare. It returns "" for other messages.
+func forwardedText(m *discordgo.Message, channelName func(id string) string) string {
 	if m.MessageReference == nil || m.MessageReference.Type != discordgo.MessageReferenceTypeForward {
 		return ""
 	}
@@ -27,7 +28,12 @@ func forwardedText(m *discordgo.Message) string {
 			continue
 		}
 		snap := s.Message
-		fmt.Fprintf(&b, "[Forwarded message from channel ID %s", ref.ChannelID)
+		b.WriteString("[Forwarded message from ")
+		if name := lookupName(channelName, ref.ChannelID); name != "" {
+			fmt.Fprintf(&b, "#%s (channel ID %s)", name, ref.ChannelID)
+		} else {
+			fmt.Fprintf(&b, "channel ID %s", ref.ChannelID)
+		}
 		if !snap.Timestamp.IsZero() {
 			fmt.Fprintf(&b, ", originally posted %s UTC", snap.Timestamp.UTC().Format("2006-01-02 15:04"))
 		}
@@ -52,9 +58,16 @@ func forwardedText(m *discordgo.Message) string {
 	return strings.TrimSpace(b.String())
 }
 
+func lookupName(channelName func(string) string, id string) string {
+	if channelName == nil || id == "" {
+		return ""
+	}
+	return channelName(id)
+}
+
 // withForwarded appends any forwarded message to a message's own text.
-func withForwarded(text string, m *discordgo.Message) string {
-	fw := forwardedText(m)
+func withForwarded(text string, m *discordgo.Message, channelName func(id string) string) string {
+	fw := forwardedText(m, channelName)
 	switch {
 	case fw == "":
 		return text

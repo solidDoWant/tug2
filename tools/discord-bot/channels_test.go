@@ -43,7 +43,7 @@ func TestReadChannel(t *testing.T) {
 	}}
 	ch := ReadableChannel{Name: "changelog", ID: "999"}
 
-	got, err := readChannel(context.Background(), reader, "42", ch, 0, time.Time{}, time.Time{})
+	got, err := readChannel(context.Background(), reader, "42", ch, nil, 0, time.Time{}, time.Time{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -55,7 +55,7 @@ func TestReadChannel(t *testing.T) {
 	}
 
 	// Only "after": results come back newest first and exclude the boundary.
-	got, _ = readChannel(context.Background(), reader, "42", ch, 100, time.Time{}, day(1))
+	got, _ = readChannel(context.Background(), reader, "42", ch, nil, 100, time.Time{}, day(1))
 	if reader.gotLimit != maxChannelRead || reader.gotAfter == "" {
 		t.Errorf("limit %d after %q", reader.gotLimit, reader.gotAfter)
 	}
@@ -64,7 +64,7 @@ func TestReadChannel(t *testing.T) {
 	}
 
 	// Both bounds: "before" is sent to Discord, "after" filters.
-	got, _ = readChannel(context.Background(), reader, "42", ch, 10, day(9), day(1))
+	got, _ = readChannel(context.Background(), reader, "42", ch, nil, 10, day(9), day(1))
 	if reader.gotBefore != snowflakeAt(day(9)) || reader.gotAfter != "" {
 		t.Errorf("before %q after %q", reader.gotBefore, reader.gotAfter)
 	}
