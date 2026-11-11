@@ -60,6 +60,14 @@ int       g_check_clip_bad[MAXPLAYERS + 1];       // consecutive shots that were
 int       g_check_name_bad[MAXPLAYERS + 1];       // player_hurt weapon differs from the active weapon
 int       g_check_unclaimed[MAXPLAYERS + 1];      // bullet hits no shot claimed (expected for the M107)
 
+// Per-round history (issue #10). FlushAllPlayerStats collects the lifetime-total updates for one
+// player in g_batch instead of sending them one by one, adds a player_rounds row (and its
+// player_round_weapons rows) recording the same numbers, and runs the lot as one transaction, so a
+// period's sums can never disagree with the lifetime totals.
+ArrayList g_batch;
+#define   BATCH_QUERY_MAX 16384
+char      g_history_query[BATCH_QUERY_MAX];
+
 // Killstreaks run until the player dies, across round ends and map changes (issue #8). A map change
 // disconnects every client slot and reconnects it, which resets the per-slot cache, so the current
 // streak is parked here by SteamID on disconnect and picked up again when the player comes back.
@@ -409,7 +417,7 @@ void FlushPlayerStats(int client)
     char query[1024];
     Format(query, sizeof(query), "INSERT INTO player_stats (steam_id, kills, deaths, suicides, headshot_given, headshot_taken, suppressions, caps, killstreak) VALUES ('%s', %i, %i, %i, %i, %i, %i, %i, %i) ON CONFLICT (steam_id) DO UPDATE SET kills = player_stats.kills + %i, deaths = player_stats.deaths + %i, suicides = player_stats.suicides + %i, headshot_given = player_stats.headshot_given + %i, headshot_taken = player_stats.headshot_taken + %i, suppressions = player_stats.suppressions + %i, caps = player_stats.caps + %i, killstreak = CASE WHEN player_stats.killstreak IS NULL OR player_stats.killstreak < %i THEN %i ELSE player_stats.killstreak END, updated_at = CURRENT_TIMESTAMP", g_SteamID[client], g_cache_kills[client], g_cache_deaths[client], g_cache_suicides[client], g_cache_headshot_given[client], g_cache_headshot_taken[client], g_cache_suppressions[client], g_cache_caps[client], g_cache_killstreak_max[client], g_cache_kills[client], g_cache_deaths[client], g_cache_suicides[client], g_cache_headshot_given[client], g_cache_headshot_taken[client], g_cache_suppressions[client], g_cache_caps[client], g_cache_killstreak_max[client], g_cache_killstreak_max[client]);
 
-    ExecuteQueryWithRetry(OnQueryComplete, query, client);
+    RunOrBatch(query, client);
 
     // Clear cache after flushing
     g_cache_kills[client]          = 0;
@@ -522,30 +530,276 @@ void FlushPlayerWeaponKills(int client)
     g_cache_weapon_kills[client].Clear();
 
     if (strlen(query) == 0) return;
-    ExecuteQueryWithRetry(OnQueryComplete, query);
+    RunOrBatch(query, client);
 }
 
 void FlushAllPlayerStats(int client, int wins = 0, int losses = 0)
 {
+    if (g_Database == null) return;    // everything stays cached for the next flush
+    if (StrEqual(g_SteamID[client], "") || StrEqual(g_SteamID[client], bawt_steam_id)) return;
+
+    // Settle the values the history row records, so it and the total updates use the same numbers.
+    AccumulatePlayTime(client);
+    if (g_cache_killstreak[client] > g_cache_killstreak_max[client])
+        g_cache_killstreak_max[client] = g_cache_killstreak[client];
+
+    bool has_history = BuildHistoryQuery(client, wins, losses, g_history_query, sizeof(g_history_query));
+
+    g_batch = new ArrayList(ByteCountToCells(BATCH_QUERY_MAX));
+    if (has_history)
+    {
+        // player_rounds references player_stats. The row exists from RecordPlayer, but a missing one
+        // must not fail the transaction and lose the totals with it.
+        char ensure[160];
+        Format(ensure, sizeof(ensure), "INSERT INTO player_stats (steam_id) VALUES ('%s') ON CONFLICT (steam_id) DO NOTHING", g_SteamID[client]);
+        g_batch.PushString(ensure);
+    }
     FlushPlayTime(client);
     FlushPlayerStats(client);
     FlushPlayerShots(client);
     FlushPlayerWeaponKills(client);
     FlushPlayerScore(client, wins, losses);
+    if (has_history) g_batch.PushString(g_history_query);
+
+    ArrayList queries = g_batch;
+    g_batch           = null;
+    if (queries.Length == 0)
+    {
+        delete queries;
+        return;
+    }
+    ExecuteBatchWithRetry(queries, 0);
+}
+
+// Inside FlushAllPlayerStats, queries join its transaction; otherwise they run on their own.
+void RunOrBatch(const char[] query, int client)
+{
+    if (g_batch != null)
+        g_batch.PushString(query);
+    else
+        ExecuteQueryWithRetry(OnQueryComplete, query, client);
+}
+
+// The score change FlushPlayerScore would add, and whether it adds anything at all (it skips when
+// there is no gain and no win or loss). The resource entity is gone during a map change.
+bool PendingScore(int client, int wins, int losses, int &change)
+{
+    change       = 0;
+    int resource = GetPlayerResourceEntity();
+    if (resource == -1) return false;
+
+    change = GetEntProp(resource, Prop_Send, "m_iPlayerScore", _, client) - g_iStartScore[client];
+    if (change <= 0 && wins <= 0 && losses <= 0)
+    {
+        change = 0;
+        return false;
+    }
+    return true;
+}
+
+// Builds the player_rounds insert for what this flush adds to the player's totals. Returns false
+// when there is nothing to record.
+bool BuildHistoryQuery(int client, int wins, int losses, char[] query, int maxlen)
+{
+    int score;
+    PendingScore(client, wins, losses, score);
+
+    // Per-weapon numbers: the union of the kill and shot caches.
+    StringMap weapons = new StringMap();    // name -> {kills, shots, enemy_hits, friendly_hits}
+    int       totals[SHOT_STATS];
+    if (g_cache_weapon_kills[client] != null)
+    {
+        StringMapSnapshot snap = g_cache_weapon_kills[client].Snapshot();
+        for (int i = 0; i < snap.Length; i++)
+        {
+            char name[64];
+            snap.GetKey(i, name, sizeof(name));
+            int row[4], kills;
+            g_cache_weapon_kills[client].GetValue(name, kills);
+            row[0] = kills;
+            weapons.SetArray(name, row, sizeof(row));
+        }
+        delete snap;
+    }
+    if (g_cache_shots[client] != null)
+    {
+        StringMapSnapshot snap = g_cache_shots[client].Snapshot();
+        for (int i = 0; i < snap.Length; i++)
+        {
+            char name[64];
+            snap.GetKey(i, name, sizeof(name));
+            int row[4], counts[SHOT_STATS];
+            g_cache_shots[client].GetArray(name, counts, sizeof(counts));
+            weapons.GetArray(name, row, sizeof(row));
+            row[1] = counts[0];
+            row[2] = counts[1];
+            row[3] = counts[2];
+            weapons.SetArray(name, row, sizeof(row));
+            totals[0] += counts[0];
+            totals[1] += counts[1];
+            totals[2] += counts[2];
+        }
+        delete snap;
+    }
+
+    if (g_cache_kills[client] == 0 && g_cache_deaths[client] == 0 && g_cache_suicides[client] == 0
+        && g_cache_headshot_given[client] == 0 && g_cache_headshot_taken[client] == 0 && g_cache_suppressions[client] == 0
+        && g_cache_caps[client] == 0 && g_cache_killstreak_max[client] == 0 && score == 0 && wins == 0 && losses == 0
+        && g_play_seconds[client] <= 0 && totals[0] == 0 && weapons.Size == 0)
+    {
+        delete weapons;
+        return false;
+    }
+
+    char map[128], map_escaped[257];
+    GetCurrentMap(map, sizeof(map));
+    if (!g_Database.Escape(map, map_escaped, sizeof(map_escaped))) map_escaped[0] = '\0';
+
+    char row_values[512];
+    Format(row_values, sizeof(row_values), "('%s', '%s', %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d)",
+           g_SteamID[client], map_escaped, g_cache_kills[client], g_cache_deaths[client], g_cache_suicides[client],
+           g_cache_headshot_given[client], g_cache_headshot_taken[client], g_cache_suppressions[client], g_cache_caps[client],
+           score, wins, losses, g_cache_killstreak_max[client], g_play_seconds[client] > 0 ? g_play_seconds[client] : 0,
+           totals[0], totals[1], totals[2]);
+    char round_insert[1024];
+    Format(round_insert, sizeof(round_insert),
+           "INSERT INTO player_rounds (steam_id, map_name, kills, deaths, suicides, headshot_given, headshot_taken, suppressions, caps, score, wins, losses, killstreak, play_time_seconds, shots, enemy_hits, friendly_hits) VALUES %s",
+           row_values);
+
+    if (weapons.Size == 0)
+    {
+        strcopy(query, maxlen, round_insert);
+        delete weapons;
+        return true;
+    }
+
+    char names[4096] = "", values[8192] = "";
+    int  count       = 0;
+    StringMapSnapshot snap = weapons.Snapshot();
+    for (int i = 0; i < snap.Length; i++)
+    {
+        char name[64], escaped[129];
+        snap.GetKey(i, name, sizeof(name));
+        if (!g_Database.Escape(name, escaped, sizeof(escaped))) continue;
+        int row[4];
+        weapons.GetArray(name, row, sizeof(row));
+
+        char name_value[160], value[256];
+        Format(name_value, sizeof(name_value), "%s('%s')", count > 0 ? ", " : "", escaped);
+        Format(value, sizeof(value), "%s('%s', %d, %d, %d, %d)", count > 0 ? ", " : "", escaped, row[0], row[1], row[2], row[3]);
+        if (strlen(names) + strlen(name_value) >= sizeof(names) || strlen(values) + strlen(value) >= sizeof(values))
+        {
+            LogError("[GG2 MSTATS2] History weapon buffer full, dropping the rest after %d weapons", count);
+            break;
+        }
+        StrCat(names, sizeof(names), name_value);
+        StrCat(values, sizeof(values), value);
+        count++;
+    }
+    delete snap;
+    delete weapons;
+
+    if (count == 0)
+    {
+        strcopy(query, maxlen, round_insert);
+        return true;
+    }
+    Format(query, maxlen,
+           "WITH r AS (%s RETURNING id), w AS (INSERT INTO weapon_stats (weapon_name) VALUES %s ON CONFLICT (weapon_name) DO UPDATE SET weapon_name = EXCLUDED.weapon_name RETURNING weapon_id, weapon_name) INSERT INTO player_round_weapons (round_id, weapon_id, kills, shots, enemy_hits, friendly_hits) SELECT r.id, w.weapon_id, v.kills, v.shots, v.enemy_hits, v.friendly_hits FROM r CROSS JOIN (VALUES %s) AS v(weapon_name, kills, shots, enemy_hits, friendly_hits) JOIN w ON w.weapon_name = v.weapon_name",
+           round_insert, names, values);
+    return true;
+}
+
+// Runs a flush's queries as one transaction, retrying on a lost connection like
+// ExecuteQueryWithRetry. queries is deleted once it succeeds or is given up on.
+void ExecuteBatchWithRetry(ArrayList queries, int retryCount)
+{
+    if (g_Database == null)
+    {
+        RetryBatchLater(queries, retryCount);
+        return;
+    }
+
+    Transaction txn = new Transaction();
+    char        query[BATCH_QUERY_MAX];
+    for (int i = 0; i < queries.Length; i++)
+    {
+        queries.GetString(i, query, sizeof(query));
+        txn.AddQuery(query);
+    }
+
+    DataPack pack = new DataPack();
+    pack.WriteCell(queries);
+    pack.WriteCell(retryCount);
+    g_Database.Execute(txn, OnBatchSuccess, OnBatchFailure, pack);
+}
+
+public void OnBatchSuccess(Database db, DataPack pack, int numQueries, DBResultSet[] results, any[] queryData)
+{
+    pack.Reset();
+    ArrayList queries = pack.ReadCell();
+    delete pack;
+    delete queries;
+}
+
+public void OnBatchFailure(Database db, DataPack pack, int numQueries, const char[] error, int failIndex, any[] queryData)
+{
+    pack.Reset();
+    ArrayList queries    = pack.ReadCell();
+    int       retryCount = pack.ReadCell();
+    delete pack;
+
+    if (StrContains(error, "no connection to the server", false) == -1)
+    {
+        char query[256];
+        if (failIndex >= 0 && failIndex < queries.Length) queries.GetString(failIndex, query, sizeof(query));
+        LogError("[GG2 MSTATS2] Stats transaction failed at query %d (%s...): %s", failIndex, query, error);
+        delete queries;
+        return;
+    }
+
+    LogError("[GG2 MSTATS2] Stats transaction failed due to connection loss - attempting reconnect and retry");
+    ReconnectDatabase();
+    RetryBatchLater(queries, retryCount);
+}
+
+void RetryBatchLater(ArrayList queries, int retryCount)
+{
+    if (retryCount >= 2)
+    {
+        LogError("[GG2 MSTATS2] Giving up on a stats transaction after %d retries", retryCount);
+        delete queries;
+        return;
+    }
+
+    DataPack pack = new DataPack();
+    pack.WriteCell(queries);
+    pack.WriteCell(retryCount + 1);
+    CreateTimer(3.0, Timer_RetryBatch, pack);
+}
+
+public Action Timer_RetryBatch(Handle timer, DataPack pack)
+{
+    pack.Reset();
+    ArrayList queries    = pack.ReadCell();
+    int       retryCount = pack.ReadCell();
+    delete pack;
+    ExecuteBatchWithRetry(queries, retryCount);
+    return Plugin_Stop;
 }
 
 void FlushPlayerScore(int client, int wins = 0, int losses = 0)
 {
-    int player_current_score = GetEntProp(GetPlayerResourceEntity(), Prop_Send, "m_iPlayerScore", _, client);
-    int player_score_change  = player_current_score - g_iStartScore[client];
-    if (player_score_change <= 0 && wins <= 0 && losses <= 0) return;
+    int player_score_change;
+    if (!PendingScore(client, wins, losses, player_score_change)) return;
+    int player_current_score = g_iStartScore[client] + player_score_change;
 
     char score_query[512];
     g_Database.Format(score_query, sizeof(score_query),
                       "INSERT INTO player_stats (steam_id, score, wins, losses) VALUES ('%s', %i, %i, %i) ON CONFLICT (steam_id) DO UPDATE SET score = player_stats.score + %i, wins = player_stats.wins + %i, losses = player_stats.losses + %i, updated_at = CURRENT_TIMESTAMP",
                       g_SteamID[client], player_score_change, wins, losses, player_score_change, wins, losses);
 
-    ExecuteQueryWithRetry(OnQueryComplete, score_query, client);
+    RunOrBatch(score_query, client);
     g_iStartScore[client] = player_current_score;
 }
 
@@ -738,6 +992,7 @@ public Action Event_PlayerDisconnect(Event event, const char[] name, bool dontBr
     if (IsFakeClient(client)) return Plugin_Continue;
 
     FlushAllPlayerStats(client);
+    g_play_start[client] = 0;    // they're leaving: OnClientDisconnect must find nothing more to add
 
     return Plugin_Continue;
 }
@@ -846,14 +1101,21 @@ public Action Event_PlayerTeam(Event event, const char[] name, bool dontBroadcas
 }
 
 // Adds the player's time on Security since the last flush to player_stats.play_time_seconds.
+// Moves the time since the current stretch on Security began into g_play_seconds.
+void AccumulatePlayTime(int client)
+{
+    if (g_play_start[client] == 0) return;
+
+    int now = GetTime();
+    g_play_seconds[client] += now - g_play_start[client];
+    g_play_start[client] = now;
+}
+
 void FlushPlayTime(int client)
 {
-    if (g_play_start[client] != 0)
-    {
-        int now = GetTime();
-        g_play_seconds[client] += now - g_play_start[client];
-        g_play_start[client] = now;
-    }
+    // Inside a batch, FlushAllPlayerStats has just accumulated, and the history row records exactly
+    // g_play_seconds; accumulating again could add a second it doesn't have.
+    if (g_batch == null) AccumulatePlayTime(client);
 
     if (g_play_seconds[client] <= 0) return;
     if (g_Database == null) return;    // kept for the next flush
@@ -863,7 +1125,7 @@ void FlushPlayTime(int client)
     Format(query, sizeof(query),
            "INSERT INTO player_stats (steam_id, play_time_seconds) VALUES ('%s', %i) ON CONFLICT (steam_id) DO UPDATE SET play_time_seconds = player_stats.play_time_seconds + %i, updated_at = CURRENT_TIMESTAMP",
            g_SteamID[client], g_play_seconds[client], g_play_seconds[client]);
-    ExecuteQueryWithRetry(OnQueryComplete, query, client);
+    RunOrBatch(query, client);
     g_play_seconds[client] = 0;
 }
 
@@ -872,8 +1134,9 @@ public void OnClientDisconnect(int client)
 {
     if (IsFakeClient(client)) return;
 
-    FlushPlayTime(client);
-    FlushPlayerShots(client);    // the player_disconnect event's flush doesn't run on a map change
+    // The player_disconnect event's flush doesn't run on a map change, which used to lose everything
+    // since the last round end. On a real leave the event has already flushed and this finds nothing.
+    FlushAllPlayerStats(client);
     g_play_start[client]   = 0;
     g_play_seconds[client] = 0;    // a failed flush must not pass time on to the slot's next player
 
@@ -1048,7 +1311,7 @@ void FlushPlayerShots(int client)
     Format(query, sizeof(query),
            "WITH upserted_weapons AS (INSERT INTO weapon_stats (weapon_name) VALUES %s ON CONFLICT (weapon_name) DO UPDATE SET weapon_name = EXCLUDED.weapon_name RETURNING weapon_id, weapon_name), shot_counts AS (SELECT * FROM (VALUES %s) AS t(weapon_name, shots, enemy_hits, friendly_hits)) INSERT INTO player_shots (steam_id, weapon_id, shots, enemy_hits, friendly_hits) SELECT '%s', uw.weapon_id, sc.shots, sc.enemy_hits, sc.friendly_hits FROM shot_counts sc JOIN upserted_weapons uw ON uw.weapon_name = sc.weapon_name ON CONFLICT (steam_id, weapon_id) DO UPDATE SET shots = player_shots.shots + EXCLUDED.shots, enemy_hits = player_shots.enemy_hits + EXCLUDED.enemy_hits, friendly_hits = player_shots.friendly_hits + EXCLUDED.friendly_hits, updated_at = CURRENT_TIMESTAMP",
            weapons_values, shots_values, g_SteamID[client]);
-    ExecuteQueryWithRetry(OnQueryComplete, query, client);
+    RunOrBatch(query, client);
 }
 
 void LogShotCheck(int client)

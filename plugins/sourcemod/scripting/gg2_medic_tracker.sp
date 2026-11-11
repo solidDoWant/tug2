@@ -216,20 +216,35 @@ public void OnClientPostAdminCheck(int client)
     GetClientAuthId(client, AuthId_SteamID64, g_client_steam_ids[client], sizeof(g_client_steam_ids[]));
 }
 
-public void update_medic_time_in_db(int client)
+// Adds the player's medic time since the last write, and with with_counts their revives and full heals
+// this round, to their lifetime medics row, and records the same numbers with the time in medic_rounds
+// (issue #10) in the same statement, so a period's sums and the lifetime totals can't disagree.
+// Heals and revives come from bm2_respawn for anyone, medic or not; they used to be shown at round end
+// and discarded.
+public void record_medic_stats(int client, bool with_counts)
 {
-    if (g_client_medic_class_time_tracker_seconds[client] == 0) return;
-    if (!IsClientConnected(client)) return;
-    if (g_Database == null) return;
+    if (!IsClientConnected(client) || IsFakeClient(client)) return;
+    if (g_Database == null) return;    // kept for the next write
+    if (g_client_steam_ids[client][0] == '\0') return;
 
-    int  time_to_add = g_client_medic_class_time_tracker_seconds[client];
+    int time_to_add = g_client_medic_class_time_tracker_seconds[client];
+    int heals       = with_counts ? g_round_medic_heals[client] : 0;
+    int revives     = with_counts ? g_round_medic_revives[client] : 0;
+    if (time_to_add == 0 && heals == 0 && revives == 0) return;
 
-    char query[512];
-    Format(query, sizeof(query), "INSERT INTO medics (steamId, banned, medic_time) VALUES ('%s', FALSE, %i) ON CONFLICT (steamId) DO UPDATE SET medic_time = medics.medic_time + EXCLUDED.medic_time", g_client_steam_ids[client], time_to_add);
+    char query[1024];
+    Format(query, sizeof(query),
+           "WITH totals AS (INSERT INTO medics (steamId, banned, medic_time, heals, revives) VALUES ('%s', FALSE, %i, %i, %i) ON CONFLICT (steamId) DO UPDATE SET medic_time = medics.medic_time + EXCLUDED.medic_time, heals = medics.heals + EXCLUDED.heals, revives = medics.revives + EXCLUDED.revives, updated_at = CURRENT_TIMESTAMP RETURNING 1) INSERT INTO medic_rounds (steam_id, medic_time, heals, revives) VALUES ('%s', %i, %i, %i)",
+           g_client_steam_ids[client], time_to_add, heals, revives, g_client_steam_ids[client], time_to_add, heals, revives);
 
     g_Database.Query(OnMedicTimeSaved, query, client);
 
     g_client_medic_class_time_tracker_seconds[client] = 0;
+    if (with_counts)
+    {
+        g_round_medic_heals[client]   = 0;
+        g_round_medic_revives[client] = 0;
+    }
 }
 
 public void OnMedicTimeSaved(Database db, DBResultSet results, const char[] error, any client)
@@ -244,12 +259,10 @@ public Action Event_RoundEnd(Event event, const char[] name, bool dontBroadcast)
         if (!IsClientConnected(client)) continue;
         if (IsFakeClient(client)) continue;
 
+        record_medic_stats(client, true);
+
         g_round_medic_revives[client] = 0;
         g_round_medic_heals[client]   = 0;
-
-        if (!is_medic(client)) continue;
-
-        update_medic_time_in_db(client);
     }
 
     g_current_revivable = 0;
@@ -263,10 +276,7 @@ public Action Event_PlayerDisconnect(Event event, const char[] name, bool dontBr
     int client = GetClientOfUserId(event.GetInt("userid"));
     if (!IsValidPlayer(client)) return Plugin_Continue;
 
-    if (is_medic(client))
-    {
-        update_medic_time_in_db(client);
-    }
+    if (!IsFakeClient(client)) record_medic_stats(client, true);
 
     g_client_steam_ids[client]                        = "";
     g_client_is_medic[client]                         = false;
@@ -291,7 +301,7 @@ public Action Event_PlayerPickSquad(Event event, const char[] name, bool dontBro
     // they're changing from medic to something else
     if (is_medic(client) && !new_class_is_medic)
     {
-        update_medic_time_in_db(client);
+        record_medic_stats(client, false);
     }
 
     g_client_is_medic[client] = new_class_is_medic;

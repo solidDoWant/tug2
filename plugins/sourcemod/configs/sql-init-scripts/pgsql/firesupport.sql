@@ -10,6 +10,17 @@ CREATE TABLE IF NOT EXISTS fire_support (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+-- One row per fire support call, for stats over a period (issue #10). Written in the same statement
+-- as the fire_support counter.
+CREATE TABLE IF NOT EXISTS fire_support_calls (
+    id BIGSERIAL PRIMARY KEY,
+    steam_id VARCHAR(64) NOT NULL,
+    called_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_fire_support_calls_called_at ON fire_support_calls(called_at);
+CREATE INDEX IF NOT EXISTS idx_fire_support_calls_steam_id_called_at ON fire_support_calls(steam_id, called_at);
+
 -- =====================================================
 -- Indexes for Performance
 -- =====================================================
@@ -81,3 +92,8 @@ COMMENT ON COLUMN fire_support.steamid IS 'SteamID64 as text (player_stats.steam
 COMMENT ON COLUMN fire_support.arty_thrown IS 'Fire support calls made.';
 COMMENT ON COLUMN fire_support.last_used IS 'Last call as Unix seconds (use to_timestamp); 0 when unknown.';
 COMMENT ON COLUMN fire_support.created_at IS 'First call (UTC).';
+
+COMMENT ON TABLE fire_support_calls IS 'One row per fire support call, with when: count over called_at for calls in a period. Recorded since 2026-11; fire_support.arty_thrown has the lifetime count.';
+COMMENT ON COLUMN fire_support_calls.id IS 'Row key.';
+COMMENT ON COLUMN fire_support_calls.steam_id IS 'SteamID64 as text (player_stats.steam_id).';
+COMMENT ON COLUMN fire_support_calls.called_at IS 'When the call was made (UTC).';

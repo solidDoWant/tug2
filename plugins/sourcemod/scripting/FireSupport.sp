@@ -1795,10 +1795,12 @@ void add_throw_to_db(int client, int supportType, int team)
 
     int  currentTime = GetTime();
 
-    char query[512];
+    // The call is also logged with its time in fire_support_calls (issue #10), in the same statement
+    // so the period counts and the lifetime counter can't disagree.
+    char query[768];
     Format(query, sizeof(query),
-           "INSERT INTO fire_support (steamId, arty_thrown, last_used) " ... "VALUES ('%s', 1, %d) " ... "ON CONFLICT (steamId) DO UPDATE SET " ... "arty_thrown = fire_support.arty_thrown + 1, " ... "last_used = EXCLUDED.last_used",
-           steamId, currentTime);
+           "WITH totals AS (INSERT INTO fire_support (steamId, arty_thrown, last_used) " ... "VALUES ('%s', 1, %d) " ... "ON CONFLICT (steamId) DO UPDATE SET " ... "arty_thrown = fire_support.arty_thrown + 1, " ... "last_used = EXCLUDED.last_used RETURNING 1) " ... "INSERT INTO fire_support_calls (steam_id) VALUES ('%s')",
+           steamId, currentTime, steamId);
 
     g_Database.Query(OnFireSupportStatUpdated, query);
     LogMessage("[FireSupport] Incremented arty_thrown for %N (team=%d, type=%d)", client, team, supportType);

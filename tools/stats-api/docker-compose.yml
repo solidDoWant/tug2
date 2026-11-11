@@ -28,6 +28,7 @@ services:
       # all share the insurgency-stats database (see database-migrations.cfg).
       - ../../plugins/sourcemod/configs/sql-init-scripts/pgsql/gg2_mstats2.sql:/docker-entrypoint-initdb.d/10-gg2_mstats2.sql:ro
       - ../../plugins/sourcemod/configs/sql-init-scripts/pgsql/gg2_mstats2_shots.sql:/docker-entrypoint-initdb.d/11-gg2_mstats2_shots.sql:ro
+      - ../../plugins/sourcemod/configs/sql-init-scripts/pgsql/gg2_mstats2_history.sql:/docker-entrypoint-initdb.d/12-gg2_mstats2_history.sql:ro
       - ../../plugins/sourcemod/configs/sql-init-scripts/pgsql/gg2_medic_tracker.sql:/docker-entrypoint-initdb.d/20-gg2_medic_tracker.sql:ro
       - ../../plugins/sourcemod/configs/sql-init-scripts/pgsql/gg2_teamkill.sql:/docker-entrypoint-initdb.d/30-gg2_teamkill.sql:ro
       - ../../plugins/sourcemod/configs/sql-init-scripts/pgsql/map_logger.sql:/docker-entrypoint-initdb.d/40-map_logger.sql:ro
