@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log/slog"
 	"slices"
 	"strings"
 	"time"
@@ -186,7 +185,7 @@ func (a *Agent) Answer(ctx context.Context, guildID string, history []Turn) (Ans
 		a.metrics.ModelRequest(a.cfg.Model, time.Since(start), &resp.Usage, nil)
 		u := resp.Usage
 		spent += u.InputTokens + u.CacheReadInputTokens + u.CacheCreationInputTokens + u.OutputTokens
-		slog.Info("model response",
+		logger(ctx).Info("model response",
 			"round", round,
 			"stop_reason", resp.StopReason,
 			"input_tokens", u.InputTokens,
@@ -253,7 +252,7 @@ func (a *Agent) Answer(ctx context.Context, guildID string, history []Turn) (Ans
 		}
 
 		if reason != "" {
-			slog.Warn("question limit reached", "limit", reason, "round", round, "question_tokens", spent)
+			logger(ctx).Warn("question limit reached", "limit", reason, "round", round, "question_tokens", spent)
 			limit = reason
 			if reason == "rounds" {
 				a.skipTools(resp) // never run; budget/context calls ran but are withheld
@@ -314,7 +313,7 @@ func (a *Agent) runTools(ctx context.Context, tc *toolContext, resp *anthropic.M
 		input := json.RawMessage(use.JSON.Input.Raw())
 		start := time.Now()
 		out, err := a.tools.Run(ctx, tc, use.Name, input)
-		slog.Info("tool call", "tool", use.Name, "input", string(input),
+		logger(ctx).Info("tool call", "tool", use.Name, "input", string(input),
 			"duration_ms", time.Since(start).Milliseconds(), "error", errString(err))
 		result := "ok"
 		if err != nil {

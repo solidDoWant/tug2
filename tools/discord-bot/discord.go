@@ -29,6 +29,9 @@ type Bot struct {
 	mu                 sync.Mutex
 	inFlight           map[string]bool // users with a question being answered
 	commandsRegistered bool            // /ask is registered in the bot channel's guild
+
+	// nicks caches server nicknames by user ID; see authorName.
+	nicks *nickCache
 }
 
 // NewSession creates the Discord session shared by the bot and the
@@ -56,6 +59,7 @@ func NewBot(ctx context.Context, cfg *Config, session *discordgo.Session, agent 
 		channels: channels,
 		ctx:      ctx,
 		inFlight: map[string]bool{},
+		nicks:    newNickCache(),
 	}
 	session.AddHandler(b.onMessage)
 	session.AddHandler(b.onInteraction)
@@ -214,6 +218,8 @@ func (b *Bot) replyTo(m *discordgo.Message, threadID, text string) {
 }
 
 func (b *Bot) answer(m *discordgo.Message, threadID string) {
+	// message identifies the request in the logs; thread is added once known.
+	log := slog.With("message", m.ID, "user", m.Author.ID)
 	if ok, wait := b.limits.AllowQuestion(m.Author.ID); !ok {
 		b.metrics.Question(outcomeRateLimited)
 		b.replyTo(m, threadID, fmt.Sprintf("You've hit the question limit. Try again in %s.", wait.Round(time.Minute)))
@@ -229,12 +235,13 @@ func (b *Bot) answer(m *discordgo.Message, threadID string) {
 			AutoArchiveDuration: 1440,
 		})
 		if err != nil {
-			slog.Error("starting thread", "err", err)
+			log.Error("starting thread", "err", err)
 			b.replyTo(m, "", "Sorry, I couldn't start a thread for that.")
 			return
 		}
 		threadID = thread.ID
 	}
+	log = log.With("thread", threadID)
 
 	select {
 	case b.busy <- struct{}{}:
@@ -243,20 +250,20 @@ func (b *Bot) answer(m *discordgo.Message, threadID string) {
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(b.ctx, 3*time.Minute)
+	ctx, cancel := context.WithTimeout(withLogger(b.ctx, log), 3*time.Minute)
 	defer cancel()
 	stopTyping := b.keepTyping(ctx, threadID)
 	defer stopTyping()
 
 	history, err := b.history(threadID)
 	if err != nil {
-		slog.Error("reading thread history", "thread", threadID, "err", err)
+		log.Error("reading thread history", "err", err)
 		b.replyTo(m, threadID, "Sorry, I couldn't read this thread.")
 		return
 	}
 
 	if newThread && b.cfg.ThreadTitles {
-		go b.retitle(threadID, history)
+		go b.retitle(log, threadID, history)
 	}
 
 	start := time.Now()
@@ -264,7 +271,7 @@ func (b *Bot) answer(m *discordgo.Message, threadID string) {
 	ans, err := b.agent.Answer(ctx, m.GuildID, history)
 	done()
 	b.metrics.QuestionFinished(time.Since(start), ans.Tokens)
-	slog.Info("answered", "user", m.Author.ID, "thread", threadID,
+	log.Info("answered",
 		"duration_ms", time.Since(start).Milliseconds(), "tokens", ans.Tokens,
 		"limit", ans.Limit, "draft", ans.Draft != nil, "error", errString(err))
 	switch {
@@ -286,7 +293,7 @@ func (b *Bot) answer(m *discordgo.Message, threadID string) {
 		return
 	}
 	stopTyping()
-	b.sendAnswer(threadID, m.Author.ID, ans)
+	b.sendAnswer(log, threadID, m.Author.ID, ans)
 }
 
 // keepTyping shows the typing indicator until stopped (it lasts ~10s per call).
@@ -327,6 +334,27 @@ func (b *Bot) cleanContent(m *discordgo.Message) string {
 		content = strings.ReplaceAll(content, mention, "")
 	}
 	return strings.TrimSpace(content)
+}
+
+// authorName is the name the server shows for a message's author. Messages
+// fetched over REST (the whole thread history) carry no member object, so
+// their author's server nickname is looked up separately; without it a
+// "discordname [SteamName]" nickname would show as just the account name.
+func (b *Bot) authorName(guildID string, m *discordgo.Message) string {
+	if m.Member == nil && guildID != "" {
+		if nick, ok := b.nicks.get(guildID, m.Author.ID, b.lookupMember); ok && nick != "" {
+			return nick
+		}
+	}
+	return displayName(m)
+}
+
+// lookupMember fetches a member from the gateway state, or else over REST.
+func (b *Bot) lookupMember(guildID, userID string) (*discordgo.Member, error) {
+	if member, err := b.session.State.Member(guildID, userID); err == nil {
+		return member, nil
+	}
+	return b.session.GuildMember(guildID, userID)
 }
 
 func displayName(m *discordgo.Message) string {
@@ -391,7 +419,7 @@ func (b *Bot) history(threadID string) ([]Turn, error) {
 		if m.Author.Bot {
 			continue
 		}
-		turns = append(turns, Turn{Author: displayName(m), Text: withForwarded(b.cleanContent(m), m, b.channelName), Posted: m.Timestamp})
+		turns = append(turns, Turn{Author: b.authorName(thread.GuildID, m), Text: withForwarded(b.cleanContent(m), m, b.channelName), Posted: m.Timestamp})
 	}
 	return turns, nil
 }
@@ -452,7 +480,7 @@ func botMessageText(m *discordgo.Message) string {
 
 // sendAnswer posts the reply, split to Discord's message limit, with any issue
 // draft and its buttons attached to the last part.
-func (b *Bot) sendAnswer(threadID, userID string, ans Answer) {
+func (b *Bot) sendAnswer(log *slog.Logger, threadID, userID string, ans Answer) {
 	chunks := splitMessage(ans.Text, 1900)
 	if len(chunks) == 0 {
 		chunks = []string{""}
@@ -467,7 +495,7 @@ func (b *Bot) sendAnswer(threadID, userID string, ans Answer) {
 			continue
 		}
 		if _, err := b.session.ChannelMessageSendComplex(threadID, send); err != nil {
-			slog.Error("sending answer", "thread", threadID, "err", err)
+			log.Error("sending answer", "err", err)
 			return
 		}
 	}

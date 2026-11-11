@@ -83,20 +83,20 @@ func cleanTitle(s string) string {
 
 // retitle renames a thread the bot just started. It runs alongside the
 // answer, and failures only leave the original name.
-func (b *Bot) retitle(threadID string, history []Turn) {
+func (b *Bot) retitle(log *slog.Logger, threadID string, history []Turn) {
 	ctx, cancel := context.WithTimeout(b.ctx, 30*time.Second)
 	defer cancel()
 	title, err := b.agent.Title(ctx, history)
 	if err != nil {
-		slog.Warn("writing thread title", "thread", threadID, "err", err)
+		log.Warn("writing thread title", "err", err)
 		return
 	}
 	if title == "" {
 		return
 	}
 	if _, err := b.session.ChannelEdit(threadID, &discordgo.ChannelEdit{Name: title}, discordgo.WithContext(ctx)); err != nil {
-		slog.Warn("renaming thread", "thread", threadID, "err", err)
+		log.Warn("renaming thread", "err", err)
 		return
 	}
-	slog.Info("renamed thread", "thread", threadID, "title", title)
+	log.Info("renamed thread", "title", title)
 }

@@ -518,6 +518,23 @@ from the logs. A question that hits a limit logs a warning saying which one.
 The token limits count cached tokens too, so they bound size and cost
 conservatively.
 
+## Logs
+
+Logs are JSON lines on stderr. Every line logged while answering a question
+(`model response`, `tool call`, `renamed thread`, `answered`, and any errors)
+carries the same three fields, so one request's lines can be pulled out
+together:
+
+- `message`: the ID of the Discord message that asked. For an `/ask`
+  question it is the bot's response message, which shows the question.
+- `thread`: the thread the answer went to. Filter on it to see a whole
+  conversation.
+- `user`: the asker's Discord user ID.
+
+A message link is `https://discord.com/channels/<guild>/<thread>/<message>`
+for a follow-up in a thread. For the question that started a thread, the
+message lives in the parent channel and shares the thread's ID.
+
 ## Metrics and dashboard
 
 Prometheus metrics are served on `METRICS_ADDR` (`:9090`), a separate port

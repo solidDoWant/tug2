@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -201,5 +202,38 @@ func TestAgentToolsSeeAsker(t *testing.T) {
 	}
 	if len(askers) == 0 || askers[0] != "discordtwo [TestPlayerBeta]" {
 		t.Errorf("tools saw askers %q", askers)
+	}
+}
+
+// TestAgentLogsCarryRequest checks that every line logged while answering
+// carries the request's attributes, so one question's lines can be found.
+func TestAgentLogsCarryRequest(t *testing.T) {
+	model := &fakeModel{inputTokens: 10}
+	agent, _ := newTestAgent(t, model, &Config{Model: "fake", Effort: "low", MaxTokens: 1000, MaxToolRounds: 2})
+
+	var buf strings.Builder
+	log := slog.New(slog.NewJSONHandler(&buf, nil)).With("message", "1570182411365388421", "thread", "1570182411365388422")
+	if _, err := agent.Answer(withLogger(context.Background(), log), "1", []Turn{{Author: "TestUserOne", Text: "q"}}); err != nil {
+		t.Fatal(err)
+	}
+	lines := strings.Split(strings.TrimSpace(buf.String()), "\n")
+	var tools, models int
+	for _, line := range lines {
+		var rec map[string]any
+		if err := json.Unmarshal([]byte(line), &rec); err != nil {
+			t.Fatalf("%q: %v", line, err)
+		}
+		if rec["message"] != "1570182411365388421" || rec["thread"] != "1570182411365388422" {
+			t.Errorf("line without the request's attributes: %s", line)
+		}
+		switch rec["msg"] {
+		case "tool call":
+			tools++
+		case "model response":
+			models++
+		}
+	}
+	if tools == 0 || models == 0 {
+		t.Errorf("logged %d tool calls and %d model responses:\n%s", tools, models, buf.String())
 	}
 }
