@@ -175,14 +175,14 @@ func clampPage(limit, offset int) (int, int) {
 
 func (ts *Toolset) addStatsTools(serverProp map[string]any, defaultServer string, stats *StatsClient) {
 	ts.add("find_players",
-		"Search players by in-game name (case-insensitive substring of their most recent name). "+
+		"Search players by name (case-insensitive substring of their most recent name). A player's in-game name is their Steam profile name, so search Steam names here. "+
 			"Use this to turn a name into a steam_id before calling get_player. Returns up to 10 matches per name searched, with their headline stats. "+
 			"Set me=true instead of name to look up the asking user: it searches their Discord display name whole and in parts, "+
 			"because many people put their Steam name in brackets after their Discord name (\"discordname [SteamName]\"). "+
 			"Brackets can also hold a clan tag or be part of the name, so check which part each player matched before assuming. "+
 			"A player who has never had a name recorded cannot be found this way.",
 		map[string]any{
-			"name":   prop("string", "Part of the player's in-game name. Omit when me is true."),
+			"name":   prop("string", "Part of the player's Steam (in-game) name. Omit when me is true."),
 			"me":     prop("boolean", "True to search for the asking user by their Discord display name and its parts."),
 			"server": serverProp,
 		}, nil,
