@@ -49,7 +49,16 @@ func run(ctx context.Context) error {
 		return err
 	}
 	channels := &DiscordChannels{session: session, botChannelID: cfg.ChannelID, descriptions: cfg.ChannelDescriptions, refreshMember: true}
-	tools := NewToolset(cfg, NewStatsClient(cfg.Servers), issues, channels)
+	var db statsDB
+	if cfg.StatsDBURL != "" {
+		pg, err := NewPostgresStatsDB(cfg.StatsDBURL)
+		if err != nil {
+			return err
+		}
+		defer pg.Close()
+		db = pg
+	}
+	tools := NewToolset(cfg, NewStatsClient(cfg.Servers), issues, channels, db)
 	agent := NewAgent(cfg, tools, issues != nil, metrics)
 
 	checkCtx, cancelCheck := context.WithTimeout(ctx, 30*time.Second)
@@ -66,7 +75,7 @@ func run(ctx context.Context) error {
 	defer bot.Close()
 
 	slog.Info("started", "model", cfg.Model, "effort", cfg.Effort, "servers", cfg.ServerOrder,
-		"channel", cfg.ChannelID, "issues", issues != nil,
+		"channel", cfg.ChannelID, "issues", issues != nil, "query_stats", cfg.statsDBServers(),
 		"channel_descriptions", len(cfg.ChannelDescriptions), "user_limit_overrides", len(cfg.UserLimits))
 
 	// Probes: liveness is the process; readiness is the Discord gateway session.

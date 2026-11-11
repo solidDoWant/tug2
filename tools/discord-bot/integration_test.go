@@ -26,7 +26,7 @@ func TestToolsAgainstStatsAPI(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ts := NewToolset(cfg, NewStatsClient(cfg.Servers), nil, nil)
+	ts := NewToolset(cfg, NewStatsClient(cfg.Servers), nil, nil, nil)
 
 	calls := []struct {
 		tool, input, want string

@@ -117,7 +117,7 @@ func TestSearchTool(t *testing.T) {
 	readable := []ReadableChannel{{Name: "main-ingame", ID: "11"}, {Name: "changelog", ID: "12"}}
 	src := &fakeChannels{readable: readable}
 	cfg := &Config{Servers: map[string]GameServer{}}
-	ts := NewToolset(cfg, NewStatsClient(cfg.Servers), nil, src)
+	ts := NewToolset(cfg, NewStatsClient(cfg.Servers), nil, src, nil)
 	tc := &toolContext{guildID: "42"}
 	run := func(input string) error {
 		_, err := ts.Run(context.Background(), tc, "search_channels", []byte(input))

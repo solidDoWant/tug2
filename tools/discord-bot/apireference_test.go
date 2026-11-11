@@ -21,7 +21,7 @@ func TestAPIReferenceTool(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ts := NewToolset(cfg, NewStatsClient(cfg.Servers), nil, nil)
+	ts := NewToolset(cfg, NewStatsClient(cfg.Servers), nil, nil, nil)
 	out, err := ts.Run(context.Background(), &toolContext{}, "api_reference", json.RawMessage(`{}`))
 	if err != nil {
 		t.Fatal(err)
@@ -40,7 +40,7 @@ func TestAPIReferenceTool(t *testing.T) {
 	// No public URL anywhere: the tool is not offered.
 	t.Setenv("SERVERS", `[{"name":"main","stats_api_url":"http://internal"}]`)
 	cfg, _ = ParseConfig()
-	if _, err := NewToolset(cfg, NewStatsClient(cfg.Servers), nil, nil).Run(context.Background(), &toolContext{}, "api_reference", json.RawMessage(`{}`)); err == nil {
+	if _, err := NewToolset(cfg, NewStatsClient(cfg.Servers), nil, nil, nil).Run(context.Background(), &toolContext{}, "api_reference", json.RawMessage(`{}`)); err == nil {
 		t.Error("api_reference offered without any public URL")
 	}
 

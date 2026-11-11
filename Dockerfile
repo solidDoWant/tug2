@@ -230,6 +230,9 @@ RUN --mount=type=bind,source=./plugins/sourcemod,target=/plugin-source \
     /sourcemod/addons/sourcemod/scripting/spcomp --include=/plugin-source/scripting/include  /plugin-source/scripting/DatabaseMigrator.sp -o /insurgency/addons/sourcemod/plugins/DatabaseMigrator.smx && \
     mkdir -p /insurgency/addons/sourcemod/configs && \
     cp /plugin-source/configs/database-migrations.cfg /insurgency/addons/sourcemod/configs/ && \
+    # Grants for the Discord bot's read-only SQL role; not tied to any one plugin
+    mkdir -p /insurgency/addons/sourcemod/configs/sql-init-scripts/pgsql && \
+    cp /plugin-source/configs/sql-init-scripts/pgsql/discord_bot_grants.sql /insurgency/addons/sourcemod/configs/sql-init-scripts/pgsql/discord_bot_grants.sql && \
     # Fixup file permissions
     find /insurgency -type d -exec chmod 755 {} \; && \
     find /insurgency -type f -exec chmod 644 {} \;

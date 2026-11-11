@@ -29,6 +29,10 @@ type GameServer struct {
 	// QueryAddress is the game server's host:port for A2S queries (the game
 	// port; Source answers queries on it). Empty disables live status for it.
 	QueryAddress string `json:"query_address"`
+	// StatsDBSchema is the Postgres schema holding this server's stats tables
+	// in the STATS_DB_URL database, for the query_stats tool. Empty leaves the
+	// server out of query_stats.
+	StatsDBSchema string `json:"stats_db_schema"`
 }
 
 // UserLimit overrides the default limits for one Discord user. A nil field
@@ -46,6 +50,11 @@ type Config struct {
 	// ChannelID is the one channel the bot answers @mentions in. Follow-ups in
 	// the threads it starts there need no mention.
 	ChannelID string
+
+	// StatsDBURL is the connection string for read-only SQL access to the
+	// stats database (query_stats). Empty disables the tool. Unset parts come
+	// from the libpq PG* environment variables.
+	StatsDBURL string
 
 	// Servers is keyed by GameServer.Name; ServerOrder keeps the configured
 	// order for prompts and tool enums, and its first entry is the default.
@@ -168,6 +177,7 @@ func ParseConfig() (*Config, error) {
 		BugLabel:     getEnv("GITHUB_BUG_LABEL", "bug"),
 		FeatureLabel: getEnv("GITHUB_FEATURE_LABEL", "enhancement"),
 		HealthAddr:   getEnv("HEALTH_ADDR", ":8080"),
+		StatsDBURL:   getEnv("STATS_DB_URL", ""),
 		MetricsAddr:  getEnv("METRICS_ADDR", ":9090"),
 		Servers:      map[string]GameServer{},
 	}
@@ -231,6 +241,7 @@ func ParseConfig() (*Config, error) {
 			s.Name = strings.ToLower(strings.TrimSpace(s.Name))
 			s.StatsAPIURL = strings.TrimRight(s.StatsAPIURL, "/")
 			s.PublicStatsAPIURL = strings.TrimRight(strings.TrimSpace(s.PublicStatsAPIURL), "/")
+			s.StatsDBSchema = strings.TrimSpace(s.StatsDBSchema)
 			switch {
 			case s.Name == "":
 				errs = append(errs, errors.New("SERVERS: every server needs a name"))
@@ -485,6 +496,21 @@ func (c *Config) statsServers() []string {
 	var out []string
 	for _, name := range c.ServerOrder {
 		if c.Servers[name].StatsAPIURL != "" {
+			out = append(out, name)
+		}
+	}
+	return out
+}
+
+// statsDBServers are the servers query_stats can read: those with a stats
+// schema, when the database is configured at all.
+func (c *Config) statsDBServers() []string {
+	var out []string
+	if c.StatsDBURL == "" {
+		return nil
+	}
+	for _, name := range c.ServerOrder {
+		if c.Servers[name].StatsDBSchema != "" {
 			out = append(out, name)
 		}
 	}

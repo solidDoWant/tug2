@@ -59,7 +59,7 @@ func TestFindPlayersMe(t *testing.T) {
 		"76561198000000002": "[TAG] TestPlayerGamma",
 	}, &searched)
 	cfg := &Config{Servers: map[string]GameServer{"main": {Name: "main", StatsAPIURL: "unused"}}, ServerOrder: []string{"main"}}
-	ts := NewToolset(cfg, stats, nil, nil)
+	ts := NewToolset(cfg, stats, nil, nil, nil)
 	run := func(asker, input string) (any, error) {
 		searched = nil
 		return ts.Run(context.Background(), &toolContext{asker: asker}, "find_players", json.RawMessage(input))

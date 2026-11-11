@@ -12,7 +12,9 @@ the reporter to press **Confirm**.
   from each server's [stats-api](../stats-api), including lookups by in-game
   name ("how's TestPlayerAlpha doing?", "top 5 by K/D on test"). "My stats"
   searches the asker's Discord display name whole and in parts, so a Steam
-  name in brackets ("discordname [SteamName]") is found too.
+  name in brackets ("discordname [SteamName]") is found too. For anything the
+  stats tools don't cover (averages, ranks, comparisons, filters), the model
+  can write its own read-only SQL; see [SQL access](#sql-access).
 - **Live server state:** map, players (names, scores, time connected), round
   number, objective progress, and whether the map vote is up. This comes from
   the Source server query (A2S) on the game port, so it needs no RCON password.
@@ -291,6 +293,50 @@ description is given. A description helps the model pick the right channel:
 
 Pass it inline or as a file with `CHANNEL_DESCRIPTIONS_FILE`.
 
+## SQL access
+
+With `STATS_DB_URL` set, the `query_stats` tool lets the model run its own
+`SELECT` against a read replica of the stats database, in the schema each
+server's `stats_db_schema` names. The other stats tools stay the preferred
+path; this covers the questions nobody wrote an endpoint for.
+
+Nothing relies on the model behaving. The limits are enforced by the database
+and the bot:
+
+- **A role that can only read the stats tables.** The `discord-bot` role is
+  created by the infra repo with a low `CONNECTION LIMIT`, outside
+  `pg_read_all_data`. Each game server grants it `SELECT` on an explicit list
+  of tables in its own schema, and revokes everything else there, on every
+  start: [`discord_bot_grants.sql`](../../plugins/sourcemod/configs/sql-init-scripts/pgsql/discord_bot_grants.sql),
+  run last by DatabaseMigrator. A new table is unreadable until it is added to
+  that list. Never add `connection_log`, which holds IP addresses. Every
+  listed table must also be in `queryableTables` and described in
+  `statsSchemaDoc` (`statsdb_schema.go`); `TestQueryableTables` checks this.
+  Grants reach a server's schema with that server's next rollout.
+- **Each query** runs in its own `READ ONLY` transaction that sets a 3-second
+  `statement_timeout`, `lock_timeout` and `search_path` with `SET LOCAL`, and
+  is always rolled back, which also undoes any setting the query changed. The
+  connection is then reset with `DISCARD ALL`, or closed if anything failed.
+- **One statement only:** queries go over the extended protocol, which refuses
+  several statements, wrapped in a subquery with a `LIMIT`. The bot returns at
+  most 200 rows and about 40,000 characters, and drops the connection rather
+  than read further. `set_config` is refused outright, since it could raise
+  `work_mem` within the query.
+- The per-question tool and token limits apply as for every other tool.
+
+Connection settings beyond `STATS_DB_URL` come from the standard libpq
+variables (`PGHOST`, `PGSSLCERT`, ...). Client certificates are re-read from
+disk when they change, so rotation needs no restart.
+
+The guards have an integration test against a real Postgres. Point it at a
+throwaway server, as it creates and drops its own roles and tables:
+
+```sh
+docker run -d --rm --name statsdb-test -e POSTGRES_PASSWORD=admin -p 127.0.0.1:15499:5432 postgres:18
+STATSDB_TEST_ADMIN_URL="postgres://postgres:admin@127.0.0.1:15499/postgres?sslmode=disable" go test -run TestPostgresStatsDB ./...
+docker rm -f statsdb-test
+```
+
 ## Deployment: run exactly one replica
 
 Run **one** replica, and in Kubernetes use the `Recreate` strategy rather
@@ -343,6 +389,7 @@ liveness probe at `/livez` and readiness at `/readyz` on `HEALTH_ADDR`.
 | `MAX_CONCURRENT_QUESTIONS`      | `4`                | Questions answered at once across everyone; others wait. Each user also gets one question at a time.                |
 | `USER_LIMITS` / `_FILE`         | _(empty)_          | Per-user overrides of the two limits above; see [Per-user limits](#per-user-limits).                                |
 | `CHANNEL_DESCRIPTIONS` / `_FILE` | _(empty)_         | Optional descriptions of channels for the model; see [Reading other channels](#reading-other-channels).              |
+| `STATS_DB_URL`                  | _(empty)_          | Read-only Postgres connection string for `query_stats`; see [SQL access](#sql-access). Empty disables the tool.     |
 | `A2S_TIMEOUT_MS`                | `3000`             | Timeout for server queries.                                                                                         |
 | `HEALTH_ADDR`                   | `:8080`            | Serves `/livez` (process up) and `/readyz` (connected to Discord).                                                  |
 | `METRICS_ADDR`                  | `:9090`            | Serves Prometheus `/metrics`; see [Metrics and dashboard](#metrics-and-dashboard).                                  |
@@ -356,14 +403,16 @@ liveness probe at `/livez` and readiness at `/readyz` on `HEALTH_ADDR`.
     "description": "the main public server",
     "stats_api_url": "http://stats-api-main.insurgency.svc",
     "public_stats_api_url": "https://stats.example.com",
-    "query_address": "game.example.com:27000"
+    "query_address": "game.example.com:27000",
+    "stats_db_schema": "public"
   },
   {
     "name": "test",
     "description": "the test server, where changes are tried before main",
     "stats_api_url": "http://stats-api-test.insurgency.svc",
     "public_stats_api_url": "https://test-stats.example.com",
-    "query_address": "game.example.com:27001"
+    "query_address": "game.example.com:27001",
+    "stats_db_schema": "insurgency-test"
   }
 ]
 ```
@@ -377,6 +426,8 @@ liveness probe at `/livez` and readiness at `/readyz` on `HEALTH_ADDR`.
 - Leave `stats_api_url` or `query_address` empty to turn off stats or live
   status for a server. `query_address` is the game port: main is 27000 and
   test is 27001, not Source's default 27015.
+- `stats_db_schema` is the server's schema in the `STATS_DB_URL` database, for
+  `query_stats`. Leave it out to keep that server out of SQL access.
 
 All configuration errors are reported together at startup.
 

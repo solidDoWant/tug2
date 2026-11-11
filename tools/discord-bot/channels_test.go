@@ -239,7 +239,7 @@ func TestChannelTools(t *testing.T) {
 		fakeReader: fakeReader{msgs: []*discordgo.Message{msgAt("5", time.Now(), "Update 0.0.112")}},
 	}
 	cfg := &Config{Servers: map[string]GameServer{}}
-	ts := NewToolset(cfg, NewStatsClient(cfg.Servers), nil, src)
+	ts := NewToolset(cfg, NewStatsClient(cfg.Servers), nil, src, nil)
 	tc := &toolContext{guildID: "42"}
 
 	out, err := ts.Run(context.Background(), tc, "list_channels", []byte(`{}`))
