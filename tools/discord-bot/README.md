@@ -153,7 +153,7 @@ permissions. Discord updates the existing bot in place.
 1. Copy the bot channel's ID (User Settings → Advanced → Developer Mode, then
    right-click the channel → **Copy Channel ID**) for `DISCORD_CHANNEL_ID`.
 2. Start the bot and check its log:
-   - `registered slash commands`: `/ask` is available. A warning that mentions
+   - `registered slash commands`: `/ask` and `/resetlimits` are available. A warning that mentions
      `applications.commands` means the scope is missing; re-invite with it.
    - `readable channels`: exactly which channels the model can read.
 3. Optionally, limit where `/ask` shows in the `/` menu: Server Settings →
@@ -253,6 +253,20 @@ file with `USER_LIMITS_FILE` (e.g. a mounted ConfigMap). Changes take effect
 on restart. Counts are kept in memory, so a restart also resets them.
 Everyone, including users with no limit, is still answered one question at
 a time and shares `MAX_CONCURRENT_QUESTIONS`.
+
+Limits are only ever per person; there is no shared question or issue limit.
+A user who reaches one is told that it applies only to them, what it is,
+and roughly when they can go again, and the bot logs `rate limited` with their ID. The
+model is told the default limits, so it can answer questions about them.
+
+For a one-off, `/resetlimits user: @someone` clears that user's recent
+questions and issues, giving them their full limits back. It doesn't change
+their standing limits; use `USER_LIMITS` for that. The reply is visible only
+to whoever ran it, and the bot logs `limits reset` with the admin's and the
+user's IDs. By default only members with Manage Server can use it; to give
+it to a bot admin role instead, go to Server Settings → **Integrations** →
+the bot → `/resetlimits`. Discord enforces that before the bot sees the
+command.
 
 ## Reading other channels
 

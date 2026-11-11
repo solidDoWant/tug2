@@ -222,7 +222,9 @@ func (b *Bot) answer(m *discordgo.Message, threadID string) {
 	log := slog.With("message", m.ID, "user", m.Author.ID)
 	if ok, wait := b.limits.AllowQuestion(m.Author.ID); !ok {
 		b.metrics.Question(outcomeRateLimited)
-		b.replyTo(m, threadID, fmt.Sprintf("You've hit the question limit. Try again in %s.", wait.Round(time.Minute)))
+		limit, _ := b.limits.limitsFor(m.Author.ID)
+		log.Info("rate limited", "kind", "question", "limit", limit, "retry_in", wait.Round(time.Second).String())
+		b.replyTo(m, threadID, questionLimitMessage(limit, wait))
 		return
 	}
 
@@ -575,8 +577,13 @@ func draftButtons(kind IssueKind, userID string, disabled bool) []discordgo.Mess
 }
 
 func (b *Bot) onInteraction(s *discordgo.Session, i *discordgo.InteractionCreate) {
-	if i.Type == discordgo.InteractionApplicationCommand && i.ApplicationCommandData().Name == askCommand {
-		b.onAsk(s, i)
+	if i.Type == discordgo.InteractionApplicationCommand {
+		switch i.ApplicationCommandData().Name {
+		case askCommand:
+			b.onAsk(s, i)
+		case resetLimitsCommand:
+			b.onResetLimits(s, i)
+		}
 		return
 	}
 	if i.Type != discordgo.InteractionMessageComponent || i.Message == nil {
@@ -615,7 +622,9 @@ func (b *Bot) onInteraction(s *discordgo.Session, i *discordgo.InteractionCreate
 	}
 	if ok, wait := b.limits.AllowIssue(user.ID); !ok {
 		b.metrics.Issue(draft.Kind, "rate_limited")
-		b.ephemeral(i, fmt.Sprintf("You've filed the maximum number of issues for today. Try again in %s.", wait.Round(time.Minute)))
+		_, limit := b.limits.limitsFor(user.ID)
+		slog.Info("rate limited", "kind", "issue", "user", user.ID, "limit", limit, "retry_in", wait.Round(time.Second).String())
+		b.ephemeral(i, issueLimitMessage(limit, wait))
 		return
 	}
 

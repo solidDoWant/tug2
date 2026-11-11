@@ -37,7 +37,7 @@ var askCommandDef = &discordgo.ApplicationCommand{
 	}},
 }
 
-// registerCommands creates /ask in the guild that holds the bot channel, once
+// registerCommands creates /ask and /resetlimits in the guild that holds the bot channel, once
 // per process. Guild commands appear immediately; a bulk overwrite is
 // idempotent and removes commands the bot no longer has.
 func (b *Bot) registerCommands(s *discordgo.Session, guildID string) {
@@ -57,14 +57,14 @@ func (b *Bot) registerCommands(s *discordgo.Session, guildID string) {
 	if s.State.Application != nil && s.State.Application.ID != "" {
 		appID = s.State.Application.ID
 	}
-	if _, err := s.ApplicationCommandBulkOverwrite(appID, guildID, []*discordgo.ApplicationCommand{askCommandDef}); err != nil {
-		slog.Warn("registering /ask (was the bot invited with the applications.commands scope?)", "guild", guildID, "err", err)
+	if _, err := s.ApplicationCommandBulkOverwrite(appID, guildID, []*discordgo.ApplicationCommand{askCommandDef, resetLimitsCommandDef}); err != nil {
+		slog.Warn("registering slash commands (was the bot invited with the applications.commands scope?)", "guild", guildID, "err", err)
 		b.mu.Lock()
 		b.commandsRegistered = false
 		b.mu.Unlock()
 		return
 	}
-	slog.Info("registered slash commands", "guild", guildID, "commands", []string{"/" + askCommand})
+	slog.Info("registered slash commands", "guild", guildID, "commands", []string{"/" + askCommand, "/" + resetLimitsCommand})
 }
 
 // onAsk handles /ask.

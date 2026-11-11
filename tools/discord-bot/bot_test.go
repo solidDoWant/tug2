@@ -337,3 +337,70 @@ func TestRoute(t *testing.T) {
 		})
 	}
 }
+
+func TestRateLimiterReset(t *testing.T) {
+	now := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	r := NewRateLimiter(1, 1, nil)
+	r.now = func() time.Time { return now }
+	r.AllowQuestion("u")
+	r.AllowIssue("u")
+	r.AllowQuestion("other")
+	if ok, _ := r.AllowQuestion("u"); ok {
+		t.Fatal("limit not enforced before the reset")
+	}
+	if q, i := r.Reset("u"); q != 1 || i != 1 {
+		t.Errorf("Reset cleared %d questions and %d issues, want 1 and 1", q, i)
+	}
+	if ok, _ := r.AllowQuestion("u"); !ok {
+		t.Error("question still limited after the reset")
+	}
+	if ok, _ := r.AllowIssue("u"); !ok {
+		t.Error("issue still limited after the reset")
+	}
+	if ok, _ := r.AllowQuestion("other"); ok {
+		t.Error("resetting one user reset another")
+	}
+	// Expired events aren't counted as cleared.
+	now = now.Add(2 * time.Hour)
+	if q, i := r.Reset("u"); q != 0 || i != 1 {
+		t.Errorf("after the hour: cleared %d questions and %d issues, want 0 and 1", q, i)
+	}
+}
+
+func TestLimitMessages(t *testing.T) {
+	for d, want := range map[time.Duration]string{
+		20 * time.Second:               "less than a minute",
+		time.Minute + 10*time.Second:   "about 1 minute",
+		47*time.Minute + 2*time.Second: "about 47 minutes",
+		89 * time.Minute:               "about 89 minutes",
+		23*time.Hour + 20*time.Minute:  "about 23 hours",
+	} {
+		if got := aboutDuration(d); got != want {
+			t.Errorf("aboutDuration(%v) = %q, want %q", d, got, want)
+		}
+	}
+	got := questionLimitMessage(20, 47*time.Minute)
+	if want := "You've asked 20 questions in the last hour, which is your limit. The limit is per person, so others can still ask. You can ask again in about 47 minutes."; got != want {
+		t.Errorf("question message = %q", got)
+	}
+	if got := issueLimitMessage(1, 3*time.Hour); !strings.Contains(got, "filed 1 issue in the last 24 hours") || !strings.Contains(got, "about 3 hours") {
+		t.Errorf("issue message = %q", got)
+	}
+	if got := resetLimitsReply("42", 3, 0); got != "Reset <@42>'s limits: cleared 3 questions from the last hour and 0 issues from the last 24 hours. Standing limits (USER_LIMITS) are unchanged." {
+		t.Errorf("reset reply = %q", got)
+	}
+}
+
+func TestUsageLimitsPrompt(t *testing.T) {
+	cfg := &Config{QuestionsPerHour: 20, IssuesPerDay: 5}
+	if got := usageLimitsPrompt(cfg, true); !strings.Contains(got, "each person may ask 20 questions per hour and 5 filed issues per 24 hours") ||
+		!strings.Contains(got, "per person") {
+		t.Errorf("prompt = %q", got)
+	}
+	if got := usageLimitsPrompt(cfg, false); strings.Contains(got, "issue") && strings.Contains(got, "filed issues per") {
+		t.Errorf("issues off but mentioned: %q", got)
+	}
+	if got := usageLimitsPrompt(&Config{}, true); got != "" {
+		t.Errorf("no limits: %q", got)
+	}
+}
