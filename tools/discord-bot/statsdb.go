@@ -43,9 +43,11 @@ const (
 	statsDBMaxConns = 2
 )
 
-// statsDB runs one read-only query in a server's schema.
+// statsDB runs one read-only query in a server's schema, and lists the tables
+// it can read there.
 type statsDB interface {
 	Query(ctx context.Context, schema, sql string) (*QueryResult, error)
+	Schema(ctx context.Context, schema string) ([]schemaTable, error)
 }
 
 // QueryResult is what query_stats returns to the model.

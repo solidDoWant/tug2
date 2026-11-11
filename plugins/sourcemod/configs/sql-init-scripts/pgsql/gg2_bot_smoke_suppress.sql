@@ -35,3 +35,12 @@ CREATE INDEX IF NOT EXISTS idx_smoke_warning_seen_last_shown ON smoke_warning_se
 
 -- Show the warning to everyone again, e.g. after changing what the mechanic does
 -- TRUNCATE smoke_warning_seen;
+
+-- Descriptions for the Discord bot's query_stats tool, which shows the comments of the tables it can
+-- read to the model writing SQL against them (tools/discord-bot). Keep them accurate and short, and
+-- describe every column: what it counts, its units, and any trap in how it joins or is stored.
+COMMENT ON TABLE smoke_warning_seen IS 'How often each player was shown the hint that bots may fire blind into smoke.';
+COMMENT ON COLUMN smoke_warning_seen.steam_id IS 'SteamID64 as bigint.';
+COMMENT ON COLUMN smoke_warning_seen.shown_count IS 'Times shown; restarts at 1 after a long gap.';
+COMMENT ON COLUMN smoke_warning_seen.first_shown_at IS 'First shown (UTC).';
+COMMENT ON COLUMN smoke_warning_seen.last_shown_at IS 'Last shown (UTC).';

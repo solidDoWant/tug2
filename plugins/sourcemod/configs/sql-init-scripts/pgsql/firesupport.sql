@@ -72,3 +72,12 @@ CREATE INDEX IF NOT EXISTS idx_fire_support_arty_thrown ON fire_support(arty_thr
 -- FROM fire_support
 -- WHERE arty_thrown > 100
 -- ORDER BY arty_thrown DESC;
+
+-- Descriptions for the Discord bot's query_stats tool, which shows the comments of the tables it can
+-- read to the model writing SQL against them (tools/discord-bot). Keep them accurate and short, and
+-- describe every column: what it counts, its units, and any trap in how it joins or is stored.
+COMMENT ON TABLE fire_support IS 'Artillery (fire support) calls per player.';
+COMMENT ON COLUMN fire_support.steamid IS 'SteamID64 as text (player_stats.steam_id). Note the column name has no underscore.';
+COMMENT ON COLUMN fire_support.arty_thrown IS 'Fire support calls made.';
+COMMENT ON COLUMN fire_support.last_used IS 'Last call as Unix seconds (use to_timestamp); 0 when unknown.';
+COMMENT ON COLUMN fire_support.created_at IS 'First call (UTC).';

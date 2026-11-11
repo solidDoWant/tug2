@@ -309,10 +309,18 @@ and the bot:
   of tables in its own schema, and revokes everything else there, on every
   start: [`discord_bot_grants.sql`](../../plugins/sourcemod/configs/sql-init-scripts/pgsql/discord_bot_grants.sql),
   run last by DatabaseMigrator. A new table is unreadable until it is added to
-  that list. Never add `connection_log`, which holds IP addresses. Every
-  listed table must also be in `queryableTables` and described in
-  `statsSchemaDoc` (`statsdb_schema.go`); `TestQueryableTables` checks this.
+  that list. Never add `connection_log`, which holds IP addresses.
   Grants reach a server's schema with that server's next rollout.
+- **Table descriptions come from the database.** The tool description lists
+  the tables the role can read on each server, with the `COMMENT`s the plugin
+  scripts put on them and their columns, so it follows the grants and the
+  schema with nothing to keep in step here. It is reloaded every 5 minutes and
+  replaced only when the text changes: the rendering is deterministic, so an
+  unchanged schema keeps the prompt cache warm. A failed reload keeps the last
+  good description. A table or column without a comment shows as
+  `(undocumented)` and logs a warning; `TestGrantedTablesHaveComments` and
+  `TestSchemaFromMigrations` (which runs both servers' real migrations) catch
+  that before it ships.
 - **Each query** runs in its own `READ ONLY` transaction that sets a 3-second
   `statement_timeout`, `lock_timeout` and `search_path` with `SET LOCAL`, and
   is always rolled back, which also undoes any setting the query changed. The
@@ -333,7 +341,7 @@ throwaway server, as it creates and drops its own roles and tables:
 
 ```sh
 docker run -d --rm --name statsdb-test -e POSTGRES_PASSWORD=admin -p 127.0.0.1:15499:5432 postgres:18
-STATSDB_TEST_ADMIN_URL="postgres://postgres:admin@127.0.0.1:15499/postgres?sslmode=disable" go test -run TestPostgresStatsDB ./...
+STATSDB_TEST_ADMIN_URL="postgres://postgres:admin@127.0.0.1:15499/postgres?sslmode=disable" go test -run 'TestPostgresStatsDB|TestSchemaFromMigrations' ./...
 docker rm -f statsdb-test
 ```
 

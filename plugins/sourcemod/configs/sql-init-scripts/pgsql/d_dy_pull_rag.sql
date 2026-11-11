@@ -23,3 +23,12 @@ CREATE TABLE IF NOT EXISTS player_drag_mode (
 
 -- Put everyone back on the server default
 -- TRUNCATE player_drag_mode;
+
+-- Descriptions for the Discord bot's query_stats tool, which shows the comments of the tables it can
+-- read to the model writing SQL against them (tools/discord-bot). Keep them accurate and short, and
+-- describe every column: what it counts, its units, and any trap in how it joins or is stored.
+COMMENT ON TABLE player_drag_mode IS 'Players who chose how dragging bodies works (!dragmode). Players who never chose have no row.';
+COMMENT ON COLUMN player_drag_mode.steam_id IS 'SteamID64 as bigint.';
+COMMENT ON COLUMN player_drag_mode.toggle_drag IS 'True for toggle mode, false for hold.';
+COMMENT ON COLUMN player_drag_mode.created_at IS 'First choice (UTC).';
+COMMENT ON COLUMN player_drag_mode.updated_at IS 'Last change (UTC).';

@@ -226,3 +226,27 @@ ON CONFLICT (id) DO UPDATE SET
 --   - Max 64 messages per table (enforced by plugin)
 --   - Messages are cached in-game and reloaded every 5 minutes
 --   - Partial indexes on 'enabled' for query optimization
+
+-- Descriptions for the Discord bot's query_stats tool, which shows the comments of the tables it can
+-- read to the model writing SQL against them (tools/discord-bot). Keep them accurate and short, and
+-- describe every column: what it counts, its units, and any trap in how it joins or is stored.
+COMMENT ON TABLE gg2_messages_rotating_player IS 'Chat tips the server rotates through for all players. Many messages are translation keys, not text.';
+COMMENT ON COLUMN gg2_messages_rotating_player.id IS 'Message key.';
+COMMENT ON COLUMN gg2_messages_rotating_player.message IS 'Text with {color} tags, or a translation key.';
+COMMENT ON COLUMN gg2_messages_rotating_player.enabled IS 'Whether the message is in rotation.';
+COMMENT ON COLUMN gg2_messages_rotating_player.created_at IS 'Added (UTC).';
+COMMENT ON COLUMN gg2_messages_rotating_player.updated_at IS 'Last change (UTC).';
+
+COMMENT ON TABLE gg2_messages_rotating_admin IS 'Chat tips the server rotates through for admins only.';
+COMMENT ON COLUMN gg2_messages_rotating_admin.id IS 'Message key.';
+COMMENT ON COLUMN gg2_messages_rotating_admin.message IS 'Text with {color} tags, or a translation key.';
+COMMENT ON COLUMN gg2_messages_rotating_admin.enabled IS 'Whether the message is in rotation.';
+COMMENT ON COLUMN gg2_messages_rotating_admin.created_at IS 'Added (UTC).';
+COMMENT ON COLUMN gg2_messages_rotating_admin.updated_at IS 'Last change (UTC).';
+
+COMMENT ON TABLE gg2_messages_join_player IS 'Messages shown to players when they join. Most are translation keys, not text.';
+COMMENT ON COLUMN gg2_messages_join_player.id IS 'Message key.';
+COMMENT ON COLUMN gg2_messages_join_player.message IS 'Text with {color} tags, or a translation key.';
+COMMENT ON COLUMN gg2_messages_join_player.enabled IS 'Whether the message is shown.';
+COMMENT ON COLUMN gg2_messages_join_player.created_at IS 'Added (UTC).';
+COMMENT ON COLUMN gg2_messages_join_player.updated_at IS 'Last change (UTC).';

@@ -4,8 +4,9 @@
 -- from every other table there.
 --
 -- Only list tables with nothing private in them. Never add connection_log: it holds players' IP
--- addresses. When adding a table, also document it in tools/discord-bot/statsdb_schema.go
--- (queryableTables and statsSchemaDoc); a test there checks the two lists match.
+-- addresses. The bot describes the tables it can read to the model from their COMMENTs, so give a
+-- table added here a COMMENT on it and on every column, in the plugin script that creates it.
+-- tools/discord-bot tests check both (TestGrantedTablesHaveComments, TestSchemaFromMigrations).
 --
 -- Runs as the table owner on every plugin load (DatabaseMigrator), so a new or re-created table
 -- is granted in the rollout that creates it. Kept in its own migration so a failure here can't

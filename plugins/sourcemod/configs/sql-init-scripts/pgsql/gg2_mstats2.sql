@@ -277,3 +277,53 @@ CREATE INDEX IF NOT EXISTS idx_win_loss_log_win ON win_loss_log(win);
 -- Clean up inactive players (not seen in 1 year)
 -- DELETE FROM player_stats
 -- WHERE updated_at < NOW() - INTERVAL '1 year';
+
+-- Descriptions for the Discord bot's query_stats tool, which shows the comments of the tables it can
+-- read to the model writing SQL against them (tools/discord-bot). Keep them accurate and short, and
+-- describe every column: what it counts, its units, and any trap in how it joins or is stored.
+COMMENT ON TABLE player_stats IS 'Lifetime stats, one row per player (humans only; bots are in bot_kills).';
+COMMENT ON COLUMN player_stats.steam_id IS 'SteamID64 as text. The player key in every table; some tables store it as bigint, so cast to join.';
+COMMENT ON COLUMN player_stats.name IS 'Latest Steam name (the name shown in game); NULL if never recorded.';
+COMMENT ON COLUMN player_stats.kills IS 'Kills of enemies (bots).';
+COMMENT ON COLUMN player_stats.deaths IS 'Deaths, from any cause.';
+COMMENT ON COLUMN player_stats.suicides IS 'Suicides.';
+COMMENT ON COLUMN player_stats.headshot_given IS 'Headshots landed on enemies.';
+COMMENT ON COLUMN player_stats.headshot_taken IS 'Headshots taken from enemies.';
+COMMENT ON COLUMN player_stats.suppressions IS 'Times the player suppressed an enemy.';
+COMMENT ON COLUMN player_stats.caps IS 'Objectives taken: control points captured plus caches destroyed.';
+COMMENT ON COLUMN player_stats.killstreak IS 'Best killstreak ever (a maximum, not a total).';
+COMMENT ON COLUMN player_stats.score IS 'In-game score earned, summed over all rounds.';
+COMMENT ON COLUMN player_stats.wins IS 'Rounds the player was in when the players won.';
+COMMENT ON COLUMN player_stats.losses IS 'Rounds the player was in when the players lost.';
+COMMENT ON COLUMN player_stats.created_at IS 'First seen (UTC).';
+COMMENT ON COLUMN player_stats.updated_at IS 'Last stats update, roughly last seen (UTC).';
+
+COMMENT ON TABLE weapon_stats IS 'Weapon names, keyed by weapon_id for player_kills and bot_kills.';
+COMMENT ON COLUMN weapon_stats.weapon_id IS 'Weapon key.';
+COMMENT ON COLUMN weapon_stats.weapon_name IS 'Name without the weapon_ prefix (ak74, m4a1). Explosives are named by projectile: rocket_rpg7, grenade_m67, grenade_c4.';
+COMMENT ON COLUMN weapon_stats.created_at IS 'When the weapon was first seen (UTC).';
+
+COMMENT ON TABLE player_kills IS 'Each player''s lifetime kills per weapon.';
+COMMENT ON COLUMN player_kills.steam_id IS 'SteamID64 as text (player_stats.steam_id).';
+COMMENT ON COLUMN player_kills.weapon_id IS 'weapon_stats.weapon_id.';
+COMMENT ON COLUMN player_kills.kill_count IS 'Kills with this weapon.';
+COMMENT ON COLUMN player_kills.created_at IS 'First kill with this weapon (UTC).';
+COMMENT ON COLUMN player_kills.updated_at IS 'Last update (UTC).';
+
+COMMENT ON TABLE bot_kills IS 'Kills by AI bots, per bot name and weapon. Bot names repeat across rounds, so a name is not one bot.';
+COMMENT ON COLUMN bot_kills.bot_name IS 'The bot''s in-game name.';
+COMMENT ON COLUMN bot_kills.weapon_id IS 'weapon_stats.weapon_id.';
+COMMENT ON COLUMN bot_kills.kill_count IS 'Kills with this weapon.';
+COMMENT ON COLUMN bot_kills.created_at IS 'First kill (UTC).';
+COMMENT ON COLUMN bot_kills.updated_at IS 'Last update (UTC).';
+
+COMMENT ON TABLE map_stats IS 'Map names, keyed by map_id for win_loss_log.';
+COMMENT ON COLUMN map_stats.map_id IS 'Map key.';
+COMMENT ON COLUMN map_stats.map_name IS 'Map name, as in the maps table.';
+COMMENT ON COLUMN map_stats.created_at IS 'When the map was first played (UTC).';
+
+COMMENT ON TABLE win_loss_log IS 'One row per round played.';
+COMMENT ON COLUMN win_loss_log.id IS 'Row key.';
+COMMENT ON COLUMN win_loss_log.map_id IS 'map_stats.map_id.';
+COMMENT ON COLUMN win_loss_log.win IS 'True when the players won the round.';
+COMMENT ON COLUMN win_loss_log.created_at IS 'When the round ended (UTC).';

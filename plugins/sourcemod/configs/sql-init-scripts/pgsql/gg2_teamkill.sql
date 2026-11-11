@@ -128,3 +128,23 @@ CREATE INDEX IF NOT EXISTS idx_player_tk_logs_created_at ON player_tk_logs(creat
 -- Clean up old teamkill records (older than 6 months)
 -- DELETE FROM player_tk_logs
 -- WHERE created_at < NOW() - INTERVAL '6 months';
+
+-- Descriptions for the Discord bot's query_stats tool, which shows the comments of the tables it can
+-- read to the model writing SQL against them (tools/discord-bot). Keep them accurate and short, and
+-- describe every column: what it counts, its units, and any trap in how it joins or is stored.
+COMMENT ON TABLE player_tks IS 'Team kill totals per player.';
+COMMENT ON COLUMN player_tks.steam_id IS 'SteamID64 as bigint: join with player_stats.steam_id = player_tks.steam_id::text.';
+COMMENT ON COLUMN player_tks.tk_given IS 'Team kills the player made.';
+COMMENT ON COLUMN player_tks.tk_taken IS 'Times the player was team killed.';
+COMMENT ON COLUMN player_tks.last_seen IS 'Last time the player connected (UTC).';
+COMMENT ON COLUMN player_tks.created_at IS 'First seen (UTC).';
+COMMENT ON COLUMN player_tks.updated_at IS 'Last update (UTC).';
+
+COMMENT ON TABLE player_tk_logs IS 'One row per team kill. Started later than the player_tks totals, so it holds fewer team kills than they count.';
+COMMENT ON COLUMN player_tk_logs.id IS 'Row key.';
+COMMENT ON COLUMN player_tk_logs.victim_steam_id IS 'SteamID64 as bigint of the player killed.';
+COMMENT ON COLUMN player_tk_logs.attacker_steam_id IS 'SteamID64 as bigint of the player who killed them.';
+COMMENT ON COLUMN player_tk_logs.forgiven IS 'True if the victim forgave the team kill.';
+COMMENT ON COLUMN player_tk_logs.weapon IS 'Weapon used, named as in weapon_stats.';
+COMMENT ON COLUMN player_tk_logs.created_at IS 'When the team kill happened (UTC).';
+COMMENT ON COLUMN player_tk_logs.updated_at IS 'Last update, e.g. when forgiven (UTC).';

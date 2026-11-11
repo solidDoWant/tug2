@@ -69,3 +69,13 @@ CREATE INDEX IF NOT EXISTS idx_medics_medic_time ON medics(medic_time);
 
 -- Unban a medic
 -- UPDATE medics SET banned = FALSE WHERE steamId = '76561198012345678';
+
+-- Descriptions for the Discord bot's query_stats tool, which shows the comments of the tables it can
+-- read to the model writing SQL against them (tools/discord-bot). Keep them accurate and short, and
+-- describe every column: what it counts, its units, and any trap in how it joins or is stored.
+COMMENT ON TABLE medics IS 'Time each player has spent playing medic.';
+COMMENT ON COLUMN medics.steamid IS 'SteamID64 as text (player_stats.steam_id). Note the column name has no underscore.';
+COMMENT ON COLUMN medics.banned IS 'Unused leftover; always false. Medic bans are kept elsewhere.';
+COMMENT ON COLUMN medics.medic_time IS 'Seconds played as medic.';
+COMMENT ON COLUMN medics.created_at IS 'First time as medic (UTC).';
+COMMENT ON COLUMN medics.updated_at IS 'Last update (UTC).';

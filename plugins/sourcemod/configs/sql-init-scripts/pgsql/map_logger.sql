@@ -50,3 +50,13 @@ CREATE INDEX IF NOT EXISTS idx_maps_play_time ON maps(play_time);
 -- SELECT SUM(play_time) as total_duration,
 --        EXTRACT(EPOCH FROM SUM(play_time)) / 3600.0 as total_hours
 -- FROM maps;
+
+-- Descriptions for the Discord bot's query_stats tool, which shows the comments of the tables it can
+-- read to the model writing SQL against them (tools/discord-bot). Keep them accurate and short, and
+-- describe every column: what it counts, its units, and any trap in how it joins or is stored.
+COMMENT ON TABLE maps IS 'Playtime per map. Join to map_stats on map_name.';
+COMMENT ON COLUMN maps.map_name IS 'Map name.';
+COMMENT ON COLUMN maps.play_time IS 'Total time played, added at each round end (time after the last round is not counted). query_stats returns intervals as seconds.';
+COMMENT ON COLUMN maps.last_start IS 'When the map or its current round last started (UTC).';
+COMMENT ON COLUMN maps.created_at IS 'First played (UTC).';
+COMMENT ON COLUMN maps.updated_at IS 'Last activity on the map (UTC).';

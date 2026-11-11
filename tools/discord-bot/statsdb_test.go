@@ -5,8 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
-	"regexp"
-	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -79,11 +77,18 @@ func jsonEqual(a, b any) bool {
 
 type fakeStatsDB struct {
 	schema, sql string
+	// tables is what Schema returns per schema; schemaErr fails it.
+	tables    map[string][]schemaTable
+	schemaErr error
 }
 
 func (f *fakeStatsDB) Query(_ context.Context, schema, sql string) (*QueryResult, error) {
 	f.schema, f.sql = schema, sql
 	return &QueryResult{Columns: []string{"x"}, Rows: [][]any{{1}}}, nil
+}
+
+func (f *fakeStatsDB) Schema(_ context.Context, schema string) ([]schemaTable, error) {
+	return f.tables[schema], f.schemaErr
 }
 
 func TestQueryStatsTool(t *testing.T) {
@@ -251,36 +256,4 @@ func TestPostgresStatsDB(t *testing.T) {
 func mustJSON(v any) string {
 	b, _ := json.Marshal(v)
 	return string(b)
-}
-
-// TestQueryableTables keeps the bot's view of the database in step with what
-// the game servers grant it: the same tables in discord_bot_grants.sql and
-// queryableTables, each documented for the model, and never connection_log.
-func TestQueryableTables(t *testing.T) {
-	sql, err := os.ReadFile("../../plugins/sourcemod/configs/sql-init-scripts/pgsql/discord_bot_grants.sql")
-	if err != nil {
-		t.Fatal(err)
-	}
-	list := regexp.MustCompile(`(?s)allowed text\[\] := ARRAY\[(.*?)\];`).FindSubmatch(sql)
-	if list == nil {
-		t.Fatal("no allowed table list in discord_bot_grants.sql")
-	}
-	var granted []string
-	for _, m := range regexp.MustCompile(`'([a-z0-9_]+)'`).FindAllSubmatch(list[1], -1) {
-		granted = append(granted, string(m[1]))
-	}
-	if !slices.Equal(slices.Sorted(slices.Values(granted)), slices.Sorted(slices.Values(queryableTables))) {
-		t.Errorf("discord_bot_grants.sql grants %v, but queryableTables is %v", granted, queryableTables)
-	}
-	for _, table := range queryableTables {
-		if table == "connection_log" {
-			t.Error("connection_log (IP addresses) must never be queryable")
-		}
-		if !regexp.MustCompile(`\b` + table + `\b`).MatchString(statsSchemaDoc) {
-			t.Errorf("table %s is granted but not described in statsSchemaDoc", table)
-		}
-	}
-	if strings.Contains(statsSchemaDoc, "connection_log") {
-		t.Error("statsSchemaDoc mentions connection_log")
-	}
 }

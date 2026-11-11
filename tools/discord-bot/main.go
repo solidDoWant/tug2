@@ -59,6 +59,7 @@ func run(ctx context.Context) error {
 		db = pg
 	}
 	tools := NewToolset(cfg, NewStatsClient(cfg.Servers), issues, channels, db)
+	tools.WatchQueryStatsDoc(ctx, schemaRefreshInterval)
 	agent := NewAgent(cfg, tools, issues != nil, metrics)
 
 	checkCtx, cancelCheck := context.WithTimeout(ctx, 30*time.Second)

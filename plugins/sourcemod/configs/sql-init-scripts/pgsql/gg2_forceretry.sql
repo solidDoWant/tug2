@@ -68,3 +68,13 @@ CREATE INDEX IF NOT EXISTS idx_players_smoke_cache_has_smoke ON players_smoke_ca
 -- Opted out AND missing the particle cache, i.e. smoke looks wrong for them by choice
 -- SELECT steam_id, updated_at
 -- FROM players_smoke_cache WHERE auto_retry_opt_out = TRUE AND has_smoke = FALSE;
+
+-- Descriptions for the Discord bot's query_stats tool, which shows the comments of the tables it can
+-- read to the model writing SQL against them (tools/discord-bot). Keep them accurate and short, and
+-- describe every column: what it counts, its units, and any trap in how it joins or is stored.
+COMMENT ON TABLE players_smoke_cache IS 'Whether each player has the custom smoke effects downloaded. New players are reconnected once so their game downloads them.';
+COMMENT ON COLUMN players_smoke_cache.steam_id IS 'SteamID64 as bigint.';
+COMMENT ON COLUMN players_smoke_cache.has_smoke IS 'True once the player has reconnected and should have the smoke effects.';
+COMMENT ON COLUMN players_smoke_cache.created_at IS 'First seen (UTC).';
+COMMENT ON COLUMN players_smoke_cache.updated_at IS 'Last update (UTC).';
+COMMENT ON COLUMN players_smoke_cache.auto_retry_opt_out IS 'True when the player turned off the automatic reconnect.';
