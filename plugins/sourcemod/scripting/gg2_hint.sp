@@ -6,9 +6,11 @@
 //
 // Sending rules, which are what stop the flicker:
 // - A message that isn't the winner is never sent.
-// - The winner is sent when it changes (key or text). An unchanged winner is re-sent at most every
-//   sm_hint_resend_interval seconds, to keep it on screen for as long as its owner keeps it current;
-//   producers that refresh every half second no longer redraw the box every half second.
+// - The winner is sent when it changes (key or text), including when a higher one lapses.
+// - An unchanged winner is re-sent only when its owner sends it again, and then at most every
+//   sm_hint_resend_interval seconds. So each message goes out no more often than its owner asks
+//   (health every 10s), and producers that refresh every half second no longer redraw the box
+//   every half second. The 0.2s tick only notices lapses; it never re-sends by itself.
 // - When nothing is current, the box is cleared once.
 
 #include <sourcemod>
@@ -61,7 +63,7 @@ public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max
 
 public void OnPluginStart()
 {
-    g_cvResend = CreateConVar("sm_hint_resend_interval", "1.0", "Seconds between re-sends of an unchanged hint, which keep it on screen while its owner keeps it current.", _, true, 0.2, true, 30.0);
+    g_cvResend = CreateConVar("sm_hint_resend_interval", "1.0", "Minimum seconds between re-sends of an unchanged hint when its owner sends it again.", _, true, 0.2, true, 30.0);
     g_cvDebug  = CreateConVar("sm_hint_debug", "0", "Log every hint sent and why.", _, true, 0.0, true, 1.0);
     AutoExecConfig(true, "gg2_hint");
 
@@ -103,7 +105,7 @@ public any Native_Set(Handle plugin, int numParams)
     g_hints[client][i].expires  = GetGameTime() + (duration > 0.0 ? duration : 0.1);
     g_hints[client][i].seq      = ++g_seq;
 
-    Update(client, GetGameTime());
+    Update(client, GetGameTime(), key);
     return 0;
 }
 
@@ -134,8 +136,9 @@ Action Timer_Tick(Handle timer)
     return Plugin_Continue;
 }
 
-// Drops lapsed messages and sends the winner if the box should change.
-void Update(int client, float now)
+// Drops lapsed messages and sends the winner if the box should change. resubmitted is the key its
+// owner just sent again, if any: only that may re-send an unchanged winner.
+void Update(int client, float now, const char[] resubmitted = "")
 {
     for (int i = g_count[client] - 1; i >= 0; i--)
     {
@@ -163,7 +166,7 @@ void Update(int client, float now)
     }
 
     bool changed = !StrEqual(g_shownKey[client], g_hints[client][best].key) || !StrEqual(g_shownText[client], g_hints[client][best].text);
-    if (!changed && now - g_shownAt[client] < g_cvResend.FloatValue) return;
+    if (!changed && (!StrEqual(resubmitted, g_hints[client][best].key) || now - g_shownAt[client] < g_cvResend.FloatValue)) return;
 
     strcopy(g_shownKey[client], KEY_LEN, g_hints[client][best].key);
     strcopy(g_shownText[client], TEXT_LEN, g_hints[client][best].text);
