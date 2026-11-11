@@ -218,8 +218,10 @@ func (b *Bot) answer(m *discordgo.Message, threadID string) {
 		return
 	}
 
-	// A new conversation gets its own thread, named after the question.
-	if threadID == "" {
+	// A new conversation gets its own thread, named after the question; the
+	// model renames it once it has read the question (see retitle).
+	newThread := threadID == ""
+	if newThread {
 		thread, err := b.session.MessageThreadStartComplex(m.ChannelID, m.ID, &discordgo.ThreadStart{
 			Name:                threadName(b.cleanContent(m)),
 			AutoArchiveDuration: 1440,
@@ -249,6 +251,10 @@ func (b *Bot) answer(m *discordgo.Message, threadID string) {
 		slog.Error("reading thread history", "thread", threadID, "err", err)
 		b.replyTo(m, threadID, "Sorry, I couldn't read this thread.")
 		return
+	}
+
+	if newThread && b.cfg.ThreadTitles {
+		go b.retitle(threadID, history)
 	}
 
 	start := time.Now()
@@ -423,8 +429,14 @@ func leadIn(starter *discordgo.Message, before []*discordgo.Message, botID strin
 func botMessageText(m *discordgo.Message) string {
 	text := m.Content
 	for _, e := range m.Embeds {
-		if e.Footer != nil && strings.HasPrefix(e.Footer.Text, draftFooterPrefix) {
+		if e.Footer == nil {
+			continue
+		}
+		switch {
+		case strings.HasPrefix(e.Footer.Text, draftFooterPrefix):
 			text += fmt.Sprintf("\n[Issue draft %q: %s]", e.Title, strings.TrimPrefix(e.Footer.Text, draftFooterPrefix))
+		case strings.HasPrefix(e.Footer.Text, filedFooterPrefix):
+			text += fmt.Sprintf("\n[Issue %q: filed as %s]", e.Title, e.URL)
 		}
 	}
 	return strings.TrimSpace(text)
@@ -485,6 +497,7 @@ func splitMessage(text string, max int) []string {
 // body), so confirming needs no server-side state and survives restarts.
 const (
 	draftFooterPrefix = "Issue draft · "
+	filedFooterPrefix = "Filed on GitHub · "
 	confirmPrefix     = "issue_confirm"
 	cancelPrefix      = "issue_cancel"
 )
@@ -496,6 +509,7 @@ func kindLabel(kind IssueKind) string {
 	return "Bug report"
 }
 
+// draftEmbed renders a draft in a state such as "awaiting confirmation".
 func draftEmbed(d IssueDraft, state string) *discordgo.MessageEmbed {
 	color := 0xd73a4a // GitHub's bug red
 	if d.Kind == IssueFeature {
@@ -551,7 +565,7 @@ func (b *Bot) onInteraction(s *discordgo.Session, i *discordgo.InteractionCreate
 
 	if action == cancelPrefix {
 		b.metrics.Issue(draft.Kind, "cancelled")
-		b.updateDraft(i, draft, "cancelled", nil)
+		b.updateDraft(i, draftEmbed(draft, "cancelled"))
 		return
 	}
 
@@ -578,8 +592,9 @@ func (b *Bot) onInteraction(s *discordgo.Session, i *discordgo.InteractionCreate
 
 	ctx, cancel := context.WithTimeout(b.ctx, 30*time.Second)
 	defer cancel()
-	link := fmt.Sprintf("https://discord.com/channels/%s/%s/%s", i.GuildID, i.ChannelID, i.Message.ID)
-	issueURL, err := b.issues.Create(ctx, draft, Reporter{Username: user.Username, UserID: user.ID, MessageLink: link})
+	// Drafts are only posted in threads, so this links the whole conversation.
+	link := fmt.Sprintf("https://discord.com/channels/%s/%s", i.GuildID, i.ChannelID)
+	issueURL, err := b.issues.Create(ctx, draft, Reporter{Username: user.Username, UserID: user.ID, ThreadLink: link})
 	if err != nil {
 		slog.Error("filing issue", "user", user.ID, "err", err)
 		b.metrics.Issue(draft.Kind, "failed")
@@ -593,15 +608,42 @@ func (b *Bot) onInteraction(s *discordgo.Session, i *discordgo.InteractionCreate
 	}
 	slog.Info("filed issue", "user", user.ID, "url", issueURL)
 	b.metrics.Issue(draft.Kind, "filed")
-	b.editDraft(i, draft, "filed: "+issueURL, &issueURL)
+	b.editDraft(i, filedEmbed(draft, issueURL))
+
+	// Announce it separately too, as a reply to the draft, so the link is easy
+	// to find and the model sees in the history that it was filed.
+	if _, err := s.ChannelMessageSendComplex(i.ChannelID, &discordgo.MessageSend{
+		Content:         filedMessage(issueURL),
+		Reference:       &discordgo.MessageReference{MessageID: i.Message.ID, ChannelID: i.ChannelID, GuildID: i.GuildID},
+		AllowedMentions: noMentions,
+	}); err != nil {
+		slog.Error("announcing filed issue", "url", issueURL, "err", err)
+	}
+}
+
+// filedEmbed is a filed issue: the title links to it and the footer says so.
+// An embed footer can't hold a link, so the URL goes on the title.
+func filedEmbed(d IssueDraft, url string) *discordgo.MessageEmbed {
+	e := draftEmbed(d, "")
+	e.URL = url
+	e.Footer.Text = filedFooterPrefix + issueRef(url)
+	return e
+}
+
+// issueRef is "#4" for an issue URL ending in /issues/4.
+func issueRef(url string) string {
+	if i := strings.LastIndex(url, "/"); i >= 0 && i < len(url)-1 {
+		return "#" + url[i+1:]
+	}
+	return url
+}
+
+func filedMessage(url string) string {
+	return fmt.Sprintf("Filed as issue %s: %s", issueRef(url), url)
 }
 
 // updateDraft responds to the click by rewriting the draft message in place.
-func (b *Bot) updateDraft(i *discordgo.InteractionCreate, draft IssueDraft, state string, url *string) {
-	embed := draftEmbed(draft, state)
-	if url != nil {
-		embed.URL = *url
-	}
+func (b *Bot) updateDraft(i *discordgo.InteractionCreate, embed *discordgo.MessageEmbed) {
 	err := b.session.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseUpdateMessage,
 		Data: &discordgo.InteractionResponseData{
@@ -616,11 +658,7 @@ func (b *Bot) updateDraft(i *discordgo.InteractionCreate, draft IssueDraft, stat
 }
 
 // editDraft edits an already-acknowledged draft message.
-func (b *Bot) editDraft(i *discordgo.InteractionCreate, draft IssueDraft, state string, url *string) {
-	embed := draftEmbed(draft, state)
-	if url != nil {
-		embed.URL = *url
-	}
+func (b *Bot) editDraft(i *discordgo.InteractionCreate, embed *discordgo.MessageEmbed) {
 	embeds := []*discordgo.MessageEmbed{embed}
 	components := []discordgo.MessageComponent{}
 	if _, err := b.session.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{

@@ -74,6 +74,9 @@ type Config struct {
 	MaxToolCallsPerRound int
 	// HistoryMessages caps how many thread messages are sent as context.
 	HistoryMessages int
+	// ThreadTitles has the model rename each thread the bot starts, with a
+	// small separate call, instead of keeping the question's first words.
+	ThreadTitles bool
 
 	// GitHub App credentials. Issues are filed as the app ("name[bot]"), not
 	// as any person. The installation is looked up from the repo at startup
@@ -130,6 +133,18 @@ func getEnvInt(key string, fallback int) (int, error) {
 	return v, nil
 }
 
+func getEnvBool(key string, fallback bool) (bool, error) {
+	raw := getEnv(key, "")
+	if raw == "" {
+		return fallback, nil
+	}
+	v, err := strconv.ParseBool(raw)
+	if err != nil {
+		return false, fmt.Errorf("%s must be true or false, got %q", key, raw)
+	}
+	return v, nil
+}
+
 func splitList(raw string) []string {
 	var out []string
 	for _, part := range strings.Split(raw, ",") {
@@ -182,6 +197,8 @@ func ParseConfig() (*Config, error) {
 	c.MaxToolCallsPerRound, err = getEnvInt("LLM_MAX_TOOL_CALLS_PER_ROUND", 4)
 	errs = append(errs, err)
 	c.HistoryMessages, err = getEnvInt("HISTORY_MESSAGES", 40)
+	errs = append(errs, err)
+	c.ThreadTitles, err = getEnvBool("THREAD_TITLES", true)
 	errs = append(errs, err)
 	c.QuestionsPerHour, err = getEnvInt("RATE_LIMIT_QUESTIONS_PER_HOUR", 20)
 	errs = append(errs, err)

@@ -368,7 +368,7 @@ func (ts *Toolset) addIssueTools(issues *IssueTracker) {
 			"kind":  enumProp("bug for something broken, feature for a request or suggestion.", []string{string(IssueBug), string(IssueFeature)}),
 			"title": prop("string", fmt.Sprintf("Short, specific issue title (max %d characters).", maxIssueTitle)),
 			"body": prop("string", fmt.Sprintf("Issue body in GitHub Markdown (max %d characters): a summary, then the details the user gave, "+
-				"under headings such as Steps to reproduce / Expected / Actual / Context. Do not include the reporter's name; it is added automatically.", maxIssueBody)),
+				"under headings such as Steps to reproduce / Expected / Actual / Context. Do not include the reporter's name; it is added automatically. The issue is public: use placeholders for player names, SteamIDs and profile links unless the bug is about that specific player.", maxIssueBody)),
 		}, []string{"kind", "title", "body"},
 		func(ctx context.Context, tc *toolContext, raw json.RawMessage) (any, error) {
 			var in struct{ Kind, Title, Body string }

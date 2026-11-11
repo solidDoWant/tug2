@@ -26,13 +26,20 @@ the reporter to press **Confirm**.
 - **Bug reports / feature requests:** the model asks for missing detail,
   searches existing issues, then posts a draft with **Confirm and file** and
   **Cancel** buttons. Only the person who asked can press them. Filed issues
-  get the configured labels and a footer naming the Discord reporter.
+  get the configured labels and a footer naming the Discord reporter and
+  linking the Discord thread. Once filed, the draft's title links to the
+  issue and the bot posts the link as a reply to it. Issues are public, so
+  the model is told to replace player names, SteamIDs and profile links with
+  placeholders unless the bug is about that player.
 
 ## How conversations work
 
 - Mention the bot in the configured channel, or use Discord's reply on one of
   its messages (with or without the ping). It starts a thread named after
-  the question and answers there.
+  the question's first words and answers there. Meanwhile a separate small
+  model call (no tools, about 1k tokens, a fraction of a cent on Haiku) writes
+  a proper title and renames the thread (`THREAD_TITLES=false` turns this
+  off). Threads someone else started are never renamed.
 - Follow-ups in that thread don't need a mention. The thread itself is the
   conversation history: the bot re-reads it on every message (up to
   `HISTORY_MESSAGES`), so nothing is stored and restarts lose nothing.
@@ -230,6 +237,7 @@ liveness probe at `/livez` and readiness at `/readyz` on `HEALTH_ADDR`.
 | `LLM_MAX_TOOL_ROUNDS`           | `8`                | Maximum model↔tool round trips for one question.                                                                    |
 | `LLM_TOKENS_PER_QUESTION`       | `150000`           | Total tokens one question may use across all its model calls; `0` for no cap. See [Limits per question](#limits-per-question). |
 | `HISTORY_MESSAGES`              | `40`               | Thread messages sent as context (max 100).                                                                          |
+| `THREAD_TITLES`                 | `true`             | Have the model title each thread the bot starts, with a separate small call.                                        |
 | `GITHUB_REPO`                   | _(empty)_          | `owner/name`, e.g. `solidDoWant/tug2`.                                                                              |
 | `GITHUB_APP_ID`                 | _(empty)_          | The GitHub App's ID.                                                                                                |
 | `GITHUB_APP_PRIVATE_KEY_FILE`   | _(empty)_          | Path to the app's private key (`.pem`). Or pass the PEM itself in `GITHUB_APP_PRIVATE_KEY`.                         |

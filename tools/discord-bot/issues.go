@@ -127,9 +127,9 @@ func (t *IssueTracker) Search(ctx context.Context, query string) ([]IssueSummary
 
 // Reporter identifies who asked for the issue, for the issue body.
 type Reporter struct {
-	Username    string
-	UserID      string
-	MessageLink string
+	Username   string
+	UserID     string
+	ThreadLink string
 }
 
 // Create files the draft and returns the new issue's URL.
@@ -147,8 +147,8 @@ func (t *IssueTracker) Create(ctx context.Context, draft IssueDraft, reporter Re
 	}
 
 	body := strings.TrimSpace(draft.Body) + fmt.Sprintf(
-		"\n\n---\n_Reported on Discord by %s (user ID %s) via the stats bot. [Conversation](%s)_",
-		reporter.Username, reporter.UserID, reporter.MessageLink)
+		"\n\n---\n_Reported on Discord by %s (user ID %s) via the stats bot. Discussion: [Discord thread](%s)_",
+		reporter.Username, reporter.UserID, reporter.ThreadLink)
 
 	issue, _, err := t.client.Issues.Create(ctx, t.owner, t.repo, &github.IssueRequest{
 		Title:  github.Ptr(draft.Title),

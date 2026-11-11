@@ -77,7 +77,7 @@ func TestIssueTrackerGitHubApp(t *testing.T) {
 
 	url, err := tracker.Create(context.Background(),
 		IssueDraft{Kind: IssueBug, Title: "Medics can't revive", Body: "Steps..."},
-		Reporter{Username: "testuserone", UserID: "100000000000000001", MessageLink: "https://discord.com/channels/1/2/3"})
+		Reporter{Username: "testuserone", UserID: "100000000000000001", ThreadLink: "https://discord.com/channels/1/2"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -102,7 +102,7 @@ func TestIssueTrackerGitHubApp(t *testing.T) {
 	if string(labels) != `["from-discord","bug"]` {
 		t.Errorf("labels = %s", labels)
 	}
-	if body, _ := created["body"].(string); !strings.Contains(body, "testuserone") || !strings.Contains(body, "https://discord.com/channels/1/2/3") {
+	if body, _ := created["body"].(string); !strings.Contains(body, "testuserone") || !strings.Contains(body, "[Discord thread](https://discord.com/channels/1/2)") {
 		t.Errorf("body missing reporter footer: %q", body)
 	}
 }
