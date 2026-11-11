@@ -24,6 +24,9 @@
 #include <smlib>
 #include <discord>
 #include <classtemplate>
+#undef REQUIRE_PLUGIN
+#include <gg2_hint>
+#define REQUIRE_PLUGIN
 
 // enable/disable medic code and ammo bag resupply
 #define DOCTOR 1    // 1 = on | 0 = off
@@ -1241,11 +1244,11 @@ Action Timer_Enemies_Remaining(Handle timer)
         if (g_bCounterAttack && IsInfiniteCounterAttack())
         {
             // PrintHintText(client, "Total enemies alive: Infinite");
-            PrintHintText(client, "%T", "total_enemies_alive_infinite", client);
+            HintShow(client, "enemies", HINT_PRI_INFO, 6.0, "%T", "total_enemies_alive_infinite", client);
         }
         else {
             // PrintHintText(client, "Total enemies alive: %d", g_iTotalAliveEnemies);
-            PrintHintText(client, "%T", "total_enemies_alive", client, g_iTotalAliveEnemies);
+            HintShow(client, "enemies", HINT_PRI_INFO, 6.0, "%T", "total_enemies_alive", client, g_iTotalAliveEnemies);
         }
     }
     // endtime = GetTime();
@@ -1317,7 +1320,7 @@ public Action Check_Total_Enemies(int client, int args)
     }
     // The server console and RCON have no HUD for a hint.
     if (client == 0) ReplyToCommand(client, "%s", textToPrint);
-    else PrintHintText(client, "%s", textToPrint);
+    else HintShow(client, "enemies", HINT_PRI_NOTICE, 5.0, "%s", textToPrint);
     return Plugin_Handled;
 }
 
@@ -1340,7 +1343,7 @@ Action Timer_EnemyReinforce(Handle timer)
         {
             // Format(textToPrint, sizeof(textToPrint), "[INTEL] Enemies reinforce in %d seconds | Capture the point soon!", g_iTimerReinforceTime);
             // PrintHintTextToAll(textToPrint);
-            PrintHintTextToAll("%t", "enemies_reinforce_in", g_iTimerReinforceTime);
+            HintShowAll("reinforce", HINT_PRI_NOTICE, (g_iTimerReinforceTime <= 10 ? 1.5 : 4.0), "%t", "enemies_reinforce_in", g_iTimerReinforceTime);
         }
 
         if (g_iTimerReinforceTime > 0)
@@ -1358,7 +1361,7 @@ Action Timer_EnemyReinforce(Handle timer)
             {
                 // Format(textToPrint, sizeof(textToPrint), "[INTEL] Enemy reinforcements have arrived!");
                 // PrintHintTextToAll(textToPrint);
-                PrintHintTextToAll("%t", "enemy_reinforcements_arrived");
+                HintShowAll("reinforce", HINT_PRI_NOTICE, 4.0, "%t", "enemy_reinforcements_arrived");
             }
 
             g_iRemaining_lives_team_ins = g_iRemaining_lives_team_ins + (g_iRespawnLivesTeamIns / 4);
@@ -2210,7 +2213,7 @@ public Action Event_RoundEnd_Pre(Event event, const char[] name, bool dontBroadc
         if ((g_iStatRevives[client] > 0 || g_iStatHeals[client] > 0) && StrContains(g_client_last_classstring[client], "medic") > -1)
         {
             Format(sBuf, sizeof(sBuf), "[MEDIC STATS] for %N: HEALS: %d | REVIVES: %d", client, g_iStatHeals[client], g_iStatRevives[client]);
-            PrintHintText(client, "%s", sBuf);
+            HintShow(client, "medic_stats", HINT_PRI_NOTICE, 6.0, "%s", sBuf);
             Format(sBuf, sizeof(sBuf), "[MEDIC STATS] for %N: HEALS: \x070088cc%d\x01 | REVIVES: \x070088cc%d", client, g_iStatHeals[client], g_iStatRevives[client]);
             PrintToChatAll("\x01%s", sBuf);
         }
@@ -2762,14 +2765,14 @@ public Action Event_PlayerDeath(Event event, const char[] name, bool dontBroadca
     if (g_fFatalChance > 0.0 && g_iHurtFatal[victim])
     {
         Format(sHint, sizeof(sHint), "You were fatally killed for %i damage", g_clientDamageDone[victim]);
-        PrintHintText(victim, "%s", sHint);
+        HintShow(victim, "death", HINT_PRI_NOTICE, 5.0, "%s", sHint);
         Format(sHint, sizeof(sHint), "You were fatally killed for \x070088cc%i\x01 damage", g_clientDamageDone[victim]);
         PrintToChat(victim, "\x01%s", sHint);
         PrintToChatAll("%N was fatally killed (completely dead)", victim);
     }
     else {
         Format(sHint, sizeof(sHint), "You're %s for %i damage, a medic will try to find you!", woundType, g_clientDamageDone[victim]);
-        PrintHintText(victim, "%s", sHint);
+        HintShow(victim, "death", HINT_PRI_NOTICE, 5.0, "%s", sHint);
         Format(sHint, sizeof(sHint), "You're \x070088cc%s\x01 for \x070088cc%i\x01 damage, a medic will try to find you!", woundType, g_clientDamageDone[victim]);
         PrintToChat(victim, "\x01%s", sHint);
     }
@@ -3361,9 +3364,9 @@ Action Timer_ReviveMonitor(Handle timer)
             if (g_iReviveRemainingTime[deadPlayer] > 0)
             {
                 Format(sBuf, sizeof(sBuf), "Reviving %N in: %i seconds (%s)", deadPlayer, g_iReviveRemainingTime[deadPlayer], woundType);
-                PrintHintText(alivePlayer, "%s", sBuf);
+                HintShow(alivePlayer, "medic", HINT_PRI_ACTIVITY, 1.5, "%s", sBuf);
                 Format(sBuf, sizeof(sBuf), "%N is reviving you in: %i seconds (%s)", alivePlayer, g_iReviveRemainingTime[deadPlayer], woundType);
-                PrintHintText(deadPlayer, "%s", sBuf);
+                HintShow(deadPlayer, "medic", HINT_PRI_ACTIVITY, 1.5, "%s", sBuf);
                 g_iReviveRemainingTime[deadPlayer]--;
                 if (!g_beingRevivedByMedic[deadPlayer])
                 {
@@ -3376,9 +3379,9 @@ Action Timer_ReviveMonitor(Handle timer)
             }
             else {
                 Format(sBuf, sizeof(sBuf), "You revived %N from a %s", deadPlayer, woundType);
-                PrintHintText(alivePlayer, "%s", sBuf);
+                HintShow(alivePlayer, "medic", HINT_PRI_NOTICE, 3.0, "%s", sBuf);
                 Format(sBuf, sizeof(sBuf), "%N revived you from a %s", alivePlayer, woundType);
-                PrintHintText(deadPlayer, "%s", sBuf);
+                HintShow(deadPlayer, "medic", HINT_PRI_NOTICE, 3.0, "%s", sBuf);
 
                 PlayVictimReviveSound(deadPlayer);
                 EmitSoundToAll("weapons/defibrillator/defibrillator_revive.wav", alivePlayer, SNDCHAN_AUTO, _, _, 0.3);
@@ -3406,16 +3409,16 @@ Action Timer_ReviveMonitor(Handle timer)
             if (g_iReviveNonMedicRemainingTime[deadPlayer] > 0)
             {
                 Format(sBuf, sizeof(sBuf), "Reviving %N in: %i seconds (%s)", deadPlayer, g_iReviveNonMedicRemainingTime[deadPlayer], woundType);
-                PrintHintText(alivePlayer, "%s", sBuf);
+                HintShow(alivePlayer, "medic", HINT_PRI_ACTIVITY, 1.5, "%s", sBuf);
                 Format(sBuf, sizeof(sBuf), "%N is reviving you in: %i seconds (%s)", alivePlayer, g_iReviveNonMedicRemainingTime[deadPlayer], woundType);
-                PrintHintText(deadPlayer, "%s", sBuf);
+                HintShow(deadPlayer, "medic", HINT_PRI_ACTIVITY, 1.5, "%s", sBuf);
                 g_iReviveNonMedicRemainingTime[deadPlayer]--;
             }
             else {
                 Format(sBuf, sizeof(sBuf), "You revived %N from a %s", deadPlayer, woundType);
-                PrintHintText(alivePlayer, "%s", sBuf);
+                HintShow(alivePlayer, "medic", HINT_PRI_NOTICE, 3.0, "%s", sBuf);
                 Format(sBuf, sizeof(sBuf), "%N revived you from a %s", alivePlayer, woundType);
-                PrintHintText(deadPlayer, "%s", sBuf);
+                HintShow(deadPlayer, "medic", HINT_PRI_NOTICE, 3.0, "%s", sBuf);
 
                 PlayVictimReviveSound(deadPlayer);
                 g_iStatRevives[alivePlayer]++;
@@ -3724,7 +3727,7 @@ Action Timer_MedicMonitor(Handle timer)
                 iHealth   = GetClientHealth(targetPlayer);
                 if (tDistance < 750.0)
                 {
-                    PrintHintText(originatingPlayer, "%N\nHP: %i", targetPlayer, iHealth);
+                    HintShow(originatingPlayer, "medic", HINT_PRI_ACTIVITY, 2.0, "%N\nHP: %i", targetPlayer, iHealth);
                 }
 
                 if (tDistance > fReviveDistance
@@ -3750,9 +3753,9 @@ Action Timer_MedicMonitor(Handle timer)
 
                         iHealth = 100;
                         AwardMedicPoints(originatingPlayer, full_heal_point_bonus.IntValue);
-                        PrintHintText(targetPlayer, "You were healed by %N (HP: %i)", originatingPlayer, iHealth);
+                        HintShow(targetPlayer, "medic", HINT_PRI_NOTICE, 3.0, "You were healed by %N (HP: %i)", originatingPlayer, iHealth);
                         Format(sBuf, sizeof(sBuf), "You fully healed %N", targetPlayer);
-                        PrintHintText(originatingPlayer, "%s", sBuf);
+                        HintShow(originatingPlayer, "medic", HINT_PRI_NOTICE, 3.0, "%s", sBuf);
                         Format(sBuf, sizeof(sBuf), "You fully healed \x070088cc%N", targetPlayer);
                         PrintToChat(originatingPlayer, "\x01%s", sBuf);
                         SendForwardMedicHealed(originatingPlayer, targetPlayer);
@@ -3762,9 +3765,9 @@ Action Timer_MedicMonitor(Handle timer)
                         char originating_player_name[64];
                         Format(originating_player_name, sizeof(originating_player_name), "%N", originatingPlayer);
                         if (held)
-                            PrintHintText(targetPlayer, "%T", "held_in_place_getting_healed", targetPlayer, originating_player_name, iHealth);
+                            HintShow(targetPlayer, "medic", HINT_PRI_ACTIVITY, 2.0, "%T", "held_in_place_getting_healed", targetPlayer, originating_player_name, iHealth);
                         else
-                            PrintHintText(targetPlayer, "%T", "do_not_move_getting_healed", targetPlayer, originating_player_name, iHealth);
+                            HintShow(targetPlayer, "medic", HINT_PRI_ACTIVITY, 2.0, "%T", "do_not_move_getting_healed", targetPlayer, originating_player_name, iHealth);
                         // PrintHintText(targetPlayer, "%T", "do_not_move_getting_healed", targetPlayer, originatingPlayer, iHealth);
                         if (g_should_ask_to_heal)
                         {
@@ -3776,7 +3779,7 @@ Action Timer_MedicMonitor(Handle timer)
                         }
                     }
                     SetEntityHealth(targetPlayer, iHealth);
-                    PrintHintText(originatingPlayer, "%N\nHP: %i\n\nHealing with %s for: %i%s", targetPlayer, iHealth, bCanHealPaddle && !bCanHealMedpack ? "paddle" : "medpack", bCanHealPaddle && !bCanHealMedpack ? g_iHealAmountPaddles : g_iHealAmountMedpack, held ? "\nHolding them in place" : "");
+                    HintShow(originatingPlayer, "medic", HINT_PRI_ACTIVITY, 2.0, "%N\nHP: %i\n\nHealing with %s for: %i%s", targetPlayer, iHealth, bCanHealPaddle && !bCanHealMedpack ? "paddle" : "medpack", bCanHealPaddle && !bCanHealMedpack ? g_iHealAmountPaddles : g_iHealAmountMedpack, held ? "\nHolding them in place" : "");
                 }
             }
             else {
@@ -3788,10 +3791,10 @@ Action Timer_MedicMonitor(Handle timer)
                     if (iHealth >= g_iMedicHealSelfMax)
                     {
                         iHealth = g_iMedicHealSelfMax;
-                        PrintHintText(originatingPlayer, "You healed yourself (HP: %i) | MAX: %i", iHealth, g_iMedicHealSelfMax);
+                        HintShow(originatingPlayer, "medic", HINT_PRI_ACTIVITY, 2.0, "You healed yourself (HP: %i) | MAX: %i", iHealth, g_iMedicHealSelfMax);
                     }
                     else {
-                        PrintHintText(originatingPlayer, "Healing Self (HP: %i) | MAX: %i", iHealth, g_iMedicHealSelfMax);
+                        HintShow(originatingPlayer, "medic", HINT_PRI_ACTIVITY, 2.0, "Healing Self (HP: %i) | MAX: %i", iHealth, g_iMedicHealSelfMax);
                     }
                     SetEntityHealth(originatingPlayer, iHealth);
                 }
@@ -3825,7 +3828,7 @@ Action Timer_MedicMonitor(Handle timer)
                 iHealth = GetClientHealth(targetPlayer);
                 if (tDistance < 750.0)
                 {
-                    PrintHintText(originatingPlayer, "%N\nHP: %i", targetPlayer, iHealth);
+                    HintShow(originatingPlayer, "medic", HINT_PRI_ACTIVITY, 2.0, "%N\nHP: %i", targetPlayer, iHealth);
                 }
 
                 if (iHealth < g_iNonMedicMaxHealOther)
@@ -3839,14 +3842,14 @@ Action Timer_MedicMonitor(Handle timer)
                         iHealth = g_iNonMedicMaxHealOther;
                         SendForwardMedicHealed(originatingPlayer, targetPlayer);
                         AwardMedicPoints(originatingPlayer, full_heal_point_bonus.IntValue);
-                        PrintHintText(targetPlayer, "Non-Medic %N can only heal you for %i HP!)", originatingPlayer, iHealth);
+                        HintShow(targetPlayer, "medic", HINT_PRI_ACTIVITY, 2.0, "Non-Medic %N can only heal you for %i HP!)", originatingPlayer, iHealth);
                         Format(sBuf, sizeof(sBuf), "You max healed %N", targetPlayer);
-                        PrintHintText(originatingPlayer, "%s", sBuf);
+                        HintShow(originatingPlayer, "medic", HINT_PRI_ACTIVITY, 2.0, "%s", sBuf);
                         Format(sBuf, sizeof(sBuf), "You max healed \x070088cc%N", targetPlayer);
                         PrintToChat(originatingPlayer, "\x01%s", sBuf);
                     }
                     else {
-                        PrintHintText(targetPlayer, "DON'T MOVE! %N is healing you.(HP: %i)", originatingPlayer, iHealth);
+                        HintShow(targetPlayer, "medic", HINT_PRI_ACTIVITY, 2.0, "DON'T MOVE! %N is healing you.(HP: %i)", originatingPlayer, iHealth);
                         if (g_should_ask_to_heal)
                         {
                             // LogMessage("[GG Respawn] yelling at player to let medic heal them");
@@ -3857,15 +3860,15 @@ Action Timer_MedicMonitor(Handle timer)
                         }
                     }
                     SetEntityHealth(targetPlayer, iHealth);
-                    PrintHintText(originatingPlayer, "%N\nHP: %i\n\nHealing.", targetPlayer, iHealth);
+                    HintShow(originatingPlayer, "medic", HINT_PRI_ACTIVITY, 2.0, "%N\nHP: %i\n\nHealing.", targetPlayer, iHealth);
                 }
                 else {
                     if (iHealth < g_iNonMedicMaxHealOther)
                     {
-                        PrintHintText(originatingPlayer, "%N\nHP: %i", targetPlayer, iHealth);
+                        HintShow(originatingPlayer, "medic", HINT_PRI_ACTIVITY, 2.0, "%N\nHP: %i", targetPlayer, iHealth);
                     }
                     else if (iHealth >= g_iNonMedicMaxHealOther) {
-                        PrintHintText(originatingPlayer, "%N\nHP: %i (MAX YOU CAN HEAL)", targetPlayer, iHealth);
+                        HintShow(originatingPlayer, "medic", HINT_PRI_ACTIVITY, 2.0, "%N\nHP: %i (MAX YOU CAN HEAL)", targetPlayer, iHealth);
                     }
                 }
             }
@@ -3877,10 +3880,10 @@ Action Timer_MedicMonitor(Handle timer)
                     if (iHealth >= g_iNonMedicHealSelfMax)
                     {
                         iHealth = g_iNonMedicHealSelfMax;
-                        PrintHintText(originatingPlayer, "You healed yourself (HP: %i) | MAX: %i", iHealth, g_iNonMedicHealSelfMax);
+                        HintShow(originatingPlayer, "medic", HINT_PRI_ACTIVITY, 2.0, "You healed yourself (HP: %i) | MAX: %i", iHealth, g_iNonMedicHealSelfMax);
                     }
                     else {
-                        PrintHintText(originatingPlayer, "Healing Self (HP: %i) | MAX: %i", iHealth, g_iNonMedicHealSelfMax);
+                        HintShow(originatingPlayer, "medic", HINT_PRI_ACTIVITY, 2.0, "Healing Self (HP: %i) | MAX: %i", iHealth, g_iNonMedicHealSelfMax);
                     }
                     SetEntityHealth(originatingPlayer, iHealth);
                 }
@@ -4658,11 +4661,11 @@ Action Healthkit(Handle timer, DataPack hDatapack)
                             {
                                 iHealth = 100;
                                 PrintCenterText(client, "Medical Pack HP Left: %i", g_healthPack_Amount[healthPack]);
-                                PrintHintText(client, "A medic assisted in healing you (HP: %i)", iHealth);
+                                HintShow(client, "healthkit", HINT_PRI_ACTIVITY - 5, 1.5, "A medic assisted in healing you (HP: %i)", iHealth);
                             }
                             else {
                                 PrintCenterText(client, "Medical Pack HP Left: %i", g_healthPack_Amount[healthPack]);
-                                PrintHintText(client, "Self area healing (HP: %i)", iHealth);
+                                HintShow(client, "healthkit", HINT_PRI_ACTIVITY - 5, 1.5, "Self area healing (HP: %i)", iHealth);
                             }
                             SetEntityHealth(client, iHealth);
                         }
@@ -4676,16 +4679,16 @@ Action Healthkit(Handle timer, DataPack hDatapack)
                             {
                                 iHealth = g_iMedicHealSelfMax;
                                 PrintCenterText(client, "Medical Pack HP Left: %i", g_healthPack_Amount[healthPack]);
-                                PrintHintText(client, "You area healed yourself (HP: %i) | MAX: %i", iHealth, g_iMedicHealSelfMax);
+                                HintShow(client, "healthkit", HINT_PRI_ACTIVITY - 5, 1.5, "You area healed yourself (HP: %i) | MAX: %i", iHealth, g_iMedicHealSelfMax);
                             }
                             else {
                                 PrintCenterText(client, "Medical Pack HP Left: %i", g_healthPack_Amount[healthPack]);
-                                PrintHintText(client, "Self area healing (HP: %i) | MAX %i", iHealth, g_iMedicHealSelfMax);
+                                HintShow(client, "healthkit", HINT_PRI_ACTIVITY - 5, 1.5, "Self area healing (HP: %i) | MAX %i", iHealth, g_iMedicHealSelfMax);
                             }
                         }
                         else {
                             PrintCenterText(client, "Medical Pack HP Left: %i", g_healthPack_Amount[healthPack]);
-                            PrintHintText(client, "You healed yourself (HP: %i) | MAX: %i", iHealth, g_iMedicHealSelfMax);
+                            HintShow(client, "healthkit", HINT_PRI_ACTIVITY - 5, 1.5, "You healed yourself (HP: %i) | MAX: %i", iHealth, g_iMedicHealSelfMax);
                         }
                     }
                 }
@@ -4709,11 +4712,11 @@ Action Healthkit(Handle timer, DataPack hDatapack)
                             {
                                 iHealth = 100;
                                 PrintCenterText(client, "Medical Pack HP Left: %i", g_healthPack_Amount[healthPack]);
-                                PrintHintText(client, "A medic assisted in healing you (HP: %i)", iHealth);
+                                HintShow(client, "healthkit", HINT_PRI_ACTIVITY - 5, 1.5, "A medic assisted in healing you (HP: %i)", iHealth);
                             }
                             else {
                                 PrintCenterText(client, "Medical Pack HP Left: %i", g_healthPack_Amount[healthPack]);
-                                PrintHintText(client, "Medic area healing you (HP: %i)", iHealth);
+                                HintShow(client, "healthkit", HINT_PRI_ACTIVITY - 5, 1.5, "Medic area healing you (HP: %i)", iHealth);
                                 switch (GetRandomInt(1, 6))
                                 {
                                     case 1: EmitSoundToAll("weapons/universal/uni_crawl_l_01.wav", client, SNDCHAN_VOICE, _, _, 1.0);
@@ -4740,7 +4743,7 @@ Action Healthkit(Handle timer, DataPack hDatapack)
                         {
                             if (iHealth < g_iNonMedicHealSelfMax)
                             {
-                                PrintHintText(client, "No medics nearby! Pull knife out to heal! (HP: %i)", iHealth);
+                                HintShow(client, "healthkit", HINT_PRI_ACTIVITY - 5, 1.5, "No medics nearby! Pull knife out to heal! (HP: %i)", iHealth);
                             }
                             continue;
                         }
@@ -4753,17 +4756,17 @@ Action Healthkit(Handle timer, DataPack hDatapack)
                             {
                                 iHealth = g_iNonMedicHealSelfMax;
                                 PrintCenterText(client, "Medical Pack HP Left: %i", g_healthPack_Amount[healthPack]);
-                                PrintHintText(client, "You healed yourself (HP: %i) | MAX: %i", iHealth, g_iNonMedicHealSelfMax);
+                                HintShow(client, "healthkit", HINT_PRI_ACTIVITY - 5, 1.5, "You healed yourself (HP: %i) | MAX: %i", iHealth, g_iNonMedicHealSelfMax);
                             }
                             else {
                                 PrintCenterText(client, "Medical Pack HP Left: %i", g_healthPack_Amount[healthPack]);
-                                PrintHintText(client, "Healing Self (HP: %i) | MAX: %i", iHealth, g_iNonMedicHealSelfMax);
+                                HintShow(client, "healthkit", HINT_PRI_ACTIVITY - 5, 1.5, "Healing Self (HP: %i) | MAX: %i", iHealth, g_iNonMedicHealSelfMax);
                             }
                             SetEntityHealth(client, iHealth);
                         }
                         else {
                             PrintCenterText(client, "Medical Pack HP Left: %i", g_healthPack_Amount[healthPack]);
-                            PrintHintText(client, "You healed yourself (HP: %i) | MAX: %i", iHealth, g_iNonMedicHealSelfMax);
+                            HintShow(client, "healthkit", HINT_PRI_ACTIVITY - 5, 1.5, "You healed yourself (HP: %i) | MAX: %i", iHealth, g_iNonMedicHealSelfMax);
                         }
                     }
                 }
@@ -4882,7 +4885,7 @@ void Check_NearbyMedicsRevive(int client, int iInjured)
             medic_bonus_life_check(assistingMedic);
 
             Format(sBuf, sizeof(sBuf), "You revived(assisted) %N from a %s", iInjured, woundType);
-            PrintHintText(assistingMedic, "%s", sBuf);
+            HintShow(assistingMedic, "medic", HINT_PRI_NOTICE, 3.0, "%s", sBuf);
         }
     }
 }
@@ -5470,7 +5473,7 @@ public void CreateCounterRespawnTimer(int client)
     {
         return;
     }
-    PrintHintText(client, "Respawning you in 5 seconds");
+    HintShow(client, "respawn", HINT_PRI_NOTICE, 5.0, "Respawning you in 5 seconds");
     g_bLifeRespawnPending[client] = true;
     CreateTimer(5.25, RespawnPlayerCounter, client);
 }

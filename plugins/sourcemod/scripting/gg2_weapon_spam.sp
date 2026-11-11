@@ -5,6 +5,9 @@
 #include <morecolors>
 #include <discord>
 #include <weaponnames>
+#undef REQUIRE_PLUGIN
+#include <gg2_hint>
+#define REQUIRE_PLUGIN
 
 public Plugin myinfo =
 {
@@ -185,7 +188,7 @@ public Action Timer_WeaponDurationCounter(Handle timer)
             Format(spammer_name, sizeof(spammer_name), "%N", client);
 
             CPrintToChatAll("{common}MG SPAM ACTION: %t", "mg_spam_action_all", spammer_name);
-            PrintHintText(client, "%T", "weapon_too_hot", client);
+            HintShow(client, "weapon_spam", HINT_PRI_WARNING, 4.0, "%T", "weapon_too_hot", client);
 
             // send_to_discord already opens the line with this client's linked name, so naming them
             // again here printed them twice. The weapon is the display name rather than the
@@ -210,7 +213,7 @@ public Action Timer_WeaponDurationCounter(Handle timer)
         if (now < last_warning_message_time[client] + 1) continue;
 
         CPrintToChat(client, "{common}MG SPAM WARN: {fullred}3-5sec Bursts Plz");
-        PrintHintText(client, "%T", "mg_spam_warn", client);
+        HintShow(client, "weapon_spam", HINT_PRI_WARNING, 2.0, "%T", "mg_spam_warn", client);
         last_warning_message_time[client] = now;
 
         LogMessage("[GG2 Weapon Spam] %N current firing duration: %i (MAX: %i)", client, current_firing_duration[client], round_max_firing_duration[client]);

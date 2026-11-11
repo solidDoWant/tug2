@@ -620,6 +620,17 @@ RUN --mount=type=bind,source=./plugins/sourcemod/scripting,target=/plugin-source
     find /insurgency -type d -exec chmod 755 {} \; && \
     find /insurgency -type f -exec chmod 644 {} \;
 
+FROM sourcemod-plugins-base AS sourcemod-plugins-gg2-hint
+
+# Build the gg2_hint plugin: shares the hint-text box between the plugins that write to it
+RUN --mount=type=bind,source=./plugins/sourcemod,target=/plugin-source \
+    /sourcemod/addons/sourcemod/scripting/spcomp --include=/plugin-source/scripting/include  /plugin-source/scripting/gg2_hint.sp -o /insurgency/addons/sourcemod/plugins/gg2_hint.smx && \
+    mkdir -p /insurgency/cfg/sourcemod && \
+    touch /insurgency/cfg/sourcemod/gg2_hint.cfg && \
+    # Fixup file permissions
+    find /insurgency -type d -exec chmod 755 {} \; && \
+    find /insurgency -type f -exec chmod 644 {} \;
+
 FROM sourcemod-plugins-base AS sourcemod-plugins-gg2-show-health-simp
 
 # Build the gg2_show_health_simp plugin
@@ -1378,6 +1389,7 @@ COPY --from=sourcemod-plugins-gg2-messages --chown=0:0 /insurgency /opt/insurgen
 COPY --from=sourcemod-plugins-gg2-mstats2 --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
 # This seems unnecessary for now
 # COPY --from=sourcemod-plugins-gg2-playlist-hax --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
+COPY --from=sourcemod-plugins-gg2-hint --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
 COPY --from=sourcemod-plugins-gg2-show-health-simp --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
 COPY --from=sourcemod-plugins-gg2-spectalk --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
 COPY --from=sourcemod-plugins-gg2-spectator --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
@@ -1524,6 +1536,7 @@ COPY --from=sourcemod-plugins-gg2-messages --chown=0:0 /insurgency /opt/insurgen
 COPY --from=sourcemod-plugins-gg2-mstats2 --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
 # This seems unnecessary for now
 # COPY --from=sourcemod-plugins-gg2-playlist-hax --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
+COPY --from=sourcemod-plugins-gg2-hint --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
 COPY --from=sourcemod-plugins-gg2-show-health-simp --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
 COPY --from=sourcemod-plugins-gg2-spectalk --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
 COPY --from=sourcemod-plugins-gg2-spectator --chown=0:0 /insurgency /opt/insurgency-server/insurgency/

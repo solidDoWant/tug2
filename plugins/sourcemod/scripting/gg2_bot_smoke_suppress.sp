@@ -34,6 +34,9 @@
 #include <sdktools>
 #include <sdkhooks>
 #include <dhooks>
+#undef REQUIRE_PLUGIN
+#include <gg2_hint>
+#define REQUIRE_PLUGIN
 
 #pragma newdecls required
 #pragma semicolon 1
@@ -1653,7 +1656,7 @@ void ShowWarning(int client, int smoke)
         switch (g_cvWarnStyle.IntValue)
         {
             case 1:  ShowInstructorHint(client, text, smoke);
-            case 2:  PrintHintText(client, "%s", text);
+            case 2:  HintShow(client, "smoke_warning", HINT_PRI_WARNING, 4.0, "%s", text);
             default: ShowGameText(client, text);
         }
     }

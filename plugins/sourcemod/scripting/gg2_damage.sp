@@ -4,6 +4,9 @@
 #include <discord>
 #include <weaponnames>
 #include <classtemplate>
+#undef REQUIRE_PLUGIN
+#include <gg2_hint>
+#define REQUIRE_PLUGIN
 
 #pragma newdecls required
 
@@ -221,11 +224,8 @@ public Action OnTakeDamage(int victim, int& attacker, int& inflictor, float& dam
 
         if (g_playerGaveTeamDamageCooldown[attacker] == 0)
         {
-            PrintHintText(victim, "");
-            PrintHintText(victim, "If you are in the way, fucking move");
-
-            PrintHintText(attacker, "");
-            PrintHintText(attacker, "Check your fire, you are shooting teammates");
+            HintShow(victim, "team_damage", HINT_PRI_WARNING, 3.0, "If you are in the way, fucking move");
+            HintShow(attacker, "team_damage", HINT_PRI_WARNING, 3.0, "Check your fire, you are shooting teammates");
 
             // The victim's name is linked the same way send_to_discord links the attacker's, so
             // both sides of the incident are clickable rather than just the one who fired. The

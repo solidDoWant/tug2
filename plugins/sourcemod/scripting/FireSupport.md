@@ -151,6 +151,15 @@ Messages are displayed to the entire team in team chat. Leave empty (`""`) to di
 - Applies on top of the team limits below; reset at round start and map change
 - `sm_firesupport_ad_call` ignores it
 
+#### What players see
+
+So nobody wastes a marker without knowing it:
+
+- While a player who can call fire support holds a marker, the hint box shows whether throwing it now will call a strike: `READY` (with the team's strikes left this round when limited), `ready in Ns`, or `none left this round`. It goes through gg2_hint at status priority, so medic progress and warnings still take precedence, and the health display returns when they put the marker away.
+- When their personal cooldown ends, they get a chat line saying they can call fire support again (not after a handed-back cooldown or a reset).
+- A marker thrown while the team's per-type delay is running, or after the team's uses for the round are gone, now says so in chat. Both used to fail without a word.
+- Throws are never blocked: a marker that won't call a strike is still a smoke grenade.
+
 #### Team-Specific Limits
 
 These settings control usage limits and cooldowns independently for each team.

@@ -22,6 +22,9 @@ public Plugin myinfo =
 #include <timers>
 #include <morecolors>
 #include <discord>
+#undef REQUIRE_PLUGIN
+#include <gg2_hint>
+#define REQUIRE_PLUGIN
 
 const int   TEAM_SPECTATE     = 1;
 const int   TEAM_SECURITY     = 2;
@@ -104,6 +107,7 @@ ConVar      gCvarSkySearchPoints;
 bool        IsEnabled[MAXPLAYERS + 1];
 bool        IsEnabledTeam[4][MAX_SUPPORT_TYPES];            // [team][supportType] - per-type cooldown tracking
 int         CountAvailableSupport[4][MAX_SUPPORT_TYPES];    // [team][supportType]
+float       gTeamReadyAt[4][MAX_SUPPORT_TYPES];             // [team][supportType] - GetGameTime() IsEnabledTeam turns back on
 
 // Active fire support tracking
 // Note: Entity references accumulate during the round as entities are created.
@@ -179,6 +183,8 @@ public void OnPluginStart()
     HookEvent("player_death", Event_PlayerDeath);
     HookEvent("grenade_thrown", Event_GrenadeThrown);
     HookEvent("grenade_detonate", Event_GrenadeDetonate);
+
+    CreateTimer(0.5, Timer_ShowStatus, _, TIMER_REPEAT);
 
     // Database connection for stat tracking
     Database.Connect(OnDatabaseConnected, "insurgency-stats");
@@ -563,9 +569,13 @@ public Action Event_WeaponFire(Event event, const char[] name, bool dontBroadcas
         return Plugin_Handled;
     }
 
-    // Check if this support type is on cooldown
+    // Check if this support type is on cooldown. These two used to fail silently, so the marker
+    // landed as a plain smoke with no word of why; the player is now told (and see Timer_ShowStatus).
     if (!IsEnabledTeam[team][supportType])
     {
+        if (!IsFakeClient(client))
+            CPrintToChat(client, "{olivedrab}[Fire Support]{default} Your team can't call this again for %d second(s); no strike called.",
+                         RoundToCeil(gTeamReadyAt[team][supportType] - GetGameTime()));
         return Plugin_Handled;
     }
 
@@ -573,6 +583,8 @@ public Action Event_WeaponFire(Event event, const char[] name, bool dontBroadcas
     int maxCount = (team == TEAM_SECURITY) ? gSupportTypes[supportType].securityCount : gSupportTypes[supportType].insurgentCount;
     if (maxCount > 0 && CountAvailableSupport[team][supportType] < 1)
     {
+        if (!IsFakeClient(client))
+            CPrintToChat(client, "{olivedrab}[Fire Support]{default} Your team has used all its strikes this round; no strike called.");
         return Plugin_Handled;
     }
 
@@ -664,6 +676,7 @@ public Action Event_GrenadeDetonate(Event event, const char[] name, bool dontBro
         if (cooldown > 0.0)
         {
             IsEnabledTeam[team][supportType] = false;
+            gTeamReadyAt[team][supportType]  = GetGameTime() + cooldown;
 
             // Use DataPack to pass both team and supportType to timer
             DataPack cooldownPack            = new DataPack();
@@ -938,6 +951,7 @@ Action CmdCallFS(int client, int args)
             if (cooldown > 0.0)
             {
                 IsEnabledTeam[team][supportType] = false;
+                gTeamReadyAt[team][supportType]  = GetGameTime() + cooldown;
 
                 DataPack pack                    = new DataPack();
                 pack.WriteCell(team);
@@ -1157,8 +1171,74 @@ bool IsPlayerOnCooldown(int client)
 
 void StartPlayerCooldown(int client)
 {
-    if (gPlayerCooldown > 0.0)
-        gPlayerNextCall[client] = GetGameTime() + gPlayerCooldown;
+    if (gPlayerCooldown <= 0.0) return;
+
+    gPlayerNextCall[client] = GetGameTime() + gPlayerCooldown;
+    if (IsFakeClient(client)) return;
+
+    // Tell them when they can call again. The deadline goes with the timer, so a cooldown that has
+    // since been handed back (failed strike) or reset (new map) doesn't announce anything.
+    DataPack pack = new DataPack();
+    pack.WriteCell(GetClientUserId(client));
+    pack.WriteFloat(gPlayerNextCall[client]);
+    CreateTimer(gPlayerCooldown + 0.1, Timer_CooldownOver, pack, TIMER_FLAG_NO_MAPCHANGE | TIMER_DATA_HNDL_CLOSE);
+}
+
+Action Timer_CooldownOver(Handle timer, DataPack pack)
+{
+    pack.Reset();
+    int   client   = GetClientOfUserId(pack.ReadCell());
+    float deadline = pack.ReadFloat();
+    if (client == 0 || !IsClientInGame(client) || gPlayerNextCall[client] != deadline || !IsEnabled[client]) return Plugin_Stop;
+
+    CPrintToChat(client, "{olivedrab}[Fire Support]{default} You can call fire support again.");
+    return Plugin_Stop;
+}
+
+// While a player who can call fire support holds a marker grenade, shows in the hint box whether
+// throwing it now will call a strike (issue #7). Before, they only found out after throwing: a
+// marker thrown on cooldown lands as a plain smoke. Throws aren't blocked, since a plain smoke is
+// still useful cover.
+Action Timer_ShowStatus(Handle timer)
+{
+    if (!gCvarEnableWeapon.BoolValue) return Plugin_Continue;
+
+    float now = GetGameTime();
+    char  weapon[64];
+    for (int client = 1; client <= MaxClients; client++)
+    {
+        if (!IsClientInGame(client) || IsFakeClient(client) || !IsPlayerAlive(client) || !IsEnabled[client]) continue;
+
+        int team = GetClientTeam(client);
+        if (team != TEAM_SECURITY && team != TEAM_INSURGENT) continue;
+
+        GetClientWeapon(client, weapon, sizeof(weapon));
+        int supportType = -1;
+        for (int i = 0; i < gNumSupportTypes; i++)
+        {
+            if (StrContains(weapon, gSupportTypes[i].weapon, false) != -1)
+            {
+                supportType = i;
+                break;
+            }
+        }
+        if (supportType == -1) continue;
+
+        int   maxCount = (team == TEAM_SECURITY) ? gSupportTypes[supportType].securityCount : gSupportTypes[supportType].insurgentCount;
+        float wait     = gPlayerNextCall[client] - now;
+        if (!IsEnabledTeam[team][supportType] && gTeamReadyAt[team][supportType] - now > wait)
+            wait = gTeamReadyAt[team][supportType] - now;
+
+        if (maxCount > 0 && CountAvailableSupport[team][supportType] < 1)
+            HintShow(client, "fire_support", HINT_PRI_STATUS, 1.0, "Fire support: none left this round\n(throwing this only makes smoke)");
+        else if (wait > 0.0)
+            HintShow(client, "fire_support", HINT_PRI_STATUS, 1.0, "Fire support: ready in %ds\n(throwing now only makes smoke)", RoundToCeil(wait));
+        else if (maxCount > 0)
+            HintShow(client, "fire_support", HINT_PRI_STATUS, 1.0, "Fire support: READY\n%d left this round", CountAvailableSupport[team][supportType]);
+        else
+            HintShow(client, "fire_support", HINT_PRI_STATUS, 1.0, "Fire support: READY");
+    }
+    return Plugin_Continue;
 }
 
 void ResetPlayerCooldowns()

@@ -1,4 +1,7 @@
 #include <sourcemod>
+#undef REQUIRE_PLUGIN
+#include <gg2_hint>
+#define REQUIRE_PLUGIN
 
 #pragma newdecls required
 
@@ -73,5 +76,7 @@ public Action Timer_RefreshHealthText(Handle timer)
 
 public void ShowHealth(int client, int health)
 {
-    PrintHintText(client, "%t", "HintText Health Text", health);
+    // Lowest priority: other plugins' messages take the box and health comes back when they lapse.
+    // Current until just after the next refresh, so it never lapses while the player is alive.
+    HintShow(client, "health", HINT_PRI_AMBIENT, GetConVarFloat(cvar_show_health_display_delay) + 1.0, "%t", "HintText Health Text", health);
 }

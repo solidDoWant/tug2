@@ -3,6 +3,9 @@
 #include <smlib>
 #include <morecolors>
 #include <dbi>
+#undef REQUIRE_PLUGIN
+#include <gg2_hint>
+#define REQUIRE_PLUGIN
 
 #pragma newdecls required
 
@@ -284,13 +287,13 @@ public Action Event_WeaponDeploy(Event event, const char[] name, bool dontBroadc
 
     if (StrEqual(weapon_name, healthkit_weapon_name, false))
     {
-        PrintHintText(client, "%T", "justholdit", client);
+        HintShow(client, "hold_tip", HINT_PRI_NOTICE, 4.0, "%T", "justholdit", client);
         return Plugin_Continue;
     }
 
     if (StrEqual(weapon_name, defib_weapon_name, false))
     {
-        PrintHintText(client, "%T", "justholditdefib", client);
+        HintShow(client, "hold_tip", HINT_PRI_NOTICE, 4.0, "%T", "justholditdefib", client);
     }
 
     return Plugin_Continue;
