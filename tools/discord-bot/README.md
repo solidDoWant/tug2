@@ -41,6 +41,14 @@ the reporter to press **Confirm**.
   model call (no tools, about 1k tokens, a fraction of a cent on Haiku) writes
   a proper title and renames the thread (`THREAD_TITLES=false` turns this
   off). Threads someone else started are never renamed.
+- Or use `/ask question: ...`, which works anywhere a mention does. The bot
+  posts the question publicly as the command's response (Discord shows "used
+  /ask" above it) and answers it exactly like a mention: a new thread in the
+  bot channel, or in place inside a thread. Elsewhere it replies, visible
+  only to the asker, pointing to the bot channel. `/ask` is registered as a
+  guild command in the bot channel's server at startup, so it appears
+  immediately. To limit it to the bot channel in the `/` menu too, use
+  Server Settings → Integrations → the bot → `/ask`.
 - Follow-ups in that thread don't need a mention. The thread itself is the
   conversation history: the bot re-reads it on every message (up to
   `HISTORY_MESSAGES`), so nothing is stored and restarts lose nothing.
@@ -67,7 +75,9 @@ the reporter to press **Confirm**.
 1. Create an application and bot in the Discord developer portal.
 2. Under **Bot**, enable the **Message Content** privileged intent. It is what
    lets the bot read follow-ups in its threads that don't mention it.
-3. Invite it with the `bot` scope and these permissions in the bot channel:
+3. Invite it with the `bot` and `applications.commands` scopes (the second
+   is what lets it add `/ask`; without it, `/ask` is missing and the log says
+   so) and these permissions in the bot channel:
    View Channel, Send Messages, Send Messages in Threads, Create Public
    Threads, Read Message History, Embed Links. In every other channel it
    should read, it needs View Channel and Read Message History. See

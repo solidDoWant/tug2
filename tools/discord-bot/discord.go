@@ -26,8 +26,9 @@ type Bot struct {
 	// ctx is cancelled on shutdown so in-flight answers stop promptly.
 	ctx context.Context
 
-	mu       sync.Mutex
-	inFlight map[string]bool // users with a question being answered
+	mu                 sync.Mutex
+	inFlight           map[string]bool // users with a question being answered
+	commandsRegistered bool            // /ask is registered in the bot channel's guild
 }
 
 // NewSession creates the Discord session shared by the bot and the
@@ -71,6 +72,7 @@ func NewBot(ctx context.Context, cfg *Config, session *discordgo.Session, agent 
 	// Log which channels the model can read once each guild's data has
 	// arrived (after Ready), so access is easy to check from the logs.
 	session.AddHandler(func(s *discordgo.Session, g *discordgo.GuildCreate) {
+		b.registerCommands(s, g.ID)
 		chans, err := b.channels.Readable(g.ID)
 		if err != nil {
 			slog.Warn("listing readable channels", "guild", g.ID, "err", err)
@@ -346,17 +348,21 @@ func (b *Bot) history(threadID string) ([]Turn, error) {
 		return nil, err
 	}
 
+	me := b.session.State.User.ID
 	var msgs []*discordgo.Message
 	if starter, err := b.session.ChannelMessage(thread.ParentID, threadID); err == nil {
+		starter = asAsker(starter, me)
 		// What the first message builds on, e.g. a forward posted just
 		// before "@bot this isn't rendering properly".
 		var before []*discordgo.Message
 		if prev, err := b.session.ChannelMessages(thread.ParentID, maxLeadIn, threadID, "", ""); err == nil {
-			before = prev
+			for _, m := range prev {
+				before = append(before, asAsker(m, me))
+			}
 		} else {
 			slog.Warn("reading messages before thread start", "thread", threadID, "err", err)
 		}
-		msgs = append(msgs, leadIn(starter, before, b.session.State.User.ID)...)
+		msgs = append(msgs, leadIn(starter, before, me)...)
 		msgs = append(msgs, starter)
 	}
 
@@ -369,12 +375,13 @@ func (b *Bot) history(threadID string) ([]Turn, error) {
 		return nil, err
 	}
 	slices.Reverse(recent) // the API returns newest first
-	msgs = append(msgs, recent...)
+	for _, m := range recent {
+		msgs = append(msgs, asAsker(m, me))
+	}
 
-	me := b.session.State.User.ID
 	var turns []Turn
 	for _, m := range msgs {
-		if m.Author == nil || (m.Type != discordgo.MessageTypeDefault && m.Type != discordgo.MessageTypeReply) {
+		if m.Author == nil || (m.Type != discordgo.MessageTypeDefault && m.Type != discordgo.MessageTypeReply && !isAsk(m)) {
 			continue
 		}
 		if m.Author.ID == me {
@@ -400,8 +407,9 @@ const (
 // the message it replies to, and the run of messages its author posted just
 // before it (each within leadInGap of the next), such as a forward followed by
 // "@bot what's wrong with this?". before is the parent channel's messages
-// preceding the starter, newest first. The run stops at anyone else's message
-// and at a message addressed to the bot (an @mention or a reply to it),
+// preceding the starter, newest first (with /ask responses already turned
+// into their askers' questions). The run stops at anyone else's message and
+// at a message addressed to the bot (an @mention, a reply to it or an /ask),
 // which is a question of its own.
 func leadIn(starter *discordgo.Message, before []*discordgo.Message, botID string) []*discordgo.Message {
 	var run []*discordgo.Message
@@ -409,7 +417,7 @@ func leadIn(starter *discordgo.Message, before []*discordgo.Message, botID strin
 	for _, m := range before {
 		if m.Author == nil || starter.Author == nil || m.Author.ID != starter.Author.ID ||
 			next.Sub(m.Timestamp) > leadInGap ||
-			addressesBot(m, botID) {
+			addressesBot(m, botID) || isAsk(m) {
 			break
 		}
 		run = append(run, m)
@@ -539,6 +547,10 @@ func draftButtons(kind IssueKind, userID string, disabled bool) []discordgo.Mess
 }
 
 func (b *Bot) onInteraction(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	if i.Type == discordgo.InteractionApplicationCommand && i.ApplicationCommandData().Name == askCommand {
+		b.onAsk(s, i)
+		return
+	}
 	if i.Type != discordgo.InteractionMessageComponent || i.Message == nil {
 		return
 	}
