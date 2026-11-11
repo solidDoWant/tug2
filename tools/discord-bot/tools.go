@@ -20,7 +20,9 @@ import (
 // the issue draft (at most one) the model produced for them.
 type toolContext struct {
 	guildID string
-	draft   *IssueDraft
+	// asker is the display name of the user whose message is being answered.
+	asker string
+	draft *IssueDraft
 }
 
 // tool is one function the model may call. run returns the content for the
@@ -174,24 +176,39 @@ func clampPage(limit, offset int) (int, int) {
 func (ts *Toolset) addStatsTools(serverProp map[string]any, defaultServer string, stats *StatsClient) {
 	ts.add("find_players",
 		"Search players by in-game name (case-insensitive substring of their most recent name). "+
-			"Use this to turn a name into a steam_id before calling get_player. Returns up to 10 matches with their headline stats. "+
-			"Players who have not connected since names started being recorded have no name and cannot be found this way.",
+			"Use this to turn a name into a steam_id before calling get_player. Returns up to 10 matches per name searched, with their headline stats. "+
+			"Set me=true instead of name to look up the asking user: it searches their Discord display name whole and in parts, "+
+			"because many people put their Steam name in brackets after their Discord name (\"discordname [SteamName]\"). "+
+			"Brackets can also hold a clan tag or be part of the name, so check which part each player matched before assuming. "+
+			"A player who has never had a name recorded cannot be found this way.",
 		map[string]any{
-			"name":   prop("string", "Part of the player's in-game name."),
+			"name":   prop("string", "Part of the player's in-game name. Omit when me is true."),
+			"me":     prop("boolean", "True to search for the asking user by their Discord display name and its parts."),
 			"server": serverProp,
-		}, []string{"name"},
-		func(ctx context.Context, _ *toolContext, raw json.RawMessage) (any, error) {
-			var in struct{ Name, Server string }
+		}, nil,
+		func(ctx context.Context, tc *toolContext, raw json.RawMessage) (any, error) {
+			var in struct {
+				Name, Server string
+				Me           bool
+			}
 			if err := decode(raw, &in); err != nil {
 				return nil, err
 			}
-			if strings.TrimSpace(in.Name) == "" {
-				return nil, errors.New("name must not be empty")
+			server := pickServer(in.Server, defaultServer)
+			name := strings.TrimSpace(in.Name)
+			switch {
+			case in.Me && name != "":
+				return nil, errors.New("give either name or me, not both")
+			case in.Me:
+				names := nameCandidates(tc.asker)
+				if len(names) == 0 {
+					return nil, errors.New("the asking user's Discord name is unknown or too short to search; ask for their in-game name")
+				}
+				return findPlayersByNames(ctx, stats, server, tc.asker, names)
+			case name == "":
+				return nil, errors.New("give a name to search for, or set me to true")
 			}
-			q := pageQuery(10, 0)
-			q.Set("name", strings.TrimSpace(in.Name))
-			q.Set("sort", "score")
-			return stats.Get(ctx, pickServer(in.Server, defaultServer), "/api/v1/players", q)
+			return stats.Get(ctx, server, "/api/v1/players", playerNameQuery(name))
 		})
 
 	ts.add("get_player",

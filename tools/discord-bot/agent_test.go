@@ -172,3 +172,34 @@ func TestAgentStopsAtRoundLimit(t *testing.T) {
 func anthropicToolUnion(p *anthropic.ToolParam) anthropic.ToolUnionParam {
 	return anthropic.ToolUnionParam{OfTool: p}
 }
+
+// TestAgentToolsSeeAsker checks the tools get the display name of the user
+// being answered: the latest user message, not the thread's first poster.
+func TestAgentToolsSeeAsker(t *testing.T) {
+	server := httptest.NewServer(&fakeModel{inputTokens: 10})
+	t.Cleanup(server.Close)
+	t.Setenv("ANTHROPIC_BASE_URL", server.URL)
+	t.Setenv("ANTHROPIC_API_KEY", "test")
+
+	var askers []string
+	ts := &Toolset{tools: map[string]tool{}}
+	ts.add("probe", "test tool", map[string]any{}, nil, func(_ context.Context, tc *toolContext, _ json.RawMessage) (any, error) {
+		askers = append(askers, tc.asker)
+		return map[string]string{"ok": "yes"}, nil
+	})
+	p := ts.tools["probe"].param
+	ts.params = append(ts.params, anthropicToolUnion(&p))
+	agent := NewAgent(&Config{Model: "fake", Effort: "low", MaxTokens: 1000, MaxToolRounds: 1}, ts, false, nil)
+
+	history := []Turn{
+		{Author: "TestUserOne", Text: "first"},
+		{FromBot: true, Text: "reply"},
+		{Author: "discordtwo [TestPlayerBeta]", Text: "my stats?"},
+	}
+	if _, err := agent.Answer(context.Background(), "1", history); err != nil {
+		t.Fatal(err)
+	}
+	if len(askers) == 0 || askers[0] != "discordtwo [TestPlayerBeta]" {
+		t.Errorf("tools saw askers %q", askers)
+	}
+}

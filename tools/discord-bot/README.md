@@ -10,7 +10,9 @@ the reporter to press **Confirm**.
 
 - **Stats:** player, weapon, map, bot, medic, team-kill and fire-support stats
   from each server's [stats-api](../stats-api), including lookups by in-game
-  name ("how's TestPlayerAlpha doing?", "top 5 by K/D on test").
+  name ("how's TestPlayerAlpha doing?", "top 5 by K/D on test"). "My stats"
+  searches the asker's Discord display name whole and in parts, so a Steam
+  name in brackets ("discordname [SteamName]") is found too.
 - **Live server state:** map, players (names, scores, time connected), round
   number, objective progress, and whether the map vote is up. This comes from
   the Source server query (A2S) on the game port, so it needs no RCON password.

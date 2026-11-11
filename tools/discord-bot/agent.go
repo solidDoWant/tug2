@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"slices"
 	"strings"
 	"time"
 
@@ -116,7 +117,7 @@ What you can do:
 
 Answering stats questions:
 - Always get numbers from the tools. Never estimate or invent stats. If the data doesn't cover the question, say so plainly.
-- Players are stored by SteamID. To look someone up by name, use find_players; if several players match, list them briefly and ask which one. "Me"/"my" refers to the asking user, whose Discord name may differ from their in-game name: search for it, and if nothing clearly matches, ask for their in-game name.
+- Players are stored by SteamID. To look someone up by name, use find_players; if several players match, list them briefly and ask which one. "Me"/"my" refers to the asking user, whose Discord name may differ from their in-game name: call find_players with me=true, which also tries the parts of their name, since many people add their Steam name in brackets ("discordname [SteamName]"). If one player clearly matches, use them and say which name you matched on; if several could be them, list them and ask; if none, ask for their in-game name.
 - Derived figures are fine when computed from tool data (K/D = kills / deaths, win rate, headshot %%). Round sensibly.
 - Times from the tools are UTC.
 
@@ -142,6 +143,12 @@ func (a *Agent) Answer(ctx context.Context, guildID string, history []Turn) (Ans
 	}
 
 	tc := &toolContext{guildID: guildID}
+	for _, t := range slices.Backward(history) {
+		if !t.FromBot {
+			tc.asker = t.Author
+			break
+		}
+	}
 	params := anthropic.MessageNewParams{
 		Model:        anthropic.Model(a.cfg.Model),
 		MaxTokens:    a.cfg.MaxTokens,
