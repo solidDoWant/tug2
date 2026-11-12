@@ -426,6 +426,7 @@ liveness probe at `/livez` and readiness at `/readyz` on `HEALTH_ADDR`.
 | `LLM_TOKENS_PER_QUESTION`       | `150000`           | Total tokens one question may use across all its model calls; `0` for no cap. See [Limits per question](#limits-per-question). |
 | `HISTORY_MESSAGES`              | `40`               | Thread messages sent as context (max 100).                                                                          |
 | `THREAD_TITLES`                 | `true`             | Have the model title each thread the bot starts, with a separate small call.                                        |
+| `THREAD_AUTO_ARCHIVE_MINUTES`   | `60`               | Inactivity before the bot's threads auto-archive: `60`, `1440`, `4320` or `10080` (Discord's only values).            |
 | `GITHUB_REPO`                   | _(empty)_          | `owner/name`, e.g. `solidDoWant/tug2`.                                                                              |
 | `GITHUB_APP_ID`                 | _(empty)_          | The GitHub App's ID.                                                                                                |
 | `GITHUB_APP_PRIVATE_KEY_FILE`   | _(empty)_          | Path to the app's private key (`.pem`). Or pass the PEM itself in `GITHUB_APP_PRIVATE_KEY`.                         |

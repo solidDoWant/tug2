@@ -234,7 +234,7 @@ func (b *Bot) answer(m *discordgo.Message, threadID string) {
 	if newThread {
 		thread, err := b.session.MessageThreadStartComplex(m.ChannelID, m.ID, &discordgo.ThreadStart{
 			Name:                threadName(b.cleanContent(m)),
-			AutoArchiveDuration: 1440,
+			AutoArchiveDuration: b.cfg.ThreadArchiveMinutes,
 		})
 		if err != nil {
 			log.Error("starting thread", "err", err)

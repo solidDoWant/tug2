@@ -166,3 +166,32 @@ func TestWorkloadIdentityEndToEnd(t *testing.T) {
 		t.Errorf("requests authenticated as %v, want %v", authSeen, want)
 	}
 }
+
+func TestThreadArchiveMinutes(t *testing.T) {
+	for _, tc := range []struct {
+		value   string
+		want    int
+		wantErr bool
+	}{
+		{"", 60, false},
+		{"1440", 1440, false},
+		{"10080", 10080, false},
+		{"30", 0, true},
+		{"abc", 0, true},
+	} {
+		wifEnv(t, map[string]string{"ANTHROPIC_API_KEY": "k", "THREAD_AUTO_ARCHIVE_MINUTES": tc.value})
+		cfg, err := ParseConfig()
+		if tc.wantErr {
+			if err == nil || !strings.Contains(err.Error(), "THREAD_AUTO_ARCHIVE_MINUTES") {
+				t.Errorf("%q: want an error naming THREAD_AUTO_ARCHIVE_MINUTES, got %v", tc.value, err)
+			}
+			continue
+		}
+		if err != nil {
+			t.Fatalf("%q: %v", tc.value, err)
+		}
+		if cfg.ThreadArchiveMinutes != tc.want {
+			t.Errorf("%q: got %d, want %d", tc.value, cfg.ThreadArchiveMinutes, tc.want)
+		}
+	}
+}

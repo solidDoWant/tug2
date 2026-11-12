@@ -86,6 +86,9 @@ type Config struct {
 	// ThreadTitles has the model rename each thread the bot starts, with a
 	// small separate call, instead of keeping the question's first words.
 	ThreadTitles bool
+	// ThreadArchiveMinutes is the auto-archive duration of the threads the bot
+	// starts: 60, 1440, 4320 or 10080, the only values Discord accepts.
+	ThreadArchiveMinutes int
 
 	// GitHub App credentials. Issues are filed as the app ("name[bot]"), not
 	// as any person. The installation is looked up from the repo at startup
@@ -210,6 +213,15 @@ func ParseConfig() (*Config, error) {
 	errs = append(errs, err)
 	c.ThreadTitles, err = getEnvBool("THREAD_TITLES", true)
 	errs = append(errs, err)
+	c.ThreadArchiveMinutes, err = getEnvInt("THREAD_AUTO_ARCHIVE_MINUTES", 60)
+	errs = append(errs, err)
+	if err == nil {
+		switch c.ThreadArchiveMinutes {
+		case 60, 1440, 4320, 10080:
+		default:
+			errs = append(errs, fmt.Errorf("THREAD_AUTO_ARCHIVE_MINUTES must be 60, 1440, 4320 or 10080, got %d", c.ThreadArchiveMinutes))
+		}
+	}
 	c.QuestionsPerHour, err = getEnvInt("RATE_LIMIT_QUESTIONS_PER_HOUR", 20)
 	errs = append(errs, err)
 	c.IssuesPerDay, err = getEnvInt("RATE_LIMIT_ISSUES_PER_DAY", 5)
