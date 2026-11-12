@@ -78,12 +78,12 @@ FROM (VALUES
 JOIN map_stats m ON m.map_name = v.map_name;
 
 -- Medics (gg2_medic_tracker) -- medic_time is seconds spent as medic ---------
-INSERT INTO medics (steamId, medic_time)
+INSERT INTO medics (steamId, medic_time, heals, revives)
 VALUES
-    ('76561198000000003', 30000),
-    ('76561198000000001', 14400),
-    ('76561198000000002', 8200),
-    ('76561198000000004', 1500)
+    ('76561198000000003', 30000, 40, 95),
+    ('76561198000000001', 14400, 22, 30),
+    ('76561198000000002', 8200, 31, 12),
+    ('76561198000000004', 1500, 0, 2)
 ON CONFLICT (steamId) DO NOTHING;
 
 -- Team kills (gg2_teamkill) -- steam_id is BIGINT here -----------------------
@@ -99,14 +99,15 @@ ON CONFLICT (steam_id) DO NOTHING;
 -- Team kill log (gg2_teamkill) -- per-incident rows behind tk_forgiven and
 -- /teamkills/weapons. Deliberately fewer rows than player_tks.tk_given, as on
 -- production where the totals predate the log.
-INSERT INTO player_tk_logs (attacker_steam_id, victim_steam_id, weapon, forgiven)
+-- The two older rows fall outside a 30-day window.
+INSERT INTO player_tk_logs (attacker_steam_id, victim_steam_id, weapon, forgiven, created_at)
 VALUES
-    (76561198000000004, 76561198000000002, 'weapon_m1014', FALSE),
-    (76561198000000004, 76561198000000002, 'weapon_m1014', TRUE),
-    (76561198000000004, 76561198000000001, 'grenade_m67',  FALSE),
-    (76561198000000001, 76561198000000002, 'weapon_m16a4', TRUE),
-    (76561198000000002, 76561198000000004, 'grenade_m67',  TRUE),
-    (76561198000000002, 76561198000000001, NULL,           FALSE);
+    (76561198000000004, 76561198000000002, 'weapon_m1014', FALSE, CURRENT_TIMESTAMP - INTERVAL '2 days'),
+    (76561198000000004, 76561198000000002, 'weapon_m1014', TRUE,  CURRENT_TIMESTAMP - INTERVAL '1 day'),
+    (76561198000000004, 76561198000000001, 'grenade_m67',  FALSE, CURRENT_TIMESTAMP - INTERVAL '60 days'),
+    (76561198000000001, 76561198000000002, 'weapon_m16a4', TRUE,  CURRENT_TIMESTAMP - INTERVAL '3 days'),
+    (76561198000000002, 76561198000000004, 'grenade_m67',  TRUE,  CURRENT_TIMESTAMP - INTERVAL '90 days'),
+    (76561198000000002, 76561198000000001, NULL,           FALSE, CURRENT_TIMESTAMP - INTERVAL '5 days');
 
 -- Map playtime (map_logger) -- 'district' has playtime but no logged rounds,
 -- and 'peak' has rounds (above) but no playtime, to exercise the full join.
@@ -125,3 +126,40 @@ VALUES
     ('76561198000000001', 17, EXTRACT(EPOCH FROM NOW() - INTERVAL '5 days')::INTEGER),
     ('76561198000000002',  3, 0)
 ON CONFLICT (steamId) DO NOTHING;
+
+-- Per-round history (issue #10) -- what each player added, with when. Rows
+-- 40 days old fall outside a 30-day window. Not re-run safe (no unique key).
+WITH r AS (
+    INSERT INTO player_rounds (steam_id, recorded_at, map_name, kills, deaths, headshot_given, caps, score, wins, losses, killstreak, play_time_seconds, shots, enemy_hits, friendly_hits)
+    VALUES
+        ('76561198000000001', CURRENT_TIMESTAMP - INTERVAL '1 day',   'ministry', 40, 3, 10, 2, 1200, 1, 0, 15, 1500, 300, 140, 1),
+        ('76561198000000001', CURRENT_TIMESTAMP - INTERVAL '40 days', 'sinjar',   90, 1, 20, 1, 2000, 0, 1, 33, 1800, 500, 200, 0),
+        ('76561198000000002', CURRENT_TIMESTAMP - INTERVAL '2 days',  'ministry', 55, 9,  8, 0, 1500, 1, 0,  7, 1700, 600, 180, 4),
+        ('76561198000000003', CURRENT_TIMESTAMP - INTERVAL '3 days',  'buhriz',   12, 2,  3, 4,  900, 0, 1,  5, 1300, 100,  60, 0)
+    RETURNING id, steam_id, recorded_at
+)
+INSERT INTO player_round_weapons (round_id, weapon_id, kills, shots, enemy_hits, friendly_hits)
+SELECT r.id, w.weapon_id, v.kills, v.shots, v.enemy_hits, v.friendly_hits
+FROM r
+JOIN (VALUES
+    ('76561198000000001', 1,  'm16a4', 40, 300, 140, 1),
+    ('76561198000000001', 40, 'm16a4', 90, 500, 200, 0),
+    ('76561198000000002', 2,  'ak47',  50, 600, 180, 4),
+    ('76561198000000002', 2,  'm9',     5,   0,   0, 0),
+    ('76561198000000003', 3,  'm24',   12, 100,  60, 0)
+) AS v(steam_id, days_ago, weapon_name, kills, shots, enemy_hits, friendly_hits)
+  ON v.steam_id = r.steam_id AND r.recorded_at::date = (CURRENT_TIMESTAMP - make_interval(days => v.days_ago))::date
+JOIN weapon_stats w ON w.weapon_name = v.weapon_name;
+
+INSERT INTO medic_rounds (steam_id, recorded_at, medic_time, heals, revives)
+VALUES
+    ('76561198000000003', CURRENT_TIMESTAMP - INTERVAL '1 day',   1200, 3, 7),
+    ('76561198000000002', CURRENT_TIMESTAMP - INTERVAL '2 days',  1800, 6, 2),
+    ('76561198000000001', CURRENT_TIMESTAMP - INTERVAL '45 days', 3000, 9, 9);
+
+INSERT INTO fire_support_calls (steam_id, called_at)
+VALUES
+    ('76561198000000003', CURRENT_TIMESTAMP - INTERVAL '1 day'),
+    ('76561198000000003', CURRENT_TIMESTAMP - INTERVAL '2 days'),
+    ('76561198000000001', CURRENT_TIMESTAMP - INTERVAL '3 days'),
+    ('76561198000000001', CURRENT_TIMESTAMP - INTERVAL '50 days');

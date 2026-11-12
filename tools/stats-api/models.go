@@ -32,7 +32,10 @@ type PlayerStats struct {
 	// shots recorded.
 	EnemyHitRate *float64  `json:"enemy_hit_rate"`
 	CreatedAt    time.Time `json:"created_at"`
-	UpdatedAt    time.Time `json:"updated_at"`
+	// Window is set on a single player's stats when the request asked for a
+	// time window; the stats are then those in it.
+	Window    *WindowInfo `json:"window,omitempty"`
+	UpdatedAt time.Time   `json:"updated_at"`
 }
 
 // PlayerWeapon is one weapon in a player's breakdown: kills (player_kills)
@@ -122,6 +125,10 @@ type MedicStats struct {
 	SteamID   string  `json:"steam_id"`
 	Name      *string `json:"name"`
 	MedicTime int     `json:"medic_time"`
+	// Heals and Revives are full heals given and revives completed, as medic
+	// or not. Counted since 2026-11.
+	Heals   int `json:"heals"`
+	Revives int `json:"revives"`
 }
 
 // TeamKillStats is a player's team-kill record (from the gg2_teamkill schema).
@@ -169,4 +176,6 @@ type ListResponse[T any] struct {
 	Total  int `json:"total"`
 	Limit  int `json:"limit"`
 	Offset int `json:"offset"`
+	// Window is set when the request asked for a time window.
+	Window *WindowInfo `json:"window,omitempty"`
 }

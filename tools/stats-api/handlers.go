@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"net/http"
+	"time"
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/danielgtaylor/huma/v2/adapters/humago"
@@ -95,6 +97,25 @@ type ListPlayersInput struct {
 	Sort string `query:"sort" default:"score" enum:"kills,deaths,score,wins,killstreak,caps,kd,play_time,accuracy,updated_at" doc:"Column to order by, descending. accuracy ranks players with at least 500 recorded shots by enemy hit rate; everyone else follows."`
 	Name string `query:"name" maxLength:"128" doc:"Only players whose most recent in-game name contains this text (case-insensitive)."`
 	PageInput
+	PeriodInput
+}
+
+// WindowedPageInput is a paginated list that also takes a time window.
+type WindowedPageInput struct {
+	PageInput
+	PeriodInput
+}
+
+// PlayerInput is a player's SteamID with an optional time window.
+type PlayerInput struct {
+	SteamIDInput
+	PeriodInput
+}
+
+type ListMedicsInput struct {
+	Sort string `query:"sort" default:"time" enum:"time,heals,revives" doc:"Order by seconds played as medic, full heals given, or revives completed; descending. Heals and revives are counted since 2026-11."`
+	PageInput
+	PeriodInput
 }
 
 type PlayersOutput struct {
@@ -116,6 +137,7 @@ type PlayerWeaponsOutput struct {
 type ListWeaponsInput struct {
 	Sort string `query:"sort" default:"kills" enum:"kills,shots,accuracy" doc:"Order by total kills, rounds fired, or enemy hit rate (weapons with at least 1000 recorded shots first, then the rest); descending."`
 	PageInput
+	PeriodInput
 }
 
 type WeaponsOutput struct {
@@ -126,6 +148,7 @@ type WeaponAccuracyInput struct {
 	WeaponName string `path:"weapon_name" example:"m4a1" maxLength:"64" doc:"Weapon name as in /api/v1/weapons (no weapon_ prefix)."`
 	MinShots   int    `query:"min_shots" default:"100" minimum:"1" maximum:"100000" doc:"Only players with at least this many recorded shots with the weapon, so a few lucky shots don't top the list."`
 	PageInput
+	PeriodInput
 }
 
 type WeaponAccuracyOutput struct {
@@ -310,27 +333,62 @@ func writeStatus(w http.ResponseWriter, code int, status string) {
 
 // --- handlers --------------------------------------------------------------
 
+// window resolves an endpoint's time-window query; a bad one is a 422.
+func window(p PeriodInput) (*Window, error) {
+	w, err := p.resolve(time.Now())
+	if err != nil {
+		return nil, huma.Error422UnprocessableEntity(err.Error())
+	}
+	return w, nil
+}
+
+// windowInfo describes w for a response; failing to read where the history
+// starts only loses that detail, not the response.
+func (s *Server) windowInfo(ctx context.Context, w *Window, source string) *WindowInfo {
+	info, err := s.store.WindowInfo(ctx, w, source)
+	if err != nil {
+		slog.WarnContext(ctx, "reading history start", "source", source, "err", err)
+		return &WindowInfo{Since: w.Since, Until: w.Until}
+	}
+	return info
+}
+
 func (s *Server) listPlayers(ctx context.Context, in *ListPlayersInput) (*PlayersOutput, error) {
-	players, total, err := s.store.ListPlayers(ctx, in.Sort, in.Name, in.Limit, in.Offset)
+	w, err := window(in.PeriodInput)
+	if err != nil {
+		return nil, err
+	}
+	players, total, err := s.store.ListPlayers(ctx, w, in.Sort, in.Name, in.Limit, in.Offset)
 	if err != nil {
 		return nil, huma.Error500InternalServerError("failed to list players")
 	}
-	return &PlayersOutput{Body: page(players, total, in.PageInput)}, nil
+	out := &PlayersOutput{Body: page(players, total, in.PageInput)}
+	out.Body.Window = s.windowInfo(ctx, w, "players")
+	return out, nil
 }
 
-func (s *Server) getPlayer(ctx context.Context, in *SteamIDInput) (*PlayerOutput, error) {
-	player, err := s.store.GetPlayer(ctx, in.SteamID)
+func (s *Server) getPlayer(ctx context.Context, in *PlayerInput) (*PlayerOutput, error) {
+	w, err := window(in.PeriodInput)
+	if err != nil {
+		return nil, err
+	}
+	player, err := s.store.GetPlayer(ctx, w, in.SteamID)
 	if errors.Is(err, ErrNotFound) {
 		return nil, huma.Error404NotFound("player not found")
 	}
 	if err != nil {
 		return nil, huma.Error500InternalServerError("failed to fetch player")
 	}
+	player.Window = s.windowInfo(ctx, w, "players")
 	return &PlayerOutput{Body: *player}, nil
 }
 
-func (s *Server) getPlayerWeapons(ctx context.Context, in *SteamIDInput) (*PlayerWeaponsOutput, error) {
-	weapons, err := s.store.GetPlayerWeapons(ctx, in.SteamID)
+func (s *Server) getPlayerWeapons(ctx context.Context, in *PlayerInput) (*PlayerWeaponsOutput, error) {
+	w, err := window(in.PeriodInput)
+	if err != nil {
+		return nil, err
+	}
+	weapons, err := s.store.GetPlayerWeapons(ctx, w, in.SteamID)
 	if err != nil {
 		return nil, huma.Error500InternalServerError("failed to fetch player weapons")
 	}
@@ -338,22 +396,34 @@ func (s *Server) getPlayerWeapons(ctx context.Context, in *SteamIDInput) (*Playe
 }
 
 func (s *Server) listWeapons(ctx context.Context, in *ListWeaponsInput) (*WeaponsOutput, error) {
-	weapons, total, err := s.store.ListWeapons(ctx, in.Sort, in.Limit, in.Offset)
+	w, err := window(in.PeriodInput)
+	if err != nil {
+		return nil, err
+	}
+	weapons, total, err := s.store.ListWeapons(ctx, w, in.Sort, in.Limit, in.Offset)
 	if err != nil {
 		return nil, huma.Error500InternalServerError("failed to list weapons")
 	}
-	return &WeaponsOutput{Body: page(weapons, total, in.PageInput)}, nil
+	out := &WeaponsOutput{Body: page(weapons, total, in.PageInput)}
+	out.Body.Window = s.windowInfo(ctx, w, "players")
+	return out, nil
 }
 
 func (s *Server) getWeaponAccuracy(ctx context.Context, in *WeaponAccuracyInput) (*WeaponAccuracyOutput, error) {
-	players, total, err := s.store.GetWeaponAccuracy(ctx, in.WeaponName, in.MinShots, in.Limit, in.Offset)
+	w, err := window(in.PeriodInput)
+	if err != nil {
+		return nil, err
+	}
+	players, total, err := s.store.GetWeaponAccuracy(ctx, w, in.WeaponName, in.MinShots, in.Limit, in.Offset)
 	if errors.Is(err, ErrNotFound) {
 		return nil, huma.Error404NotFound("weapon not found")
 	}
 	if err != nil {
 		return nil, huma.Error500InternalServerError("failed to fetch weapon accuracy")
 	}
-	return &WeaponAccuracyOutput{Body: page(players, total, in.PageInput)}, nil
+	out := &WeaponAccuracyOutput{Body: page(players, total, in.PageInput)}
+	out.Body.Window = s.windowInfo(ctx, w, "players")
+	return out, nil
 }
 
 func (s *Server) listMaps(ctx context.Context, in *ListMapsInput) (*MapsOutput, error) {
@@ -388,36 +458,60 @@ func (s *Server) getBotWeapons(ctx context.Context, in *BotNameInput) (*BotWeapo
 	return &BotWeaponsOutput{Body: weapons}, nil
 }
 
-func (s *Server) listMedics(ctx context.Context, in *PageInput) (*MedicsOutput, error) {
-	medics, total, err := s.store.ListMedics(ctx, in.Limit, in.Offset)
+func (s *Server) listMedics(ctx context.Context, in *ListMedicsInput) (*MedicsOutput, error) {
+	w, err := window(in.PeriodInput)
+	if err != nil {
+		return nil, err
+	}
+	medics, total, err := s.store.ListMedics(ctx, w, in.Sort, in.Limit, in.Offset)
 	if err != nil {
 		return nil, huma.Error500InternalServerError("failed to list medics")
 	}
-	return &MedicsOutput{Body: page(medics, total, *in)}, nil
+	out := &MedicsOutput{Body: page(medics, total, in.PageInput)}
+	out.Body.Window = s.windowInfo(ctx, w, "medics")
+	return out, nil
 }
 
-func (s *Server) listTeamKills(ctx context.Context, in *PageInput) (*TeamKillsOutput, error) {
-	teamKills, total, err := s.store.ListTeamKills(ctx, in.Limit, in.Offset)
+func (s *Server) listTeamKills(ctx context.Context, in *WindowedPageInput) (*TeamKillsOutput, error) {
+	w, err := window(in.PeriodInput)
+	if err != nil {
+		return nil, err
+	}
+	teamKills, total, err := s.store.ListTeamKills(ctx, w, in.Limit, in.Offset)
 	if err != nil {
 		return nil, huma.Error500InternalServerError("failed to list team kills")
 	}
-	return &TeamKillsOutput{Body: page(teamKills, total, *in)}, nil
+	out := &TeamKillsOutput{Body: page(teamKills, total, in.PageInput)}
+	out.Body.Window = s.windowInfo(ctx, w, "teamkills")
+	return out, nil
 }
 
-func (s *Server) listTeamKillWeapons(ctx context.Context, in *PageInput) (*TeamKillWeaponsOutput, error) {
-	weapons, total, err := s.store.ListTeamKillWeapons(ctx, in.Limit, in.Offset)
+func (s *Server) listTeamKillWeapons(ctx context.Context, in *WindowedPageInput) (*TeamKillWeaponsOutput, error) {
+	w, err := window(in.PeriodInput)
+	if err != nil {
+		return nil, err
+	}
+	weapons, total, err := s.store.ListTeamKillWeapons(ctx, w, in.Limit, in.Offset)
 	if err != nil {
 		return nil, huma.Error500InternalServerError("failed to list team kill weapons")
 	}
-	return &TeamKillWeaponsOutput{Body: page(weapons, total, *in)}, nil
+	out := &TeamKillWeaponsOutput{Body: page(weapons, total, in.PageInput)}
+	out.Body.Window = s.windowInfo(ctx, w, "teamkills")
+	return out, nil
 }
 
-func (s *Server) listFireSupport(ctx context.Context, in *PageInput) (*FireSupportOutput, error) {
-	players, total, err := s.store.ListFireSupport(ctx, in.Limit, in.Offset)
+func (s *Server) listFireSupport(ctx context.Context, in *WindowedPageInput) (*FireSupportOutput, error) {
+	w, err := window(in.PeriodInput)
+	if err != nil {
+		return nil, err
+	}
+	players, total, err := s.store.ListFireSupport(ctx, w, in.Limit, in.Offset)
 	if err != nil {
 		return nil, huma.Error500InternalServerError("failed to list fire support")
 	}
-	return &FireSupportOutput{Body: page(players, total, *in)}, nil
+	out := &FireSupportOutput{Body: page(players, total, in.PageInput)}
+	out.Body.Window = s.windowInfo(ctx, w, "firesupport")
+	return out, nil
 }
 
 // page wraps a slice and total into the standard pagination envelope.

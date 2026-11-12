@@ -69,17 +69,18 @@ const (
 // leaderboards maps the board names the model sees to stats-api paths and the
 // sort values each accepts (nil: fixed order).
 var leaderboards = map[string]struct {
-	path  string
-	sorts []string
+	path     string
+	sorts    []string
+	windowed bool // takes period/since/until
 }{
-	"players":          {"/api/v1/players", []string{"score", "kills", "deaths", "wins", "killstreak", "caps", "kd", "play_time", "accuracy", "updated_at"}},
-	"weapons":          {"/api/v1/weapons", []string{"kills", "shots", "accuracy"}},
-	"maps":             {"/api/v1/maps", []string{"rounds", "play_time", "last_played"}},
-	"bots":             {"/api/v1/bots", nil},
-	"medics":           {"/api/v1/medics", nil},
-	"teamkills":        {"/api/v1/teamkills", nil},
-	"teamkill_weapons": {"/api/v1/teamkills/weapons", nil},
-	"fire_support":     {"/api/v1/fire-support", nil},
+	"players":          {"/api/v1/players", []string{"score", "kills", "deaths", "wins", "killstreak", "caps", "kd", "play_time", "accuracy", "updated_at"}, true},
+	"weapons":          {"/api/v1/weapons", []string{"kills", "shots", "accuracy"}, true},
+	"maps":             {"/api/v1/maps", []string{"rounds", "play_time", "last_played"}, false},
+	"bots":             {"/api/v1/bots", nil, false},
+	"medics":           {"/api/v1/medics", []string{"time", "heals", "revives"}, true},
+	"teamkills":        {"/api/v1/teamkills", nil, true},
+	"teamkill_weapons": {"/api/v1/teamkills/weapons", nil, true},
+	"fire_support":     {"/api/v1/fire-support", nil, true},
 }
 
 // sortedKeys gives a stable order, which keeps the tool definitions (and so
@@ -203,6 +204,38 @@ func pickServer(requested, fallback string) string {
 	return strings.ToLower(requested)
 }
 
+// periodProps are the time-window parameters of the stats tools that take one.
+func periodProps(props map[string]any) map[string]any {
+	props["period"] = prop("string", "Only count the last N days, e.g. 7d, 30d or 365d, instead of all time. Omit for lifetime stats. Not with since/until.")
+	props["since"] = prop("string", "Only count from this UTC date (YYYY-MM-DD), inclusive. Omit for lifetime stats.")
+	props["until"] = prop("string", "Only count before this UTC date (YYYY-MM-DD), exclusive. Defaults to now.")
+	return props
+}
+
+// periodInput is what periodProps adds to a tool's input.
+type periodInput struct {
+	Period, Since, Until string
+}
+
+// set adds the window, if any, to a stats-api query.
+func (p periodInput) set(q url.Values) url.Values {
+	if q == nil {
+		q = url.Values{}
+	}
+	for k, v := range map[string]string{"period": p.Period, "since": p.Since, "until": p.Until} {
+		if v = strings.TrimSpace(v); v != "" {
+			q.Set(k, v)
+		}
+	}
+	return q
+}
+
+func (p periodInput) any() bool { return p.Period != "" || p.Since != "" || p.Until != "" }
+
+// periodNote is how the stats tools explain the time window to the model.
+const periodNote = " Pass period (e.g. 30d) or since/until for stats over a time window instead of lifetime totals; the response's window then gives the range and history_since, " +
+	"when per-round history starts (November 2026; December 2025 for team kills). A window reaching back before history_since only covers the part since then, so say so; lifetime totals are the only record of earlier play."
+
 func clampPage(limit, offset int) (int, int) {
 	if limit <= 0 {
 		limit = defaultPageSize
@@ -256,15 +289,16 @@ func (ts *Toolset) addStatsTools(serverProp map[string]any, defaultServer string
 
 	ts.add("get_player",
 		"Get one player's full lifetime stats (kills, deaths, suicides, headshots given/taken, suppressions, caps, best killstreak, score, wins, losses, playtime (play_time_seconds, time on the Security team, only counted since November 2026), accuracy (shots = rounds fired, enemy_hits / friendly_hits = rounds that damaged an enemy / a teammate, enemy_hit_rate = enemy_hits/shots in %; only counted since November 2026), first/last seen) "+
-			"and their kills, shots and hits per weapon. Times are UTC.",
-		map[string]any{
+			"and their kills, shots and hits per weapon. Times are UTC."+periodNote,
+		periodProps(map[string]any{
 			"steam_id": prop("string", "The player's 64-bit SteamID (17 digits), e.g. from find_players."),
 			"server":   serverProp,
-		}, []string{"steam_id"},
+		}), []string{"steam_id"},
 		func(ctx context.Context, _ *toolContext, raw json.RawMessage) (any, error) {
 			var in struct {
 				SteamID string `json:"steam_id"`
 				Server  string
+				periodInput
 			}
 			if err := decode(raw, &in); err != nil {
 				return nil, err
@@ -274,14 +308,15 @@ func (ts *Toolset) addStatsTools(serverProp map[string]any, defaultServer string
 			}
 			server := pickServer(in.Server, defaultServer)
 			path := "/api/v1/players/" + url.PathEscape(in.SteamID)
-			player, err := stats.Get(ctx, server, path, nil)
+			q := in.periodInput.set(nil)
+			player, err := stats.Get(ctx, server, path, q)
 			if errors.Is(err, errNotFound) {
 				return map[string]any{"found": false, "note": "No stats recorded for this SteamID on " + server + "."}, nil
 			}
 			if err != nil {
 				return nil, err
 			}
-			weapons, err := stats.Get(ctx, server, path+"/weapons", nil)
+			weapons, err := stats.Get(ctx, server, path+"/weapons", q)
 			if err != nil {
 				return nil, err
 			}
@@ -292,20 +327,22 @@ func (ts *Toolset) addStatsTools(serverProp map[string]any, defaultServer string
 	ts.add("leaderboard",
 		"Read a ranked leaderboard. Boards: players (sort: score, kills, deaths, wins, killstreak, caps, kd, play_time, accuracy (enemy hit rate, players with 500+ shots first), updated_at), "+
 			"weapons (all players' totals per weapon: kills, rounds fired, enemy/friendly hits and enemy hit rate; sort: kills, shots, accuracy (weapons with 1000+ shots first)), maps (win/loss and playtime; sort: rounds, play_time, last_played), "+
-			"bots (bots ranked by kills on players), medics (time spent as medic, seconds), teamkills (players by team kills given, with forgiven count), "+
+			"bots (bots ranked by kills on players), medics (time spent as medic in seconds, full heals given and revives completed, heals/revives counted since November 2026; sort: time, heals, revives), teamkills (players by team kills given, with forgiven count), "+
 			"teamkill_weapons (weapons by team kills), fire_support (players by artillery calls). "+
-			"Results are descending and paginated; the response's total is the number of entries on the whole board.",
-		map[string]any{
+			"Results are descending and paginated; the response's total is the number of entries on the whole board."+
+			periodNote+" Time windows work on every board except maps and bots.",
+		periodProps(map[string]any{
 			"board":  enumProp("Which leaderboard.", boardNames),
-			"sort":   prop("string", "Order, only for the players, weapons and maps boards (see the description). Omit for the default."),
+			"sort":   prop("string", "Order, only for the players, weapons, medics and maps boards (see the description). Omit for the default."),
 			"limit":  intProp("How many entries (default 10).", 1, maxPageSize),
 			"offset": intProp("Entries to skip, for later pages.", 0, 100000),
 			"server": serverProp,
-		}, []string{"board"},
+		}), []string{"board"},
 		func(ctx context.Context, _ *toolContext, raw json.RawMessage) (any, error) {
 			var in struct {
 				Board, Sort, Server string
 				Limit, Offset       int
+				periodInput
 			}
 			if err := decode(raw, &in); err != nil {
 				return nil, err
@@ -324,6 +361,12 @@ func (ts *Toolset) addStatsTools(serverProp map[string]any, defaultServer string
 					return nil, fmt.Errorf("board %q does not accept sort %q (valid: %v)", in.Board, in.Sort, board.sorts)
 				}
 				q.Set("sort", in.Sort)
+			}
+			if in.periodInput.any() {
+				if !board.windowed {
+					return nil, fmt.Errorf("board %q has no time window; it only has lifetime totals", in.Board)
+				}
+				q = in.periodInput.set(q)
 			}
 			return stats.Get(ctx, pickServer(in.Server, defaultServer), board.path, q)
 		})
@@ -349,19 +392,20 @@ func (ts *Toolset) addStatsTools(serverProp map[string]any, defaultServer string
 	ts.add("weapon_accuracy",
 		"The most accurate players with one weapon: enemy hit rate (rounds that damaged an enemy / rounds fired, %), with shots and friendly hits. "+
 			"Only players with at least min_shots recorded shots with it are ranked. Shots and hits have only been recorded since November 2026. "+
-			"Use a weapon name as the weapons board or a player's weapons list it (e.g. m4a1).",
-		map[string]any{
+			"Use a weapon name as the weapons board or a player's weapons list it (e.g. m4a1)."+periodNote,
+		periodProps(map[string]any{
 			"weapon":    prop("string", "Weapon name, e.g. m4a1."),
 			"min_shots": intProp("Minimum recorded shots with the weapon to be ranked (default 100).", 1, 100000),
 			"limit":     intProp("How many players (default 10).", 1, maxPageSize),
 			"offset":    intProp("Players to skip, for later pages.", 0, 100000),
 			"server":    serverProp,
-		}, []string{"weapon"},
+		}), []string{"weapon"},
 		func(ctx context.Context, _ *toolContext, raw json.RawMessage) (any, error) {
 			var in struct {
 				Weapon, Server string
 				MinShots       int `json:"min_shots"`
 				Limit, Offset  int
+				periodInput
 			}
 			if err := decode(raw, &in); err != nil {
 				return nil, err
@@ -374,6 +418,7 @@ func (ts *Toolset) addStatsTools(serverProp map[string]any, defaultServer string
 			if in.MinShots > 0 {
 				q.Set("min_shots", strconv.Itoa(in.MinShots))
 			}
+			q = in.periodInput.set(q)
 			return stats.Get(ctx, pickServer(in.Server, defaultServer), "/api/v1/weapons/"+url.PathEscape(weapon)+"/accuracy", q)
 		})
 

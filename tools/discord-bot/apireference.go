@@ -26,29 +26,39 @@ var (
 		{"limit", "page size, 0-200, default 50"},
 		{"offset", "entries to skip, 0-100000, default 0"},
 	}
+	// periodParams select a time window instead of lifetime totals; the
+	// response's window says the range and when the history behind it starts.
+	periodParams = []apiParam{
+		{"period", "only the last N days, e.g. 7d, 30d, 365d (1-3650); not with since/until"},
+		{"since", "only from this UTC date (YYYY-MM-DD) or RFC 3339 time, inclusive"},
+		{"until", "only before this UTC date or time, exclusive; default now"},
+	}
+	windowedPage = append(append([]apiParam{}, pageParams...), periodParams...)
 	apiEndpoints = []apiEndpoint{
-		{"/api/v1/players", "Players with lifetime stats, descending.", append([]apiParam{
+		{"/api/v1/players", "Players with lifetime stats (or stats in a time window), descending.", append([]apiParam{
 			{"sort", "score (default), kills, deaths, wins, killstreak, caps, kd, play_time, accuracy (players with 500+ shots, by enemy hit rate), updated_at"},
 			{"name", "only players whose latest in-game name contains this, case-insensitive"},
-		}, pageParams...)},
-		{"/api/v1/players/{steam_id}", "One player's lifetime stats by SteamID64; 404 if unknown.", nil},
-		{"/api/v1/players/{steam_id}/weapons", "One player's kills, rounds fired, enemy/friendly hits and enemy hit rate per weapon (a plain array, not paginated).", nil},
+		}, windowedPage...)},
+		{"/api/v1/players/{steam_id}", "One player's stats by SteamID64 (lifetime, or in a time window); 404 if unknown.", periodParams},
+		{"/api/v1/players/{steam_id}/weapons", "One player's kills, rounds fired, enemy/friendly hits and enemy hit rate per weapon (a plain array, not paginated).", periodParams},
 		{"/api/v1/weapons", "Weapons across all players: total kills, players with a kill, rounds fired, enemy/friendly hits and enemy hit rate.", append([]apiParam{
 			{"sort", "kills (default), shots, accuracy (weapons with 1000+ shots, by enemy hit rate)"},
-		}, pageParams...)},
+		}, windowedPage...)},
 		{"/api/v1/weapons/{weapon_name}/accuracy", "Players ranked by enemy hit rate with one weapon (e.g. m4a1); 404 for an unknown weapon.", append([]apiParam{
 			{"min_shots", "only players with at least this many shots with it, 1-100000, default 100"},
-		}, pageParams...)},
+		}, windowedPage...)},
 		{"/api/v1/maps", "Per-map wins, losses, win rate, playtime and last played.", append([]apiParam{
 			{"sort", "rounds (default), play_time, last_played"},
 		}, pageParams...)},
 		{"/api/v1/matches", "Round results, newest first.", pageParams},
 		{"/api/v1/bots", "Bots ranked by kills on players.", pageParams},
 		{"/api/v1/bots/{bot_name}/weapons", "One bot's kills per weapon; URL-encode the name (spaces as %20). Plain array.", nil},
-		{"/api/v1/medics", "Players ranked by time spent as medic (seconds).", pageParams},
-		{"/api/v1/teamkills", "Players ranked by team kills given, with taken and forgiven counts.", pageParams},
-		{"/api/v1/teamkills/weapons", "Weapons ranked by team kills.", pageParams},
-		{"/api/v1/fire-support", "Players ranked by artillery calls.", pageParams},
+		{"/api/v1/medics", "Players ranked by time spent as medic (seconds), with full heals and revives.", append([]apiParam{
+			{"sort", "time (default), heals, revives"},
+		}, windowedPage...)},
+		{"/api/v1/teamkills", "Players ranked by team kills given, with taken and forgiven counts.", windowedPage},
+		{"/api/v1/teamkills/weapons", "Weapons ranked by team kills.", windowedPage},
+		{"/api/v1/fire-support", "Players ranked by artillery calls.", windowedPage},
 	}
 )
 

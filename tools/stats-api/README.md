@@ -145,10 +145,45 @@ endpoints are unversioned.
 | `GET /api/v1/matches`                    | Recent match results. `?limit=&offset=`.                           |
 | `GET /api/v1/bots`                       | Bots ranked by total kills. `?limit=&offset=`.                     |
 | `GET /api/v1/bots/{bot_name}/weapons`    | Per-weapon kill breakdown for a bot (unpaginated sub-resource).    |
-| `GET /api/v1/medics`                     | Players ranked by time spent as medic. `?limit=&offset=`.          |
+| `GET /api/v1/medics`                     | Players ranked by medic time, heals or revives. `?sort=&limit=&offset=`. |
 | `GET /api/v1/teamkills`                  | Players ranked by team kills. `?limit=&offset=`.                   |
 | `GET /api/v1/teamkills/weapons`          | Weapons ranked by logged team kills. `?limit=&offset=`.            |
 | `GET /api/v1/fire-support`               | Players ranked by fire-support calls. `?limit=&offset=`.           |
+
+Endpoints marked below also take a time window (see [Time windows](#time-windows)):
+players, a player, a player's weapons, weapons, weapon accuracy, medics, team kills,
+team-kill weapons and fire support.
+
+### Time windows
+
+By default every number is a lifetime total. Add `?period=30d` (the last N days,
+1-3650) or `?since=2026-11-01&until=2026-12-01` (UTC dates or RFC 3339 times; `since`
+inclusive, `until` exclusive and defaulting to now) to get the same response for that
+window instead. Mixing `period` with `since`/`until`, a bad date, or an empty range is
+a `422`.
+
+A window is summed from per-round history the plugins record next to the lifetime
+totals:
+
+| Endpoints                                        | History                                           |
+| ------------------------------------------------ | ------------------------------------------------- |
+| players, a player and their weapons, weapons, accuracy | `player_rounds`, `player_round_weapons` (gg2_mstats2) |
+| medics                                           | `medic_rounds` (gg2_medic_tracker)                |
+| teamkills, teamkill weapons                      | `player_tk_logs` (gg2_teamkill)                   |
+| fire-support                                     | `fire_support_calls` (FireSupport)                |
+
+That history starts in 2026-11 (team kills: 2025-12), so windowed responses carry
+`window: {since, until, history_since}`, `history_since` being the oldest record behind
+that endpoint; a window starting earlier only covers the part since then. Lifetime
+responses have no `window`. A windowed list only includes players (or weapons) with
+activity in the window; a single player is returned with zeros if they didn't play in
+it. In a window, `killstreak` is the best streak reached in it, `kills` on the team-kill
+board come from `player_rounds`, and fire support's `last_used_at` is the last call in
+the window. `/players/{steam_id}/weapons` is a plain array, so it has no `window`.
+
+`/api/v1/medics` also returns `heals` (full heals given) and `revives` (revives
+completed), counted for anyone, medic or not, since 2026-11; `sort` accepts `time`
+(default), `heals` and `revives`.
 
 ### Pagination
 
