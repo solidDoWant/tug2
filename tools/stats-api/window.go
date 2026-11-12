@@ -99,21 +99,22 @@ func parseWindowTime(s string) (time.Time, error) {
 	return time.Time{}, fmt.Errorf("%w: %q is not a date (YYYY-MM-DD) or RFC 3339 time", errWindow, s)
 }
 
-// sqlTime formats a bound for a timestamp-without-time-zone column, which
-// holds UTC. It is sent as text and cast, so pgx's time zone handling for
-// timestamp parameters doesn't come into it.
+// sqlTime formats a bound as an absolute time (RFC 3339 in UTC), sent as text
+// and cast to timestamptz in SQL.
 func sqlTime(t time.Time) string {
-	return t.UTC().Format("2006-01-02 15:04:05.999999")
+	return t.UTC().Format(time.RFC3339Nano)
 }
 
 // bind appends the window's bounds to args and returns a function that
 // restricts a timestamp column to the window, for use as many times as a
-// query needs.
+// query needs. The columns hold wall-clock times in the session's time zone
+// (see timezone.go), so each bound is converted to that zone once, in SQL,
+// leaving the column bare for its index.
 func (w *Window) bind(args *[]any) func(column string) string {
 	*args = append(*args, sqlTime(w.Since), sqlTime(w.Until))
 	since, until := len(*args)-1, len(*args)
 	return func(column string) string {
-		return fmt.Sprintf("(%s >= $%d::timestamp AND %s < $%d::timestamp)", column, since, column, until)
+		return fmt.Sprintf("(%s >= $%d::timestamptz::timestamp AND %s < $%d::timestamptz::timestamp)", column, since, column, until)
 	}
 }
 

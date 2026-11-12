@@ -42,6 +42,7 @@ func NewStore(ctx context.Context, databaseURL string) (*Store, error) {
 	}
 
 	enableTLSReload(&config.ConnConfig.Config, databaseURL)
+	config.AfterConnect = useSessionTimeZone
 
 	pool, err := pgxpool.NewWithConfig(ctx, config)
 	if err != nil {
@@ -801,7 +802,7 @@ func (s *Store) ListFireSupport(ctx context.Context, w *Window, limit, offset in
 	if w != nil {
 		in := w.bind(&args)
 		source = `
-		SELECT steam_id, COUNT(*) AS arty_thrown, MAX(called_at) AT TIME ZONE 'UTC' AS last_used_at
+		SELECT steam_id, COUNT(*) AS arty_thrown, MAX(called_at) AS last_used_at
 		FROM fire_support_calls
 		WHERE ` + in("called_at") + `
 		GROUP BY steam_id`
