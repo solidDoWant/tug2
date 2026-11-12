@@ -265,33 +265,76 @@ void gen_steam_link(int client, char[] url_safe, int max_size)
 // client's current name is stale, e.g. player_changename fires before the new name is applied.
 void gen_steam_link_named(int client, const char[] name, char[] url_safe, int max_size)
 {
-    char escaped[MAX_NAME_LENGTH * 2];
-    escape_discord_markdown(name, escaped, sizeof(escaped));
-
     char authID[32];
+    char escaped[MAX_NAME_LENGTH * 2];
     if (!GetClientAuthId(client, AuthId_SteamID64, authID, sizeof(authID)) || StrEqual(BAWT_AUTH_ID, authID))
     {
+        escape_discord_markdown(name, escaped, sizeof(escaped), false);
         strcopy(url_safe, max_size, escaped);
         return;
     }
 
+    char linkable[MAX_NAME_LENGTH];
+    strip_unmatched_brackets(name, linkable, sizeof(linkable));
+    escape_discord_markdown(linkable, escaped, sizeof(escaped), true);
     Format(url_safe, max_size, "[%s](<https://steamcommunity.com/profiles/%s>)", escaped, authID);
+}
+
+// Copies name without the brackets that can't sit in masked link text. Discord accepts balanced
+// pairs one level deep there ("[[SGT] Name](<url>)" shows "[SGT] Name", linked), but an unmatched
+// bracket stops the link parsing, and escaping one doesn't help (see escape_discord_markdown). So
+// pairs are kept and any bracket without a partner is dropped: "[SGT] [Example" -> "[SGT] Example".
+// A "[" inside an open pair drops the earlier one, so "[[x]]" -> "[x]".
+void strip_unmatched_brackets(const char[] name, char[] output, int maxlen)
+{
+    int len = strlen(name);
+    if (len >= maxlen) len = maxlen - 1;
+
+    bool[] keep = new bool[len + 1];
+    int open = -1;    // index of the pending "[", if any
+    for (int i = 0; i < len; i++)
+    {
+        keep[i] = true;
+        if (name[i] == '[')
+        {
+            if (open != -1) keep[open] = false;
+            open = i;
+        }
+        else if (name[i] == ']')
+        {
+            if (open == -1) keep[i] = false;
+            else open = -1;
+        }
+    }
+    if (open != -1) keep[open] = false;
+
+    int j = 0;
+    for (int i = 0; i < len; i++)
+    {
+        if (keep[i]) output[j++] = name[i];
+    }
+    output[j] = '\0';
 }
 
 // Backslash-escapes the characters Discord treats as markdown, so a player name shows as typed.
 //
-// Clan tags put brackets in a lot of names ("[MEDIC] [TAG]Name[X]"), and inside the masked link
-// above an unescaped "]" ends the link text early: Discord then shows part of the name as plain
-// text with stray brackets and links only the tail. That read as "garbled characters" in the
-// relay (issue #5), though the non-ASCII letters themselves were fine. Discord drops the backslash
-// before any ASCII punctuation, so escaping more than strictly needed shows nothing extra.
-// Multi-byte UTF-8 is never touched: every byte of it is >= 0x80.
-void escape_discord_markdown(const char[] input, char[] output, int maxlen)
+// Clan tags put brackets in a lot of names ("[MEDIC] [TAG]Name[X]"), and inside a masked link an
+// unmatched "]" ends the link text early: Discord then shows part of the name as plain text with
+// stray brackets and links only the tail. That read as "garbled characters" in the relay (issue
+// #5), though the non-ASCII letters themselves were fine.
+//
+// Escaping brackets doesn't help inside link text: Discord keeps the backslash there ("\[SGT\]").
+// So in_link leaves brackets alone, and gen_steam_link_named first drops any without a partner
+// (strip_unmatched_brackets). Outside link text Discord drops the backslash before any ASCII
+// punctuation, so escaping more than strictly needed shows nothing extra.
+// Multi-byte UTF-8 is never touched: every byte is >= 0x80.
+void escape_discord_markdown(const char[] input, char[] output, int maxlen, bool in_link)
 {
     int j = 0;
     for (int i = 0; input[i] != '\0'; i++)
     {
-        bool special = FindCharInString("\\*_~`|[]()<>#-", input[i]) != -1;
+        bool special = FindCharInString("\\*_~`|[]()<>#-", input[i]) != -1
+                    && !(in_link && (input[i] == '[' || input[i] == ']'));
         if (j + (special ? 2 : 1) >= maxlen)
             break;
         if (special)

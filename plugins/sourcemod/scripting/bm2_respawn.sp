@@ -17,6 +17,10 @@
 
 #pragma semicolon 1
 #pragma newdecls required
+
+// Bytes the engine keeps of a player name (32 including the terminator).
+#define MAX_PLAYER_NAME_BYTES 31
+
 #include <sourcemod>
 #include <sdktools>
 #include <sdkhooks>
@@ -2509,6 +2513,11 @@ public Action Event_PlayerPickSquad_Post(Event event, const char[] name, bool do
         }
     }
 
+    // The engine keeps only the first 31 bytes of a name, so a tag can push the end of a long one
+    // off, and a cut in the middle of a multi-byte character left an invalid byte that showed as
+    // garbage in the scoreboard and the Discord relay (issue #5). Cut at a character boundary instead.
+    TruncateUtf8(sNewNickname, MAX_PLAYER_NAME_BYTES);
+
     // Set player nickname
     char sCurNickname[64];
     Format(sCurNickname, sizeof(sCurNickname), "%N", client);
@@ -2518,6 +2527,15 @@ public Action Event_PlayerPickSquad_Post(Event event, const char[] name, bool do
 
     UpdateRespawnCvars();    // Update RespawnCvars when player picks squad
     return Plugin_Continue;
+}
+
+// Shortens s to at most max_bytes without splitting a UTF-8 character.
+void TruncateUtf8(char[] s, int max_bytes)
+{
+    if (strlen(s) <= max_bytes) return;
+    int n = max_bytes;
+    while (n > 0 && (s[n] & 0xC0) == 0x80) n--;    // s[n] is the first byte cut; back up to its lead byte
+    s[n] = '\0';
 }
 
 #if DOCTOR
