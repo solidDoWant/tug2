@@ -1230,9 +1230,9 @@ Action Timer_ShowStatus(Handle timer)
             wait = gTeamReadyAt[team][supportType] - now;
 
         if (maxCount > 0 && CountAvailableSupport[team][supportType] < 1)
-            HintShow(client, "fire_support", HINT_PRI_STATUS, 1.0, "Fire support: none left this round\n(throwing this only makes smoke)");
+            HintShow(client, "fire_support", HINT_PRI_STATUS, 1.0, "Fire support: none left this round");
         else if (wait > 0.0)
-            HintShow(client, "fire_support", HINT_PRI_STATUS, 1.0, "Fire support: ready in %ds\n(throwing now only makes smoke)", RoundToCeil(wait));
+            HintShow(client, "fire_support", HINT_PRI_STATUS, 1.0, "Fire support: ready in %ds", RoundToCeil(wait));
         else if (maxCount > 0)
             HintShow(client, "fire_support", HINT_PRI_STATUS, 1.0, "Fire support: READY\n%d left this round", CountAvailableSupport[team][supportType]);
         else
