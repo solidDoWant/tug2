@@ -1,0 +1,37 @@
+{
+  $schema: "https://docs.renovatebot.com/renovate-schema.json",
+  description: "Groups, then the digest-only group that overrides them",
+  packageRules: [
+    {
+      description: "Go modules (all four modules): one PR",
+      groupName: "go modules",
+      matchManagers: ["gomod"],
+      matchUpdateTypes: ["minor", "patch", "digest"],
+      group: { commitMessageTopic: "{{{groupName}}} group" },
+    },
+    {
+      description: "The golang build images move together",
+      groupName: "golang images",
+      matchDatasources: ["docker"],
+      matchPackageNames: ["golang"],
+      group: { commitMessageTopic: "{{{groupName}}} group" },
+    },
+    {
+      description: "GitHub Actions: one PR",
+      groupName: "github actions",
+      matchManagers: ["github-actions"],
+      group: { commitMessageTopic: "{{{groupName}}} group" },
+    },
+
+    // After every group rule, so it takes image digest-only updates out of their groups.
+    {
+      description: "Image digest-only updates (same tag, new digest): one PR, held for Dashboard approval",
+      matchDatasources: ["docker"],
+      matchUpdateTypes: ["digest"],
+      groupName: "digest updates",
+      groupSlug: "digest-updates",
+      group: { commitMessageTopic: "digests" },
+      dependencyDashboardApproval: true,
+    },
+  ],
+}
