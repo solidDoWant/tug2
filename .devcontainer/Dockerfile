@@ -1,4 +1,4 @@
-FROM mcr.microsoft.com/devcontainers/go:2-1.27-bookworm
+FROM mcr.microsoft.com/devcontainers/go:2-1.27-bookworm@sha256:75a84cbeca74acadcebf7df05777c77d6ade353a26c0a3ce55fc4b13bdad69cd
 
 # The base image's Go can trail the patch release a module requires (go.mod
 # "go 1.27.4" on a 1.27.3 image). "auto" lets the go command fetch the exact
