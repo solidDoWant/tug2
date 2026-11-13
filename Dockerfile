@@ -9,7 +9,7 @@ ARG METAMOD_VERSION=1.12.0-git1228
 ARG SOURCEMOD_VERSION=1.12.0-git7259
 ARG SOURCEMOD_COMMIT=3808e21eb842d8598cc8351a341dcbe661d21b58 # SourceMod 1.12.0.7259
 
-FROM ghcr.io/gameservermanagers/steamcmd:ubuntu-24.04 AS gameserver-builder
+FROM ghcr.io/gameservermanagers/steamcmd:ubuntu-24.04@sha256:fa007743ac5a1c7dc28f5fa3fcbe92b4918cadb4a97c32139c107a8fdfa51266 AS gameserver-builder
 
 RUN \
     # Persist the depot manifest cache and in-progress download chunks across builds so an
@@ -40,7 +40,7 @@ RUN \
 # without having the ability to overwrite existing files (such as libraries loaded with `dlopen`).
 RUN mkdir /empty-directory
 
-FROM ghcr.io/gameservermanagers/steamcmd:ubuntu-24.04 AS gameserver-mods-base
+FROM ghcr.io/gameservermanagers/steamcmd:ubuntu-24.04@sha256:fa007743ac5a1c7dc28f5fa3fcbe92b4918cadb4a97c32139c107a8fdfa51266 AS gameserver-mods-base
 
 RUN \
     # Install curl and unzip for downloading mods
@@ -884,7 +884,7 @@ RUN gcc -m32 -shared -fPIC -O2 -Wall -Wno-overflow -o /casecache.so /casecache.c
 # One layer per item would be the ideal and is not possible: overlay2 refuses to build past 128
 # layers, a server image is already in the fifties, and there are 158 items on main.
 
-FROM ghcr.io/gameservermanagers/steamcmd:ubuntu-24.04 AS workshop-downloader
+FROM ghcr.io/gameservermanagers/steamcmd:ubuntu-24.04@sha256:fa007743ac5a1c7dc28f5fa3fcbe92b4918cadb4a97c32139c107a8fdfa51266 AS workshop-downloader
 # steamcmd rather than srcds because it can fetch one item at a time, which is what makes the
 # per-bucket layers possible. Anonymous login is enough for this app's items.
 COPY --chmod=0755 tools/workshop/fetch_items.sh /usr/local/bin/fetch-items

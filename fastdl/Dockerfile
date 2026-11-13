@@ -32,7 +32,7 @@ RUN --mount=type=bind,source=fastdl/tools,target=/src \
 # -vtxformat 1 is required. Insurgency is a CS:GO-branch build (datacache.so carries the build path
 # .../csgo/rel_pc/src/datacache/mdlcache.cpp), and format 1 is the CS:GO/SFM/ASW .vtx strip layout;
 # format 0 is the older TF2/HL2 one.
-FROM debian:bookworm-slim AS model-compiler
+FROM debian:bookworm-slim@sha256:734a72b3d6142a71993b4bc580ca01d8ca687f77a2c422d96a961d3376b179bc AS model-compiler
 
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends -y \
       build-essential cmake git ca-certificates \
@@ -62,7 +62,7 @@ RUN git clone --filter=blob:none https://github.com/ToppiOfficial/PulseModel.git
 #
 # Cycles on CPU: EEVEE needs a GPU/GL context a build container does not have. This stage is cached
 # on its inputs, so it only re-runs when the model, texture or framing config changes.
-FROM debian:bookworm-slim AS icon-render
+FROM debian:bookworm-slim@sha256:734a72b3d6142a71993b4bc580ca01d8ca687f77a2c422d96a961d3376b179bc AS icon-render
 
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends -y \
       blender \
@@ -77,7 +77,7 @@ COPY fastdl/src/render /src/render
 RUN TOOLS=/tools sh /tools/render_icons.sh /src /out
 
 # ---------------------------------------------------------------------------- builder
-FROM debian:bookworm-slim AS builder
+FROM debian:bookworm-slim@sha256:734a72b3d6142a71993b4bc580ca01d8ca687f77a2c422d96a961d3376b179bc AS builder
 
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends -y \
       bzip2 coreutils \

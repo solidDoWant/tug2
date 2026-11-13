@@ -9,7 +9,7 @@ RUN go mod download
 COPY . .
 RUN CGO_ENABLED=0 go build -ldflags="-s -w" -o /stats-api ./
 
-FROM gcr.io/distroless/static:nonroot AS stats-api
+FROM gcr.io/distroless/static:nonroot@sha256:aafe993665bf6200db38a02c11a9351e782a84b6a45e7f33b6695638c88e3931 AS stats-api
 
 COPY --from=build /stats-api /stats-api
 
