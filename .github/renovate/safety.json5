@@ -1,0 +1,30 @@
+{
+  $schema: "https://docs.renovatebot.com/renovate-schema.json",
+  description: "Approval gates and version holds for what Renovate can't regenerate",
+  packageRules: [
+    {
+      description: "Major updates wait for a Dependency Dashboard checkbox",
+      matchUpdateTypes: ["major"],
+      dependencyDashboardApproval: true,
+    },
+    {
+      description: "This repository's own images (the server-runner base is built by the Makefile and used as :latest); a digest pin would freeze it",
+      matchDatasources: ["docker"],
+      matchPackageNames: ["ghcr.io/soliddowant/**"],
+      enabled: false,
+    },
+    {
+      description: "go.mod's go line must not pass the golang image that builds the module; the golang image updates come first",
+      matchManagers: ["gomod"],
+      matchDepTypes: ["golang", "toolchain"],
+      enabled: false,
+    },
+    {
+      description: "The game server's Ubuntu base: a new LTS changes glibc and the 32-bit libraries srcds needs, so test it by hand",
+      matchDatasources: ["docker"],
+      matchPackageNames: ["ubuntu", "ghcr.io/gameservermanagers/steamcmd"],
+      matchUpdateTypes: ["major", "minor"],
+      dependencyDashboardApproval: true,
+    },
+  ],
+}

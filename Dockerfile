@@ -81,6 +81,7 @@ RUN \
 # Build SourceMod extensions
 FROM ubuntu:24.04 AS sourcemod-extensions-ripext
 
+# renovate: datasource=github-releases depName=ErikMinekus/sm-ripext
 ARG RIPEXT_VERSION=1.3.2
 
 RUN \
@@ -91,7 +92,7 @@ RUN \
 # Download and extract ripext extensions
 RUN \
     mkdir /insurgency && \
-    curl -fsSL -o /tmp/ripext.zip https://github.com/ErikMinekus/sm-ripext/releases/download/1.3.2/sm-ripext-${RIPEXT_VERSION}-linux.zip && \
+    curl -fsSL -o /tmp/ripext.zip https://github.com/ErikMinekus/sm-ripext/releases/download/${RIPEXT_VERSION}/sm-ripext-${RIPEXT_VERSION}-linux.zip && \
     unzip -q /tmp/ripext.zip -d /insurgency && \
     rm /tmp/ripext.zip && \
     # Fixup file permissions

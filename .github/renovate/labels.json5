@@ -1,0 +1,48 @@
+{
+  $schema: "https://docs.renovatebot.com/renovate-schema.json",
+  description: "PR labels",
+  packageRules: [
+    // Update-type labels use `labels` (last match wins); the rest use
+    // `addLabels` and accumulate on top.
+    {
+      matchUpdateTypes: ["major"],
+      labels: ["type/major"],
+    },
+    {
+      matchUpdateTypes: ["minor"],
+      labels: ["type/minor"],
+    },
+    {
+      matchUpdateTypes: ["patch"],
+      labels: ["type/patch"],
+    },
+    {
+      matchUpdateTypes: ["digest", "pinDigest"],
+      labels: ["type/digest"],
+    },
+    {
+      matchUpdateTypes: ["lockFileMaintenance"],
+      labels: ["type/lockfile"],
+    },
+    {
+      matchDatasources: ["docker"],
+      addLabels: ["renovate/container"],
+    },
+    {
+      matchDatasources: ["helm"],
+      addLabels: ["renovate/helm"],
+    },
+    {
+      matchManagers: ["github-actions"],
+      addLabels: ["renovate/github-actions"],
+    },
+    {
+      matchManagers: ["gomod"],
+      addLabels: ["renovate/go"],
+    },
+    {
+      matchManagers: ["nix"],
+      addLabels: ["renovate/nix"],
+    },
+  ],
+}
