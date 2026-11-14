@@ -50,4 +50,4 @@ require (
 	google.golang.org/protobuf v1.36.12 // indirect
 )
 
-replace github.com/rumblefrog/go-a2s => github.com/solidDoWant/go-a2s v0.0.0-20261111023547-c3d417f599b2
+replace github.com/rumblefrog/go-a2s => github.com/solidDoWant/go-a2s v0.0.0-20260324234634-a7d16a1229b3
