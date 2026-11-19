@@ -79,7 +79,7 @@ RUN \
     chmod 644 /insurgency/addons/metamod.vdf
 
 # Build SourceMod extensions
-FROM ubuntu:24.04 AS sourcemod-extensions-ripext
+FROM ubuntu:24.04@sha256:73b999393d07f2bf65a40373778a44dc9a6d54ad7718d29247d8ff9413c4d6a8 AS sourcemod-extensions-ripext
 
 # renovate: datasource=github-releases depName=ErikMinekus/sm-ripext
 ARG RIPEXT_VERSION=1.3.2
@@ -137,7 +137,7 @@ RUN \
     find /insurgency -type f -name '*.so' -exec chmod 755 {} \;
 
 # This target is used to compile SourceMod plugins.
-FROM ubuntu:24.04 AS sourcemod-plugins-base
+FROM ubuntu:24.04@sha256:73b999393d07f2bf65a40373778a44dc9a6d54ad7718d29247d8ff9413c4d6a8 AS sourcemod-plugins-base
 
 # Download SourceMod for the compiler
 ARG SOURCEMOD_VERSION
@@ -737,7 +737,7 @@ RUN --mount=type=bind,source=./plugins/sourcemod,target=/plugin-source \
 FROM ${SERVER_RUNNER_IMAGE_NAME} AS server-runner
 
 
-FROM ubuntu:24.04 AS gameserver
+FROM ubuntu:24.04@sha256:73b999393d07f2bf65a40373778a44dc9a6d54ad7718d29247d8ff9413c4d6a8 AS gameserver
 
 RUN \
     dpkg --add-architecture i386 && \
@@ -853,7 +853,7 @@ ENTRYPOINT [    \
 # readelf checks fail the build if it ever comes out 64-bit. See tools/casecache/ for what it does
 # (it eliminates the native-Linux -workshop case-insensitive directory-descent storm that makes
 # map changes take minutes and intermittently trips the engine watchdog -> crash).
-FROM ubuntu:24.04 AS casecache-builder
+FROM ubuntu:24.04@sha256:73b999393d07f2bf65a40373778a44dc9a6d54ad7718d29247d8ff9413c4d6a8 AS casecache-builder
 RUN apt-get update \
     && apt-get install -y --no-install-recommends gcc-multilib libc6-dev-i386 \
     && rm -rf /var/lib/apt/lists/*

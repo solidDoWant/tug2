@@ -10,7 +10,7 @@
 #  "wrong ELF class" and ignore it; only the 32-bit srcds_linux loads the shim. To avoid that log
 #  noise, set LD_PRELOAD on the srcds child only, from server-runner, instead of via ENV.)
 
-FROM ubuntu:24.04 AS casecache-builder
+FROM ubuntu:24.04@sha256:73b999393d07f2bf65a40373778a44dc9a6d54ad7718d29247d8ff9413c4d6a8 AS casecache-builder
 RUN apt-get update \
     && apt-get install -y --no-install-recommends gcc-multilib libc6-dev-i386 \
     && rm -rf /var/lib/apt/lists/*
