@@ -118,10 +118,13 @@ clean:	## Clean up all built images and temporary files.
 
 start-local-server: start-local-server-main	## Start a local server container for testing.
 
+# renovate: datasource=docker depName=outdead/rcon
+RCON_IMAGE = outdead/rcon:latest@sha256:c2e13830355729a986e28bb81ba18aa695542c90f5c87c62204462307200aee2
+
 .PHONY: local-rcon-%
 local-rcon-%:	## Connect to the local server's RCON. Usage: make local-rcon-SERVER_NAME
 	@echo "Type ':q' to quit."
-	@exec docker run --rm -it --network host outdead/rcon /rcon -a 127.0.0.1:27015 -p "$(LOCAL_RCON_PASSWORD)"
+	@exec docker run --rm -it --network host "$(RCON_IMAGE)" /rcon -a 127.0.0.1:27015 -p "$(LOCAL_RCON_PASSWORD)"
 
 .PHONY: local-rcon
 local-rcon: local-rcon-main	## Connect to the local server's RCON.

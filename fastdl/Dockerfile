@@ -10,7 +10,7 @@
 # ---------------------------------------------------------------------------- tools
 # Texture compiler, content hashing and the templating pre-pass. Go, matching tools/server-runner:
 # one static binary, no runtime dependencies in the builder.
-FROM golang:1.27@sha256:205c7636d74e0ffbe3d007162df7d74f859f5a8c8322dfb9f907977686c126cf AS tools
+FROM golang:1.27.4@sha256:205c7636d74e0ffbe3d007162df7d74f859f5a8c8322dfb9f907977686c126cf AS tools
 
 RUN --mount=type=bind,source=fastdl/tools,target=/src \
     go build -C /src -o /fastdl-tools
@@ -38,6 +38,9 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install --no-instal
       build-essential cmake git ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
+# Tracks main by commit: upstream tags only every few releases. Renovate bumps it only after a
+# Dependency Dashboard approval (see .github/renovate/safety.json5), for the comparison above.
+# renovate: datasource=git-refs depName=ToppiOfficial/PulseModel branch=main
 ARG PULSEMODEL_REF=fb8af77ca96718f8130686f361b6d32d12629153
 
 # Upstream develops on MSVC, which includes <cstddef> transitively where GCC does not, so the build

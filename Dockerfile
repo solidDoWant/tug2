@@ -5,9 +5,24 @@
 # Plugins and mods must be the Linux versions.
 
 ARG SERVER_RUNNER_IMAGE_NAME=ghcr.io/soliddowant/server-runner:latest
-ARG METAMOD_VERSION=1.12.0-git1228
-ARG SOURCEMOD_VERSION=1.12.0-git7259
-ARG SOURCEMOD_COMMIT=3808e21eb842d8598cc8351a341dcbe661d21b58 # SourceMod 1.12.0.7259
+
+# Versions are GitHub release tags (1.12.0.7259); the tarballs inside are named with "-git" in place
+# of the last dot (1.12.0-git7259), which the download steps derive. Renovate bumps the version but
+# cannot follow that rename to update the checksum, so a version bump fails the build at
+# `sha256sum -c` until the matching *_SHA256 is updated by hand (the Renovate PR says how).
+# renovate: datasource=github-releases depName=alliedmodders/metamod-source versioning=loose
+ARG METAMOD_VERSION=1.12.0.1228
+ARG METAMOD_SHA256=29f60bb40154fb4d9d0020ee35347c8359eeaf493dc4fdd7182873cf51f83f47
+# Keep in sync with .devcontainer/Dockerfile (Renovate updates both in one PR).
+# renovate: datasource=github-releases depName=alliedmodders/sourcemod versioning=loose
+ARG SOURCEMOD_VERSION=1.12.0.7259
+ARG SOURCEMOD_SHA256=1025717c46119c15c6e73fd9b4a190fd8da480987307d133e1281eb9a6f5c91c
+
+# Third-party plugin sources fetched from GitHub by commit.
+# renovate: datasource=git-refs depName=NullifidianSF/insurgency_public branch=main
+ARG INSURGENCY_PUBLIC_COMMIT=e6eb683a6ba407b5bba29b74817e0c0bcb9d6a0c
+# renovate: datasource=git-refs depName=thecannons/Insurgency-dy-sourcemod branch=master
+ARG INSURGENCY_DY_SOURCEMOD_COMMIT=594f5d321010da16cc0ad78478921af4d80cfa80
 
 FROM ghcr.io/gameservermanagers/steamcmd:ubuntu-24.04@sha256:56b234bcdbe889dd178d5fdd3b33ac1e8b5f14e1fc6d397fa1cbb386012f8033 AS gameserver-builder
 
@@ -63,8 +78,10 @@ FROM gameserver-mods-base AS gameserver-mods-metamod
 
 # MetaMod Source (Linux version)
 ARG METAMOD_VERSION
+ARG METAMOD_SHA256
 RUN \
-    curl -fsSL -o /tmp/mmsource.tar.gz https://github.com/alliedmodders/metamod-source/releases/download/${METAMOD_VERSION/-git/.}/mmsource-${METAMOD_VERSION}-linux.tar.gz && \
+    curl -fsSL -o /tmp/mmsource.tar.gz "https://github.com/alliedmodders/metamod-source/releases/download/${METAMOD_VERSION}/mmsource-${METAMOD_VERSION%.*}-git${METAMOD_VERSION##*.}-linux.tar.gz" && \
+    echo "${METAMOD_SHA256}  /tmp/mmsource.tar.gz" | sha256sum -c - && \
     tar -xzf /tmp/mmsource.tar.gz -C /insurgency && \
     rm /tmp/mmsource.tar.gz && \
     # Remove extra files
@@ -81,8 +98,9 @@ RUN \
 # Build SourceMod extensions
 FROM ubuntu:26.04@sha256:d66b366dac61b575bee2aef07e9c26e8070096fbe84a3d4d3eb0da069b5d76db AS sourcemod-extensions-ripext
 
-# renovate: datasource=github-releases depName=ErikMinekus/sm-ripext
+# renovate: datasource=github-release-attachments depName=ErikMinekus/sm-ripext
 ARG RIPEXT_VERSION=1.3.2
+ARG RIPEXT_DIGEST=c3afa6173b2d5210110e139b00cfb03f04c5615f44840d83be46aa60fc497624
 
 RUN \
     apt update && \
@@ -93,6 +111,7 @@ RUN \
 RUN \
     mkdir /insurgency && \
     curl -fsSL -o /tmp/ripext.zip https://github.com/ErikMinekus/sm-ripext/releases/download/${RIPEXT_VERSION}/sm-ripext-${RIPEXT_VERSION}-linux.zip && \
+    echo "${RIPEXT_DIGEST}  /tmp/ripext.zip" | sha256sum -c - && \
     unzip -q /tmp/ripext.zip -d /insurgency && \
     rm /tmp/ripext.zip && \
     # Fixup file permissions
@@ -103,10 +122,12 @@ FROM gameserver-mods-base AS gameserver-mods-sourcemod
 
 # SourceMod (Linux version)
 ARG SOURCEMOD_VERSION
+ARG SOURCEMOD_SHA256
 RUN \
     --mount=type=bind,source=./plugins/sourcemod,target=/plugin-source \
     --mount=from=sourcemod-extensions-ripext,target=/plugin-extensions/ripext \
-    curl -fsSL -o /tmp/sourcemod.tar.gz https://github.com/alliedmodders/sourcemod/releases/download/${SOURCEMOD_VERSION/-git/.}/sourcemod-${SOURCEMOD_VERSION}-linux.tar.gz && \
+    curl -fsSL -o /tmp/sourcemod.tar.gz "https://github.com/alliedmodders/sourcemod/releases/download/${SOURCEMOD_VERSION}/sourcemod-${SOURCEMOD_VERSION%.*}-git${SOURCEMOD_VERSION##*.}-linux.tar.gz" && \
+    echo "${SOURCEMOD_SHA256}  /tmp/sourcemod.tar.gz" | sha256sum -c - && \
     tar -xzf /tmp/sourcemod.tar.gz -C /insurgency && \
     rm /tmp/sourcemod.tar.gz && \
     # Disable auto updates
@@ -141,6 +162,7 @@ FROM ubuntu:26.04@sha256:d66b366dac61b575bee2aef07e9c26e8070096fbe84a3d4d3eb0da0
 
 # Download SourceMod for the compiler
 ARG SOURCEMOD_VERSION
+ARG SOURCEMOD_SHA256
 RUN \
     dpkg --add-architecture i386 && \
     apt update && \
@@ -151,17 +173,23 @@ RUN \
         libc6:i386 lib32stdc++6 && \
     rm -rf /var/lib/apt/lists/* && \
     mkdir -p /sourcemod && \
-    curl -fsSL -o - https://sm.alliedmods.net/smdrop/1.12/sourcemod-${SOURCEMOD_VERSION}-linux.tar.gz \
-    | tar -xz -C /sourcemod && \
+    # Same tarball as the one the server ships (gameserver-mods-sourcemod), so the compiler and the
+    # runtime cannot drift apart.
+    curl -fsSL -o /tmp/sourcemod.tar.gz "https://github.com/alliedmodders/sourcemod/releases/download/${SOURCEMOD_VERSION}/sourcemod-${SOURCEMOD_VERSION%.*}-git${SOURCEMOD_VERSION##*.}-linux.tar.gz" && \
+    echo "${SOURCEMOD_SHA256}  /tmp/sourcemod.tar.gz" | sha256sum -c - && \
+    tar -xzf /tmp/sourcemod.tar.gz -C /sourcemod && \
+    rm /tmp/sourcemod.tar.gz && \
     # Create output dirs
     mkdir -p /insurgency/addons/sourcemod/plugins/disabled /insurgency/cfg
 
 FROM sourcemod-plugins-base AS sourcemod-plugins-marquis-fix
 
+ARG INSURGENCY_PUBLIC_COMMIT
+
 # Build the marquis map fix plugin
 RUN \
     mkdir /plugin-source && \
-    curl -fsSL -o /plugin-source/marquis_fix.sp https://raw.githubusercontent.com/NullifidianSF/insurgency_public/e6eb683a6ba407b5bba29b74817e0c0bcb9d6a0c/addons/sourcemod/scripting/marquis_fix.sp && \
+    curl -fsSL -o /plugin-source/marquis_fix.sp https://raw.githubusercontent.com/NullifidianSF/insurgency_public/${INSURGENCY_PUBLIC_COMMIT}/addons/sourcemod/scripting/marquis_fix.sp && \
     /sourcemod/addons/sourcemod/scripting/spcomp /plugin-source/marquis_fix.sp -o /insurgency/addons/sourcemod/plugins/disabled/marquis_fix.smx && \
     rm -rf /plugin-source && \
     # Create a config file to only load this plugin when the marquis map is running
@@ -171,10 +199,12 @@ RUN \
 
 FROM sourcemod-plugins-base AS sourcemod-plugins-citadel-coop-spawn-fix
 
+ARG INSURGENCY_PUBLIC_COMMIT
+
 # Build the citadel coop spawn fix plugin
 RUN \
     mkdir /plugin-source && \
-    curl -fsSL -o /plugin-source/citadel_coop_spawn_fix.sp https://raw.githubusercontent.com/NullifidianSF/insurgency_public/e6eb683a6ba407b5bba29b74817e0c0bcb9d6a0c/addons/sourcemod/scripting/citadel_coop_spawn_fix.sp && \
+    curl -fsSL -o /plugin-source/citadel_coop_spawn_fix.sp https://raw.githubusercontent.com/NullifidianSF/insurgency_public/${INSURGENCY_PUBLIC_COMMIT}/addons/sourcemod/scripting/citadel_coop_spawn_fix.sp && \
     /sourcemod/addons/sourcemod/scripting/spcomp /plugin-source/citadel_coop_spawn_fix.sp -o /insurgency/addons/sourcemod/plugins/disabled/citadel_coop_spawn_fix.smx && \
     rm -rf /plugin-source && \
     # Create a config file to only load this plugin when the citadel_coop map is running
@@ -195,13 +225,15 @@ RUN --mount=type=bind,source=./plugins/sourcemod/scripting,target=/plugin-source
 
 FROM sourcemod-plugins-base AS sourcemod-plugins-bot-names
 
+ARG INSURGENCY_DY_SOURCEMOD_COMMIT
+
 # Build the bot name plugin
 RUN \
     mkdir -p /plugin-source /insurgency/addons/sourcemod/configs/botnames && \
-    curl -fsSL -o /plugin-source/bot_names.sp https://raw.githubusercontent.com/thecannons/Insurgency-dy-sourcemod/594f5d321010da16cc0ad78478921af4d80cfa80/scripting/botnames.sp && \
-    curl -fsSL -o /insurgency/addons/sourcemod/configs/botnames/arabic.txt https://raw.githubusercontent.com/thecannons/Insurgency-dy-sourcemod/594f5d321010da16cc0ad78478921af4d80cfa80/configs/botnames/arabic.txt && \
-    curl -fsSL -o /insurgency/addons/sourcemod/configs/botnames/default.txt https://raw.githubusercontent.com/thecannons/Insurgency-dy-sourcemod/594f5d321010da16cc0ad78478921af4d80cfa80/configs/botnames/default.txt && \
-    curl -fsSL -o /insurgency/addons/sourcemod/configs/botnames/pashto.txt https://raw.githubusercontent.com/thecannons/Insurgency-dy-sourcemod/594f5d321010da16cc0ad78478921af4d80cfa80/configs/botnames/pashto.txt && \
+    curl -fsSL -o /plugin-source/bot_names.sp https://raw.githubusercontent.com/thecannons/Insurgency-dy-sourcemod/${INSURGENCY_DY_SOURCEMOD_COMMIT}/scripting/botnames.sp && \
+    curl -fsSL -o /insurgency/addons/sourcemod/configs/botnames/arabic.txt https://raw.githubusercontent.com/thecannons/Insurgency-dy-sourcemod/${INSURGENCY_DY_SOURCEMOD_COMMIT}/configs/botnames/arabic.txt && \
+    curl -fsSL -o /insurgency/addons/sourcemod/configs/botnames/default.txt https://raw.githubusercontent.com/thecannons/Insurgency-dy-sourcemod/${INSURGENCY_DY_SOURCEMOD_COMMIT}/configs/botnames/default.txt && \
+    curl -fsSL -o /insurgency/addons/sourcemod/configs/botnames/pashto.txt https://raw.githubusercontent.com/thecannons/Insurgency-dy-sourcemod/${INSURGENCY_DY_SOURCEMOD_COMMIT}/configs/botnames/pashto.txt && \
     /sourcemod/addons/sourcemod/scripting/spcomp /plugin-source/bot_names.sp -o /insurgency/addons/sourcemod/plugins/bot_names.smx && \
     rm -rf /plugin-source && \
     # Fixup file permissions
