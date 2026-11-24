@@ -11,7 +11,7 @@ ARG SERVER_RUNNER_IMAGE_NAME=ghcr.io/soliddowant/server-runner:latest
 # cannot follow that rename to update the checksum, so a version bump fails the build at
 # `sha256sum -c` until the matching *_SHA256 is updated by hand (the Renovate PR says how).
 # renovate: datasource=github-releases depName=alliedmodders/metamod-source versioning=loose
-ARG METAMOD_VERSION=1.12.0.1228
+ARG METAMOD_VERSION=1.12.0.1230
 ARG METAMOD_SHA256=29f60bb40154fb4d9d0020ee35347c8359eeaf493dc4fdd7182873cf51f83f47
 # Keep in sync with .devcontainer/Dockerfile (Renovate updates both in one PR).
 # renovate: datasource=github-releases depName=alliedmodders/sourcemod versioning=loose
