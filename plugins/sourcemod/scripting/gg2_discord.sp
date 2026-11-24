@@ -723,7 +723,43 @@ public Action Event_PlayerTeam(Event event, const char[] name, bool dontBroadcas
     // Event_PlayerDisconnect above already filters this way; this is the same test.
     if (IsFakeClient(client)) return Plugin_Continue;
 
-    int  team            = GetEventInt(event, "team");
+    int team = GetEventInt(event, "team");
+    char eventName[MAX_NAME_LENGTH];
+    event.GetString("name", eventName, sizeof(eventName));
+
+    // A move to Spectators is announced one frame late. bm2_respawn drops the player's class tag
+    // ("[MEDIC] ") on this same event, but this hook is Pre, so it runs first and the line would
+    // still show the class the player just left - which is how a class ban read in the relay
+    // (issue #43). By the next frame the name is the one they have in Spectators.
+    if (team != TEAM_1_SEC && team != TEAM_2_INS)
+    {
+        DataPack pack = new DataPack();
+        pack.WriteCell(GetClientUserId(client));
+        pack.WriteCell(team);
+        pack.WriteString(eventName);
+        RequestFrame(Frame_PostTeamJoin, pack);
+        return Plugin_Continue;
+    }
+
+    PostTeamJoin(client, team, eventName);
+    return Plugin_Continue;
+}
+
+void Frame_PostTeamJoin(DataPack pack)
+{
+    pack.Reset();
+    int  client = GetClientOfUserId(pack.ReadCell());
+    int  team   = pack.ReadCell();
+    char eventName[MAX_NAME_LENGTH];
+    pack.ReadString(eventName, sizeof(eventName));
+    delete pack;
+
+    if (client == 0 || !IsClientInGame(client)) return;
+    PostTeamJoin(client, team, eventName);
+}
+
+void PostTeamJoin(int client, int team, const char[] eventName)
+{
     char joined_team[20] = "Spectators";    // "Insurgent Forces" is 16 chars, so not [16]
     if (team == TEAM_1_SEC) joined_team = "Security Forces";
     else if (team == TEAM_2_INS) joined_team = "Insurgent Forces";
@@ -736,17 +772,13 @@ public Action Event_PlayerTeam(Event event, const char[] name, bool dontBroadcas
     // this reason - use it rather than posting a nameless line.
     if (link[0] == '\0' || StrContains(link, "[]") == 0)
     {
-        char eventName[MAX_NAME_LENGTH];
-        event.GetString("name", eventName, sizeof(eventName));
-        if (eventName[0] == '\0') return Plugin_Continue;
+        if (eventName[0] == '\0') return;
         strcopy(link, sizeof(link), eventName);
     }
 
     char message[1024];
     Format(message, sizeof(message), "%s Joined %s", link, joined_team);
     send_discord(message, sizeof(message));
-
-    return Plugin_Continue;
 }
 
 public void OnMapStart()

@@ -2469,13 +2469,25 @@ public Action Event_PlayerPickSquad_Post(Event event, const char[] name, bool do
     }
 #endif
 
+    ApplyNicknameTags(client, g_client_last_classstring[client]);
+    g_playersReady = true;
+
+    UpdateRespawnCvars();    // Update RespawnCvars when player picks squad
+    return Plugin_Continue;
+}
+
+// Sets client's name to their bare name plus the tags for classString: [ADMIN] for admins, then
+// [MEDIC]/[SGT]/[MG] for those classes. An empty classString (no class - e.g. in Spectators) leaves
+// only the admin tag.
+void ApplyNicknameTags(int client, const char[] classString)
+{
     char adminVal[9] = "";
     if (GetUserFlagBits(client) & ADMFLAG_BAN)
     {
         adminVal = "[ADMIN]";
     }
     char sNewNickname[64];
-    if (StrContains(g_client_last_classstring[client], "medic") > -1)
+    if (StrContains(classString, "medic") > -1)
     {
         if (!StrEqual(adminVal, ""))
         {
@@ -2485,7 +2497,7 @@ public Action Event_PlayerPickSquad_Post(Event event, const char[] name, bool do
             Format(sNewNickname, sizeof(sNewNickname), "[MEDIC] %s", g_client_org_nickname[client]);
         }
     }
-    else if (StrContains(g_client_last_classstring[client], "recon") > -1) {
+    else if (StrContains(classString, "recon") > -1) {
         if (!StrEqual(adminVal, ""))
         {
             Format(sNewNickname, sizeof(sNewNickname), "%s[SGT] %s", adminVal, g_client_org_nickname[client]);
@@ -2494,7 +2506,7 @@ public Action Event_PlayerPickSquad_Post(Event event, const char[] name, bool do
             Format(sNewNickname, sizeof(sNewNickname), "[SGT] %s", g_client_org_nickname[client]);
         }
     }
-    else if (StrContains(g_client_last_classstring[client], "support") > -1) {
+    else if (StrContains(classString, "support") > -1) {
         if (!StrEqual(adminVal, ""))
         {
             Format(sNewNickname, sizeof(sNewNickname), "%s[MG] %s", adminVal, g_client_org_nickname[client]);
@@ -2523,10 +2535,6 @@ public Action Event_PlayerPickSquad_Post(Event event, const char[] name, bool do
     Format(sCurNickname, sizeof(sCurNickname), "%N", client);
     if (!StrEqual(sCurNickname, sNewNickname))
         SetClientName(client, sNewNickname);
-    g_playersReady = true;
-
-    UpdateRespawnCvars();    // Update RespawnCvars when player picks squad
-    return Plugin_Continue;
 }
 
 // Shortens s to at most max_bytes without splitting a UTF-8 character.
@@ -4933,6 +4941,19 @@ public Action Event_PlayerTeam(Event event, const char[] name, bool dontBroadcas
 {
     int client = GetClientOfUserId(event.GetInt("userid"));
     if (client < 1) return Plugin_Continue;
+
+    // A player who leaves for Spectators no longer has a class, so drop its tag. The tags are only
+    // ever rewritten on player_pick_squad, which a move to Spectators does not fire - so a class
+    // ban (punitive_persistence moves the player with ChangeClientTeam) or a player switching on
+    // their own kept "[MEDIC] " on their real name, and every Discord relay and log line carried
+    // it (issue #43). Read the destination from the event: at this point the player's team
+    // property is not guaranteed to have changed yet.
+    int newTeam = event.GetInt("team");
+    if (!event.GetBool("disconnect") && IsClientInGame(client) && !IsFakeClient(client)
+        && (newTeam == TEAM_SPEC || newTeam == SPECTATOR_TEAM))
+    {
+        ApplyNicknameTags(client, "");
+    }
     if (IsClientInGame(client)
         && !IsFakeClient(client)
         && (GetClientTeam(client) == TEAM_SPEC
