@@ -8,7 +8,7 @@ ENV GOTOOLCHAIN=auto
 # Keep in sync with SOURCEMOD_VERSION in the repository's root Dockerfile (Renovate updates both in
 # one PR; the checksum is updated by hand, see the root Dockerfile).
 # renovate: datasource=github-releases depName=alliedmodders/sourcemod versioning=loose
-ARG SOURCEMOD_VERSION=1.12.0.7259
+ARG SOURCEMOD_VERSION=1.12.0.7260
 ARG SOURCEMOD_SHA256=1025717c46119c15c6e73fd9b4a190fd8da480987307d133e1281eb9a6f5c91c
 
 # renovate: datasource=github-release-attachments depName=wagoodman/dive
