@@ -28441,6 +28441,19 @@
 				"BounceSound"	"Weapon_IED.Bounce"
 			}
 		}
+		"healthkit"
+		{
+			"import"	"baseGrenade"
+			"entity_class"	"remote"
+			"Model"	"models/hlthkit/w_c4.mdl"
+			"Cookable"	"0"
+			"DetonateDamage"	"0"
+			"DetonateDamageRadius"	"0"
+			"DetonatePenetrationRadius"	"0"
+			"Health"	"50"
+			"ReactExplosions"	"1"
+			"ReactBullets"	"0"
+		}
 		"grenade_m18"
 		{
 			"import"	"baseGrenade"
@@ -28858,18 +28871,6 @@
 				"DetonateSound"	"Napalm.Burn"
 				"BounceSound"	"Weapon_M67.Bounce"
 			}
-		}
-		"healthkit"
-		{
-			"import"	"baseGrenade"
-			"entity_class"	"remote"
-			"Model"	"models/hlthkit/w_c4.mdl"
-			"DetonateDamage"	"0"
-			"DetonateDamageRadius"	"0"
-			"DetonatePenetrationRadius"	"0"
-			"Health"	"50"
-			"ReactExplosions"	"1"
-			"ReactBullets"	"0"
 		}
 		"baseDetonator"
 		{

@@ -9288,15 +9288,23 @@
 	{
 		// The HE rounds, matched to the WP round's model.
 		//
-		// RESTATED IN FULL, and they have to be. These two were a one-key "Model" override until
-		// 2026-09-14, on the assumption that #base deep-merges a partial block into the inherited
-		// definition. It does not - the same assumption produced the marker-grenade bug fixed in
-		// "Fix HE smokes not working", where a one-key weapon block replaced TUG's definition with
-		// a stub that had no import and no ammo_type. The measured rule is the one written above
-		// the "weapons" section: duplicate children do not merge, the LATER definition wins
-		// outright. A one-key block is therefore a whole new definition with one key in it.
+		// RESTATED IN FULL, which is this section's convention for every override. These two were a
+		// one-key "Model" override until 2026-09-14, and the artillery broke while they were.
 		//
-		// For an explosive that means no "entity_class", and with no entity_class there is nothing
+		// The explanation recorded at the time - "#base does not merge, the later definition wins
+		// outright, so a one-key block is a stub" - was WRONG; see the CORRECTION at the top of this
+		// file and theaters/README.md. #base merges recursively, ours winning per key, and
+		// tools/theater-build now does that merge itself, so a one-key block would merge correctly
+		// today. Restating in full is kept anyway: it gives the same result, it is what
+		// tools/survival-economy expects (it copies the first definition it finds whole), and each
+		// block shows the complete definition being shipped.
+		//
+		// That leaves the 2026-09-14 artillery failure without a proven cause: under recursive
+		// merge the one-key block kept TUG's entity_class, so the mechanism described below cannot
+		// have been it. The paragraph is kept because the symptoms and the silent-failure path in
+		// FireSupport are real and worth recognising if they recur:
+		//
+		// With no "entity_class" there is nothing
 		// for CBaseRocketMissile::CreateRocketMissile to build: FireSupport's SDKCall returns no
 		// entity, the plugin does not log it (see the rocket > 0 guard in Timer_FireShell), and the
 		// mission silently produces the radio call and then nothing at all. Which is exactly how
@@ -9582,6 +9590,32 @@
 				"DetonateWaterSound"		"IED.ExplodeWater"
 				"BounceSound"				"Weapon_IED.Bounce"
 			}
+		}
+
+		// Medkit (weapon_healthkit). RESTATED IN FULL - copied verbatim from TUG's
+		// theater_tug_39_default_weapon.theater EXCEPT the added "Cookable" "0" (issue #41).
+		//
+		// TUG sets no Cookable, so the engine default applies, and that default is 1
+		// (explosiveDefinition_t::Clear). For a cookable grenade CINSGrenadeBase::PrimaryAttack sets
+		// the throw state to 2, which IsGrenadeLive counts as live, and CanHolster refuses a live
+		// grenade - so a medkit could not be put away ("pin put back in") once a throw started. Every
+		// non-cookable grenade (the molotov sets Cookable 0) can. A medkit has no fuse to cook anyway:
+		// FuseTime is also unset, i.e. 0, so a cooked medkit would have been dropped the instant its
+		// spoon came off.
+		"healthkit"
+		{
+			"import"				"baseGrenade"
+			"entity_class"				"remote"
+			"Model"					"models/hlthkit/w_c4.mdl"
+			"Cookable"				"0"
+
+			"DetonateDamage"			"0"
+			"DetonateDamageRadius"			"0"
+			"DetonatePenetrationRadius"		"0"
+
+			"Health"				"50"
+			"ReactExplosions"			"1"
+			"ReactBullets"				"0"
 		}
 
 	}
