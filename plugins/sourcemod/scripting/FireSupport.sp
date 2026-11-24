@@ -84,16 +84,26 @@ enum struct SupportType
     bool  spawnSmoke;                // Whether to spawn smoke on impact
     char  smokeType[64];             // Type of smoke grenade to spawn (e.g., "smokegrenade_projectile")
     char  discordMessage[256];       // Discord notification message (empty = no notification)
+
+    // How a call of this type sets the caller's per-player cooldown (issue #17). Constant: always
+    // player_cooldown. Polynomial: player_cooldown * x^exponent, x = the caller's calls of this
+    // type so far this round including this one, capped at playerCooldownMax (0 = no cap).
+    bool  playerCooldownPolynomial;
+    float playerCooldownExponent;
+    float playerCooldownMax;
 }
 
 SupportType gSupportTypes[MAX_SUPPORT_TYPES];
 int         gNumSupportTypes;
 
 // Per-player cooldown shared by every support type ("player_cooldown" at the top of the config).
+// A support type with "player_cooldown_scaling" "polynomial" lengthens it with each call the player
+// makes of that type in the round; see GetPlayerCooldown.
 // Unlike the per-team limits it starts when the marker is thrown, not when it lands, so one player
 // cannot get several strikes in flight by throwing markers before the first one pops.
 float       gPlayerCooldown;
 float       gPlayerNextCall[MAXPLAYERS + 1];    // GetGameTime() at which the player may call again
+int         gPlayerCalls[MAXPLAYERS + 1][MAX_SUPPORT_TYPES];    // Calls this round, per type; drives polynomial cooldowns
 
 ConVar      gCvarClass;
 ConVar      gCvarEnableCmd;
@@ -275,7 +285,10 @@ public void OnEntityDestroyed(int entity)
             // Clean up without triggering fire support, and hand back the thrower's cooldown
             DataPack pack = view_as<DataPack>(gPendingFireSupport[entity]);
             pack.Reset();
-            gPlayerNextCall[pack.ReadCell()] = 0.0;
+            int client      = pack.ReadCell();
+            pack.ReadCell();    // team
+            int supportType = pack.ReadCell();
+            RefundPlayerCall(client, supportType);
             delete pack;
             gPendingFireSupport[entity] = null;
         }
@@ -301,6 +314,8 @@ public void OnClientConnected(int client)
 {
     IsEnabled[client]       = false;
     gPlayerNextCall[client] = 0.0;
+    for (int i = 0; i < MAX_SUPPORT_TYPES; i++)
+        gPlayerCalls[client][i] = 0;
 }
 
 public void OnClientPutInServer(int client)
@@ -400,6 +415,14 @@ void LoadSupportConfig()
             kv.GetString("smoke_type", gSupportTypes[gNumSupportTypes].smokeType, 64, "grenade_m18");
             kv.GetString("discord_message", gSupportTypes[gNumSupportTypes].discordMessage, 256, "");
 
+            char scaling[32];
+            kv.GetString("player_cooldown_scaling", scaling, sizeof(scaling), "constant");
+            gSupportTypes[gNumSupportTypes].playerCooldownPolynomial = StrEqual(scaling, "polynomial", false);
+            if (!gSupportTypes[gNumSupportTypes].playerCooldownPolynomial && !StrEqual(scaling, "constant", false))
+                LogError("Support type %d: unknown player_cooldown_scaling \"%s\", using constant", gNumSupportTypes, scaling);
+            gSupportTypes[gNumSupportTypes].playerCooldownExponent = kv.GetFloat("player_cooldown_exponent", 0.3);
+            gSupportTypes[gNumSupportTypes].playerCooldownMax      = kv.GetFloat("player_cooldown_max", 0.0);
+
             LogMessage("Loaded support type %d: weapon=%s, spread=%.1f, shells=%d, delay=%.1f, duration=%.1f, jitter=%.2f, projectile=%s, sec_count=%d, sec_delay=%.1f, ins_count=%d, ins_delay=%.1f, spawn_smoke=%d, smoke_type=%s, discord_msg=%s",
                        gNumSupportTypes,
                        gSupportTypes[gNumSupportTypes].weapon,
@@ -416,6 +439,12 @@ void LoadSupportConfig()
                        gSupportTypes[gNumSupportTypes].spawnSmoke,
                        gSupportTypes[gNumSupportTypes].smokeType,
                        gSupportTypes[gNumSupportTypes].discordMessage);
+
+            if (gSupportTypes[gNumSupportTypes].playerCooldownPolynomial)
+                LogMessage("Support type %d: per-player cooldown is polynomial, %.1fs * x^%.2f, max %.1fs (0 = none)",
+                           gNumSupportTypes, gPlayerCooldown,
+                           gSupportTypes[gNumSupportTypes].playerCooldownExponent,
+                           gSupportTypes[gNumSupportTypes].playerCooldownMax);
 
             gNumSupportTypes++;
         }
@@ -593,7 +622,7 @@ public Action Event_WeaponFire(Event event, const char[] name, bool dontBroadcas
     {
         return Plugin_Handled;
     }
-    StartPlayerCooldown(client);
+    StartPlayerCooldown(client, supportType);
 
     // Play throw sound
     PlayConfigSound(client, team, gSupportTypes[supportType].throwSound);
@@ -689,7 +718,7 @@ public Action Event_GrenadeDetonate(Event event, const char[] name, bool dontBro
     else
     {
         // Failure - a strike that never came should not cost the caller their cooldown
-        gPlayerNextCall[storedClient] = 0.0;
+        RefundPlayerCall(storedClient, supportType);
         PlayConfigSound(storedClient, team, gSupportTypes[supportType].failSound);
         PrintMessageToTeam(team, gSupportTypes[supportType].failMessage);
     }
@@ -750,7 +779,7 @@ public Action Timer_FindThrownGrenade(Handle timer, DataPack pack)
     if (grenadeEntity == -1)
     {
         // Couldn't find the grenade, fire support fails
-        gPlayerNextCall[client] = 0.0;
+        RefundPlayerCall(client, supportType);
         PlayConfigSound(client, team, gSupportTypes[supportType].failSound);
         PrintMessageToTeam(team, gSupportTypes[supportType].failMessage);
         delete pack;
@@ -936,7 +965,7 @@ Action CmdCallFS(int client, int args)
 
         if (CallFireSupport(client, ground, supportType, team))
         {
-            StartPlayerCooldown(client);
+            StartPlayerCooldown(client, supportType);
 
             if (maxCount > 0)
             {
@@ -1169,11 +1198,17 @@ bool IsPlayerOnCooldown(int client)
     return true;
 }
 
-void StartPlayerCooldown(int client)
+// Starts the caller's cooldown for a call of supportType, counting the call towards that type's
+// tally for the round. The tally is kept even when player_cooldown is 0 so that turning the
+// cooldown on mid-round (sm_firesupport_reload) still sees earlier calls.
+void StartPlayerCooldown(int client, int supportType)
 {
-    if (gPlayerCooldown <= 0.0) return;
+    gPlayerCalls[client][supportType]++;
 
-    gPlayerNextCall[client] = GetGameTime() + gPlayerCooldown;
+    float cooldown = GetPlayerCooldown(client, supportType);
+    if (cooldown <= 0.0) return;
+
+    gPlayerNextCall[client] = GetGameTime() + cooldown;
     if (IsFakeClient(client)) return;
 
     // Tell them when they can call again. The deadline goes with the timer, so a cooldown that has
@@ -1181,7 +1216,32 @@ void StartPlayerCooldown(int client)
     DataPack pack = new DataPack();
     pack.WriteCell(GetClientUserId(client));
     pack.WriteFloat(gPlayerNextCall[client]);
-    CreateTimer(gPlayerCooldown + 0.1, Timer_CooldownOver, pack, TIMER_FLAG_NO_MAPCHANGE | TIMER_DATA_HNDL_CLOSE);
+    CreateTimer(cooldown + 0.1, Timer_CooldownOver, pack, TIMER_FLAG_NO_MAPCHANGE | TIMER_DATA_HNDL_CLOSE);
+}
+
+// The cooldown a call of supportType gives, using the call count already including that call.
+// Polynomial: f(x) = t_0 * x^e, so the first call of the round is plain t_0 (issue #17).
+float GetPlayerCooldown(int client, int supportType)
+{
+    if (gPlayerCooldown <= 0.0 || !gSupportTypes[supportType].playerCooldownPolynomial)
+        return gPlayerCooldown;
+
+    int calls = gPlayerCalls[client][supportType];
+    if (calls < 1) calls = 1;
+
+    float cooldown = gPlayerCooldown * Pow(float(calls), gSupportTypes[supportType].playerCooldownExponent);
+    float cap      = gSupportTypes[supportType].playerCooldownMax;
+    if (cap > 0.0 && cooldown > cap)
+        cooldown = cap;
+    return cooldown;
+}
+
+// A call that never turned into a strike: hand back the cooldown and take it off the tally.
+void RefundPlayerCall(int client, int supportType)
+{
+    gPlayerNextCall[client] = 0.0;
+    if (gPlayerCalls[client][supportType] > 0)
+        gPlayerCalls[client][supportType]--;
 }
 
 Action Timer_CooldownOver(Handle timer, DataPack pack)
@@ -1244,7 +1304,11 @@ Action Timer_ShowStatus(Handle timer)
 void ResetPlayerCooldowns()
 {
     for (int i = 0; i <= MaxClients; i++)
+    {
         gPlayerNextCall[i] = 0.0;
+        for (int j = 0; j < MAX_SUPPORT_TYPES; j++)
+            gPlayerCalls[i][j] = 0;
+    }
 }
 
 void ShowDelayEffect(float ground[3], float sky[3], float time)
