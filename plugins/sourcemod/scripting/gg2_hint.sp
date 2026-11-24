@@ -11,7 +11,8 @@
 //   sm_hint_resend_interval seconds. So each message goes out no more often than its owner asks
 //   (health every 10s), and producers that refresh every half second no longer redraw the box
 //   every half second. The 0.2s tick only notices lapses; it never re-sends by itself.
-// - When nothing is current, the box is cleared once.
+// - When nothing is current, nothing is sent and the box fades on its own. An empty hint must never
+//   be sent: the client draws an uninitialised buffer for it (see Update).
 
 #include <sourcemod>
 
@@ -157,11 +158,13 @@ void Update(int client, float now, const char[] resubmitted = "")
     if (best == -1)
     {
         if (g_shownKey[client][0] == '\0') return;
-        // Nothing current: clear what's left on screen, once.
+        // Nothing current: forget what was shown and let the box fade on its own. Never send an
+        // empty hint to clear it: the client's CHudHintDisplay::SetHintText has no empty-text check,
+        // and UTIL_ReplaceKeyBindings returns on empty input without writing its output, so the box
+        // shows an uninitialised stack buffer as garbage glyphs (issue #32).
         g_shownKey[client][0]  = '\0';
         g_shownText[client][0] = '\0';
-        PrintHintText(client, "");
-        if (g_cvDebug.BoolValue) LogMessage("[GG2 HINT] %N: cleared", client);
+        if (g_cvDebug.BoolValue) LogMessage("[GG2 HINT] %N: nothing current, letting the box fade", client);
         return;
     }
 
