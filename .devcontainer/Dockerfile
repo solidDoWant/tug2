@@ -5,11 +5,11 @@ FROM mcr.microsoft.com/devcontainers/go:2-1.27-bookworm@sha256:57d71ff964ee9ece1
 # toolchain a module asks for, instead of refusing to build with "local".
 ENV GOTOOLCHAIN=auto
 
-# Keep in sync with SOURCEMOD_VERSION in the repository's root Dockerfile (Renovate updates both in
-# one PR; the checksum is updated by hand, see the root Dockerfile).
-# renovate: datasource=github-releases depName=alliedmodders/sourcemod versioning=loose
+# Keep in sync with SOURCEMOD_VERSION in the repository's root Dockerfile (Renovate updates both,
+# version and digest, in one PR).
+# renovate: datasource=custom.alliedmodders depName=alliedmodders/sourcemod versioning=loose
 ARG SOURCEMOD_VERSION=1.12.0.7260
-ARG SOURCEMOD_SHA256=1025717c46119c15c6e73fd9b4a190fd8da480987307d133e1281eb9a6f5c91c
+ARG SOURCEMOD_DIGEST=b01719e6143bc7d5bb63aae8086d031574da6ef838f041ba4b8ab72c8c75b888
 
 # renovate: datasource=github-release-attachments depName=wagoodman/dive
 ARG DIVE_VERSION=v0.13.1
@@ -45,7 +45,7 @@ RUN \
     lib32stdc++6 && \
     mkdir -p /opt/sourcemod && \
     curl -fsSL -o /tmp/sourcemod.tar.gz "https://github.com/alliedmodders/sourcemod/releases/download/${SOURCEMOD_VERSION}/sourcemod-${SOURCEMOD_VERSION%.*}-git${SOURCEMOD_VERSION##*.}-linux.tar.gz" && \
-    echo "${SOURCEMOD_SHA256}  /tmp/sourcemod.tar.gz" | sha256sum -c - && \
+    echo "${SOURCEMOD_DIGEST}  /tmp/sourcemod.tar.gz" | sha256sum -c - && \
     tar -xzf /tmp/sourcemod.tar.gz -C /opt/sourcemod && \
     rm /tmp/sourcemod.tar.gz && \
     ln -s /opt/sourcemod/addons/sourcemod/scripting/spcomp64 /usr/local/bin/smcompiler && \

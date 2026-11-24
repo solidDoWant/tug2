@@ -7,16 +7,16 @@
 ARG SERVER_RUNNER_IMAGE_NAME=ghcr.io/soliddowant/server-runner:latest
 
 # Versions are GitHub release tags (1.12.0.7259); the tarballs inside are named with "-git" in place
-# of the last dot (1.12.0-git7259), which the download steps derive. Renovate bumps the version but
-# cannot follow that rename to update the checksum, so a version bump fails the build at
-# `sha256sum -c` until the matching *_SHA256 is updated by hand (the Renovate PR says how).
-# renovate: datasource=github-releases depName=alliedmodders/metamod-source versioning=loose
+# of the last dot (1.12.0-git7259), which the download steps derive. *_DIGEST is the sha256 of the
+# Linux tarball. Renovate updates it with the version, from the digest GitHub publishes for the
+# release asset (the custom.alliedmodders datasource in .github/renovate.json5).
+# renovate: datasource=custom.alliedmodders depName=alliedmodders/metamod-source versioning=loose
 ARG METAMOD_VERSION=1.12.0.1230
-ARG METAMOD_SHA256=29f60bb40154fb4d9d0020ee35347c8359eeaf493dc4fdd7182873cf51f83f47
+ARG METAMOD_DIGEST=22dab1bbd312025e700dd526f136e2f6e3efcda6fcf6c1b66c0319488f513882
 # Keep in sync with .devcontainer/Dockerfile (Renovate updates both in one PR).
-# renovate: datasource=github-releases depName=alliedmodders/sourcemod versioning=loose
+# renovate: datasource=custom.alliedmodders depName=alliedmodders/sourcemod versioning=loose
 ARG SOURCEMOD_VERSION=1.12.0.7260
-ARG SOURCEMOD_SHA256=1025717c46119c15c6e73fd9b4a190fd8da480987307d133e1281eb9a6f5c91c
+ARG SOURCEMOD_DIGEST=b01719e6143bc7d5bb63aae8086d031574da6ef838f041ba4b8ab72c8c75b888
 
 # Third-party plugin sources fetched from GitHub by commit.
 # renovate: datasource=git-refs depName=NullifidianSF/insurgency_public branch=main
@@ -78,10 +78,10 @@ FROM gameserver-mods-base AS gameserver-mods-metamod
 
 # MetaMod Source (Linux version)
 ARG METAMOD_VERSION
-ARG METAMOD_SHA256
+ARG METAMOD_DIGEST
 RUN \
     curl -fsSL -o /tmp/mmsource.tar.gz "https://github.com/alliedmodders/metamod-source/releases/download/${METAMOD_VERSION}/mmsource-${METAMOD_VERSION%.*}-git${METAMOD_VERSION##*.}-linux.tar.gz" && \
-    echo "${METAMOD_SHA256}  /tmp/mmsource.tar.gz" | sha256sum -c - && \
+    echo "${METAMOD_DIGEST}  /tmp/mmsource.tar.gz" | sha256sum -c - && \
     tar -xzf /tmp/mmsource.tar.gz -C /insurgency && \
     rm /tmp/mmsource.tar.gz && \
     # Remove extra files
@@ -122,12 +122,12 @@ FROM gameserver-mods-base AS gameserver-mods-sourcemod
 
 # SourceMod (Linux version)
 ARG SOURCEMOD_VERSION
-ARG SOURCEMOD_SHA256
+ARG SOURCEMOD_DIGEST
 RUN \
     --mount=type=bind,source=./plugins/sourcemod,target=/plugin-source \
     --mount=from=sourcemod-extensions-ripext,target=/plugin-extensions/ripext \
     curl -fsSL -o /tmp/sourcemod.tar.gz "https://github.com/alliedmodders/sourcemod/releases/download/${SOURCEMOD_VERSION}/sourcemod-${SOURCEMOD_VERSION%.*}-git${SOURCEMOD_VERSION##*.}-linux.tar.gz" && \
-    echo "${SOURCEMOD_SHA256}  /tmp/sourcemod.tar.gz" | sha256sum -c - && \
+    echo "${SOURCEMOD_DIGEST}  /tmp/sourcemod.tar.gz" | sha256sum -c - && \
     tar -xzf /tmp/sourcemod.tar.gz -C /insurgency && \
     rm /tmp/sourcemod.tar.gz && \
     # Disable auto updates
@@ -162,7 +162,7 @@ FROM ubuntu:26.04@sha256:d66b366dac61b575bee2aef07e9c26e8070096fbe84a3d4d3eb0da0
 
 # Download SourceMod for the compiler
 ARG SOURCEMOD_VERSION
-ARG SOURCEMOD_SHA256
+ARG SOURCEMOD_DIGEST
 RUN \
     dpkg --add-architecture i386 && \
     apt update && \
@@ -176,7 +176,7 @@ RUN \
     # Same tarball as the one the server ships (gameserver-mods-sourcemod), so the compiler and the
     # runtime cannot drift apart.
     curl -fsSL -o /tmp/sourcemod.tar.gz "https://github.com/alliedmodders/sourcemod/releases/download/${SOURCEMOD_VERSION}/sourcemod-${SOURCEMOD_VERSION%.*}-git${SOURCEMOD_VERSION##*.}-linux.tar.gz" && \
-    echo "${SOURCEMOD_SHA256}  /tmp/sourcemod.tar.gz" | sha256sum -c - && \
+    echo "${SOURCEMOD_DIGEST}  /tmp/sourcemod.tar.gz" | sha256sum -c - && \
     tar -xzf /tmp/sourcemod.tar.gz -C /sourcemod && \
     rm /tmp/sourcemod.tar.gz && \
     # Create output dirs

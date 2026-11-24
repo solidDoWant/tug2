@@ -31,20 +31,6 @@
       dependencyDashboardApproval: true,
     },
     {
-      description: "Renovate cannot update this checksum (the asset name does not contain the release tag)",
-      matchDepNames: ["alliedmodders/sourcemod"],
-      prBodyNotes: [
-        "Update `SOURCEMOD_SHA256` in **both** `Dockerfile` and `.devcontainer/Dockerfile` by hand, or the build fails at `sha256sum -c`: `v={{{newVersion}}}; curl -fsSL \"https://github.com/alliedmodders/sourcemod/releases/download/$v/sourcemod-${v%.*}-git${v##*.}-linux.tar.gz\" | sha256sum`",
-      ],
-    },
-    {
-      description: "Renovate cannot update this checksum (the asset name does not contain the release tag)",
-      matchDepNames: ["alliedmodders/metamod-source"],
-      prBodyNotes: [
-        "Update `METAMOD_SHA256` in `Dockerfile` by hand, or the build fails at `sha256sum -c`: `v={{{newVersion}}}; curl -fsSL \"https://github.com/alliedmodders/metamod-source/releases/download/$v/mmsource-${v%.*}-git${v##*.}-linux.tar.gz\" | sha256sum`",
-      ],
-    },
-    {
       description: "The game server's Ubuntu base: a new LTS changes glibc and the 32-bit libraries srcds needs, so test it by hand",
       matchDatasources: ["docker"],
       matchPackageNames: ["ubuntu", "ghcr.io/gameservermanagers/steamcmd"],

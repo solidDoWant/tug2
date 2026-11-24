@@ -52,14 +52,16 @@
       //   # renovate: datasource=github-releases depName=alliedmodders/sourcemod versioning=loose
       //   ARG SOURCEMOD_VERSION=1.12.0.7259
       // An ARG named *_DIGEST directly after it is the sha256 of the downloaded
-      // release asset; with datasource=github-release-attachments Renovate
-      // updates it with the version. It can only do that when the asset's file
-      // name contains the version, so SourceMod and MetaMod (tag 1.12.0.7259,
-      // file ...-git7259...) keep a hand-maintained *_SHA256 instead.
+      // release asset, and Renovate updates it with the version. The datasource
+      // must supply the new digest: github-release-attachments does when the
+      // asset's file name contains the version; custom.alliedmodders (below)
+      // does for SourceMod and MetaMod, whose files do not (tag 1.12.0.7259,
+      // file ...-git7259...). Without one, the version moves and the digest
+      // does not, and the build fails at sha256sum -c.
       description: "Dockerfile ARG versions, with an optional asset digest",
       customType: "regex",
       managerFilePatterns: ["/(^|/)Dockerfile$/"],
-      matchStrings: ["#\\s*renovate:\\s*datasource=(?<datasource>[a-z-]+)\\s+depName=(?<depName>\\S+)(?:\\s+versioning=(?<versioning>\\S+))?\\s*\\n\\s*ARG\\s+[A-Z0-9_]+=(?<currentValue>\\S+)(?:\\s*\\n\\s*ARG\\s+[A-Z0-9_]+_DIGEST=(?<currentDigest>[0-9a-f]{64}))?"],
+      matchStrings: ["#\\s*renovate:\\s*datasource=(?<datasource>[a-z.-]+)\\s+depName=(?<depName>\\S+)(?:\\s+versioning=(?<versioning>\\S+))?\\s*\\n\\s*ARG\\s+[A-Z0-9_]+=(?<currentValue>\\S+)(?:\\s*\\n\\s*ARG\\s+[A-Z0-9_]+_DIGEST=(?<currentDigest>[0-9a-f]{64}))?"],
     },
     {
       // Git commits that only a Dockerfile ARG holds, tracking a branch:
@@ -81,6 +83,20 @@
       matchStrings: ["#\\s*renovate:\\s*datasource=(?<datasource>docker)\\s+depName=(?<depName>\\S+)\\s*\\n\\s*[A-Z0-9_]+\\s*[:?]?=\\s*[^:\\s]+:(?<currentValue>[^@\\s]+)@(?<currentDigest>sha256:[0-9a-f]{64})"],
     },
   ],
+
+  customDatasources: {
+    // AlliedModders' GitHub releases with the sha256 GitHub publishes for each
+    // asset, so a version bump also updates the matching *_DIGEST. Takes the
+    // Linux tarball's digest; dev branches (1.13, 2.0) are prereleases and are
+    // marked unstable so they are not offered.
+    alliedmodders: {
+      defaultRegistryUrlTemplate: "https://api.github.com/repos/{{packageName}}/releases?per_page=100",
+      format: "json",
+      transformTemplates: [
+        '{"releases": [$map($, function($r) { {"version": $r.tag_name, "releaseTimestamp": $r.published_at, "isStable": $not($r.prerelease), "digest": $substringAfter($r.assets[$contains(name, "-linux.tar.gz")][0].digest, "sha256:")} })]}',
+      ],
+    },
+  },
 
   packageRules: [
     // Last so it overrides any preset rule. The owner merges Renovate's PRs.
