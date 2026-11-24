@@ -1,4 +1,4 @@
-FROM mcr.microsoft.com/devcontainers/go:2-1.27-bookworm@sha256:75a84cbeca74acadcebf7df05777c77d6ade353a26c0a3ce55fc4b13bdad69cd
+FROM mcr.microsoft.com/devcontainers/go:2-1.27-bookworm@sha256:57d71ff964ee9ece1e8158b7379a5a0922f9a709a5aa2109115f7546be430bd7
 
 # The base image's Go can trail the patch release a module requires (go.mod
 # "go 1.27.4" on a 1.27.3 image). "auto" lets the go command fetch the exact
@@ -22,7 +22,7 @@ RUN \
 
 # Install linuxgsm for local use
 # Pinned by digest; the server image no longer uses this base, so this is only for the local linuxgsm script.
-COPY --from=ghcr.io/gameservermanagers/gameserver:ins@sha256:59cbec3bf83fd068c4f415c66baf26690d95a6a8f57d58774ece6c439c4662a8 /app/linuxgsm.sh /usr/local/bin/linuxgsm
+COPY --from=ghcr.io/gameservermanagers/gameserver:ins@sha256:0b24766159ae2c97ebf7bfc2c6922bab97fee55a0d671762b460fc4dc75eb620 /app/linuxgsm.sh /usr/local/bin/linuxgsm
 
 RUN \
     # Install [Dive](https://github.com/wagoodman/dive) for inspecting container images

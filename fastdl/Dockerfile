@@ -10,7 +10,7 @@
 # ---------------------------------------------------------------------------- tools
 # Texture compiler, content hashing and the templating pre-pass. Go, matching tools/server-runner:
 # one static binary, no runtime dependencies in the builder.
-FROM golang:1.27@sha256:ec47ea3725fea0cc88f6de94919aef19f40f12fc1ec0e2d1b3426dbf15ecca04 AS tools
+FROM golang:1.27@sha256:205c7636d74e0ffbe3d007162df7d74f859f5a8c8322dfb9f907977686c126cf AS tools
 
 RUN --mount=type=bind,source=fastdl/tools,target=/src \
     go build -C /src -o /fastdl-tools
@@ -32,7 +32,7 @@ RUN --mount=type=bind,source=fastdl/tools,target=/src \
 # -vtxformat 1 is required. Insurgency is a CS:GO-branch build (datacache.so carries the build path
 # .../csgo/rel_pc/src/datacache/mdlcache.cpp), and format 1 is the CS:GO/SFM/ASW .vtx strip layout;
 # format 0 is the older TF2/HL2 one.
-FROM debian:bookworm-slim@sha256:734a72b3d6142a71993b4bc580ca01d8ca687f77a2c422d96a961d3376b179bc AS model-compiler
+FROM debian:bookworm-slim@sha256:e67eeead736ff7bbe258ef088bff683635c561b1fcfefad0806c1df4ab49ce0e AS model-compiler
 
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends -y \
       build-essential cmake git ca-certificates \
@@ -62,7 +62,7 @@ RUN git clone --filter=blob:none https://github.com/ToppiOfficial/PulseModel.git
 #
 # Cycles on CPU: EEVEE needs a GPU/GL context a build container does not have. This stage is cached
 # on its inputs, so it only re-runs when the model, texture or framing config changes.
-FROM debian:bookworm-slim@sha256:734a72b3d6142a71993b4bc580ca01d8ca687f77a2c422d96a961d3376b179bc AS icon-render
+FROM debian:bookworm-slim@sha256:e67eeead736ff7bbe258ef088bff683635c561b1fcfefad0806c1df4ab49ce0e AS icon-render
 
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends -y \
       blender \
@@ -77,7 +77,7 @@ COPY fastdl/src/render /src/render
 RUN TOOLS=/tools sh /tools/render_icons.sh /src /out
 
 # ---------------------------------------------------------------------------- builder
-FROM debian:bookworm-slim@sha256:734a72b3d6142a71993b4bc580ca01d8ca687f77a2c422d96a961d3376b179bc AS builder
+FROM debian:bookworm-slim@sha256:e67eeead736ff7bbe258ef088bff683635c561b1fcfefad0806c1df4ab49ce0e AS builder
 
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends -y \
       bzip2 coreutils \
