@@ -467,11 +467,9 @@ func (ts *Toolset) addServerStatusTool(cfg *Config, choices []string) {
 				if !ok || gs.QueryAddress == "" {
 					return nil, fmt.Errorf("no live status is available for server %q", name)
 				}
-				wg.Add(1)
-				go func() {
-					defer wg.Done()
+				wg.Go(func() {
 					results[i] = QueryServer(name, gs.QueryAddress, cfg.A2STimeout)
-				}()
+				})
 			}
 			wg.Wait()
 			return results, nil

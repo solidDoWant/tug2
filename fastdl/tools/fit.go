@@ -78,9 +78,9 @@ func fitImage(src *image.NRGBA, w, h int, fx, fy, zoom float64) *image.NRGBA {
 	step := 1 / scale
 
 	dst := image.NewNRGBA(image.Rect(0, 0, w, h))
-	for oy := 0; oy < h; oy++ {
+	for oy := range h {
 		ya, yb := y0+float64(oy)*step, y0+float64(oy+1)*step
-		for ox := 0; ox < w; ox++ {
+		for ox := range w {
 			xa, xb := x0+float64(ox)*step, x0+float64(ox+1)*step
 			var acc [4]float64
 			var total float64
@@ -96,14 +96,14 @@ func fitImage(src *image.NRGBA, w, h int, fx, fy, zoom float64) *image.NRGBA {
 					}
 					wgt := wx * wy
 					p := src.PixOffset(src.Bounds().Min.X+sx, src.Bounds().Min.Y+sy)
-					for c := 0; c < 4; c++ {
+					for c := range 4 {
 						acc[c] += float64(src.Pix[p+c]) * wgt
 					}
 					total += wgt
 				}
 			}
 			q := dst.PixOffset(ox, oy)
-			for c := 0; c < 4; c++ {
+			for c := range 4 {
 				dst.Pix[q+c] = uint8(math.Round(acc[c] / total))
 			}
 		}

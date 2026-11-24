@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -43,12 +44,8 @@ func TestParseAnthropicAuth(t *testing.T) {
 	}
 	with := func(extra map[string]string, drop ...string) map[string]string {
 		out := map[string]string{}
-		for k, v := range wif {
-			out[k] = v
-		}
-		for k, v := range extra {
-			out[k] = v
-		}
+		maps.Copy(out, wif)
+		maps.Copy(out, extra)
 		for _, k := range drop {
 			delete(out, k)
 		}

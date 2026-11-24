@@ -38,7 +38,7 @@ func registerStoredTimestamps(m *pgtype.Map, loc *time.Location) {
 	m.RegisterType(&pgtype.Type{
 		Name:  "timestamp",
 		OID:   pgtype.TimestampOID,
-		Codec: &storedTimestampCodec{TimestampCodec: pgtype.TimestampCodec{ScanLocation: loc}},
+		Codec: &storedTimestampCodec{ScanLocation: loc},
 	})
 }
 

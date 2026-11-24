@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"image"
 	"os"
+	"slices"
 )
 
 const vtfHeaderSize = 80
@@ -105,7 +106,7 @@ func readVTFHeader(d []byte) (*vtfHeader, error) {
 		lowFormat: int32(le.Uint32(d[57:])), lowW: d[61], lowH: d[62],
 		depth: 1,
 	}
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		h.reflectivity[i] = f32(le.Uint32(d[32+i*4:]))
 	}
 	h.bumpScale = f32(le.Uint32(d[48:]))
@@ -154,8 +155,8 @@ func writeVTF(path string, img *image.NRGBA, format, flags uint32, bumpScale flo
 	le.PutUint16(hdr[63:], 1) // depth
 
 	body := make([]byte, 0, mipSize(format, w, h)*4/3)
-	for i := len(levels) - 1; i >= 0; i-- { // VTF stores the smallest mip first
-		body = append(body, encodeLevel(levels[i], format)...)
+	for _, level := range slices.Backward(levels) { // VTF stores the smallest mip first
+		body = append(body, encodeLevel(level, format)...)
 	}
 
 	out := append(hdr, body...)
@@ -171,8 +172,8 @@ func encodeLevel(img *image.NRGBA, format uint32) []byte {
 		return encodeDXT(img, format)
 	}
 	out := make([]byte, 0, w*h*4)
-	for y := 0; y < h; y++ {
-		for x := 0; x < w; x++ {
+	for y := range h {
+		for x := range w {
 			p := img.PixOffset(x, y)
 			r, g, b, a := img.Pix[p], img.Pix[p+1], img.Pix[p+2], img.Pix[p+3]
 			if format == fmtBGRA8888 {
@@ -191,8 +192,8 @@ func reflectivity(img *image.NRGBA) [3]float32 {
 	var sum [3]float64
 	w, h := img.Bounds().Dx(), img.Bounds().Dy()
 	n := float64(w * h)
-	for y := 0; y < h; y++ {
-		for x := 0; x < w; x++ {
+	for y := range h {
+		for x := range w {
 			p := img.PixOffset(x, y)
 			sum[0] += float64(img.Pix[p])
 			sum[1] += float64(img.Pix[p+1])
@@ -212,25 +213,25 @@ func halve(src *image.NRGBA) *image.NRGBA {
 	sw, sh := src.Bounds().Dx(), src.Bounds().Dy()
 	dw, dh := max(1, sw/2), max(1, sh/2)
 	dst := image.NewNRGBA(image.Rect(0, 0, dw, dh))
-	for y := 0; y < dh; y++ {
-		for x := 0; x < dw; x++ {
+	for y := range dh {
+		for x := range dw {
 			var sum [4]int
 			var n int
-			for dy := 0; dy < 2; dy++ {
-				for dx := 0; dx < 2; dx++ {
+			for dy := range 2 {
+				for dx := range 2 {
 					sx, sy := x*2+dx, y*2+dy
 					if sx >= sw || sy >= sh {
 						continue
 					}
 					p := src.PixOffset(sx, sy)
-					for c := 0; c < 4; c++ {
+					for c := range 4 {
 						sum[c] += int(src.Pix[p+c])
 					}
 					n++
 				}
 			}
 			p := dst.PixOffset(x, y)
-			for c := 0; c < 4; c++ {
+			for c := range 4 {
 				dst.Pix[p+c] = uint8(sum[c] / n)
 			}
 		}

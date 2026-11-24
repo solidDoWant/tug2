@@ -42,7 +42,7 @@ func nameCandidates(display string) []string {
 
 	add(display)
 	outside := bracketed.ReplaceAllString(display, "\x00")
-	for _, part := range strings.Split(nameDividers.Replace(outside), "\x00") {
+	for part := range strings.SplitSeq(nameDividers.Replace(outside), "\x00") {
 		add(part)
 	}
 	for _, m := range bracketed.FindAllStringSubmatch(display, -1) {

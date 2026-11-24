@@ -117,7 +117,7 @@ func TestRateLimiter(t *testing.T) {
 	r := NewRateLimiter(2, 1, nil)
 	r.now = func() time.Time { return now }
 
-	for i := 0; i < 2; i++ {
+	for i := range 2 {
 		if ok, _ := r.AllowQuestion("u"); !ok {
 			t.Fatalf("question %d rejected", i)
 		}
@@ -152,7 +152,7 @@ func TestRateLimiterOverrides(t *testing.T) {
 		"raised": {QuestionsPerHour: &five},                      // issues keep the default
 	})
 
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		if ok, _ := r.AllowQuestion("owner"); !ok {
 			t.Fatalf("owner limited after %d questions", i)
 		}
@@ -160,7 +160,7 @@ func TestRateLimiterOverrides(t *testing.T) {
 			t.Fatalf("owner limited after %d issues", i)
 		}
 	}
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		if ok, _ := r.AllowQuestion("raised"); !ok {
 			t.Fatalf("raised user limited after %d questions", i)
 		}

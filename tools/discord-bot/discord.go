@@ -481,19 +481,20 @@ func leadIn(starter *discordgo.Message, before []*discordgo.Message, botID strin
 // botMessageText is what the model sees of one of the bot's own messages,
 // including the state of any issue draft it carries.
 func botMessageText(m *discordgo.Message) string {
-	text := m.Content
+	var text strings.Builder
+	text.WriteString(m.Content)
 	for _, e := range m.Embeds {
 		if e.Footer == nil {
 			continue
 		}
 		switch {
 		case strings.HasPrefix(e.Footer.Text, draftFooterPrefix):
-			text += fmt.Sprintf("\n[Issue draft %q: %s]", e.Title, strings.TrimPrefix(e.Footer.Text, draftFooterPrefix))
+			fmt.Fprintf(&text, "\n[Issue draft %q: %s]", e.Title, strings.TrimPrefix(e.Footer.Text, draftFooterPrefix))
 		case strings.HasPrefix(e.Footer.Text, filedFooterPrefix):
-			text += fmt.Sprintf("\n[Issue %q: filed as %s]", e.Title, e.URL)
+			fmt.Fprintf(&text, "\n[Issue %q: filed as %s]", e.Title, e.URL)
 		}
 	}
-	return strings.TrimSpace(text)
+	return strings.TrimSpace(text.String())
 }
 
 // sendAnswer posts the reply, split to Discord's message limit, with any issue

@@ -67,11 +67,11 @@ func cubeFaces(d []byte, h *vtfHeader) ([][]float32, int, error) {
 	base := len(d) - need
 	out := make([][]float32, faces)
 	le := binary.LittleEndian
-	for f := 0; f < faces; f++ {
+	for f := range faces {
 		px := make([]float32, size*size*3)
 		off := base + f*face
 		for i := 0; i < size*size; i++ {
-			for c := 0; c < 3; c++ {
+			for c := range 3 {
 				px[i*3+c] = halfToFloat(le.Uint16(d[off+i*8+c*2:]))
 			}
 		}
@@ -186,7 +186,7 @@ func cmdVtf2hdr(args []string) error {
 
 	out := make([]float32, w*h*3)
 	var peak float32
-	for y := 0; y < h; y++ {
+	for y := range h {
 		phi := (0.5 - (float64(y)+0.5)/float64(h)) * math.Pi // +pi/2 at the top
 		for x := 0; x < w; x++ {
 			theta := ((float64(x)+0.5)/float64(w)*2 - 1) * math.Pi

@@ -199,10 +199,7 @@ const discordEpochMS = 1420070400000
 
 // snowflakeAt is the smallest snowflake for a time, for before/after paging.
 func snowflakeAt(t time.Time) string {
-	ms := t.UnixMilli() - discordEpochMS
-	if ms < 0 {
-		ms = 0
-	}
+	ms := max(t.UnixMilli()-discordEpochMS, 0)
 	return strconv.FormatUint(uint64(ms)<<22, 10)
 }
 

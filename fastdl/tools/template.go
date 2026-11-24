@@ -55,7 +55,7 @@ func expand(text string, groups map[string]string, where string) (string, error)
 		sub := tokenRE.FindStringSubmatch(m)
 		fn := sub[1]
 		var args []string
-		for _, a := range strings.Split(sub[2], ",") {
+		for a := range strings.SplitSeq(sub[2], ",") {
 			if a = strings.TrimSpace(a); a != "" {
 				args = append(args, a)
 			}

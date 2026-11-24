@@ -235,8 +235,8 @@ func (f *fakeChannels) ChannelMessages(channelID string, limit int, beforeID, af
 
 func TestChannelTools(t *testing.T) {
 	src := &fakeChannels{
-		readable:   []ReadableChannel{{Name: "changelog", ID: "11"}},
-		fakeReader: fakeReader{msgs: []*discordgo.Message{msgAt("5", time.Now(), "Update 0.0.112")}},
+		readable: []ReadableChannel{{Name: "changelog", ID: "11"}},
+		msgs:     []*discordgo.Message{msgAt("5", time.Now(), "Update 0.0.112")},
 	}
 	cfg := &Config{Servers: map[string]GameServer{}}
 	ts := NewToolset(cfg, NewStatsClient(cfg.Servers), nil, src, nil)

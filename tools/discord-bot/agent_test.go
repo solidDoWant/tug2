@@ -52,7 +52,7 @@ func (f *fakeModel) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	calls := max(f.toolsPerCall, 1)
 	var uses []string
-	for i := 0; i < calls; i++ {
+	for i := range calls {
 		uses = append(uses, fmt.Sprintf(`{"type":"tool_use","id":"tu_%d_%d","name":"probe","input":{}}`, n, i))
 	}
 	content := "[" + strings.Join(uses, ",") + "]"

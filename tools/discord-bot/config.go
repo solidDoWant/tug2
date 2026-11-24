@@ -159,7 +159,7 @@ func getEnvBool(key string, fallback bool) (bool, error) {
 
 func splitList(raw string) []string {
 	var out []string
-	for _, part := range strings.Split(raw, ",") {
+	for part := range strings.SplitSeq(raw, ",") {
 		if part = strings.TrimSpace(part); part != "" {
 			out = append(out, part)
 		}

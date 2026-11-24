@@ -114,7 +114,7 @@ type IssueSummary struct {
 func (t *IssueTracker) Search(ctx context.Context, query string) ([]IssueSummary, error) {
 	q := fmt.Sprintf("repo:%s/%s is:issue %s", t.owner, t.repo, query)
 	result, _, err := t.client.Search.Issues(ctx, q, &github.SearchOptions{
-		ListOptions: github.ListOptions{PerPage: 5},
+		PerPage: 5,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("searching GitHub issues: %w", err)

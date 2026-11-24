@@ -97,7 +97,7 @@ func normaliseBasePath(raw string) (string, error) {
 	if strings.ContainsAny(trimmed, "?#{} ") {
 		return "", fmt.Errorf("invalid BASE_PATH %q: must be a plain URL path", raw)
 	}
-	for _, segment := range strings.Split(trimmed, "/") {
+	for segment := range strings.SplitSeq(trimmed, "/") {
 		if segment == "" || segment == "." || segment == ".." {
 			return "", fmt.Errorf("invalid BASE_PATH %q: empty or dot path segment", raw)
 		}

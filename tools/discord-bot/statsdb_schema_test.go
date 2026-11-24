@@ -175,7 +175,7 @@ func migrationScripts(t *testing.T, server string) []string {
 		t.Fatalf("%s: no insurgency-stats migrations", server)
 	}
 	var files []string
-	for _, line := range strings.Split(string(block[1]), "\n") {
+	for line := range strings.SplitSeq(string(block[1]), "\n") {
 		if m := regexp.MustCompile(`^\s*"[^"]+"\s+"configs/sql-init-scripts/pgsql/([^"]+)"`).FindStringSubmatch(line); m != nil {
 			files = append(files, filepath.Join(pgsqlScripts, m[1]))
 		}

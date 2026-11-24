@@ -280,7 +280,7 @@ func connStringParams(s string) map[string]string {
 		return params
 	}
 
-	for _, field := range strings.Fields(s) {
+	for field := range strings.FieldsSeq(s) {
 		if k, v, ok := strings.Cut(field, "="); ok {
 			params[k] = v
 		}
