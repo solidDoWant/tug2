@@ -20,7 +20,7 @@ ARG SOURCEMOD_SHA256=1025717c46119c15c6e73fd9b4a190fd8da480987307d133e1281eb9a6f
 
 # Third-party plugin sources fetched from GitHub by commit.
 # renovate: datasource=git-refs depName=NullifidianSF/insurgency_public branch=main
-ARG INSURGENCY_PUBLIC_COMMIT=e6eb683a6ba407b5bba29b74817e0c0bcb9d6a0c
+ARG INSURGENCY_PUBLIC_COMMIT=b7c334350eb3cb8505c79b0a81b8738efb03b29f
 # renovate: datasource=git-refs depName=thecannons/Insurgency-dy-sourcemod branch=master
 ARG INSURGENCY_DY_SOURCEMOD_COMMIT=594f5d321010da16cc0ad78478921af4d80cfa80
 
