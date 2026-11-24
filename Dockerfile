@@ -79,7 +79,7 @@ RUN \
     chmod 644 /insurgency/addons/metamod.vdf
 
 # Build SourceMod extensions
-FROM ubuntu:24.04@sha256:9c7f200c07e3d4a03e7249d2c16bf66a51120fb876aa2242cf31451412543289 AS sourcemod-extensions-ripext
+FROM ubuntu:26.04@sha256:d66b366dac61b575bee2aef07e9c26e8070096fbe84a3d4d3eb0da069b5d76db AS sourcemod-extensions-ripext
 
 # renovate: datasource=github-releases depName=ErikMinekus/sm-ripext
 ARG RIPEXT_VERSION=1.3.2
@@ -137,7 +137,7 @@ RUN \
     find /insurgency -type f -name '*.so' -exec chmod 755 {} \;
 
 # This target is used to compile SourceMod plugins.
-FROM ubuntu:24.04@sha256:9c7f200c07e3d4a03e7249d2c16bf66a51120fb876aa2242cf31451412543289 AS sourcemod-plugins-base
+FROM ubuntu:26.04@sha256:d66b366dac61b575bee2aef07e9c26e8070096fbe84a3d4d3eb0da069b5d76db AS sourcemod-plugins-base
 
 # Download SourceMod for the compiler
 ARG SOURCEMOD_VERSION
@@ -737,7 +737,7 @@ RUN --mount=type=bind,source=./plugins/sourcemod,target=/plugin-source \
 FROM ${SERVER_RUNNER_IMAGE_NAME} AS server-runner
 
 
-FROM ubuntu:24.04@sha256:9c7f200c07e3d4a03e7249d2c16bf66a51120fb876aa2242cf31451412543289 AS gameserver
+FROM ubuntu:26.04@sha256:d66b366dac61b575bee2aef07e9c26e8070096fbe84a3d4d3eb0da069b5d76db AS gameserver
 
 RUN \
     dpkg --add-architecture i386 && \
@@ -853,7 +853,7 @@ ENTRYPOINT [    \
 # readelf checks fail the build if it ever comes out 64-bit. See tools/casecache/ for what it does
 # (it eliminates the native-Linux -workshop case-insensitive directory-descent storm that makes
 # map changes take minutes and intermittently trips the engine watchdog -> crash).
-FROM ubuntu:24.04@sha256:9c7f200c07e3d4a03e7249d2c16bf66a51120fb876aa2242cf31451412543289 AS casecache-builder
+FROM ubuntu:26.04@sha256:d66b366dac61b575bee2aef07e9c26e8070096fbe84a3d4d3eb0da069b5d76db AS casecache-builder
 RUN apt-get update \
     && apt-get install -y --no-install-recommends gcc-multilib libc6-dev-i386 \
     && rm -rf /var/lib/apt/lists/*
