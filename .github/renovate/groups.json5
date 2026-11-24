@@ -17,9 +17,11 @@
       group: { commitMessageTopic: "{{{groupName}}} group" },
     },
     {
-      description: "GitHub Actions: one PR",
-      groupName: "github actions",
-      matchManagers: ["github-actions"],
+      description: "Third-party SourceMod plugin sources (raw files fetched by commit): one monthly PR. Any commit to the repository moves the pin, including ones that do not touch the files used",
+      groupName: "sourcemod plugin sources",
+      matchDatasources: ["git-refs"],
+      matchDepNames: ["NullifidianSF/insurgency_public", "thecannons/Insurgency-dy-sourcemod"],
+      schedule: ["* 0-3 1 * *"],
       group: { commitMessageTopic: "{{{groupName}}} group" },
     },
 

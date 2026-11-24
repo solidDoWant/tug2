@@ -5,9 +5,15 @@ FROM mcr.microsoft.com/devcontainers/go:2-1.27-bookworm@sha256:57d71ff964ee9ece1
 # toolchain a module asks for, instead of refusing to build with "local".
 ENV GOTOOLCHAIN=auto
 
-# Keep in sync with SOURCEMOD_VERSION in the repository's root Dockerfile.
-ARG SOURCEMOD_VERSION=1.12.0-git7259
-ARG SOURCEMOD_RELEASE=1.12.0.7259
+# Keep in sync with SOURCEMOD_VERSION in the repository's root Dockerfile (Renovate updates both in
+# one PR; the checksum is updated by hand, see the root Dockerfile).
+# renovate: datasource=github-releases depName=alliedmodders/sourcemod versioning=loose
+ARG SOURCEMOD_VERSION=1.12.0.7259
+ARG SOURCEMOD_SHA256=1025717c46119c15c6e73fd9b4a190fd8da480987307d133e1281eb9a6f5c91c
+
+# renovate: datasource=github-release-attachments depName=wagoodman/dive
+ARG DIVE_VERSION=v0.13.1
+ARG DIVE_DIGEST=0c20d18f0cc87e6e982a3289712ac3aa9fc364ba973109d1da3a473232640571
 
 RUN \
     # Agree to steamcmd license
@@ -26,7 +32,8 @@ COPY --from=ghcr.io/gameservermanagers/gameserver:ins@sha256:0b24766159ae2c97ebf
 
 RUN \
     # Install [Dive](https://github.com/wagoodman/dive) for inspecting container images
-    curl -fsSL -o /tmp/dive.deb https://github.com/wagoodman/dive/releases/download/v0.13.1/dive_0.13.1_linux_amd64.deb && \
+    curl -fsSL -o /tmp/dive.deb "https://github.com/wagoodman/dive/releases/download/${DIVE_VERSION}/dive_${DIVE_VERSION#v}_linux_amd64.deb" && \
+    echo "${DIVE_DIGEST}  /tmp/dive.deb" | sha256sum -c - && \
     dpkg -i /tmp/dive.deb && \
     rm -rf /tmp/dive.deb
 
@@ -37,7 +44,9 @@ RUN \
     lib32gcc-s1 \
     lib32stdc++6 && \
     mkdir -p /opt/sourcemod && \
-    curl -fsSL -o - https://github.com/alliedmodders/sourcemod/releases/download/${SOURCEMOD_RELEASE}/sourcemod-${SOURCEMOD_VERSION}-linux.tar.gz | \
-    tar -xzf - -C /opt/sourcemod && \
+    curl -fsSL -o /tmp/sourcemod.tar.gz "https://github.com/alliedmodders/sourcemod/releases/download/${SOURCEMOD_VERSION}/sourcemod-${SOURCEMOD_VERSION%.*}-git${SOURCEMOD_VERSION##*.}-linux.tar.gz" && \
+    echo "${SOURCEMOD_SHA256}  /tmp/sourcemod.tar.gz" | sha256sum -c - && \
+    tar -xzf /tmp/sourcemod.tar.gz -C /opt/sourcemod && \
+    rm /tmp/sourcemod.tar.gz && \
     ln -s /opt/sourcemod/addons/sourcemod/scripting/spcomp64 /usr/local/bin/smcompiler && \
     ln -s /opt/sourcemod/addons/sourcemod/scripting/spcomp64 /usr/local/bin/spcomp

@@ -1,8 +1,9 @@
 {
   $schema: "https://docs.renovatebot.com/renovate-schema.json",
   // Managers: dockerfile (the server, fastdl, tools and devcontainer images),
-  // gomod (the Go modules under tools/ and fastdl/tools), github-actions and
-  // devcontainer. Policy is split by topic under .github/renovate/.
+  // gomod (the Go modules under tools/ and fastdl/tools), devcontainer, and the
+  // regex managers below for versions held in Dockerfile ARGs and Makefile
+  // variables. Policy is split by topic under .github/renovate/.
   extends: [
     "config:recommended",
     ":semanticCommits",
@@ -40,14 +41,39 @@
 
   postUpdateOptions: ["gomodTidy"],
 
-  // Versions that only a Dockerfile ARG holds, marked with a comment like:
-  //   # renovate: datasource=github-releases depName=ErikMinekus/sm-ripext
-  //   ARG RIPEXT_VERSION=1.3.2
   customManagers: [
     {
+      // Versions that only a Dockerfile ARG holds, marked with a comment like:
+      //   # renovate: datasource=github-releases depName=alliedmodders/sourcemod versioning=loose
+      //   ARG SOURCEMOD_VERSION=1.12.0.7259
+      // An ARG named *_DIGEST directly after it is the sha256 of the downloaded
+      // release asset; with datasource=github-release-attachments Renovate
+      // updates it with the version. It can only do that when the asset's file
+      // name contains the version, so SourceMod and MetaMod (tag 1.12.0.7259,
+      // file ...-git7259...) keep a hand-maintained *_SHA256 instead.
+      description: "Dockerfile ARG versions, with an optional asset digest",
       customType: "regex",
       managerFilePatterns: ["/(^|/)Dockerfile$/"],
-      matchStrings: ["#\\s*renovate:\\s*datasource=(?<datasource>[a-z-]+)\\s+depName=(?<depName>\\S+)(?:\\s+versioning=(?<versioning>\\S+))?\\s*\\n\\s*ARG\\s+[A-Z0-9_]+=(?<currentValue>\\S+)"],
+      matchStrings: ["#\\s*renovate:\\s*datasource=(?<datasource>[a-z-]+)\\s+depName=(?<depName>\\S+)(?:\\s+versioning=(?<versioning>\\S+))?\\s*\\n\\s*ARG\\s+[A-Z0-9_]+=(?<currentValue>\\S+)(?:\\s*\\n\\s*ARG\\s+[A-Z0-9_]+_DIGEST=(?<currentDigest>[0-9a-f]{64}))?"],
+    },
+    {
+      // Git commits that only a Dockerfile ARG holds, tracking a branch:
+      //   # renovate: datasource=git-refs depName=ToppiOfficial/PulseModel branch=main
+      //   ARG PULSEMODEL_REF=fb8af77ca96718f8130686f361b6d32d12629153
+      description: "Dockerfile ARG GitHub commits",
+      customType: "regex",
+      managerFilePatterns: ["/(^|/)Dockerfile$/"],
+      matchStrings: ["#\\s*renovate:\\s*datasource=(?<datasource>git-refs)\\s+depName=(?<depName>\\S+)\\s+branch=(?<currentValue>\\S+)\\s*\\n\\s*ARG\\s+[A-Z0-9_]+=(?<currentDigest>[0-9a-f]{40})"],
+      packageNameTemplate: "https://github.com/{{{depName}}}",
+    },
+    {
+      // Images a Makefile runs directly, pinned by tag and digest:
+      //   # renovate: datasource=docker depName=outdead/rcon
+      //   RCON_IMAGE = outdead/rcon:latest@sha256:...
+      description: "Makefile image variables",
+      customType: "regex",
+      managerFilePatterns: ["/(^|/)Makefile$/"],
+      matchStrings: ["#\\s*renovate:\\s*datasource=(?<datasource>docker)\\s+depName=(?<depName>\\S+)\\s*\\n\\s*[A-Z0-9_]+\\s*[:?]?=\\s*[^:\\s]+:(?<currentValue>[^@\\s]+)@(?<currentDigest>sha256:[0-9a-f]{64})"],
     },
   ],
 

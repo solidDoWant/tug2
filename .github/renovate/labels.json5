@@ -33,10 +33,6 @@
       addLabels: ["renovate/helm"],
     },
     {
-      matchManagers: ["github-actions"],
-      addLabels: ["renovate/github-actions"],
-    },
-    {
       matchManagers: ["gomod"],
       addLabels: ["renovate/go"],
     },
