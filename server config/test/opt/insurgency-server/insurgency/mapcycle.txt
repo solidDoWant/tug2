@@ -114,7 +114,8 @@ cu_chi_tunnels_x64 checkpoint
 //jack_hammer_coopvfix checkpoint  [checkpoint-only, removed]
 //de_breach_d checkpoint  [checkpoint-only, removed]
 //nomercy_coopv1  [checkpoint-only, removed]
-//christmas_house_coop checkpoint
+// HOLIDAY (issue #26): temporary, comment back out after the holidays
+christmas_house_coop checkpoint
 //kunar_fixed_a3 checkpoint
 //insz_favela checkpoint  [checkpoint-only, removed]
 hesitation_coop_ins checkpoint

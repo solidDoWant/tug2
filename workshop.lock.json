@@ -480,6 +480,16 @@
         "main"
       ]
     },
+    "1202835280": {
+      "title": "christmas_house_coop - soundpack",
+      "manifest": "5534120104353542349",
+      "size": 3494513,
+      "time_updated": 1544198322,
+      "servers": [
+        "main",
+        "test"
+      ]
+    },
     "1202839339": {
       "title": "de_vertigo_coop - checkpoint",
       "manifest": "5903704349326355566",
@@ -639,6 +649,16 @@
       "time_updated": 1543313257,
       "servers": [
         "main"
+      ]
+    },
+    "1584514038": {
+      "title": "Christmas House",
+      "manifest": "8997348754396304652",
+      "size": 83347652,
+      "time_updated": 1544378626,
+      "servers": [
+        "main",
+        "test"
       ]
     },
     "1586281347": {

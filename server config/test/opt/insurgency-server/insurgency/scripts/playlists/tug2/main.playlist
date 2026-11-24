@@ -221,6 +221,9 @@
 		"hijacked_ws"						"checkpoint"
 		"ins_prison_2020_new"				"checkpoint"
 		"cs_assault"						"checkpoint"
+
+		// ---- HOLIDAY (issue #26): temporary, checkpoint-only exemption; remove after the holidays ----
+		"christmas_house_coop"				"checkpoint"
 	}
 	
 	"cvars"

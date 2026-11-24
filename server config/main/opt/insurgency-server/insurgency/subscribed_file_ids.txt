@@ -163,8 +163,9 @@
 2107007637 // de_breach_d checkpoint 454.830 MB
 1180002850 // nomercy_coopv1 checkpoint 139.001 MB
 //335578709 //hijacked_ws checkpoint 200.115 MB
-//1584514038 //christmas_house_coop checkpoint 79.487 MB
-//1202835280 // christmas house sound
+// HOLIDAY (issue #26): temporary, comment both back out after the holidays. Checkpoint-only.
+1584514038 // christmas_house_coop checkpoint 79.487 MB
+1202835280 // christmas_house_coop soundpack (music; workshop child of the map) 3.5 MB
 //576166552 // pain and death 47.053 MB
 //2793724329 // Definitive Arabic Voices 96.703 MB
 //3337875920 // kunar_fixed_a3 checkpoint 124.135 MB

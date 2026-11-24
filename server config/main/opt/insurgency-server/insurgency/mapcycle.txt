@@ -108,7 +108,8 @@ jack_hammer_coopvfix checkpoint
 de_breach_d checkpoint
 nomercy_coopv1
 //hijacked_ws checkpoint
-//christmas_house_coop checkpoint
+// HOLIDAY (issue #26): temporary, comment back out after the holidays
+christmas_house_coop checkpoint
 //kunar_fixed_a3 checkpoint
 insz_favela checkpoint
 hesitation_coop_ins checkpoint
