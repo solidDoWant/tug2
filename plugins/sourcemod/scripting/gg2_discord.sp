@@ -46,6 +46,9 @@ StringMap g_RecentBans      = null;
 // Message batching queue (circular buffer)
 char  g_MessageQueue[MAX_QUEUE_SIZE][MAX_MESSAGE_SIZE];
 bool  g_MessagePriorities[MAX_QUEUE_SIZE];
+// Messages allowed to ping the admin role (calladmin). Each is sent in a post of its own - see
+// SendDiscordMessageDirect for why that, and not rewriting the text, is what keeps pings safe.
+bool  g_MessageMentionsAdmin[MAX_QUEUE_SIZE];
 bool  g_MessageDeleted[MAX_QUEUE_SIZE];
 int   g_QueueHead          = 0;
 int   g_QueueTail          = 0;
@@ -59,6 +62,7 @@ float g_RateLimitResetTime = 0.0;
 char  g_PendingBatch[MAX_MESSAGE_SIZE];
 int   g_PendingBatchRetries = 0;
 bool  g_HasPendingBatch     = false;
+bool  g_PendingBatchMentionsAdmin = false;
 bool  g_RequestInFlight     = false;    // Prevents concurrent requests
 #define MAX_RETRIES 3
 
@@ -129,11 +133,6 @@ public SMCResult Config_OnKeyValue(SMCParser smc, const char[] key, const char[]
     }
 
     return SMCParse_Continue;
-}
-
-void no_ats(char[] value, int size)
-{
-    ReplaceString(value, size, "@", "©");
 }
 
 public void OnPluginStart()
@@ -892,8 +891,8 @@ bool IsCallAdminBanned(int client)
 public void Call_Admin(int client, char[] message, int max_size)
 {
     char admin_message[4096];
-    no_ats(message, max_size);
-    // This will @ the admin role in Discord
+    // This will @ the admin role in Discord. The player's text needs no cleaning: this post is the
+    // only kind allowed to ping anything, and the only thing it may ping is this same role.
     Format(admin_message, sizeof(admin_message), "<@&%s> ```%s```", AdminRoleID, message);
     send_discord_calladmin(admin_message, sizeof(admin_message));
 }
@@ -973,18 +972,14 @@ public void send_discord(char[] content, int maxSize)
     send_discord_raw(content, maxSize, false, false);
 }
 
-public void send_discord_raw(char[] content, int maxSize, bool allowDiscordAts, bool isPriority)
+public void send_discord_raw(char[] content, int maxSize, bool mentionsAdmin, bool isPriority)
 {
-    if (!allowDiscordAts)
-    {
-        no_ats(content, maxSize);
-    }
-
-    // Queue the message instead of sending directly
-    QueueDiscordMessage(content, isPriority);
+    // Queue the message instead of sending directly. The text is sent exactly as given: what may
+    // ping is decided by allowed_mentions, not by the text (see SendDiscordMessageDirect).
+    QueueDiscordMessage(content, isPriority, mentionsAdmin);
 }
 
-void SendDiscordMessageDirect(const char[] content)
+void SendDiscordMessageDirect(const char[] content, bool mentionsAdmin)
 {
     // Mark request as in-flight to prevent concurrent sends
     g_RequestInFlight          = true;
@@ -993,14 +988,22 @@ void SendDiscordMessageDirect(const char[] content)
     discord_content.SetString("username", "In-Game Chat");
     discord_content.SetString("content", content);
 
-    // Restrict (and enable) mentions to the admin role only. Webhook role
-    // mentions are left unresolved and render as "@unknown-role" unless the
-    // role is explicitly listed in allowed_mentions. Every non-calladmin
-    // message is already run through no_ats(), so the admin role is the only
-    // mention the plugin ever emits.
+    // What may ping is decided here, by Discord, never by editing the text. allowed_mentions with
+    // an empty "parse" resolves no @everyone, no @here, and no user or role mention except those
+    // listed by id. So an ordinary post lists nothing and can ping no one, whatever players typed -
+    // no text filter to keep in step with Discord's mention syntax. (Text used to be filtered by
+    // replacing every "@" with a copyright sign, which mangled "sm_respawn @all" into "©all",
+    // issue #37.)
+    //
+    // A calladmin post lists the admin role, which is also what makes it resolve at all: a webhook
+    // role mention not listed here renders as "@unknown-role". The queue sends every calladmin in a
+    // post of its own (Timer_ProcessMessageQueue), so this permission never covers anyone else's text. The
+    // calladmin's own text could repeat the role mention, which only pings the role being pinged.
     JSONObject allowed_mentions = new JSONObject();
+    JSONArray  allowed_parse    = new JSONArray();
     JSONArray  allowed_roles    = new JSONArray();
-    allowed_roles.PushString(AdminRoleID);
+    if (mentionsAdmin) allowed_roles.PushString(AdminRoleID);
+    allowed_mentions.Set("parse", allowed_parse);
     allowed_mentions.Set("roles", allowed_roles);
     discord_content.Set("allowed_mentions", allowed_mentions);
 
@@ -1008,6 +1011,7 @@ void SendDiscordMessageDirect(const char[] content)
     request.SetHeader("Content-Type", "application/json");
     request.Post(discord_content, onRequestFinished);
 
+    delete allowed_parse;
     delete allowed_roles;
     delete allowed_mentions;
     delete discord_content;
@@ -1115,7 +1119,7 @@ public Action Timer_ProcessMessageQueue(Handle timer)
     if (g_HasPendingBatch)
     {
         LogMessage("[DISCORD QUEUE] Retrying pending batch (attempt %d/%d), %d chars", g_PendingBatchRetries + 1, MAX_RETRIES, strlen(g_PendingBatch));
-        SendDiscordMessageDirect(g_PendingBatch);
+        SendDiscordMessageDirect(g_PendingBatch, g_PendingBatchMentionsAdmin);
         return Plugin_Continue;
     }
 
@@ -1128,6 +1132,7 @@ public Action Timer_ProcessMessageQueue(Handle timer)
     char batchedMessage[MAX_DISCORD_MESSAGE_SIZE];
     int  batchedLength   = 0;
     int  messagesInBatch = 0;
+    bool batchMentionsAdmin = false;
 
     while (g_QueueCount > 0)
     {
@@ -1138,6 +1143,11 @@ public Action Timer_ProcessMessageQueue(Handle timer)
             g_QueueTail                   = (g_QueueTail + 1) % MAX_QUEUE_SIZE;
             continue;
         }
+
+        // A message that may ping the admin role travels alone: the permission applies to the whole
+        // post, so sharing it would let any text batched alongside ping the role too.
+        bool mentionsAdmin = g_MessageMentionsAdmin[g_QueueTail];
+        if (mentionsAdmin && messagesInBatch > 0) break;    // send what we have; it goes next cycle
 
         // Check if next message will fit (peek without dequeuing)
         int messageLen = strlen(g_MessageQueue[g_QueueTail]);
@@ -1172,6 +1182,12 @@ public Action Timer_ProcessMessageQueue(Handle timer)
         StrCat(batchedMessage, sizeof(batchedMessage), currentMessage);
         batchedLength += messageLen;
         messagesInBatch++;
+
+        if (mentionsAdmin)
+        {
+            batchMentionsAdmin = true;
+            break;    // nothing else may join this post
+        }
     }
 
     if (messagesInBatch > 0)
@@ -1184,9 +1200,10 @@ public Action Timer_ProcessMessageQueue(Handle timer)
     {
         // Store the batch in case we need to retry
         strcopy(g_PendingBatch, sizeof(g_PendingBatch), batchedMessage);
-        g_HasPendingBatch = true;
+        g_HasPendingBatch           = true;
+        g_PendingBatchMentionsAdmin = batchMentionsAdmin;
 
-        SendDiscordMessageDirect(batchedMessage);
+        SendDiscordMessageDirect(batchedMessage, batchMentionsAdmin);
     }
 
     return Plugin_Continue;
@@ -1225,7 +1242,7 @@ void RemoveMessageAtIndex(int index)
     g_QueueCount--;
 }
 
-bool QueueDiscordMessage(const char[] message, bool isPriority)
+bool QueueDiscordMessage(const char[] message, bool isPriority, bool mentionsAdmin)
 {
     int messageLen = strlen(message);
 
@@ -1265,6 +1282,7 @@ bool QueueDiscordMessage(const char[] message, bool isPriority)
     // Add message to queue
     strcopy(g_MessageQueue[g_QueueHead], MAX_MESSAGE_SIZE, message);
     g_MessagePriorities[g_QueueHead] = isPriority;
+    g_MessageMentionsAdmin[g_QueueHead] = mentionsAdmin;
     g_MessageDeleted[g_QueueHead]    = false;
     g_QueueHead                      = (g_QueueHead + 1) % MAX_QUEUE_SIZE;
     g_QueueCount++;
