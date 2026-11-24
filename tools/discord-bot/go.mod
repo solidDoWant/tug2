@@ -3,11 +3,11 @@ module github.com/solidDoWant/tug2/tools/discord-bot
 go 1.27.4
 
 require (
-	github.com/anthropics/anthropic-sdk-go/v2 v2.9.0
+	github.com/anthropics/anthropic-sdk-go/v2 v2.13.0
 	github.com/bradleyfalzon/ghinstallation/v2 v2.19.0
 	github.com/bwmarrin/discordgo v0.29.0
 	github.com/google/go-github/v88 v88.0.0
-	github.com/jackc/pgx/v5 v5.12.0
+	github.com/jackc/pgx/v5 v5.13.0
 	github.com/prometheus/client_golang v1.25.0
 	github.com/rumblefrog/go-a2s v1.0.3
 )

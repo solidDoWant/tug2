@@ -3,8 +3,8 @@ module github.com/solidDoWant/tug2/tools/stats-api
 go 1.27.4
 
 require (
-	github.com/danielgtaylor/huma/v2 v2.40.0
-	github.com/jackc/pgx/v5 v5.12.0
+	github.com/danielgtaylor/huma/v2 v2.41.0
+	github.com/jackc/pgx/v5 v5.13.0
 	github.com/prometheus/client_golang v1.25.0
 )
 
