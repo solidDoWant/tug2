@@ -15,7 +15,7 @@ ARG METAMOD_VERSION=1.12.0.1228
 ARG METAMOD_SHA256=29f60bb40154fb4d9d0020ee35347c8359eeaf493dc4fdd7182873cf51f83f47
 # Keep in sync with .devcontainer/Dockerfile (Renovate updates both in one PR).
 # renovate: datasource=github-releases depName=alliedmodders/sourcemod versioning=loose
-ARG SOURCEMOD_VERSION=1.12.0.7259
+ARG SOURCEMOD_VERSION=1.12.0.7260
 ARG SOURCEMOD_SHA256=1025717c46119c15c6e73fd9b4a190fd8da480987307d133e1281eb9a6f5c91c
 
 # Third-party plugin sources fetched from GitHub by commit.
