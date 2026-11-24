@@ -41,7 +41,7 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install --no-instal
 # Tracks main by commit: upstream tags only every few releases. Renovate bumps it only after a
 # Dependency Dashboard approval (see .github/renovate/safety.json5), for the comparison above.
 # renovate: datasource=git-refs depName=ToppiOfficial/PulseModel branch=main
-ARG PULSEMODEL_REF=fb8af77ca96718f8130686f361b6d32d12629153
+ARG PULSEMODEL_REF=a1facf95424fbba5576775be7c386b4b30499ad8
 
 # Upstream develops on MSVC, which includes <cstddef> transitively where GCC does not, so the build
 # fails on libs/minicollision/convexhull.cpp. Drop the patch once upstream builds clean on GCC.
