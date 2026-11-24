@@ -48,7 +48,9 @@
 //3562969635 // environ terrorists
 //3469147622 // Middle East Insurgents from Squad
 //355701236 // christmas present IEDs
-//3071910412 // christmas present ied (vpk)
+// HOLIDAY (issue #26): temporary, comment back out after the holidays. Repackaged vpk; 355701236 is the
+// legacy (HTTP) original and must stay out (it hangs the UGC download queue).
+3071910412 // christmas present ied (vpk)
 
 1379716589 //CPSetup.txt
 
