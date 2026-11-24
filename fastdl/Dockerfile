@@ -53,7 +53,9 @@ RUN git clone --filter=blob:none https://github.com/ToppiOfficial/PulseModel.git
     && cmake -S /pm -B /pm/build -DCMAKE_BUILD_TYPE=Release \
     && cmake --build /pm/build -j "$(nproc)" \
     && install -Dm755 /pm/build/PulseModel/mdlcompiler /out/mdlcompiler \
-    && /out/mdlcompiler -dumpcommands > /dev/null && echo "mdlcompiler runs"
+    # No-argument run prints usage and exits 1; it proves the binary loads and runs. (-dumpcommands,
+    # the old check, was removed upstream.)
+    && { /out/mdlcompiler || true; } | grep -q '^usage: mdlcompiler' && echo "mdlcompiler runs"
 
 # ---------------------------------------------------------------------------- icon renderer
 # Buy-menu icons, rendered from the model so they track the texture.
