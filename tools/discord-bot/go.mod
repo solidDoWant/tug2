@@ -7,6 +7,7 @@ require (
 	github.com/bradleyfalzon/ghinstallation/v2 v2.19.0
 	github.com/bwmarrin/discordgo v0.29.0
 	github.com/google/go-github/v88 v88.0.0
+	github.com/google/go-github/v93 v93.0.0
 	github.com/jackc/pgx/v5 v5.13.0
 	github.com/prometheus/client_golang v1.25.0
 	github.com/rumblefrog/go-a2s v1.0.3
