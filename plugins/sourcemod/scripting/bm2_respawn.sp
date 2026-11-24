@@ -3313,6 +3313,18 @@ Action Timer_ReviveMonitor(Handle timer)
         woundType[64],
         discordString[256];
 
+    // Downed players whose revive completed earlier in this pass. The revive itself is deferred to
+    // a 0-second timer (CreateReviveTimer), so the player is still dead for the rest of this loop -
+    // and every other reviver standing over the same body would otherwise also reach the
+    // completion branch on this tick: a second medkit spent, the revive counted, scored, forwarded
+    // and announced twice (issue #40). Only the first reviver completes it.
+    bool revivedThisPass[MAXPLAYERS + 1];
+    //
+    // The countdowns below are per downed player, not per reviver, and every reviver standing over
+    // the body decrements them each pass - so two revivers finish in half the time, three in a
+    // third. That started as an accident and is now a deliberate team mechanic: do not "fix" it
+    // into one decrement per pass. Only the completion is deduplicated.
+
     for (int alivePlayer = 1; alivePlayer <= MaxClients; alivePlayer++)
     {
         if (!IsClientInGame(alivePlayer)
@@ -3324,6 +3336,7 @@ Action Timer_ReviveMonitor(Handle timer)
 
         deadPlayer = g_iNearestBody[alivePlayer];
         if (deadPlayer <= 0
+            || revivedThisPass[deadPlayer]
             || !IsClientInGame(deadPlayer)
             || IsPlayerAlive(deadPlayer)
             || g_iHurtFatal[deadPlayer]
@@ -3408,6 +3421,7 @@ Action Timer_ReviveMonitor(Handle timer)
                 AwardMedicPoints(alivePlayer, revive_point_bonus.IntValue);
                 medic_bonus_life_check(alivePlayer);
 
+                revivedThisPass[deadPlayer] = true;
                 Check_NearbyMedicsRevive(alivePlayer, deadPlayer);
                 g_revivedByMedic[deadPlayer] = true;
                 CreateReviveTimer(deadPlayer);
@@ -3443,6 +3457,7 @@ Action Timer_ReviveMonitor(Handle timer)
                 AwardMedicPoints(alivePlayer, revive_point_bonus.IntValue);
                 medic_bonus_life_check(alivePlayer);
 
+                revivedThisPass[deadPlayer] = true;
                 Check_NearbyMedicsRevive(alivePlayer, deadPlayer);
                 g_revivedByMedic[deadPlayer] = false;
                 CreateReviveTimer(deadPlayer);
