@@ -7,7 +7,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/google/go-github/v88/github"
+	"github.com/google/go-github/v93/github"
 )
 
 // Issues the bot files are labelled by kind (GITHUB_BUG_LABEL /
@@ -86,8 +86,8 @@ func (t *IssueTracker) EnsureLabels(ctx context.Context) error {
 		if have[strings.ToLower(c.Name)] {
 			continue
 		}
-		if _, _, err := t.client.Issues.CreateLabel(ctx, t.owner, t.repo, &github.Label{
-			Name: github.Ptr(c.Name), Description: github.Ptr(c.Description), Color: github.Ptr(c.Color),
+		if _, _, err := t.client.Issues.CreateLabel(ctx, t.owner, t.repo, github.CreateIssueLabelRequest{
+			Name: c.Name, Description: new(c.Description), Color: new(c.Color),
 		}); err != nil {
 			return fmt.Errorf("creating label %s: %w", c.Name, err)
 		}

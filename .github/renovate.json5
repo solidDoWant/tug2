@@ -39,7 +39,12 @@
     "**/docs/**",
   ],
 
-  postUpdateOptions: ["gomodTidy"],
+  // gomodUpdateImportPaths: a Go major version is a new module path (/v88 -> /v93).
+  // Without it Renovate only adds the new path to go.mod and skips tidy, the
+  // imports stay on the old path, and the same PR is reopened after every merge.
+  // With it the PR rewrites the imports; breaking API changes still need fixing
+  // by hand on the branch.
+  postUpdateOptions: ["gomodTidy", "gomodUpdateImportPaths"],
 
   customManagers: [
     {

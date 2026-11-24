@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/bradleyfalzon/ghinstallation/v2"
-	"github.com/google/go-github/v88/github"
+	"github.com/google/go-github/v93/github"
 )
 
 // IssueKind is what a user is filing.
@@ -157,10 +157,10 @@ func (t *IssueTracker) Create(ctx context.Context, draft IssueDraft, threadLink 
 	body := strings.TrimSpace(draft.Body) + fmt.Sprintf(
 		"\n\n---\n_Reported on Discord via the stats bot. Discussion: [Discord thread](%s)_", threadLink)
 
-	issue, _, err := t.client.Issues.Create(ctx, t.owner, t.repo, &github.IssueRequest{
-		Title:  github.Ptr(draft.Title),
-		Body:   github.Ptr(body),
-		Labels: &labels,
+	issue, _, err := t.client.Issues.Create(ctx, t.owner, t.repo, github.CreateIssueRequest{
+		Title:  draft.Title,
+		Body:   new(body),
+		Labels: labels,
 	})
 	if err != nil {
 		return "", fmt.Errorf("creating GitHub issue: %w", err)
