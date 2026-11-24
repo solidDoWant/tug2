@@ -89,6 +89,7 @@ ConVar    g_cvInSmoke;
 ConVar    g_cvGrenadeChance;
 ConVar    g_cvGrenadeClass;
 ConVar    g_cvSmokeLife;
+ConVar    g_cvRequireLof;
 ArrayList g_aSmokeBorn;
 float     g_fBotLastSeed[MAXPLAYERS + 1];
 
@@ -110,6 +111,7 @@ int       g_iShotsInSmoke = 0, g_iShotsOutSmoke = 0;
 // not on the whitelist' - the first would mean the prop lookup is wrong, the second that bots are
 // genuinely holding sidearms/knives at the moment we sample them.
 int       g_iSkipNoWeapon = 0, g_iSkipBadClass = 0, g_iSeeded = 0, g_iLastBadClass = -1;
+int       g_iSkipNoLof = 0;    // bots not seeded because cover sat between them and the target
 
 // Refreshed once per sweep so the pursuit detour can decide with pure comparisons instead of
 // SDKCalls. g_iBotNextBot maps a client to its INextBot address, which is what ShouldPursue is
@@ -438,6 +440,12 @@ public void OnPluginStart()
 
     g_cvSmokeLife      = CreateConVar("sm_bot_smoke_suppress_smoke_life", "18.0",
                                       "Seconds a smoke stays tracked. Should roughly match how long the cloud is actually visible.", _, true, 1.0, true, 120.0);
+    // Issue #35. The engine's suppress action never checks line of fire - stock bots only ever
+    // suppress a spot they actually saw, so it never needs to. A seeded threat skips that
+    // assumption, so without this a bot behind a tent or wall hoses the cover (or through it, where
+    // the material is penetrable) at a player it could not have seen even without the smoke.
+    g_cvRequireLof     = CreateConVar("sm_bot_smoke_suppress_require_lof", "1",
+                                      "Only seed bots with a clear line of fire to the player: a bullet trace from the bot's eyes to the player's centre that hits nothing but the player. Smoke does not block traces, so this rejects cover, not the cloud.", _, true, 0.0, true, 1.0);
     g_cvDebug          = CreateConVar("sm_bot_smoke_suppress_debug", "0",
                                       "Log every suppression decision. Noisy - troubleshooting only.");
 
@@ -504,9 +512,9 @@ public void OnPluginStart()
     }
     if (g_hAddKnownEntity == null) LogError("[SMOKE SUPPRESS] Failed to prepare IVision::AddKnownEntity");
 
-    // The CINSNextBot::IsLineOfFireClear check that used to live here was removed: it has the
-    // same wrong-this-pointer problem as GetVisionInterface did, and it is only an
-    // optimisation. Without it a bot may occasionally suppress a cloud it has no shot at.
+    // CINSNextBot::IsLineOfFireClear is not called (it has the same wrong-this-pointer problem as
+    // GetVisionInterface did). The line-of-fire check is a plain bullet trace instead - see
+    // HasLineOfFire and sm_bot_smoke_suppress_require_lof.
 
     g_hGetPrimaryThreat = PrepVirt(conf, "IVision::GetPrimaryKnownThreat", SDKType_Bool, true);
     g_hKE_GetEntity     = PrepVirtEnt(conf, "CKnownEntity::GetEntity");
@@ -1982,8 +1990,8 @@ Action Timer_Sweep(Handle timer)
         for (int c = 0; c < sizeof(g_aClsHist); c++)
             if (g_aClsHist[c] > 0) Format(hist, sizeof(hist), "%s%d:%d ", hist, c, g_aClsHist[c]);
 
-        LogMessage("[SMOKE SUPPRESS] pursue detour: calls=%d pCombat=%d pCombatOk=%d pMain=%d denied=%d nonClient=%d stale=%d attackForced=%d suppressForced=%d suppCalls=%d suppOther=%d combatUpd=%d ageForced=%d ageSampled=%d ageBelow=%d ageMax=%.1f ammoSampled=%d ammoBelow=%d ammoMin=%.2f refilled=%d rearmed=%d clipFill=%d forgot=%d holdNade=%d unstuck=%d | smokes=%d | BOT SHOTS near smoke=%d (inSmoke=%d outside=%d) | seeded=%d skipNoWep=%d skipClass=%d lastBadCls=%d unblinded=%d promoted=%d gateHits=%d nadeArmed=%d nadeHits=%d icaCalls=%d mEnt=%d fovForced=%d fovSkip=%d fovInPursue=%d noNade=%d | clsHist=%s | arousal n=%d high=%d min=%.1f max=%.1f clamped=%d",
-                   g_iPursueCalls, g_iPursueCombat, g_iPursueCombatOk, g_iPursueMain, g_iPursueDenied, g_iPursueNonClient, g_iPursueStale, g_iAttackForced, g_iSuppressForced, g_iSuppCalls, g_iSuppOther, g_iCombatUpdates, g_iAgeForced, g_iAgeSampled, g_iAgeBelow, g_fAgeMax, g_iAmmoSampled, g_iAmmoBelow, g_fAmmoMin, g_iRefilled, g_iRearmed, g_iClipFilled, g_iForgot, g_iHoldingNade, g_iUnstuck, g_aSmokes.Length, g_iBotShotsNearSmoke, g_iShotsInSmoke, g_iShotsOutSmoke, g_iSeeded, g_iSkipNoWeapon, g_iSkipBadClass, g_iLastBadClass, g_iUnblinded, g_iPromoted, g_iGateHits, g_iNadeArmed, g_iNadeHits, g_iIcaCalls, g_iIcaMatchEnt, g_iFovForced, g_iFovSkip, g_iFovInPursue, g_iNadeSkipNoNade, hist, g_iArousalSampled, g_iArousalHigh, g_fArousalMin, g_fArousalMax, g_iArousalClamped);
+        LogMessage("[SMOKE SUPPRESS] pursue detour: calls=%d pCombat=%d pCombatOk=%d pMain=%d denied=%d nonClient=%d stale=%d attackForced=%d suppressForced=%d suppCalls=%d suppOther=%d combatUpd=%d ageForced=%d ageSampled=%d ageBelow=%d ageMax=%.1f ammoSampled=%d ammoBelow=%d ammoMin=%.2f refilled=%d rearmed=%d clipFill=%d forgot=%d holdNade=%d unstuck=%d | smokes=%d | BOT SHOTS near smoke=%d (inSmoke=%d outside=%d) | seeded=%d skipNoWep=%d skipClass=%d lastBadCls=%d noLOF=%d unblinded=%d promoted=%d gateHits=%d nadeArmed=%d nadeHits=%d icaCalls=%d mEnt=%d fovForced=%d fovSkip=%d fovInPursue=%d noNade=%d | clsHist=%s | arousal n=%d high=%d min=%.1f max=%.1f clamped=%d",
+                   g_iPursueCalls, g_iPursueCombat, g_iPursueCombatOk, g_iPursueMain, g_iPursueDenied, g_iPursueNonClient, g_iPursueStale, g_iAttackForced, g_iSuppressForced, g_iSuppCalls, g_iSuppOther, g_iCombatUpdates, g_iAgeForced, g_iAgeSampled, g_iAgeBelow, g_fAgeMax, g_iAmmoSampled, g_iAmmoBelow, g_fAmmoMin, g_iRefilled, g_iRearmed, g_iClipFilled, g_iForgot, g_iHoldingNade, g_iUnstuck, g_aSmokes.Length, g_iBotShotsNearSmoke, g_iShotsInSmoke, g_iShotsOutSmoke, g_iSeeded, g_iSkipNoWeapon, g_iSkipBadClass, g_iLastBadClass, g_iSkipNoLof, g_iUnblinded, g_iPromoted, g_iGateHits, g_iNadeArmed, g_iNadeHits, g_iIcaCalls, g_iIcaMatchEnt, g_iFovForced, g_iFovSkip, g_iFovInPursue, g_iNadeSkipNoNade, hist, g_iArousalSampled, g_iArousalHigh, g_fArousalMin, g_fArousalMax, g_iArousalClamped);
         g_iPursueCalls       = 0;
         g_iPursueCombat      = 0;
         g_iPursueCombatOk    = 0;
@@ -1997,6 +2005,7 @@ Action Timer_Sweep(Handle timer)
         g_iSeeded            = 0;
         g_iSkipNoWeapon      = 0;
         g_iSkipBadClass      = 0;
+        g_iSkipNoLof         = 0;
         g_iUnblinded         = 0;
         g_iPromoted          = 0;
         g_iGateHits          = 0;
@@ -2172,9 +2181,18 @@ Action Timer_Sweep(Handle timer)
                 // Do not reset the age clock on a bot we already seeded recently.
                 if (g_fBotLastSeed[bot] > GetGameTime() - g_cvReseed.FloatValue) continue;
 
+                // Checked last: it is the only test here that costs a trace. A blocked bot is not
+                // stamped with g_fBotLastSeed, so it is reconsidered next sweep if it moves clear.
+                float aim[3];
+                if (!HasLineOfFire(bot, client, aim))
+                {
+                    g_iSkipNoLof++;
+                    continue;
+                }
+
                 g_fBotLastSeed[bot] = GetGameTime();
                 g_iSeeded++;
-                SeedKnowledge(bot, client, smokePos);
+                SeedKnowledge(bot, client, smokePos, aim);
             }
         }
     }
@@ -2187,7 +2205,7 @@ Action Timer_Sweep(Handle timer)
 // seen and then immediately unseen manufactures the exact state the engine's existing suppression
 // path is written for: a threat glimpsed a moment ago and since lost. Only touches the entry if it
 // really is the one we just injected, since the bot may have a more pressing threat.
-int GiveVisualMemory(int vision, int target)
+int GiveVisualMemory(int vision, int target, const float aim[3])
 {
     if (g_hGetPrimaryThreat == null || g_hKE_GetEntity == null || g_hKE_UpdateVis == null) return 0;
 
@@ -2195,11 +2213,39 @@ int GiveVisualMemory(int vision, int target)
     if (known == 0) return 0;
     if (SDKCall(g_hKE_GetEntity, known) != target) return 0;
 
+    // The suppression aim point is GetLastKnownPosition, which a fresh entry takes from the
+    // target's GetAbsOrigin - their feet, where knee-high cover the line-of-fire trace passed over
+    // can still catch every round. Point it at the exact spot HasLineOfFire traced instead.
+    if (g_hKE_UpdatePos != null) SDKCall(g_hKE_UpdatePos, known, aim);
+
     // Seen, then immediately unseen. Both halves are required: see the comment above.
     SDKCall(g_hKE_UpdateVis, known, true);
     SDKCall(g_hKE_UpdateVis, known, false);
 
     return known;
+}
+
+// Can this bot's bullets reach target? A MASK_SHOT trace from the bot's eyes to the target's
+// centre (halfway between feet and eyes, so it follows crouching and prone) that hits nothing but
+// the target - world, props, tents and teammates in between all count as blocked. Smoke is not
+// solid to traces, so a player hidden only by the cloud passes. aim receives the traced end point.
+bool HasLineOfFire(int bot, int target, float aim[3])
+{
+    float eye[3], foot[3], tEye[3];
+    GetClientEyePosition(bot, eye);
+    GetClientAbsOrigin(target, foot);
+    GetClientEyePosition(target, tEye);
+    for (int k = 0; k < 3; k++) aim[k] = (foot[k] + tEye[k]) * 0.5;
+
+    if (!g_cvRequireLof.BoolValue) return true;
+
+    TR_TraceRayFilter(eye, aim, MASK_SHOT, RayType_EndPoint, TraceFilter_NotSelf, bot);
+    return !TR_DidHit() || TR_GetEntityIndex() == target;
+}
+
+public bool TraceFilter_NotSelf(int entity, int contentsMask, any self)
+{
+    return entity != self;
 }
 
 // Does this bot carry a grenade the ThrowGrenade action could actually use? Classes 2 (frag) and
@@ -2432,7 +2478,7 @@ void SampleThreatAge(int bot, int target)
 
 // Give one bot knowledge of one player. Every pointer is checked before use: a null here is a
 // server crash, not a failed function call.
-void SeedKnowledge(int bot, int target, const float smokePos[3])
+void SeedKnowledge(int bot, int target, const float smokePos[3], const float aim[3])
 {
     int nextbot = SDKCall(g_hMyNextBotPointer, bot);
     if (nextbot == 0) return;
@@ -2454,7 +2500,7 @@ void SeedKnowledge(int bot, int target, const float smokePos[3])
     }
 
     SDKCall(g_hAddKnownEntity, vision, target);
-    int known = GiveVisualMemory(vision, target);
+    int known = GiveVisualMemory(vision, target, aim);
 
     // Refilling ammo is not enough on its own: weapon selection is not re-run when the reserve
     // changes, so a bot that fell back to melee keeps holding the knife with full magazines. Ask

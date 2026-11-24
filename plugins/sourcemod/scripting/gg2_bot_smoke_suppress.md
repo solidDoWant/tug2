@@ -84,8 +84,8 @@ step 4 ok - full chain survived
 
 Lesson for anything similar: check whether a function appears in a vtable before calling it by
 symbol. `CINSNextBot::IsLineOfFireClear` was dropped for the same reason - it has the same
-wrong-`this` problem and was only an optimisation. Without it a bot may occasionally suppress a
-cloud it has no shot at; worth restoring later via its own vtable slot.
+wrong-`this` problem. It turned out not to be an optimisation at all - see "Line of fire" below; it
+is now a plain bullet trace instead.
 
 ### Still unverified - these need a human on the server
 
@@ -357,6 +357,34 @@ get tired of suppressing and congregate around the smoke".
 Denial now refreshes every sweep while the player is inside a live cloud, so it ends 6s after they
 leave the smoke rather than 6s after an arbitrary seed.
 
+## Line of fire: bots shooting into cover (issue #35)
+
+Reported on test: with a player in smoke behind a tent, bots fired into the tent, or through it.
+
+The sweep seeded every enemy bot within `range` of the cloud on distance alone, and nothing
+downstream checks line of fire either: `CINSBotSuppressTarget::Update` (0x722ac0) calls none of the
+`IsLineOfFireClear` overloads. Stock bots only ever suppress a position they actually saw, so the
+engine never needs the check - a seeded threat breaks that assumption. A bot with cover between it
+and the player then dutifully hosed the cover, and on penetrable materials the rounds went through.
+
+Two parts to the fix:
+
+1. **Gate seeding on a trace.** `HasLineOfFire` runs a `MASK_SHOT` trace from the bot's eyes to the
+   player's centre (midway between feet and eyes, so it follows stance) and seeds only if it hits
+   nothing but the player. Smoke is not solid to traces, so the cloud itself never fails it. A
+   blocked bot is not stamped with the reseed cooldown, so it is reconsidered next sweep. Counted
+   as `noLOF` in the debug line.
+2. **Aim at the traced point.** A fresh `CKnownEntity` takes its last known position from the
+   target's `GetAbsOrigin()` (`IVision::AddKnownEntity` -> `CalcAbsolutePosition`) - the feet - so
+   knee-high cover the trace passed over could still eat every round. `UpdatePosition` (slot 3) now
+   sets it to the traced point. That call had been in place once (see "The aim point") and was lost
+   in the 2026-09-09 debug-code cleanup; with `refresh_threat` on, the fresh entry happened to sit at
+   the feet, which is why its loss went unnoticed.
+
+Not covered: the check is made when a bot is seeded, and the suppress action then runs for
+`ins_bot_suppressing_fire_duration` (5s). A bot that walks behind cover inside that window keeps
+firing until the action ends.
+
 ## Hiding a player for testing: notarget and nb_blind both fail
 
 - **`notarget` does not work** on NextBot vision.
@@ -378,6 +406,7 @@ still lands. Confirm it is matching with `hidden=` in the debug line.
 | `..._interval` | 2.0 | sweep period (live-tunable; restarts the timer) |
 | `..._range` | 1500 | max bot distance to the cloud |
 | `..._radius` | 250 | how close a player must be to count as hidden |
+| `..._require_lof` | 1 | only seed bots whose bullets can reach the player - see "Line of fire" |
 | `..._nopursue_time` | 6.0 | pursuit denial; refreshed every sweep while the player is in a live cloud |
 | `..._reseed_cooldown` | 8.0 | **load-bearing** - lets the threat age past the 1.0s gate. Deliberately NOT tied to `nopursue_time` |
 | `..._arousal_cap` | 6.5 | **load-bearing** - keeps bots under `IsMinArousal(8)`. Without it suppression dies ~32s in and never returns. See the postmortem below |
