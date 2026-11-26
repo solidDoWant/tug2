@@ -257,12 +257,21 @@ func TestSchemaFromMigrations(t *testing.T) {
 	}
 	defer db.Close()
 	schemas := map[string][]schemaTable{}
-	for server, schema := range map[string]string{"main": "public", "test": "insurgency-test"} {
+	// test-v2 is the stats v2 schema the test server's bot entry reads from phase 2 of issue #44.
+	for server, schema := range map[string]string{"main": "public", "test": "insurgency-test", "test-v2": "stats_test"} {
 		if schemas[server], err = db.Schema(ctx, schema); err != nil {
 			t.Fatal(err)
 		}
 	}
-	doc := renderSchemaDoc([]string{"main", "test"}, schemas)
+	if len(schemas["test-v2"]) == 0 {
+		t.Error("the bot can read nothing in stats_test (stats_11_grants.sql)")
+	}
+	for _, table := range schemas["test-v2"] {
+		if strings.HasPrefix(table.Name, "old_") {
+			t.Errorf("the bot can read %s: old_* views are plumbing and must not be granted", table.Name)
+		}
+	}
+	doc := renderSchemaDoc([]string{"main", "test", "test-v2"}, schemas)
 	if n := strings.Count(doc, undocumented); n > 0 {
 		t.Errorf("%d tables or columns have no COMMENT:\n%s", n, doc)
 	}
