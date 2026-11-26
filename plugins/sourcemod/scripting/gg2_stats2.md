@@ -27,13 +27,11 @@ The forwards it listens to are declared in `include/gg2_stats.inc`.
 
 ## Enabling it on a server
 
-1. An admin creates the server's schema once; the game server's database user cannot:
-
-   ```sql
-   -- in sourcemod-insurgency-stats, as a superuser
-   CREATE SCHEMA stats_test AUTHORIZATION "insurgency-test";   -- test
-   CREATE SCHEMA stats_main AUTHORIZATION insurgency;          -- main (phase 3)
-   ```
+1. The server's schema exists, owned by its database user. The game server's user cannot create
+   schemas, so it is declared in infra-mk3 (`backend/postgres/databases/sourcemod-insurgency-stats.yaml`,
+   CloudNativePG `Database.spec.schemas`): `stats_test` owned by `insurgency-test`, later `stats_main`
+   owned by `insurgency`. By hand it would be
+   `CREATE SCHEMA stats_test AUTHORIZATION "insurgency-test";` as a superuser.
 
    The plugin and the `stats_*.sql` files find the one `stats_*` schema owned by the connecting
    user. With none, the plugin records nothing and logs why; the SQL files fail and roll back.

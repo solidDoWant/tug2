@@ -2,8 +2,8 @@
 -- Stats v2 (issue #44), part 1: types, reference data, identity and the match timeline.
 --
 -- The v2 tables live in a schema of their own per server, owned by that server's database user and
--- named stats_* (stats_test, stats_main). The game server's user cannot create schemas, so an admin
--- creates it once, e.g.:   CREATE SCHEMA stats_test AUTHORIZATION "insurgency-test";
+-- named stats_* (stats_test, stats_main). The game server's user cannot create schemas, so it is
+-- declared in infra-mk3 (CloudNativePG Database schemas); by hand: CREATE SCHEMA stats_test AUTHORIZATION "insurgency-test";
 -- Every stats_*.sql file starts by pointing search_path at that schema for its own transaction, so
 -- the same files serve every server. The old tables stay in the user's old schema (public or the
 -- user-named one) and are only read, through the old_* views in stats_05_legacy.sql.
