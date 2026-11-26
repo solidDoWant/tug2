@@ -33,7 +33,7 @@ func TestNameCandidates(t *testing.T) {
 	}
 }
 
-// fakeStats serves /api/v1/players?name= from a fixed player list, matching
+// fakeStats serves /api/v2/players?name= from a fixed player list, matching
 // like the real API (case-insensitive substring).
 func fakeStats(t *testing.T, players map[string]string, searched *[]string) *StatsClient {
 	t.Helper()

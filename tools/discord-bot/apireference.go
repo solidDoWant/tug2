@@ -27,7 +27,7 @@ var (
 		{"offset", "entries to skip, 0-100000, default 0"},
 	}
 	// periodParams select a time window instead of lifetime totals; the
-	// response's window says the range and when the history behind it starts.
+	// response's window says the range.
 	periodParams = []apiParam{
 		{"period", "only the last N days, e.g. 7d, 30d, 365d (1-3650); not with since/until"},
 		{"since", "only from this UTC date (YYYY-MM-DD) or RFC 3339 time, inclusive"},
@@ -35,30 +35,44 @@ var (
 	}
 	windowedPage = append(append([]apiParam{}, pageParams...), periodParams...)
 	apiEndpoints = []apiEndpoint{
-		{"/api/v1/players", "Players with lifetime stats (or stats in a time window), descending.", append([]apiParam{
-			{"sort", "score (default), kills, deaths, wins, killstreak, caps, kd, play_time, accuracy (players with 500+ shots, by enemy hit rate), updated_at"},
-			{"name", "only players whose latest in-game name contains this, case-insensitive"},
+		{"/api/v2/players", "Players with lifetime stats (or stats in a time window), descending.", append([]apiParam{
+			{"sort", "score (default), kills, deaths, kd, assists, wins, play_time, accuracy (players with 500+ shots first), revives, heals, caps, headshot_kills, killstreak, last_seen"},
+			{"name", "only players whose current in-game name contains this, case-insensitive"},
 		}, windowedPage...)},
-		{"/api/v1/players/{steam_id}", "One player's stats by SteamID64 (lifetime, or in a time window); 404 if unknown.", periodParams},
-		{"/api/v1/players/{steam_id}/weapons", "One player's kills, rounds fired, enemy/friendly hits and enemy hit rate per weapon (a plain array, not paginated).", periodParams},
-		{"/api/v1/weapons", "Weapons across all players: total kills, players with a kill, rounds fired, enemy/friendly hits and enemy hit rate.", append([]apiParam{
-			{"sort", "kills (default), shots, accuracy (weapons with 1000+ shots, by enemy hit rate)"},
+		{"/api/v2/players/{steam_id}", "One player's stats by SteamID64 (lifetime, or in a time window) and name history; 404 if unknown.", periodParams},
+		{"/api/v2/players/{steam_id}/weapons", "One player's stats per weapon: kills, shots, accuracy, hits by body part, damage, reloads, seconds in hand (a plain array).", periodParams},
+		{"/api/v2/players/{steam_id}/classes", "One player's time, kills and deaths per class (a plain array).", periodParams},
+		{"/api/v2/players/{steam_id}/rounds", "One player's rounds, newest first: map, result, MVP and their stats in each.", windowedPage},
+		{"/api/v2/weapons", "Weapons across all players: kills, players with a kill, shots, hits and accuracy.", append([]apiParam{
+			{"sort", "kills (default), shots, accuracy (weapons with 1000+ shots first)"},
 		}, windowedPage...)},
-		{"/api/v1/weapons/{weapon_name}/accuracy", "Players ranked by enemy hit rate with one weapon (e.g. m4a1); 404 for an unknown weapon.", append([]apiParam{
-			{"min_shots", "only players with at least this many shots with it, 1-100000, default 100"},
+		{"/api/v2/weapons/{weapon_name}", "Top players with one weapon (e.g. m4a1); 404 for an unknown weapon.", append([]apiParam{
+			{"sort", "accuracy (default; players with at least min_shots shots), kills"},
+			{"min_shots", "for sort=accuracy: only players with at least this many shots with it, 1-100000, default 100"},
 		}, windowedPage...)},
-		{"/api/v1/maps", "Per-map wins, losses, win rate, playtime and last played.", append([]apiParam{
-			{"sort", "rounds (default), play_time, last_played"},
+		{"/api/v2/maps", "Per-map rounds, wins, losses, win rate, play time and last played.", append([]apiParam{
+			{"sort", "rounds (default), play_time, last_played, win_rate"},
 		}, pageParams...)},
-		{"/api/v1/matches", "Round results, newest first.", pageParams},
-		{"/api/v1/bots", "Bots ranked by kills on players.", pageParams},
-		{"/api/v1/bots/{bot_name}/weapons", "One bot's kills per weapon; URL-encode the name (spaces as %20). Plain array.", nil},
-		{"/api/v1/medics", "Players ranked by time spent as medic (seconds), with full heals and revives.", append([]apiParam{
-			{"sort", "time (default), heals, revives"},
+		{"/api/v2/maps/{map_name}", "One map with its recent games and recent kill positions (for heatmaps); 404 if unknown.", []apiParam{
+			{"limit_positions", "how many recent kill positions, 0-10000, default 2000"},
+		}},
+		{"/api/v2/map-runs", "Games (map runs), newest first: map, mode, start, game over, load time, build, rounds won and lost.", pageParams},
+		{"/api/v2/map-runs/{id}", "One game: its rounds (result, how it ended, MVP) and every player's scoreboard; 404 if unknown.", nil},
+		{"/api/v2/rounds/{id}", "One round with a timeline of kills, objectives, counterattacks, revives and survival levels; 404 if unknown.", nil},
+		{"/api/v2/bots", "Bots ranked by kills on players.", append([]apiParam{
+			{"sort", "kills (default)"},
+		}, pageParams...)},
+		{"/api/v2/bots/{bot_name}/weapons", "One bot's kills per weapon; URL-encode the name (spaces as %20). Plain array.", nil},
+		{"/api/v2/medics", "Players ranked by medic play: medic time (seconds), revives, full heals, HP healed, average seconds to revive.", append([]apiParam{
+			{"sort", "medic_time (default), revives, heals, hp_healed"},
 		}, windowedPage...)},
-		{"/api/v1/teamkills", "Players ranked by team kills given, with taken and forgiven counts.", windowedPage},
-		{"/api/v1/teamkills/weapons", "Weapons ranked by team kills.", windowedPage},
-		{"/api/v1/fire-support", "Players ranked by artillery calls.", windowedPage},
+		{"/api/v2/teamkills", "Players ranked by team kills, with team kills taken and forgiven.", append([]apiParam{
+			{"sort", "team_kills (default), team_killed, forgiven"},
+		}, windowedPage...)},
+		{"/api/v2/teamkills/weapons", "Weapons ranked by team kills.", windowedPage},
+		{"/api/v2/fire-support", "Players ranked by fire support calls, with refused and refunded calls.", append([]apiParam{
+			{"sort", "calls (default), failed, last_called"},
+		}, windowedPage...)},
 	}
 )
 
@@ -85,6 +99,7 @@ func buildAPIReference(cfg *Config) apiReference {
 			"All endpoints are GET, read-only, need no authentication, and return JSON. Full URL = base_url + path.",
 			`List endpoints return {"items": [...], "total": N, "limit": L, "offset": O}; total counts all entries before paging.`,
 			"Invalid query parameters return 422 with an error body. Times are UTC.",
+			"Per-round history reaches back to November 2026 (December 2025 for team kills); lifetime totals include play from before that. Stats only recorded since stats v2 are null for older periods.",
 			"Responses are cached for about a minute, so very recent changes may not show yet.",
 			"SteamIDs are returned as strings (they exceed JavaScript's safe integer range).",
 			"The docs_url page has interactive documentation and the full schema.",

@@ -268,7 +268,7 @@ func TestSchemaFromMigrations(t *testing.T) {
 	}
 	// Stats v2 (issue #44): a server that records it shows the v2 tables and v_* views, which
 	// include the old history, instead of the old stats tables; old_* views are plumbing.
-	for server, v2 := range map[string]bool{"main": false, "test": true} {
+	for server, v2 := range map[string]bool{"main": true, "test": true} {
 		has := map[string]bool{}
 		for _, table := range schemas[server] {
 			has[table.Name] = true

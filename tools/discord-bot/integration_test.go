@@ -32,24 +32,28 @@ func TestToolsAgainstStatsAPI(t *testing.T) {
 		tool, input, want string
 		wantErr           bool
 	}{
-		{"find_players", `{"name":"alpha"}`, "TestPlayerAlpha", false},
-		{"get_player", `{"steam_id":"76561198000000001"}`, `"kills_by_weapon"`, false},
+		{"find_players", `{"name":"alpha"}`, "Alpha Renamed", false},
+		{"get_player", `{"steam_id":"76561198000000001"}`, `"classes"`, false},
 		{"get_player", `{"steam_id":"76561198999999999"}`, `"found":false`, false},
 		{"get_player", `{"steam_id":"123"}`, "", true},
 		{"leaderboard", `{"board":"players","sort":"kd","limit":2}`, `"limit":2`, false},
-		{"leaderboard", `{"board":"maps","sort":"play_time"}`, "play_time_seconds", false},
+		{"leaderboard", `{"board":"maps","sort":"play_time"}`, "play_seconds", false},
 		{"leaderboard", `{"board":"weapons","sort":"kd"}`, "", true},
-		{"leaderboard", `{"board":"fire_support"}`, "arty_thrown", false},
-		{"leaderboard", `{"board":"players","sort":"kills","period":"30d"}`, `"history_since"`, false},
+		{"leaderboard", `{"board":"fire_support"}`, `"calls"`, false},
+		{"leaderboard", `{"board":"players","sort":"kills","period":"30d"}`, `"window"`, false},
 		{"leaderboard", `{"board":"medics","sort":"revives","period":"30d"}`, `"revives"`, false},
 		{"leaderboard", `{"board":"teamkills","since":"2026-01-01"}`, `"window"`, false},
 		{"leaderboard", `{"board":"maps","period":"30d"}`, "", true}, // maps have no history
 		{"leaderboard", `{"board":"players","period":"thirty"}`, "", true},
 		{"get_player", `{"steam_id":"76561198000000001","period":"30d"}`, `"window"`, false},
-		{"weapon_accuracy", `{"weapon":"m16a4","period":"60d"}`, `"enemy_hit_rate"`, false},
+		{"weapon_accuracy", `{"weapon":"m4a1","period":"60d","min_shots":1}`, `"accuracy"`, false},
 		{"weapon_accuracy", `{"weapon":"nope"}`, "", true},
-		{"recent_matches", `{"limit":3}`, "played_at", false},
-		{"get_bot_weapons", `{"bot_name":"Bot Adams"}`, "kill_count", false},
+		{"recent_matches", `{"limit":3}`, "map_run_id", false},
+		{"get_match", `{"map_run_id":1}`, "scoreboard", false},
+		{"get_match", `{"map_run_id":999999}`, `"found":false`, false},
+		{"get_round", `{"round_id":1}`, "timeline", false},
+		{"get_player_rounds", `{"steam_id":"76561198000000001","limit":5}`, "round_id", false},
+		{"get_bot_weapons", `{"bot_name":"Rifleman Jones"}`, "ak74", false},
 		{"find_players", `{"name":"x","bogus":1}`, "", true},
 		{"server_status", `{"server":"all"}`, "", true}, // not offered: no query address
 	}
