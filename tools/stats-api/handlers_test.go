@@ -60,7 +60,7 @@ func TestBasePathRouting(t *testing.T) {
 		{"/", http.StatusNotFound, ""},
 		{"/docs", http.StatusNotFound, ""},
 		{"/openapi.json", http.StatusNotFound, ""},
-		{"/api/v1/players", http.StatusNotFound, ""},
+		{"/api/v2/players", http.StatusNotFound, ""},
 		{"/testing/docs", http.StatusNotFound, ""},
 	}
 
@@ -129,8 +129,8 @@ func TestStripBasePath(t *testing.T) {
 	tests := []struct {
 		pattern, basePath, want string
 	}{
-		{"GET /api/v1/players", "", "GET /api/v1/players"},
-		{"GET /test/api/v1/players/{steam_id}", "/test", "GET /api/v1/players/{steam_id}"},
+		{"GET /api/v2/players", "", "GET /api/v2/players"},
+		{"GET /test/api/v2/players/{steam_id}", "/test", "GET /api/v2/players/{steam_id}"},
 		{"GET /test", "/test", "GET /"},
 		{"GET /test/{$}", "/test", "GET /{$}"},
 		{"GET /livez", "/test", "GET /livez"},

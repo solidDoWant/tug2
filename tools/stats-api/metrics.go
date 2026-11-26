@@ -82,12 +82,12 @@ var probePatterns = map[string]struct{}{
 }
 
 // Instrument wraps the API mux, recording request count and latency labelled by
-// the matched route *pattern* (e.g. "GET /api/v1/players/{steam_id}") rather than
+// the matched route *pattern* (e.g. "GET /api/v2/players/{steam_id}") rather than
 // the raw path, so high-cardinality path params like {steam_id} cannot explode
 // the metric series.
 //
-// The base path is removed from the label ("GET /test/api/v1/players" is
-// recorded as "GET /api/v1/players"), so every deployment reports the same
+// The base path is removed from the label ("GET /test/api/v2/players" is
+// recorded as "GET /api/v2/players"), so every deployment reports the same
 // route names whatever prefix it is served under; the scrape's job/instance
 // labels already tell deployments apart.
 //

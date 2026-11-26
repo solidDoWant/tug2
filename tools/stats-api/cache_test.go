@@ -33,17 +33,17 @@ func TestCacheControl(t *testing.T) {
 		implicit bool
 		wantCC   string
 	}{
-		{"cacheable 200 via Write", value, "", http.MethodGet, "/api/v1/players", http.StatusOK, true, value},
-		{"cacheable 200 via WriteHeader", value, "", http.MethodGet, "/api/v1/maps", http.StatusOK, false, value},
-		{"error 422 not cached", value, "", http.MethodGet, "/api/v1/players", http.StatusUnprocessableEntity, false, "no-store"},
-		{"error 500 not cached", value, "", http.MethodGet, "/api/v1/weapons", http.StatusInternalServerError, false, "no-store"},
+		{"cacheable 200 via Write", value, "", http.MethodGet, "/api/v2/players", http.StatusOK, true, value},
+		{"cacheable 200 via WriteHeader", value, "", http.MethodGet, "/api/v2/maps", http.StatusOK, false, value},
+		{"error 422 not cached", value, "", http.MethodGet, "/api/v2/players", http.StatusUnprocessableEntity, false, "no-store"},
+		{"error 500 not cached", value, "", http.MethodGet, "/api/v2/weapons", http.StatusInternalServerError, false, "no-store"},
 		{"probe path untouched", value, "", http.MethodGet, "/readyz", http.StatusOK, true, ""},
 		{"docs path untouched", value, "", http.MethodGet, "/openapi.json", http.StatusOK, true, ""},
-		{"non-GET untouched", value, "", http.MethodPost, "/api/v1/players", http.StatusOK, true, ""},
-		{"disabled passes through", "", "", http.MethodGet, "/api/v1/players", http.StatusOK, true, ""},
-		{"base path API cached", value, "/test", http.MethodGet, "/test/api/v1/players", http.StatusOK, true, value},
-		{"base path error not cached", value, "/test", http.MethodGet, "/test/api/v1/players", http.StatusNotFound, false, "no-store"},
-		{"unprefixed API under base path untouched", value, "/test", http.MethodGet, "/api/v1/players", http.StatusOK, true, ""},
+		{"non-GET untouched", value, "", http.MethodPost, "/api/v2/players", http.StatusOK, true, ""},
+		{"disabled passes through", "", "", http.MethodGet, "/api/v2/players", http.StatusOK, true, ""},
+		{"base path API cached", value, "/test", http.MethodGet, "/test/api/v2/players", http.StatusOK, true, value},
+		{"base path error not cached", value, "/test", http.MethodGet, "/test/api/v2/players", http.StatusNotFound, false, "no-store"},
+		{"unprefixed API under base path untouched", value, "/test", http.MethodGet, "/api/v2/players", http.StatusOK, true, ""},
 		{"base path docs untouched", value, "/test", http.MethodGet, "/test/openapi.json", http.StatusOK, true, ""},
 	}
 

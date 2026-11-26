@@ -10,10 +10,10 @@ import (
 // outside it — the liveness/readiness probes, the OpenAPI docs/spec — is
 // intentionally excluded so health signals are never served stale and the spec
 // stays revalidated.
-const cacheablePrefix = "/api/v1/"
+const cacheablePrefix = "/api/v2/"
 
 // CacheControl wraps next so that successful (2xx) responses to GET requests
-// under <basePath>/api/v1/* carry the given Cache-Control header, letting a shared cache
+// under <basePath>/api/v2/* carry the given Cache-Control header, letting a shared cache
 // (e.g. a CDN such as Cloudflare) serve repeated anonymous reads without hitting
 // the origin. Because every data endpoint is a pure function of URL+query string
 // with no auth or cookies, the full request URL is a sound cache key.
