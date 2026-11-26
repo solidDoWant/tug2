@@ -1,8 +1,10 @@
 # gg2_stats2 - stats v2 recorder (issue #44)
 
-Records raw game facts into the stats v2 tables, beside the old stats tables in each server's own
-schema (`public` on main, `insurgency-test` on test). Every total (lifetime kills, K/D, wins,
-accuracy, killstreaks, play and medic time, ...) is a view in
+Records raw game facts into the stats v2 tables, in each server's own schema (`public` on main,
+`insurgency-test` on test). It replaced the old stats plugins (gg2_mstats2, gg2_medic_tracker,
+map_logger, gg2_connection_tracker); their tables stay as read-only history that the views read
+(`stats_12_retire_old.sql`). Every total (lifetime kills, K/D, wins, accuracy, killstreaks, play
+and medic time, ...) is a view in
 `configs/sql-init-scripts/pgsql/stats_05..07_views.sql`. The design and its reasoning are in
 issue #44.
 
@@ -83,7 +85,7 @@ starts a new map run. `sm_stats2_status` (server console) prints the plugin's st
    `punitive-persistence`.
 3. The image ships `gg2_stats2.smx` (the `sourcemod-plugins-gg2-stats2` stage).
 4. Once, by hand, copy the old IP history across (the command is at the top of
-   `player_connections.sql`).
+   `player_connections.sql`), check it, then drop the old table with `retire_connection_log.sql`.
 
 ## Testing
 

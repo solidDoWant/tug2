@@ -36,7 +36,7 @@ apply() {
     psql "$USER_DB" -q -v ON_ERROR_STOP=1 -c BEGIN -c "$(cat "$SQL_DIR/$1")" -c COMMIT > /dev/null
 }
 
-OLD=(firesupport d_dy_pull_rag gg2_bot_smoke_suppress gg2_connection_tracker gg2_forceretry gg2_fuckyeah
+OLD=(firesupport d_dy_pull_rag gg2_bot_smoke_suppress gg2_forceretry gg2_fuckyeah
      gg2_medic_tracker gg2_messages gg2_mstats2 gg2_mstats2_shots gg2_mstats2_history gg2_teamkill map_logger)
 for pass in 1 2; do
     for f in "${OLD[@]}"; do apply "$f.sql"; done
@@ -61,5 +61,15 @@ psql "$USER_DB" -q -v ON_ERROR_STOP=1 -f results.sql > /dev/null
 apply stats_03_results.sql
 if [ "$(psql "$USER_DB" -Atc "SELECT count(*) FROM round_results_done WHERE def_hash <> stats_results_hash()")" != 0 ]; then
     echo "FAIL: a boot left rounds cached by an older definition"; exit 1
+fi
+
+# Phase 4: the old tables become read-only to their owner (twice: every boot re-runs it), the views
+# still read them, and the old schema files' DDL still applies.
+apply stats_12_retire_old.sql
+apply stats_12_retire_old.sql
+for f in "${OLD[@]}"; do apply "$f.sql"; done
+psql "$USER_DB" -q -v ON_ERROR_STOP=1 -c 'SELECT count(*) FROM stats_test.v_player_lifetime' > /dev/null
+if psql "$USER_DB" -q -c 'INSERT INTO "insurgency-test".player_stats (steam_id) VALUES ($$76561198000000099$$)' 2> /dev/null; then
+    echo "FAIL: the old tables still accept writes after stats_12_retire_old.sql"; exit 1
 fi
 echo "OK"

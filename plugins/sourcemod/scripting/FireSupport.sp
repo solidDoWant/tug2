@@ -43,9 +43,6 @@ Handle      fCreateRocket;
 
 int         gBeamSprite;
 
-// Database integration for stat tracking
-Database    g_Database = null;
-
 // Special sound names to refer to a random sound from one of the arrays
 // These require workshop item 2983737308 (TUG WW2 Sounds)
 #define SOUND_REQUEST_ARTILLERY "#request_artillery_sound"
@@ -198,8 +195,8 @@ public void OnPluginStart()
 
     CreateTimer(0.5, Timer_ShowStatus, _, TIMER_REPEAT);
 
-    // Database connection for stat tracking
-    Database.Connect(OnDatabaseConnected, "insurgency-stats");
+    // Calls are recorded by gg2_stats2 from FireSupport_OnCallResult (stats v2, issue #44); this
+    // plugin no longer writes to the database.
 
     // Create global forward for other plugins
     FireSupportCalledForward = new GlobalForward(
@@ -269,13 +266,6 @@ public void OnMapStart()
             delete gPendingFireSupport[i];
             gPendingFireSupport[i] = null;
         }
-    }
-
-    // Check if database connection is ready
-    if (g_Database == null)
-    {
-        LogMessage("[FireSupport] Database unavailable at map start, attempting reconnection...");
-        ReconnectDatabase();
     }
 }
 
@@ -1144,7 +1134,6 @@ public bool CallFireSupport(int client, float ground[3], int supportType, int te
         int sessionIndex = gActiveFireSupport.Length - 1;
 
         // Track stats and notify external systems
-        add_throw_to_db(client, supportType, team);
         SendStatsCallResult(client, supportType, ground, true, "");
         SendFireSupportForward(client, team, supportType);
         SendDiscordNotification(client, supportType);
@@ -1789,101 +1778,6 @@ public void OnRocketTouch(int rocket, int other)
 
     // Unhook to prevent multiple calls
     SDKUnhook(rocket, SDKHook_Touch, OnRocketTouch);
-}
-
-// ============================================================================
-// Database Integration Functions
-// ============================================================================
-public void OnDatabaseConnected(Database db, const char[] error, any data)
-{
-    if (db == null)
-    {
-        LogError("[FireSupport] Failed to connect to database: %s", error);
-        SetFailState("Database connection failed");
-        return;
-    }
-
-    g_Database = db;
-    LogMessage("[FireSupport] Successfully connected to database");
-}
-
-// Attempt to reconnect to the database
-void ReconnectDatabase()
-{
-    LogMessage("[FireSupport] Attempting to reconnect to database...");
-    g_Database = null;
-    Database.Connect(OnDatabaseReconnected, "insurgency-stats");
-}
-
-public void OnDatabaseReconnected(Database db, const char[] error, any data)
-{
-    if (db == null)
-    {
-        LogError("[FireSupport] Failed to reconnect to database: %s", error);
-        // Try again after a delay
-        CreateTimer(5.0, Timer_RetryReconnect);
-        return;
-    }
-
-    g_Database = db;
-    LogMessage("[FireSupport] Successfully reconnected to database");
-}
-
-public Action Timer_RetryReconnect(Handle timer)
-{
-    if (g_Database == null)
-    {
-        ReconnectDatabase();
-    }
-
-    return Plugin_Stop;
-}
-
-// Helper function to handle database query errors
-// Returns true if query was successful, false if there was an error
-bool HandleQueryError(DBResultSet results, const char[] error, const char[] operationName)
-{
-    if (results != null) return true;
-
-    // Check if the error is due to lost connection
-    if (StrContains(error, "no connection to the server", false) != -1)
-    {
-        LogError("[FireSupport] Lost connection to database: %s - attempting to reconnect", error);
-        ReconnectDatabase();
-        return false;
-    }
-
-    LogError("[FireSupport] Failed to %s: %s", operationName, error);
-    return false;
-}
-
-public void OnFireSupportStatUpdated(Database db, DBResultSet results, const char[] error, any data)
-{
-    HandleQueryError(results, error, "update fire support stats");
-}
-
-void add_throw_to_db(int client, int supportType, int team)
-{
-    if (g_Database == null) return;
-
-    if (!IsValidClient(client) || IsFakeClient(client)) return;
-
-    char steamId[64];
-    GetClientAuthId(client, AuthId_SteamID64, steamId, sizeof(steamId));
-
-    if (StrEqual(steamId, "")) return;
-
-    int  currentTime = GetTime();
-
-    // The call is also logged with its time in fire_support_calls (issue #10), in the same statement
-    // so the period counts and the lifetime counter can't disagree.
-    char query[768];
-    Format(query, sizeof(query),
-           "WITH totals AS (INSERT INTO fire_support (steamId, arty_thrown, last_used) " ... "VALUES ('%s', 1, %d) " ... "ON CONFLICT (steamId) DO UPDATE SET " ... "arty_thrown = fire_support.arty_thrown + 1, " ... "last_used = EXCLUDED.last_used RETURNING 1) " ... "INSERT INTO fire_support_calls (steam_id) VALUES ('%s')",
-           steamId, currentTime, steamId);
-
-    g_Database.Query(OnFireSupportStatUpdated, query);
-    LogMessage("[FireSupport] Incremented arty_thrown for %N (team=%d, type=%d)", client, team, supportType);
 }
 
 // ============================================================================

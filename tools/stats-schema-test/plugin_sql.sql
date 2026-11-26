@@ -78,3 +78,13 @@ BEGIN
            AND c.damage_enemy = 100 AND c.damage_taken = 32 AND c.headshot_hits = 1,
            format('round stats %s', c);    -- span ended before the round end: not present at the end
 END $$;
+
+-- gg2_teamkill's amnesty and offender lookups (phase 4), as it formats them.
+DO $$ BEGIN
+    ASSERT (SELECT array_agg(steam_id::text) FROM "stats_test".v_player_lifetime
+            WHERE steam_id = ANY(ARRAY[76561198000000011,76561198000000012]::bigint[]) AND kills >= 1 AND team_kills > 0
+            AND (kills::numeric / team_kills) > 0) = ARRAY['76561198000000011'], 'amnesty lookup';
+    ASSERT (SELECT count(*) FROM "stats_test".v_player_lifetime
+            WHERE steam_id = ANY(ARRAY[76561198000000011]::bigint[]) AND kills >= 500 AND team_kills > 0
+            AND (kills::numeric / team_kills) < 100) = 0, 'offender lookup';
+END $$;

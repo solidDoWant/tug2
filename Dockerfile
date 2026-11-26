@@ -346,18 +346,6 @@ RUN --mount=type=bind,source=./plugins/sourcemod,target=/plugin-source \
     find /insurgency -type d -exec chmod 755 {} \; && \
     find /insurgency -type f -exec chmod 644 {} \;
 
-FROM sourcemod-plugins-base AS sourcemod-plugins-map-logger
-
-# Build the map logger plugin
-COPY plugins/sourcemod/gamedata/ /insurgency/addons/sourcemod/gamedata/
-RUN --mount=type=bind,source=./plugins/sourcemod,target=/plugin-source \
-    /sourcemod/addons/sourcemod/scripting/spcomp --include=/plugin-source/scripting/include  /plugin-source/scripting/map_logger.sp -o /insurgency/addons/sourcemod/plugins/map_logger.smx && \
-    mkdir -p /insurgency/addons/sourcemod/configs/sql-init-scripts/pgsql && \
-    cp /plugin-source/configs/sql-init-scripts/pgsql/map_logger.sql /insurgency/addons/sourcemod/configs/sql-init-scripts/pgsql/map_logger.sql && \
-    # Fixup file permissions
-    find /insurgency -type d -exec chmod 755 {} \; && \
-    find /insurgency -type f -exec chmod 644 {} \;
-
 FROM sourcemod-plugins-base AS sourcemod-plugins-gg2-weapon-spam
 
 # Build the gg2_weapon_spam plugin
@@ -433,18 +421,6 @@ FROM sourcemod-plugins-base AS sourcemod-plugins-gg2-cache-protect
 COPY plugins/sourcemod/gamedata/ /insurgency/addons/sourcemod/gamedata/
 RUN --mount=type=bind,source=./plugins/sourcemod/scripting,target=/plugin-source/scripting \
     /sourcemod/addons/sourcemod/scripting/spcomp --include=/plugin-source/scripting/include  /plugin-source/scripting/gg2_cache_protect.sp -o /insurgency/addons/sourcemod/plugins/gg2_cache_protect.smx && \
-    # Fixup file permissions
-    find /insurgency -type d -exec chmod 755 {} \; && \
-    find /insurgency -type f -exec chmod 644 {} \;
-
-FROM sourcemod-plugins-base AS sourcemod-plugins-gg2-connection-tracker
-
-# Build the gg2_connection_tracker plugin
-COPY plugins/sourcemod/gamedata/ /insurgency/addons/sourcemod/gamedata/
-RUN --mount=type=bind,source=./plugins/sourcemod,target=/plugin-source \
-    /sourcemod/addons/sourcemod/scripting/spcomp --include=/plugin-source/scripting/include  /plugin-source/scripting/gg2_connection_tracker.sp -o /insurgency/addons/sourcemod/plugins/gg2_connection_tracker.smx && \
-    mkdir -p /insurgency/addons/sourcemod/configs/sql-init-scripts/pgsql && \
-    cp /plugin-source/configs/sql-init-scripts/pgsql/gg2_connection_tracker.sql /insurgency/addons/sourcemod/configs/sql-init-scripts/pgsql/gg2_connection_tracker.sql && \
     # Fixup file permissions
     find /insurgency -type d -exec chmod 755 {} \; && \
     find /insurgency -type f -exec chmod 644 {} \;
@@ -601,20 +577,6 @@ RUN --mount=type=bind,source=./plugins/sourcemod/scripting,target=/plugin-source
     find /insurgency -type d -exec chmod 755 {} \; && \
     find /insurgency -type f -exec chmod 644 {} \;
 
-FROM sourcemod-plugins-base AS sourcemod-plugins-gg2-medic-tracker
-
-# Build the gg2_medic_tracker plugin
-COPY plugins/sourcemod/gamedata/ /insurgency/addons/sourcemod/gamedata/
-RUN --mount=type=bind,source=./plugins/sourcemod,target=/plugin-source \
-    /sourcemod/addons/sourcemod/scripting/spcomp --include=/plugin-source/scripting/include /plugin-source/scripting/gg2_medic_tracker.sp -o /insurgency/addons/sourcemod/plugins/gg2_medic_tracker.smx && \
-    mkdir -p /insurgency/cfg/sourcemod && \
-    touch /insurgency/cfg/sourcemod/gg2_medic_tracker.cfg && \
-    mkdir -p /insurgency/addons/sourcemod/configs/sql-init-scripts/pgsql && \
-    cp /plugin-source/configs/sql-init-scripts/pgsql/gg2_medic_tracker.sql /insurgency/addons/sourcemod/configs/sql-init-scripts/pgsql/gg2_medic_tracker.sql && \
-    # Fixup file permissions
-    find /insurgency -type d -exec chmod 755 {} \; && \
-    find /insurgency -type f -exec chmod 644 {} \;
-
 FROM sourcemod-plugins-base AS sourcemod-plugins-gg2-messages
 
 # Build the gg2_messages plugin
@@ -625,22 +587,6 @@ RUN --mount=type=bind,source=./plugins/sourcemod,target=/plugin-source \
     cp /plugin-source/translations/tug.phrases.txt /insurgency/addons/sourcemod/translations/ && \
     mkdir -p /insurgency/addons/sourcemod/configs/sql-init-scripts/pgsql && \
     cp /plugin-source/configs/sql-init-scripts/pgsql/gg2_messages.sql /insurgency/addons/sourcemod/configs/sql-init-scripts/pgsql/gg2_messages.sql && \
-    # Fixup file permissions
-    find /insurgency -type d -exec chmod 755 {} \; && \
-    find /insurgency -type f -exec chmod 644 {} \;
-
-FROM sourcemod-plugins-base AS sourcemod-plugins-gg2-mstats2
-
-# Build the gg2_mstats2 plugin
-COPY plugins/sourcemod/gamedata/ /insurgency/addons/sourcemod/gamedata/
-RUN --mount=type=bind,source=./plugins/sourcemod,target=/plugin-source \
-    /sourcemod/addons/sourcemod/scripting/spcomp --include=/plugin-source/scripting/include  /plugin-source/scripting/gg2_mstats2.sp -o /insurgency/addons/sourcemod/plugins/gg2_mstats2.smx && \
-    mkdir -p /insurgency/cfg/sourcemod && \
-    touch /insurgency/cfg/sourcemod/gg2_mstats2.cfg && \
-    mkdir -p /insurgency/addons/sourcemod/configs/sql-init-scripts/pgsql && \
-    cp /plugin-source/configs/sql-init-scripts/pgsql/gg2_mstats2.sql /insurgency/addons/sourcemod/configs/sql-init-scripts/pgsql/gg2_mstats2.sql && \
-    cp /plugin-source/configs/sql-init-scripts/pgsql/gg2_mstats2_shots.sql /insurgency/addons/sourcemod/configs/sql-init-scripts/pgsql/gg2_mstats2_shots.sql && \
-    cp /plugin-source/configs/sql-init-scripts/pgsql/gg2_mstats2_history.sql /insurgency/addons/sourcemod/configs/sql-init-scripts/pgsql/gg2_mstats2_history.sql && \
     # Fixup file permissions
     find /insurgency -type d -exec chmod 755 {} \; && \
     find /insurgency -type f -exec chmod 644 {} \;
@@ -656,6 +602,12 @@ RUN --mount=type=bind,source=./plugins/sourcemod,target=/plugin-source \
     mkdir -p /insurgency/addons/sourcemod/configs/sql-init-scripts/pgsql && \
     cp /plugin-source/configs/sql-init-scripts/pgsql/stats_*.sql /insurgency/addons/sourcemod/configs/sql-init-scripts/pgsql/ && \
     cp /plugin-source/configs/sql-init-scripts/pgsql/player_connections.sql /insurgency/addons/sourcemod/configs/sql-init-scripts/pgsql/ && \
+    # The old stats tables' schema files. Their plugins are retired (issue #44, phase 4), but the
+    # tables stay - the only copy of everything recorded before stats v2 - and stats_04_old.sql's
+    # views read them, so every server still creates them.
+    cp /plugin-source/configs/sql-init-scripts/pgsql/gg2_mstats2.sql /plugin-source/configs/sql-init-scripts/pgsql/gg2_mstats2_shots.sql \
+       /plugin-source/configs/sql-init-scripts/pgsql/gg2_mstats2_history.sql /plugin-source/configs/sql-init-scripts/pgsql/gg2_medic_tracker.sql \
+       /plugin-source/configs/sql-init-scripts/pgsql/map_logger.sql /insurgency/addons/sourcemod/configs/sql-init-scripts/pgsql/ && \
     # Fixup file permissions
     find /insurgency -type d -exec chmod 755 {} \; && \
     find /insurgency -type f -exec chmod 644 {} \;
@@ -1430,14 +1382,12 @@ COPY --from=sourcemod-plugins-bot-flashlights --chown=0:0 /insurgency /opt/insur
 COPY --from=sourcemod-plugins-bot-names --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
 COPY --from=sourcemod-plugins-teamflash --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
 COPY --from=sourcemod-plugins-punitive-persistence --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
-COPY --from=sourcemod-plugins-map-logger --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
 COPY --from=sourcemod-plugins-gg2-weapon-spam --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
 COPY --from=sourcemod-plugins-gg2-admin-logger --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
 COPY --from=sourcemod-plugins-gg2-burn --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
 # Needed by LoadoutSaverSlots.
 COPY --from=sourcemod-plugins-gg2-theater-items --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
 COPY --from=sourcemod-plugins-gg2-cache-protect --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
-COPY --from=sourcemod-plugins-gg2-connection-tracker --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
 COPY --from=sourcemod-plugins-gg2-damage --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
 COPY --from=sourcemod-plugins-gg2-discord --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
 COPY --from=sourcemod-plugins-gg2-forceauthorize --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
@@ -1448,9 +1398,7 @@ COPY --from=sourcemod-plugins-gg2-insurgency --chown=0:0 /insurgency /opt/insurg
 COPY --from=sourcemod-plugins-gg2-kill-entities --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
 # I don't want plugins writing to the config directory if I can avoid it, because this allows them to execute arbitrary commands.
 # COPY --from=sourcemod-plugins-gg2-map-changeups --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
-COPY --from=sourcemod-plugins-gg2-medic-tracker --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
 COPY --from=sourcemod-plugins-gg2-messages --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
-COPY --from=sourcemod-plugins-gg2-mstats2 --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
 # Stats v2 (issue #44).
 COPY --from=sourcemod-plugins-gg2-stats2 --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
 # This seems unnecessary for now
@@ -1576,7 +1524,6 @@ COPY --from=sourcemod-plugins-bot-flashlights --chown=0:0 /insurgency /opt/insur
 COPY --from=sourcemod-plugins-bot-names --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
 COPY --from=sourcemod-plugins-teamflash --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
 COPY --from=sourcemod-plugins-punitive-persistence --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
-COPY --from=sourcemod-plugins-map-logger --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
 COPY --from=sourcemod-plugins-gg2-weapon-spam --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
 COPY --from=sourcemod-plugins-gg2-admin-logger --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
 COPY --from=sourcemod-plugins-gg2-burn --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
@@ -1587,7 +1534,6 @@ COPY --from=sourcemod-plugins-gg2-bomber --chown=0:0 /insurgency /opt/insurgency
 # Test server only: needs gg2_theater_items, and is not wanted on main.
 COPY --from=sourcemod-plugins-gg2-easter-eggs --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
 COPY --from=sourcemod-plugins-gg2-cache-protect --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
-COPY --from=sourcemod-plugins-gg2-connection-tracker --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
 COPY --from=sourcemod-plugins-gg2-damage --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
 COPY --from=sourcemod-plugins-gg2-discord --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
 COPY --from=sourcemod-plugins-gg2-forceauthorize --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
@@ -1601,9 +1547,7 @@ COPY --from=sourcemod-plugins-gg2-kill-entities --chown=0:0 /insurgency /opt/ins
 COPY --from=sourcemod-plugins-gg2-bot-smoke-suppress --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
 # I don't want plugins writing to the config directory if I can avoid it, because this allows them to execute arbitrary commands.
 # COPY --from=sourcemod-plugins-gg2-map-changeups --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
-COPY --from=sourcemod-plugins-gg2-medic-tracker --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
 COPY --from=sourcemod-plugins-gg2-messages --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
-COPY --from=sourcemod-plugins-gg2-mstats2 --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
 # Stats v2 (issue #44).
 COPY --from=sourcemod-plugins-gg2-stats2 --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
 # This seems unnecessary for now
