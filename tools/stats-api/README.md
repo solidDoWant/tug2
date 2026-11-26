@@ -1,11 +1,8 @@
 # stats-api
 
-A small read-only REST API over the `gg2_mstats2` player statistics database
-(see `plugins/sourcemod/scripting/gg2_mstats2.sp` and the schema in
-`plugins/sourcemod/configs/sql-init-scripts/pgsql/gg2_mstats2.sql`).
-
-This is an early scaffold — the endpoint shapes are expected to change as
-requirements firm up.
+A small read-only REST API over the stats v2 database (issue #44; the schema is
+`plugins/sourcemod/configs/sql-init-scripts/pgsql/stats_*.sql`): players,
+weapons, maps, map runs, rounds, bots, medics, team kills and fire support.
 
 ## Configuration
 
@@ -15,13 +12,13 @@ This tool only owns its HTTP settings:
 | --------------- | ---------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `LISTEN_ADDR`   | `:8080`                                                                | Address the API HTTP server binds to.                                                                                                                     |
 | `METRICS_ADDR`  | `:9090`                                                                | Address the Prometheus metrics server binds to.                                                                                                           |
-| `CACHE_CONTROL` | `public, s-maxage=60, stale-while-revalidate=60, stale-if-error=86400` | `Cache-Control` header stamped on successful `GET /api/v1/*` responses so a shared cache/CDN can serve repeated anonymous reads. Set to `off` to disable. |
+| `CACHE_CONTROL` | `public, s-maxage=60, stale-while-revalidate=60, stale-if-error=86400` | `Cache-Control` header stamped on successful `GET /api/v2/*` responses so a shared cache/CDN can serve repeated anonymous reads. Set to `off` to disable. |
 | `BASE_PATH`     | _(empty)_                                                              | URL path prefix to serve the API, docs, and spec under (e.g. `/test`), so several deployments can share one hostname. See [Base path](#base-path).        |
 
 `CACHE_CONTROL` exists because this API is intended to sit behind a CDN (e.g.
 Cloudflare) on a public network. `s-maxage` targets the shared cache only (no
 browser `max-age`), so responses are at most ~60s stale at the edge; error and
-non-`/api/v1/` responses (probes, docs) are never cached.
+non-`/api/v2/` responses (probes, docs) are never cached.
 
 To cap how long any single query may run on the database (the origin-side
 backstop for cache misses — chiefly the aggregation endpoints and deep-`offset`
@@ -33,7 +30,7 @@ parameters; the service does not set a default of its own.
 ### Base path
 
 Setting `BASE_PATH=/test` moves every API, docs, and spec route under that
-prefix: `/test/api/v1/players`, `/test/docs`, `/test/openapi.yaml`, with
+prefix: `/test/api/v2/players`, `/test/docs`, `/test/openapi.yaml`, with
 `/test` and `/test/` redirecting to `/test/docs`. The unprefixed paths then
 return 404. Leading/trailing slashes are optional (`test`, `/test` and `/test/`
 are equivalent); an invalid value (query string, `{}` wildcards, empty or dot
@@ -49,7 +46,7 @@ What does not move:
 - `/livez` and `/readyz` stay at the root, since the orchestrator probes the
   pod directly rather than through the proxy.
 - The metrics listener (`METRICS_ADDR`) is unaffected, and the `route` label
-  omits the prefix (`GET /api/v1/players`, not `GET /test/api/v1/players`), so
+  omits the prefix (`GET /api/v2/players`, not `GET /test/api/v2/players`), so
   every deployment reports the same route names; `job`/`instance` tell them
   apart.
 
@@ -58,7 +55,12 @@ What does not move:
 The database connection is configured entirely through pgx's native inputs —
 this tool adds no connection variables of its own. Set `DATABASE_URL` to a
 PostgreSQL connection string, or leave it empty and use the standard libpq
-environment variables, which pgx reads directly:
+environment variables, which pgx reads directly.
+
+The connection's `search_path` must select the server's stats schema, e.g.
+`DATABASE_URL=postgres://...?options=-csearch_path%3Dstats_main` (or
+`PGOPTIONS="-c search_path=stats_main"`); the API names no schema itself. Each
+session is set to `TimeZone=UTC` on connect.
 
 - **Connection:** `PGHOST`, `PGPORT`, `PGDATABASE`, `PGUSER`, `PGPASSWORD`,
   `PGCONNECT_TIMEOUT`.
@@ -116,7 +118,7 @@ network; keep it off any public ingress.
 
 | Metric                                                                       | Type      | Labels                    | Notes                                                                                                                                                                                                                                                                                                                                                                                              |
 | ---------------------------------------------------------------------------- | --------- | ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `http_requests_total`                                                        | counter   | `route`, `method`, `code` | `route` is the matched pattern (e.g. `GET /api/v1/players/{steam_id}`), not the raw path, so path params don't explode cardinality. Unmatched paths collapse to `unmatched`. The `/livez` and `/readyz` probes are excluded — they carry no operational signal (Kubernetes reports probe health) and their constant kubelet traffic would skew the aggregate request rate and latency percentiles. |
+| `http_requests_total`                                                        | counter   | `route`, `method`, `code` | `route` is the matched pattern (e.g. `GET /api/v2/players/{steam_id}`), not the raw path, so path params don't explode cardinality. Unmatched paths collapse to `unmatched`. The `/livez` and `/readyz` probes are excluded — they carry no operational signal (Kubernetes reports probe health) and their constant kubelet traffic would skew the aggregate request rate and latency percentiles. |
 | `http_request_duration_seconds`                                              | histogram | `route`, `method`         | Default buckets.                                                                                                                                                                                                                                                                                                                                                                                   |
 | `http_requests_in_flight`                                                    | gauge     | —                         | Requests currently being served.                                                                                                                                                                                                                                                                                                                                                                   |
 | `pgxpool_acquired_conns` / `_idle_conns` / `_total_conns` / `_max_conns`     | gauge     | —                         | Connection-pool snapshot, read at scrape time. Watch `acquired`/`total` against `max` to validate `pool_max_conns` sizing.                                                                                                                                                                                                                                                                         |
@@ -129,30 +131,78 @@ curl localhost:9090/metrics
 
 ## Endpoints
 
-The data API is versioned via the URL (`/api/v1`). The operational probe
-endpoints are unversioned.
+The data API is versioned via the URL (`/api/v2`; v1 is gone). The operational
+probe endpoints are unversioned. Every endpoint is a `GET`.
 
-| Method & path                            | Description                                                        |
-| ---------------------------------------- | ------------------------------------------------------------------ |
-| `GET /livez`                             | Liveness probe. Does not touch the DB; use for restart decisions.  |
-| `GET /readyz`                            | Readiness probe. Pings the DB; use for load-balancer rotation.     |
-| `GET /api/v1/players`                    | List players. `?sort=&name=&limit=&offset=`.                       |
-| `GET /api/v1/players/{steam_id}`         | Single player's stats.                                             |
-| `GET /api/v1/players/{steam_id}/weapons` | Per-weapon kills, shots and hits for a player (unpaginated sub-resource). |
-| `GET /api/v1/weapons`                    | Weapons across all players: kills, shots, hits. `?sort=&limit=&offset=`. |
-| `GET /api/v1/weapons/{weapon_name}/accuracy` | Most accurate players with one weapon. `?min_shots=&limit=&offset=`. |
-| `GET /api/v1/maps`                       | Per-map win/loss and playtime summary. `?sort=&limit=&offset=`.    |
-| `GET /api/v1/matches`                    | Recent match results. `?limit=&offset=`.                           |
-| `GET /api/v1/bots`                       | Bots ranked by total kills. `?limit=&offset=`.                     |
-| `GET /api/v1/bots/{bot_name}/weapons`    | Per-weapon kill breakdown for a bot (unpaginated sub-resource).    |
-| `GET /api/v1/medics`                     | Players ranked by medic time, heals or revives. `?sort=&limit=&offset=`. |
-| `GET /api/v1/teamkills`                  | Players ranked by team kills. `?limit=&offset=`.                   |
-| `GET /api/v1/teamkills/weapons`          | Weapons ranked by logged team kills. `?limit=&offset=`.            |
-| `GET /api/v1/fire-support`               | Players ranked by fire-support calls. `?limit=&offset=`.           |
+| Path                                     | Description                                                                 |
+| ---------------------------------------- | --------------------------------------------------------------------------- |
+| `/livez`                                 | Liveness probe. Does not touch the DB; use for restart decisions.           |
+| `/readyz`                                | Readiness probe. Pings the DB; use for load-balancer rotation.              |
+| `/api/v2/players`                        | Player leaderboard. `sort`, `name`, window, pagination.                     |
+| `/api/v2/players/{steam_id}`             | One player's stats and name history. Window.                                |
+| `/api/v2/players/{steam_id}/weapons`     | A player's stats per weapon (plain array). Window.                          |
+| `/api/v2/players/{steam_id}/classes`     | A player's time, kills and deaths per class (plain array). Window.          |
+| `/api/v2/players/{steam_id}/rounds`      | A player's round history, newest first. Window, pagination.                 |
+| `/api/v2/weapons`                        | Weapons across all players. `sort`, window, pagination.                     |
+| `/api/v2/weapons/{weapon_name}`          | Top players with one weapon. `sort`, `min_shots`, window, pagination.       |
+| `/api/v2/maps`                           | Per-map rounds, results and play time. `sort`, pagination.                  |
+| `/api/v2/maps/{map_name}`                | One map, its last 20 runs and recent kill positions. `limit_positions`.     |
+| `/api/v2/map-runs`                       | Map runs (map loads), newest first. Pagination.                             |
+| `/api/v2/map-runs/{id}`                  | One map run: its rounds and a scoreboard.                                   |
+| `/api/v2/rounds/{id}`                    | One round and its timeline.                                                 |
+| `/api/v2/bots`                           | Bots by kills of players. Pagination.                                       |
+| `/api/v2/bots/{bot_name}/weapons`        | A bot's kills per weapon (plain array; `[]` for an unknown bot).            |
+| `/api/v2/medics`                         | Medic leaderboard. `sort`, window, pagination.                              |
+| `/api/v2/teamkills`                      | Team-kill leaderboard. `sort`, window, pagination.                          |
+| `/api/v2/teamkills/weapons`              | Weapons by team kills. Window, pagination.                                  |
+| `/api/v2/fire-support`                   | Fire-support leaderboard. `sort`, window, pagination.                       |
 
-Endpoints marked below also take a time window (see [Time windows](#time-windows)):
-players, a player, a player's weapons, weapons, weapon accuracy, medics, team kills,
-team-kill weapons and fire support.
+`/docs` and `/openapi.yaml` describe every field; the notes below cover the rules.
+
+### Where the numbers come from
+
+The API reads the stats v2 schema (issue #44,
+`plugins/sourcemod/configs/sql-init-scripts/pgsql/stats_*.sql`). Facts are stored
+once and every total is a view: lifetime stats come from `v_player_lifetime`,
+`v_player_weapon_lifetime`, `v_maps`, `v_bot_weapon_kills` and `v_team_kills`,
+which combine v2 rows with the pre-v2 tables. The API does not re-derive any
+stat; it only sums the per-round views over a window, joins names in
+(`v_players`), pages and sorts. The schema itself is not named anywhere: the
+connection's `search_path` selects the server's `stats_*` schema (see
+[Database connection](#database-connection)).
+
+- **SteamIDs** are JSON strings (a SteamID64 exceeds JavaScript's safe integers).
+- **Times** are RFC 3339 in UTC.
+- **Names** are each player's latest in-game name (`v_players`), or `null`.
+- **v2-only stats** (assists, world deaths, headshot kills, cache kills, times
+  revived, HP healed, times suppressed, damage, per-hitgroup hits, reloads,
+  deploys, time drawn, rounds played, class breakdowns, map runs, rounds,
+  kill positions, failed/refunded fire support, revive times) only exist from the
+  v2 cutover (late 2026-11). Lifetime totals count them as 0 before that; in a
+  window holding only pre-v2 history they are `null`, not 0.
+- `kd` is `kills / deaths` to two decimals (`kills` when `deaths` is 0);
+  `accuracy` is `100 * shots_hit_enemy / shots` to one decimal, `null` without shots.
+- `best_killstreak` is lifetime only, so `null` with a window.
+
+### Sorts
+
+All sorts are descending, `null`s last; an invalid value is a `422`.
+
+| Endpoint                     | `sort` (default first)                                                                                                                  |
+| ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `/players`                   | `score`, `kills`, `deaths`, `kd`, `assists`, `wins`, `play_time`, `accuracy`, `revives`, `heals`, `caps`, `headshot_kills`, `killstreak`, `last_seen` |
+| `/weapons`                   | `kills`, `shots`, `accuracy`                                                                                                            |
+| `/weapons/{weapon_name}`     | `accuracy` (players with at least `min_shots`, default 100), `kills` (players with a kill)                                              |
+| `/maps`                      | `rounds`, `play_time`, `last_played`, `win_rate`                                                                                        |
+| `/bots`                      | `kills`                                                                                                                                 |
+| `/medics`                    | `medic_time`, `revives`, `heals`, `hp_healed`                                                                                           |
+| `/teamkills`                 | `team_kills`, `team_killed`, `forgiven`                                                                                                 |
+| `/fire-support`              | `calls`, `failed`, `last_called`                                                                                                        |
+
+`accuracy` on `/players` ranks players with at least 500 shots first, everyone
+else after; on `/weapons` the cut is 1000 shots. `/players?name=` keeps players
+whose current name contains the text, case-insensitively (`%`, `_` and `\` match
+literally). Map runs and a player's rounds are newest first.
 
 ### Time windows
 
@@ -160,104 +210,97 @@ By default every number is a lifetime total. Add `?period=30d` (the last N days,
 1-3650) or `?since=2026-11-01&until=2026-12-01` (UTC dates or RFC 3339 times; `since`
 inclusive, `until` exclusive and defaulting to now) to get the same response for that
 window instead. Mixing `period` with `since`/`until`, a bad date, or an empty range is
-a `422`.
+a `422`. Windowed list responses carry `window: {since, until}`, as does a single
+player; lifetime responses have no `window`.
 
-A window is summed from per-round history the plugins record next to the lifetime
-totals:
+Endpoints taking a window: players, a player, their weapons, classes and rounds,
+weapons, a weapon's players, medics, team kills, team-kill weapons and fire support.
 
-| Endpoints                                        | History                                           |
-| ------------------------------------------------ | ------------------------------------------------- |
-| players, a player and their weapons, weapons, accuracy | `player_rounds`, `player_round_weapons` (gg2_mstats2) |
-| medics                                           | `medic_rounds` (gg2_medic_tracker)                |
-| teamkills, teamkill weapons                      | `player_tk_logs` (gg2_teamkill)                   |
-| fire-support                                     | `fire_support_calls` (FireSupport)                |
-
-That history starts in 2026-11 (team kills: 2025-12), so windowed responses carry
-`window: {since, until, history_since}`, `history_since` being the oldest record behind
-that endpoint; a window starting earlier only covers the part since then. Lifetime
-responses have no `window`. A windowed list only includes players (or weapons) with
-activity in the window; a single player is returned with zeros if they didn't play in
-it. In a window, `killstreak` is the best streak reached in it, `kills` on the team-kill
-board come from `player_rounds`, and fire support's `last_used_at` is the last call in
-the window. `/players/{steam_id}/weapons` is a plain array, so it has no `window`.
-
-`/api/v1/medics` also returns `heals` (full heals given) and `revives` (revives
-completed), counted for anyone, medic or not, since 2026-11; `sort` accepts `time`
-(default), `heals` and `revives`.
+With a window, player and weapon stats are summed from `v_player_round_stats` and
+`v_player_round_weapon_stats` over their `at` (round end); the other sources are
+filtered on their own time (revives on `revived_at`, `v_team_kills` on `killed_at`,
+fire-support calls on `called_at`, class spans on their start and kills on
+`killed_at`). That per-round history only reaches back so far: **to 2026-11 for the
+core stats** (kills, deaths, score, shots, medic time, fire support, ...) and **to
+2025-12 for team kills**. A window starting earlier only covers the part from then
+on; earlier play exists only in the lifetime totals. A windowed list only includes
+players (or weapons) with activity in the window; a single player is returned with
+zeros if they didn't play in it.
 
 ### Pagination
 
 Every list endpoint returns a paginated envelope so clients can build pagers:
 
 ```json
-{ "items": [ ... ], "total": 1234, "limit": 50, "offset": 0 }
+{ "items": [ ... ], "total": 1234, "limit": 50, "offset": 0, "window": { ... } }
 ```
 
 `total` is the count before `limit`/`offset` is applied. `limit` defaults to 50
-(max 200); `offset` defaults to 0.
+(max 200); `offset` defaults to 0 (max 100000). The per-player weapons and classes
+and a bot's weapons are plain arrays.
 
-`sort` for `/api/v1/players` accepts: `kills`, `deaths`, `score`, `wins`,
-`killstreak`, `caps`, `kd`, `play_time`, `updated_at` (default `score`). Results are
-descending. Query parameters are validated by huma — an invalid `sort` or an
-out-of-range `limit`/`offset` returns `422` with a problem-detail body.
+### Notes per endpoint
 
-`name` for `/api/v1/players` keeps only players whose most recent in-game name
-contains it, case-insensitively (`%` and `_` are matched literally). Names are
-recorded by `gg2_mstats2` whenever it records a player, so `name` is `null` for
-players who haven't connected since that started. The medic, team-kill and
-fire-support leaderboards include each player's `name` too.
-
-`play_time_seconds` on a player is their time on the Security team. It has only
-been counted since 2026-11, so it is low or 0 for earlier play.
-
-`shots`, `enemy_hits` and `friendly_hits` on a player (totals) and on each weapon
-in `/api/v1/players/{steam_id}/weapons` count rounds fired from firearms and
-rounds that damaged at least one enemy or teammate; `enemy_hit_rate` is
-`enemy_hits / shots` as a percentage (null with no shots). A shotgun shell is one
-round. Counted since 2026-11. `sort=accuracy` ranks players with at least 500
-shots by `enemy_hit_rate`; everyone else follows.
-
-`/api/v1/weapons` totals each weapon across all players, including weapons that
-have shots but no kills. `sort` accepts `kills` (default), `shots` and
-`accuracy`, which ranks weapons with at least 1000 shots by `enemy_hit_rate`,
-then the rest. `/api/v1/weapons/{weapon_name}/accuracy` ranks the players with at
-least `min_shots` (default 100) shots with that weapon by `enemy_hit_rate`; an
-unknown weapon is `404`.
-
-`sort` for `/api/v1/maps` accepts: `rounds` (logged round results, the
-default), `play_time` (total playtime from map_logger), and `last_played`
-(most recent map_logger activity). Results are descending; maps known to only
-one of the two sources report zero/null for the other source's fields
-(`win_rate` is `null` when no rounds are logged).
-
-> Bots, medics, and team kills are sourced from the `bot_kills`,
-> `gg2_medic_tracker`, and `gg2_teamkill` tables, which share the
-> `insurgency-stats` database. Player **display names and avatars are not yet
-> resolved** — these endpoints return raw Steam IDs for now.
+- **`/players/{steam_id}`**: the leaderboard fields plus `name_history`
+  (`[{name, changed_at}]`, newest first, consecutive repeats collapsed; v2 only).
+  `404` for a SteamID `v_players` doesn't know.
+- **`/players/{steam_id}/classes`**: per `class_template`, `seconds` played in it
+  (from `player_spans`) and the enemy `kills` and `deaths` while in it (the span open
+  at the kill). v2 only.
+- **`/players/{steam_id}/rounds`**: rows of `v_player_round_stats` with the round's
+  `map_name`, `game_mode`, `ended_at`, `winner`, `end_reason` and `was_mvp`. Pre-v2
+  rows have `source: "old"`, `round_id: null`, and `null` for what the old plugins
+  did not record; old medic, team-kill and fire-support history are rows of their own.
+- **`/weapons/{weapon_name}`**: `404` for a weapon neither v2 nor the old stats know.
+- **`/maps/{map_name}`**: the `/maps` row, `recent_runs` (last 20 map runs) and
+  `kill_positions` (the most recent `limit_positions`, default 2000, max 10000, v2
+  kills on the map with a recorded position). `404` for an unknown map.
+- **`/map-runs/{id}`**: `{run, rounds, scoreboard}`; `run` is the `/map-runs` item
+  (its `rounds` is a count of ended rounds), `rounds` the run's rounds, `scoreboard`
+  each player's sums over them, by score.
+- **`/rounds/{id}`**: the round plus `timeline`, every event in time order as
+  `{at, type, ...}`: `kill` (kind, attacker/victim SteamID or bot name and name,
+  weapon, headshot), `objective` (kind, control point, name, team, participants),
+  `counterattack_start`/`counterattack_end`, `revive` (reviver, revived, method) and
+  `survival_level`. Fields that don't apply are omitted.
+- **`/medics`**: players with medic time, revives or heals; `avg_revive_seconds` is
+  their mean revive duration as the reviver (v2 only).
+- **`/teamkills`**: players with team kills given or taken; `kills` (enemy kills)
+  is for context, `forgiven` counts their logged team kills (`v_team_kills`) that
+  the victim forgave.
+- **`/fire-support`**: `calls` are successful calls; `failed` and `refunded` are v2
+  only; `last_called_at` is the last successful call in the v2 or old call log.
 
 ## Development
 
 ```sh
 make run                 # go run with fmt+vet
+make test                # unit tests (the integration test skips itself)
 make binary              # build a static binary under build/
 make container-image     # build the container image
+testdata/run-integration.sh   # integration test against a throwaway Postgres 18 (docker, psql)
 ```
+
+`testdata/run-integration.sh` starts `postgres:18` on a random port in a non-UTC
+zone, lays it out with `testdata/init-db.sh` (old tables in `public`, v2 in
+`stats_dev`, `testdata/seed.sql`'s fictional data in both), and runs
+`integration_test.go` with `STATS_API_TEST_DB_URL` set: every endpoint's query
+runs, lifetime numbers are compared with the views, and the HTTP responses are
+checked for status codes, string SteamIDs and `null` pre-v2 stats.
 
 ### Local stack (docker-compose)
 
-`docker-compose.yml` brings up a Postgres 18 instance with the `gg2_mstats2`,
-`gg2_medic_tracker`, and `gg2_teamkill` schemas applied, alongside this service
-built from the `Dockerfile`:
+`docker-compose.yml` brings up the same database (`testdata/init-db.sh`) alongside
+this service built from the `Dockerfile`, pointed at `search_path=stats_dev`:
 
 ```sh
 docker compose up --build      # start Postgres + stats-api
 curl localhost:8080/readyz     # API is up and the DB is reachable
-curl localhost:8080/api/v1/players
+curl localhost:8080/api/v2/players
 docker compose down -v         # stop and wipe the database volume
 ```
 
-The schema is applied from `plugins/.../pgsql/gg2_mstats2.sql` only when the
-database volume is first created. After changing the schema, recreate the volume
-with `docker compose down -v` followed by `docker compose up`. Postgres is also
-exposed on `localhost:5432` (user/password/db all `insurgency` /
-`sourcemod-insurgency-stats`) for direct inspection.
+The schema and seed are applied only when the database volume is first created.
+After changing them, recreate the volume with `docker compose down -v` followed by
+`docker compose up`. Postgres is also exposed on `localhost:5432` (user/password
+`insurgency`, database `sourcemod-insurgency-stats`) for direct inspection.
