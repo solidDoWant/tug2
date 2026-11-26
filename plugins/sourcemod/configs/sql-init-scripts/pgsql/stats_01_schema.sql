@@ -1,0 +1,130 @@
+-- =====================================================
+-- Stats v2 (issue #44), part 1: types, reference data, identity and the match timeline.
+--
+-- The v2 tables live in a schema of their own per server, owned by that server's database user and
+-- named stats_* (stats_test, stats_main). The game server's user cannot create schemas, so an admin
+-- creates it once, e.g.:   CREATE SCHEMA stats_test AUTHORIZATION "insurgency-test";
+-- Every stats_*.sql file starts by pointing search_path at that schema for its own transaction, so
+-- the same files serve every server. The old tables stay in the user's old schema (public or the
+-- user-named one) and are only read, through the old_* views in stats_05_legacy.sql.
+--
+-- Design: https://github.com/solidDoWant/tug2/issues/44. Facts are stored once; every total is a view.
+-- Column and table descriptions are in the stats_comments_*.sql files (the Discord bot reads them).
+-- =====================================================
+
+DO $$
+DECLARE n int;
+BEGIN
+    SELECT count(*) INTO n FROM pg_namespace
+    WHERE nspname LIKE 'stats\_%' AND nspowner = (SELECT oid FROM pg_roles WHERE rolname = current_user);
+    IF n <> 1 THEN
+        RAISE EXCEPTION 'expected exactly one stats_* schema owned by %, found %', current_user, n;
+    END IF;
+    PERFORM set_config('search_path', (SELECT quote_ident(nspname) FROM pg_namespace
+        WHERE nspname LIKE 'stats\_%' AND nspowner = (SELECT oid FROM pg_roles WHERE rolname = current_user)), true);
+END $$;
+
+-- Closed sets, fixed by the engine.
+DO $$ BEGIN CREATE TYPE team AS ENUM ('spectator', 'security', 'insurgents');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN CREATE TYPE round_end_reason AS ENUM ('objective', 'elimination', 'time_expired', 'draw');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN CREATE TYPE hitgroup AS ENUM ('generic', 'head', 'chest', 'stomach', 'left_arm', 'right_arm', 'left_leg', 'right_leg', 'gear');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN CREATE TYPE stance AS ENUM ('standing', 'crouched', 'prone');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN CREATE TYPE aim_mode AS ENUM ('hip', 'sights', 'bipod', 'focus');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN CREATE TYPE revive_method AS ENUM ('defib', 'knife', 'healthkit');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN CREATE TYPE objective_kind AS ENUM ('captured', 'neutralized', 'cache_destroyed');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN CREATE TYPE objective_role AS ENUM ('capper', 'attacker', 'assister');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN CREATE TYPE heal_hold_release AS ENUM ('full_health', 'keys_released', 'lost_target', 'death', 'disconnect', 'round_end', 'map_end');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+-- Open sets, discovered at runtime: lookup tables the writers upsert into.
+CREATE TABLE IF NOT EXISTS maps (map_name TEXT PRIMARY KEY);
+CREATE TABLE IF NOT EXISTS game_modes (game_mode TEXT PRIMARY KEY);
+CREATE TABLE IF NOT EXISTS theaters (theater_name TEXT PRIMARY KEY);
+CREATE TABLE IF NOT EXISTS weapon_types (weapon_type TEXT PRIMARY KEY);
+CREATE TABLE IF NOT EXISTS weapons (
+    weapon_name TEXT PRIMARY KEY,
+    weapon_type TEXT REFERENCES weapon_types
+);
+
+-- Identity.
+CREATE TABLE IF NOT EXISTS players (steam_id BIGINT PRIMARY KEY CHECK (steam_id > 0));
+
+CREATE TABLE IF NOT EXISTS sessions (
+    steam_id          BIGINT NOT NULL REFERENCES players,
+    connected_at      TIMESTAMPTZ NOT NULL,
+    disconnected_at   TIMESTAMPTZ CHECK (disconnected_at >= connected_at),
+    disconnect_reason TEXT,
+    PRIMARY KEY (steam_id, connected_at)
+);
+
+CREATE TABLE IF NOT EXISTS name_changes (
+    steam_id     BIGINT NOT NULL,
+    connected_at TIMESTAMPTZ NOT NULL,
+    changed_at   TIMESTAMPTZ NOT NULL,
+    name         TEXT NOT NULL,
+    PRIMARY KEY (steam_id, changed_at),
+    FOREIGN KEY (steam_id, connected_at) REFERENCES sessions
+);
+
+-- Server builds and boots.
+CREATE TABLE IF NOT EXISTS server_builds (
+    git_commit    TEXT PRIMARY KEY,
+    image_version TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS server_boots (
+    booted_at  TIMESTAMPTZ PRIMARY KEY,
+    git_commit TEXT NOT NULL REFERENCES server_builds
+);
+
+-- The match timeline.
+CREATE TABLE IF NOT EXISTS map_runs (
+    map_run_id   BIGSERIAL PRIMARY KEY,
+    booted_at    TIMESTAMPTZ NOT NULL REFERENCES server_boots,
+    started_at   TIMESTAMPTZ NOT NULL UNIQUE,
+    map_name     TEXT NOT NULL REFERENCES maps,
+    game_mode    TEXT NOT NULL REFERENCES game_modes,
+    theater      TEXT REFERENCES theaters,
+    load_seconds REAL CHECK (load_seconds >= 0),
+    game_over_at TIMESTAMPTZ CHECK (game_over_at >= started_at)
+);
+CREATE INDEX IF NOT EXISTS idx_map_runs_map_name ON map_runs (map_name, started_at);
+CREATE INDEX IF NOT EXISTS idx_map_runs_booted_at ON map_runs (booted_at);
+
+CREATE TABLE IF NOT EXISTS rounds (
+    round_id     BIGSERIAL PRIMARY KEY,
+    map_run_id   BIGINT NOT NULL REFERENCES map_runs,
+    round_number SMALLINT NOT NULL CHECK (round_number >= 1),
+    started_at   TIMESTAMPTZ NOT NULL,
+    live_at      TIMESTAMPTZ CHECK (live_at >= started_at),
+    ended_at     TIMESTAMPTZ CHECK (ended_at >= started_at),
+    winner       team,
+    end_reason   round_end_reason,
+    mvp_steam_id BIGINT REFERENCES players,
+    UNIQUE (map_run_id, round_number)
+);
+CREATE INDEX IF NOT EXISTS idx_rounds_started_at ON rounds (started_at);
+
+CREATE TABLE IF NOT EXISTS survival_levels (
+    round_id   BIGINT NOT NULL REFERENCES rounds,
+    level      SMALLINT NOT NULL CHECK (level >= 0),
+    reached_at TIMESTAMPTZ NOT NULL,
+    PRIMARY KEY (round_id, level)
+);
+
+CREATE TABLE IF NOT EXISTS counterattacks (
+    round_id      BIGINT NOT NULL REFERENCES rounds,
+    control_point SMALLINT NOT NULL CHECK (control_point >= 0),
+    started_at    TIMESTAMPTZ NOT NULL,
+    ended_at      TIMESTAMPTZ CHECK (ended_at >= started_at),
+    finale        BOOLEAN NOT NULL,
+    PRIMARY KEY (round_id, started_at)
+);

@@ -7,6 +7,9 @@ CONTAINER_REGISTRY = tug2
 CONTAINER_REPOSITORY = $(CONTAINER_REGISTRY)/insurgency
 PUSH_ARG = $(if $(findstring t,$(PUSH_ALL)),--push)
 DOCKER_ARGS = --build-arg SERVER_RUNNER_IMAGE_NAME=$(CONTAINER_REGISTRY)/server-runner:latest
+# The commit an image is built from, recorded by gg2_stats2 (server_builds). "-dirty" when the tree has
+# uncommitted changes, since then the commit alone does not say what is in the image.
+GIT_COMMIT = $(shell git -C "$(PROJECT_DIR)" rev-parse HEAD 2>/dev/null || echo unknown)$(shell git -C "$(PROJECT_DIR)" diff --quiet HEAD 2>/dev/null || echo -dirty)
 
 # Records which commit a pushed image was built from: after a successful push, HEAD is tagged with the
 # image name minus the "insurgency-" prefix plus its tag, e.g. test-0.0.27-dev. Forced, so pushing the
@@ -101,7 +104,8 @@ server-image-%: base-image Dockerfile	## Build the container image for the speci
 	@$(MAKE) workshop-check
 	@$(MAKE) workshop-render
 	@$(MAKE) theater-check
-	docker build --target gameserver-$* -t "$(CONTAINER_REPOSITORY)-$*:$(VERSION)" $(PUSH_ARG) --load $(DOCKER_ARGS) $(EXTRA_DOCKER_ARGS) "$(PROJECT_DIR)"
+	docker build --target gameserver-$* -t "$(CONTAINER_REPOSITORY)-$*:$(VERSION)" $(PUSH_ARG) --load $(DOCKER_ARGS) \
+	  --build-arg GIT_COMMIT=$(GIT_COMMIT) --build-arg IMAGE_VERSION=$*-$(VERSION) $(EXTRA_DOCKER_ARGS) "$(PROJECT_DIR)"
 	$(call tag-pushed-image,$*-$(VERSION),$(CONTAINER_REPOSITORY)-$*:$(VERSION))
 
 .PHONY: server-images

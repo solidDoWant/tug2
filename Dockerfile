@@ -645,6 +645,22 @@ RUN --mount=type=bind,source=./plugins/sourcemod,target=/plugin-source \
     find /insurgency -type d -exec chmod 755 {} \; && \
     find /insurgency -type f -exec chmod 644 {} \;
 
+FROM sourcemod-plugins-base AS sourcemod-plugins-gg2-stats2
+
+# Build gg2_stats2, the stats v2 recorder (issue #44), and ship its schema files: stats_*.sql for the
+# stats database and player_connections.sql for punitive-persistence. They are only applied on servers
+# whose database-migrations.cfg lists them, and the stats ones need an admin-created stats_* schema
+# (see stats_01_schema.sql). The plugin records nothing until that schema exists.
+COPY plugins/sourcemod/gamedata/ /insurgency/addons/sourcemod/gamedata/
+RUN --mount=type=bind,source=./plugins/sourcemod,target=/plugin-source \
+    /sourcemod/addons/sourcemod/scripting/spcomp --include=/plugin-source/scripting/include  /plugin-source/scripting/gg2_stats2.sp -o /insurgency/addons/sourcemod/plugins/gg2_stats2.smx && \
+    mkdir -p /insurgency/addons/sourcemod/configs/sql-init-scripts/pgsql && \
+    cp /plugin-source/configs/sql-init-scripts/pgsql/stats_*.sql /insurgency/addons/sourcemod/configs/sql-init-scripts/pgsql/ && \
+    cp /plugin-source/configs/sql-init-scripts/pgsql/player_connections.sql /insurgency/addons/sourcemod/configs/sql-init-scripts/pgsql/ && \
+    # Fixup file permissions
+    find /insurgency -type d -exec chmod 755 {} \; && \
+    find /insurgency -type f -exec chmod 644 {} \;
+
 FROM sourcemod-plugins-base AS sourcemod-plugins-gg2-playlist-hax
 
 # Build the gg2_playlist_hax plugin
@@ -1334,6 +1350,17 @@ RUN fetch-items /out \
 # The trade-off is that the stages are near-identical by hand. When adding a plugin or changing
 # how a server is assembled, apply it to both stages unless the difference is intentional.
 
+# The build's identity for gg2_stats2 (issue #44): the commit and image version the Makefile passes,
+# as a SourceMod KeyValues file. Its own stage because the server stages run as uid 1000 and cannot
+# write into the root-owned SourceMod tree.
+FROM ubuntu:26.04@sha256:d66b366dac61b575bee2aef07e9c26e8070096fbe84a3d4d3eb0da069b5d76db AS build-info
+ARG GIT_COMMIT=unknown
+ARG IMAGE_VERSION=unknown
+RUN mkdir -p /out/addons/sourcemod/configs && \
+    printf '"Build"\n{\n\t"commit"\t"%s"\n\t"version"\t"%s"\n}\n' "$GIT_COMMIT" "$IMAGE_VERSION" \
+        > /out/addons/sourcemod/configs/gg2_build.cfg && \
+    chmod 644 /out/addons/sourcemod/configs/gg2_build.cfg
+
 FROM gameserver AS gameserver-main
 
 # The list the running server reads. Everything on it is fetched at build time by the ws-* stages
@@ -1477,6 +1504,10 @@ ENV LD_PRELOAD=/opt/insurgency-server/casecache.so
 # ENOENT from resolve(), so the files would be written and then be invisible.
 ENV CASECACHE_EXCLUDE=/insurgency/scripts/theaters:/insurgency/models
 
+# Which build this is, for gg2_stats2's server_builds/server_boots (issue #44). Last, so a new commit
+# only changes this one small layer.
+COPY --from=build-info --chown=0:0 /out/ /opt/insurgency-server/insurgency/
+
 
 FROM gameserver AS gameserver-test
 
@@ -1572,6 +1603,8 @@ COPY --from=sourcemod-plugins-gg2-bot-smoke-suppress --chown=0:0 /insurgency /op
 COPY --from=sourcemod-plugins-gg2-medic-tracker --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
 COPY --from=sourcemod-plugins-gg2-messages --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
 COPY --from=sourcemod-plugins-gg2-mstats2 --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
+# Stats v2 (issue #44): test server only until main moves over (phase 3).
+COPY --from=sourcemod-plugins-gg2-stats2 --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
 # This seems unnecessary for now
 # COPY --from=sourcemod-plugins-gg2-playlist-hax --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
 COPY --from=sourcemod-plugins-gg2-hint --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
@@ -1628,3 +1661,7 @@ ENV CASECACHE_EXCLUDE=/insurgency/scripts/theaters:/insurgency/models
 # of the theater it has to match, both come from manifest.json on the fastdl host at map start. That
 # is what lets the content image be republished without rebuilding or redeploying this one.
 COPY --from=sourcemod-plugins-gg2-fastdl --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
+
+# Which build this is, for gg2_stats2's server_builds/server_boots (issue #44). Last, so a new commit
+# only changes this one small layer.
+COPY --from=build-info --chown=0:0 /out/ /opt/insurgency-server/insurgency/

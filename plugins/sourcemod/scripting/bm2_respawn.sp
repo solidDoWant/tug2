@@ -30,6 +30,7 @@
 #include <classtemplate>
 #undef REQUIRE_PLUGIN
 #include <gg2_hint>
+#include <gg2_stats>
 #define REQUIRE_PLUGIN
 
 // enable/disable medic code and ammo bag resupply
@@ -120,6 +121,11 @@ float g_fLastHeight[2048] = { 0.0, ... },
       g_fSecCounterRespawnPosition[3] = { 0.0, ... };
 
 // gameme forwards
+GlobalForward StatsReviveForward, StatsHealTickForward, StatsHealHoldForward;
+
+// GetEngineTime() when anyone first made progress reviving this downed player; 0 when nobody has.
+float g_fReviveStartedAt[MAXPLAYERS + 1];
+
 GlobalForward MedicRevivedForward,
     MedicHealedForward,
     DeadCountForward;
@@ -411,6 +417,11 @@ public void OnPluginStart()
     MedicRevivedForward = new GlobalForward("Medic_Revived", ET_Event, Param_Cell, Param_Cell);
     MedicHealedForward  = new GlobalForward("Medic_Healed", ET_Event, Param_Cell, Param_Cell);
     DeadCountForward    = new GlobalForward("Dead_Count", ET_Event, Param_Cell, Param_Cell);
+
+    // Stats v2 (gg2_stats2; include/gg2_stats.inc)
+    StatsReviveForward   = new GlobalForward("Stats_OnRevive", ET_Ignore, Param_Cell, Param_Cell, Param_Float, Param_Cell, Param_Array, Param_Cell);
+    StatsHealTickForward = new GlobalForward("Stats_OnHealTick", ET_Ignore, Param_Cell, Param_Cell, Param_Cell, Param_Cell);
+    StatsHealHoldForward = new GlobalForward("Stats_OnHealHold", ET_Ignore, Param_Cell, Param_Cell, Param_Cell, Param_Cell);
 
     is_ww2_server       = CreateConVar("sm_is_ww2_server", "0", "Is this a WW2 Server (needs diff models)?");
 
@@ -1053,7 +1064,7 @@ Action Timer_MapStart(Handle timer)
 
 public void OnMapEnd()
 {
-    ReleaseAllHealHolds();
+    ReleaseAllHealHolds(STATS_HOLD_MAP_END);
     // Reset respawn token
     ResetInsurgencyLives();
     g_isMapInit    = 0;
@@ -1898,7 +1909,7 @@ public void OnClientDisconnect(int client)
 {
     g_bHuntPending[client] = false;
     g_bLifeRespawnPending[client] = false;
-    ReleaseHealHold(client);
+    ReleaseHealHold(client, STATS_HOLD_DISCONNECT);
 }
 
 public void OnClientPutInServer(int client)
@@ -2897,6 +2908,7 @@ Action ConvertDeleteRagdoll(Handle timer, int client)
                 g_fRagdollPosition[client]             = g_fDeadPosition[client];
 
                 g_iReviveRemainingTime[client]         = g_playerWoundTime[client];
+                g_fReviveStartedAt[client]             = 0.0;
                 g_iReviveNonMedicRemainingTime[client] = g_iNonMedicReviveTime;
             }
         }
@@ -3407,6 +3419,7 @@ Action Timer_ReviveMonitor(Handle timer)
                 Format(sBuf, sizeof(sBuf), "%N is reviving you in: %i seconds (%s)", alivePlayer, g_iReviveRemainingTime[deadPlayer], woundType);
                 HintShow(deadPlayer, "medic", HINT_PRI_ACTIVITY, 1.5, "%s", sBuf);
                 g_iReviveRemainingTime[deadPlayer]--;
+                if (g_fReviveStartedAt[deadPlayer] == 0.0) g_fReviveStartedAt[deadPlayer] = GetEngineTime();
                 if (!g_beingRevivedByMedic[deadPlayer])
                 {
                     Format(sBuf, sizeof(sBuf), "%N is reviving %N", alivePlayer, deadPlayer);
@@ -3430,10 +3443,14 @@ Action Timer_ReviveMonitor(Handle timer)
                 medic_bonus_life_check(alivePlayer);
 
                 revivedThisPass[deadPlayer] = true;
-                Check_NearbyMedicsRevive(alivePlayer, deadPlayer);
+                int helpers[MAXPLAYERS], helperCount;
+                Check_NearbyMedicsRevive(alivePlayer, deadPlayer, helpers, helperCount);
                 g_revivedByMedic[deadPlayer] = true;
                 CreateReviveTimer(deadPlayer);
                 SendForwardMedicRevive(alivePlayer, deadPlayer);
+                SendForwardStatsRevive(alivePlayer, deadPlayer,
+                                       StrContains(sWeapon, "weapon_defib") != -1 ? STATS_REVIVE_DEFIB : STATS_REVIVE_KNIFE,
+                                       helpers, helperCount);
                 FormatReviveDiscordMessage(deadPlayer, discordString, sizeof(discordString));
                 send_to_discord(alivePlayer, discordString);
             }
@@ -3453,6 +3470,7 @@ Action Timer_ReviveMonitor(Handle timer)
                 Format(sBuf, sizeof(sBuf), "%N is reviving you in: %i seconds (%s)", alivePlayer, g_iReviveNonMedicRemainingTime[deadPlayer], woundType);
                 HintShow(deadPlayer, "medic", HINT_PRI_ACTIVITY, 1.5, "%s", sBuf);
                 g_iReviveNonMedicRemainingTime[deadPlayer]--;
+                if (g_fReviveStartedAt[deadPlayer] == 0.0) g_fReviveStartedAt[deadPlayer] = GetEngineTime();
             }
             else {
                 Format(sBuf, sizeof(sBuf), "You revived %N from a %s", deadPlayer, woundType);
@@ -3466,7 +3484,8 @@ Action Timer_ReviveMonitor(Handle timer)
                 medic_bonus_life_check(alivePlayer);
 
                 revivedThisPass[deadPlayer] = true;
-                Check_NearbyMedicsRevive(alivePlayer, deadPlayer);
+                int helpers[MAXPLAYERS], helperCount;
+                Check_NearbyMedicsRevive(alivePlayer, deadPlayer, helpers, helperCount);
                 g_revivedByMedic[deadPlayer] = false;
                 CreateReviveTimer(deadPlayer);
 
@@ -3506,6 +3525,7 @@ Action Timer_ReviveMonitor(Handle timer)
                 CreateTimer(0.1, Timer_ChangeWeaponFromHK, alivePlayer, TIMER_FLAG_NO_MAPCHANGE);
                 // ChangePlayerWeaponSlot(alivePlayer, 2);
                 SendForwardMedicRevive(alivePlayer, deadPlayer);
+                SendForwardStatsRevive(alivePlayer, deadPlayer, STATS_REVIVE_HEALTHKIT, helpers, helperCount);
                 FormatReviveDiscordMessage(deadPlayer, discordString, sizeof(discordString));
                 send_to_discord(alivePlayer, discordString);
             }
@@ -3570,6 +3590,41 @@ public Action SendForwardMedicRevive(int iMedic, int iInjured)
     return result;
 }
 
+void SendForwardStatsRevive(int reviver, int revived, int method, const int[] helpers, int helperCount)
+{
+    float startedAt = g_fReviveStartedAt[revived] > 0.0 ? g_fReviveStartedAt[revived] : GetEngineTime();
+    g_fReviveStartedAt[revived] = 0.0;
+    Call_StartForward(StatsReviveForward);
+    Call_PushCell(reviver);
+    Call_PushCell(revived);
+    Call_PushFloat(startedAt);
+    Call_PushCell(method);
+    Call_PushArray(helpers, helperCount > 0 ? helperCount : 1);
+    Call_PushCell(helperCount);
+    Call_Finish();
+}
+
+void SendForwardStatsHealTick(int healer, int patient, int hpGained, bool reachedMax)
+{
+    if (hpGained <= 0) return;
+    Call_StartForward(StatsHealTickForward);
+    Call_PushCell(healer);
+    Call_PushCell(patient);
+    Call_PushCell(hpGained);
+    Call_PushCell(reachedMax);
+    Call_Finish();
+}
+
+void SendForwardStatsHealHold(int medic, int patient, bool started, int reason)
+{
+    Call_StartForward(StatsHealHoldForward);
+    Call_PushCell(medic);
+    Call_PushCell(patient);
+    Call_PushCell(started);
+    Call_PushCell(reason);
+    Call_Finish();
+}
+
 public Action SendForwardMedicHealed(int iMedic, int iInjured)
 {    // tug stats forward
     Action result;
@@ -3627,7 +3682,7 @@ bool HoldForHeal(int medic, int target)
 
     // One target per medic.
     if (g_iHealHolding[medic] != 0)
-        ReleaseHealHold(g_iHealHolding[medic]);
+        ReleaseHealHold(g_iHealHolding[medic], STATS_HOLD_LOST_TARGET);
 
     g_HealHoldPrevMoveType[target] = GetEntityMoveType(target);
     SetEntityMoveType(target, MOVETYPE_NONE);
@@ -3635,25 +3690,27 @@ bool HoldForHeal(int medic, int target)
 
     g_iHealHeldBy[target]  = medic;
     g_iHealHolding[medic]  = target;
+    SendForwardStatsHealHold(medic, target, true, 0);
     return true;
 }
 
-// Frees whoever this client is holding and/or being held by.
-void ReleaseHealHold(int client)
+// Frees whoever this client is holding and/or being held by. reason is STATS_HOLD_*, for the stats.
+void ReleaseHealHold(int client, int reason)
 {
     if (g_iHealHolding[client] != 0)
-        FreeHealTarget(g_iHealHolding[client]);
+        FreeHealTarget(g_iHealHolding[client], reason);
     if (g_iHealHeldBy[client] != 0)
-        FreeHealTarget(client);
+        FreeHealTarget(client, reason);
 }
 
-void FreeHealTarget(int target)
+void FreeHealTarget(int target, int reason)
 {
     int medic = g_iHealHeldBy[target];
     if (medic == 0) return;
 
     g_iHealHeldBy[target] = 0;
     g_iHealHolding[medic] = 0;
+    SendForwardStatsHealHold(medic, target, false, reason);
 
     // A dead target is already in observer movement, which must not be overwritten; the next spawn
     // resets the move type anyway.
@@ -3661,12 +3718,12 @@ void FreeHealTarget(int target)
         SetEntityMoveType(target, g_HealHoldPrevMoveType[target]);
 }
 
-void ReleaseAllHealHolds()
+void ReleaseAllHealHolds(int reason)
 {
     for (int client = 1; client <= MaxClients; client++)
     {
         if (g_iHealHeldBy[client] != 0)
-            FreeHealTarget(client);
+            FreeHealTarget(client, reason);
     }
 }
 
@@ -3674,7 +3731,7 @@ public Action Event_HealHoldDeath(Event event, const char[] name, bool dontBroad
 {
     int client = GetClientOfUserId(event.GetInt("userid"));
     if (client != 0)
-        ReleaseHealHold(client);
+        ReleaseHealHold(client, STATS_HOLD_DEATH);
     return Plugin_Continue;
 }
 
@@ -3682,7 +3739,7 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
 {
     // The medic let go of the keys: free the target now rather than on the next heal tick.
     if (g_iHealHolding[client] != 0 && !((buttons & IN_DUCK) && (buttons & IN_SPRINT)))
-        FreeHealTarget(g_iHealHolding[client]);
+        FreeHealTarget(g_iHealHolding[client], STATS_HOLD_KEYS_RELEASED);
     return Plugin_Continue;
 }
 
@@ -3691,13 +3748,15 @@ Action Timer_MedicMonitor(Handle timer)
 {
     if (!g_iRoundStatus)
     {
-        ReleaseAllHealHolds();
+        ReleaseAllHealHolds(STATS_HOLD_ROUND_END);
         return Plugin_Continue;
     }
 
     // Targets a medic is still holding this tick; anyone held but not re-confirmed is released
     // after the loop (medic looked away, walked off, switched weapon, stopped pressing the keys).
     bool heldThisTick[MAXPLAYERS + 1];
+    // Targets healed to full this tick: a hold on them ends for that reason, not a lost target.
+    bool fullThisTick[MAXPLAYERS + 1];
 
     bool bCanHealPaddle   = false,
          bCanHealMedpack  = false;
@@ -3766,6 +3825,7 @@ Action Timer_MedicMonitor(Handle timer)
                 tDistance = GetVectorDistance(vecOriginatingPlayer, vecTargetPlayer);
 
                 iHealth   = GetClientHealth(targetPlayer);
+                int iHealthBefore = iHealth;
                 if (tDistance < 750.0)
                 {
                     HintShow(originatingPlayer, "medic", HINT_PRI_ACTIVITY, 2.0, "%N\nHP: %i", targetPlayer, iHealth);
@@ -3820,6 +3880,8 @@ Action Timer_MedicMonitor(Handle timer)
                         }
                     }
                     SetEntityHealth(targetPlayer, iHealth);
+                    if (iHealth >= 100) fullThisTick[targetPlayer] = true;
+                    SendForwardStatsHealTick(originatingPlayer, targetPlayer, iHealth - iHealthBefore, iHealth >= 100);
                     HintShow(originatingPlayer, "medic", HINT_PRI_ACTIVITY, 2.0, "%N\nHP: %i\n\nHealing with %s for: %i%s", targetPlayer, iHealth, bCanHealPaddle && !bCanHealMedpack ? "paddle" : "medpack", bCanHealPaddle && !bCanHealMedpack ? g_iHealAmountPaddles : g_iHealAmountMedpack, held ? "\nHolding them in place" : "");
                 }
             }
@@ -3867,6 +3929,7 @@ Action Timer_MedicMonitor(Handle timer)
                 }
 
                 iHealth = GetClientHealth(targetPlayer);
+                int iHealthBefore = iHealth;
                 if (tDistance < 750.0)
                 {
                     HintShow(originatingPlayer, "medic", HINT_PRI_ACTIVITY, 2.0, "%N\nHP: %i", targetPlayer, iHealth);
@@ -3901,6 +3964,7 @@ Action Timer_MedicMonitor(Handle timer)
                         }
                     }
                     SetEntityHealth(targetPlayer, iHealth);
+                    SendForwardStatsHealTick(originatingPlayer, targetPlayer, iHealth - iHealthBefore, iHealth >= g_iNonMedicMaxHealOther);
                     HintShow(originatingPlayer, "medic", HINT_PRI_ACTIVITY, 2.0, "%N\nHP: %i\n\nHealing.", targetPlayer, iHealth);
                 }
                 else {
@@ -3934,7 +3998,7 @@ Action Timer_MedicMonitor(Handle timer)
     for (int client = 1; client <= MaxClients; client++)
     {
         if (g_iHealHeldBy[client] != 0 && !heldThisTick[client])
-            FreeHealTarget(client);
+            FreeHealTarget(client, fullThisTick[client] ? STATS_HOLD_FULL_HEALTH : STATS_HOLD_LOST_TARGET);
     }
 
     return Plugin_Continue;
@@ -4877,8 +4941,10 @@ bool Check_NearbyMedics(int client)
     return false;
 }
 
-void Check_NearbyMedicsRevive(int client, int iInjured)
+// helpers/helperCount receive the medics this credits, for the stats forward.
+void Check_NearbyMedicsRevive(int client, int iInjured, int[] helpers, int &helperCount)
 {
+    helperCount = 0;
     float medicPosition[3],
         fDistance;
 
@@ -4924,6 +4990,7 @@ void Check_NearbyMedicsRevive(int client, int iInjured)
 
             g_iStatRevives[assistingMedic]++;
             medic_bonus_life_check(assistingMedic);
+            helpers[helperCount++] = assistingMedic;
 
             Format(sBuf, sizeof(sBuf), "You revived(assisted) %N from a %s", iInjured, woundType);
             HintShow(assistingMedic, "medic", HINT_PRI_NOTICE, 3.0, "%s", sBuf);
@@ -5031,7 +5098,7 @@ bool IsInfiniteCounterAttack()
 
 public void OnPluginEnd()
 {
-    ReleaseAllHealHolds();
+    ReleaseAllHealHolds(STATS_HOLD_MAP_END);
     delete ga_hMapSpawns;
     delete ga_hBotSpawns;
     delete ga_hNextBotSpawns;

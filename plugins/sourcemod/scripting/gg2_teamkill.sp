@@ -7,6 +7,10 @@
 #include <weaponnames>
 #include <morecolors>
 #include <dbi>
+#include <gg2_stats>
+
+// gg2_stats2 (include/gg2_stats.inc): raised when a victim forgives a team kill.
+GlobalForward g_StatsForgivenForward;
 
 #define TEAM_INS 3
 
@@ -51,6 +55,7 @@ bool     g_OffenderNotified[MAXPLAYERS + 1];
 
 public void OnPluginStart()
 {
+    g_StatsForgivenForward    = new GlobalForward("TeamKill_OnForgiven", ET_Ignore, Param_Cell, Param_Cell);
     g_cvarBanTime             = CreateConVar("tk_ban_basetime", "60", "Base ban time (min)", FCVAR_PROTECTED);
     g_cvarAmnestyMinKPTK      = CreateConVar("tk_amnesty_min_kptk", "250", "Minimum kills-per-TK ratio for amnesty", FCVAR_PROTECTED);
     g_cvarAmnestyMinKillCount = CreateConVar("tk_amnesty_min_kills", "1000", "Minimum total kills required for amnesty", FCVAR_PROTECTED);
@@ -218,6 +223,11 @@ public Action Timer_RefreshOffenderList(Handle timer)
 
 public void UpdateTKForgivenInDB(int attacker, int victim)
 {
+    Call_StartForward(g_StatsForgivenForward);
+    Call_PushCell(victim);
+    Call_PushCell(attacker);
+    Call_Finish();
+
     if (g_Database == null) return;
 
     // Use cached Steam IDs - if not available, the player disconnected
