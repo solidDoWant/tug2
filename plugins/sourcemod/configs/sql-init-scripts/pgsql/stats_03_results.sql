@@ -131,7 +131,7 @@ WITH vk AS MATERIALIZED (SELECT * FROM stats_round_kills(p_rounds)),
 vh AS MATERIALIZED (SELECT * FROM stats_round_hits(p_rounds)),
 keys AS (
     SELECT round_id, steam_id FROM player_spans WHERE round_id = ANY (p_rounds)
-    UNION SELECT round_id, steam_id FROM v2_player_rounds WHERE round_id = ANY (p_rounds)
+    UNION SELECT round_id, steam_id FROM player_rounds WHERE round_id = ANY (p_rounds)
     UNION SELECT round_id, attacker_steam_id FROM vk WHERE attacker_steam_id IS NOT NULL
     UNION SELECT round_id, victim_steam_id FROM vk WHERE victim_steam_id IS NOT NULL
     UNION SELECT round_id, attacker_steam_id FROM vh WHERE attacker_steam_id IS NOT NULL
@@ -201,10 +201,10 @@ rd AS (SELECT round_id, revived_steam_id AS steam_id, count(*) AS times_revived
 he AS (SELECT round_id, healer_steam_id AS steam_id, count(*) FILTER (WHERE to_full) AS heals, sum(hp_healed) AS hp_healed
        FROM heals WHERE round_id = ANY (p_rounds) GROUP BY 1, 2),
 fs AS (SELECT round_id, steam_id, count(*) FILTER (WHERE failure_reason IS NULL) AS fire_support_calls
-       FROM v2_fire_support_calls WHERE round_id = ANY (p_rounds) GROUP BY 1, 2),
+       FROM fire_support_calls WHERE round_id = ANY (p_rounds) GROUP BY 1, 2),
 wp AS (SELECT round_id, steam_id, sum(shots) AS shots, sum(shots_hit_enemy) AS shots_hit_enemy,
               sum(shots_hit_friendly) AS shots_hit_friendly
-       FROM v2_player_round_weapons WHERE round_id = ANY (p_rounds) GROUP BY 1, 2),
+       FROM player_round_weapons WHERE round_id = ANY (p_rounds) GROUP BY 1, 2),
 hg AS (SELECT round_id, attacker_steam_id AS steam_id, count(*) FILTER (WHERE hitgroup = 'head') AS headshot_hits,
               sum(damage) AS damage_enemy
        FROM vh WHERE kind = 'enemy' AND attacker_steam_id IS NOT NULL GROUP BY 1, 2),
@@ -234,7 +234,7 @@ LEFT JOIN rv USING (round_id, steam_id) LEFT JOIN rd USING (round_id, steam_id)
 LEFT JOIN he USING (round_id, steam_id) LEFT JOIN fs USING (round_id, steam_id)
 LEFT JOIN wp USING (round_id, steam_id)
 LEFT JOIN hg USING (round_id, steam_id) LEFT JOIN ht USING (round_id, steam_id)
-LEFT JOIN v2_player_rounds pr USING (round_id, steam_id)
+LEFT JOIN player_rounds pr USING (round_id, steam_id)
 $f$;
 
 -- Per player and weapon for the given rounds: kills of enemies, hits on enemies by body part, and

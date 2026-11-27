@@ -26,9 +26,6 @@ public Plugin myinfo =
 // TODO maybe this should track class/role as well - see original mstats2 plugin for reference
 
 Database g_Database = null;
-// The server's stats v2 schema (issue #44), quoted; empty until found. Lifetime kills and team kills
-// for amnesty come from its v_player_lifetime view.
-char     g_StatsSchema[160];
 // Ban duration in minutes when auto-ban is triggered (how long to ban the player)
 ConVar   g_cvarBanTime;
 // Amnesty criteria CVars
@@ -96,28 +93,6 @@ public void OnDatabaseConnected(Database db, const char[] error, any data)
 
     g_Database = db;
     LogMessage("[GG2 TEAMKILL] Successfully connected to database");
-    FindStatsSchema();
-}
-
-// The one stats_* schema the database user owns (see stats_01_schema.sql). Without it there are no
-// lifetime stats to judge amnesty by, so nobody gets amnesty and nobody is flagged.
-void FindStatsSchema()
-{
-    g_Database.Query(OnStatsSchemaFound,
-                     "SELECT quote_ident(nspname) FROM pg_namespace WHERE nspname LIKE 'stats\\_%' "
-                   ... "AND nspowner = (SELECT oid FROM pg_roles WHERE rolname = current_user)");
-}
-
-public void OnStatsSchemaFound(Database db, DBResultSet results, const char[] error, any data)
-{
-    if (!HandleQueryError(results, error, "find the stats schema")) return;
-    if (results.RowCount != 1 || !results.FetchRow())
-    {
-        LogError("[GG2 TEAMKILL] %d stats_* schemas owned by this database user (need exactly 1): no amnesty or offender lists", results.RowCount);
-        g_StatsSchema[0] = '\0';
-        return;
-    }
-    results.FetchString(0, g_StatsSchema, sizeof(g_StatsSchema));
     QueryAmnestyPlayers();
     QueryOffenderPlayers();
 }
@@ -142,7 +117,8 @@ public void OnDatabaseReconnected(Database db, const char[] error, any data)
 
     g_Database = db;
     LogMessage("[GG2 TEAMKILL] Successfully reconnected to database");
-    FindStatsSchema();
+    QueryAmnestyPlayers();
+    QueryOffenderPlayers();
 }
 
 public Action Timer_RetryReconnect(Handle timer)
@@ -276,17 +252,17 @@ public bool PlayerHasAmnesty(int attacker_client)
 // so the old "active within tk_amnesty_time_cutoff" test is always met and is not repeated.
 public void QueryAmnestyPlayers()
 {
-    if (g_Database == null || g_StatsSchema[0] == '\0') return;
+    if (g_Database == null) return;
 
     char steamIdList[2048];
     if (BuildConnectedSteamIDList(steamIdList, sizeof(steamIdList)) == 0) return;
 
     char query[3072];
     Format(query, sizeof(query),
-           "SELECT steam_id::text FROM %s.v_player_lifetime "
+           "SELECT steam_id::text FROM v_player_lifetime "
          ... "WHERE steam_id = ANY(ARRAY[%s]::bigint[]) AND kills >= %i AND team_kills > 0 "
          ... "AND (kills::numeric / team_kills) > %i",
-           g_StatsSchema, steamIdList, g_cvarAmnestyMinKillCount.IntValue, g_cvarAmnestyMinKPTK.IntValue);
+           steamIdList, g_cvarAmnestyMinKillCount.IntValue, g_cvarAmnestyMinKPTK.IntValue);
 
     g_Database.Query(OnAmnestyPlayersLoaded, query);
 }
@@ -329,17 +305,17 @@ public void OnAmnestyPlayersLoaded(Database db, DBResultSet results, const char[
 // for amnesty. The old "active in the last 90 days" test is always met by a connected player.
 public void QueryOffenderPlayers()
 {
-    if (g_Database == null || g_StatsSchema[0] == '\0') return;
+    if (g_Database == null) return;
 
     char steamIdList[2048];
     if (BuildConnectedSteamIDList(steamIdList, sizeof(steamIdList)) == 0) return;
 
     char query[3072];
     Format(query, sizeof(query),
-           "SELECT steam_id::text FROM %s.v_player_lifetime "
+           "SELECT steam_id::text FROM v_player_lifetime "
          ... "WHERE steam_id = ANY(ARRAY[%s]::bigint[]) AND kills >= 500 AND team_kills > 0 "
          ... "AND (kills::numeric / team_kills) < 100",
-           g_StatsSchema, steamIdList);
+           steamIdList);
 
     g_Database.Query(OnOffenderPlayersLoaded, query);
 }

@@ -2,10 +2,10 @@
 -- Stats v2 (issue #44), part 1: types, reference data, identity and the match timeline.
 --
 -- The v2 tables live beside the old stats tables, in each server's own schema (public on main,
--- insurgency-test on test), where unqualified names resolve for the game server's user. Four v2
--- tables would clash with old tables still being written, so they carry a v2_ prefix until the old
--- tables are retired: v2_maps, v2_player_rounds, v2_player_round_weapons, v2_fire_support_calls.
--- The old tables are only read, through the old_* views in stats_04_old.sql.
+-- insurgency-test on test), where unqualified names resolve for the game server's user. The old
+-- tables are only read, through the old_* views in stats_04_old.sql; the four whose names v2 uses
+-- (maps, player_rounds, player_round_weapons, fire_support_calls) are legacy_* since
+-- stats_00_legacy_rename.sql.
 --
 -- Design: https://github.com/solidDoWant/tug2/issues/44. Facts are stored once; every total is a view.
 -- Column and table descriptions are in stats_08..10_comments.sql (the Discord bot reads them).
@@ -32,7 +32,7 @@ DO $$ BEGIN CREATE TYPE heal_hold_release AS ENUM ('full_health', 'keys_released
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- Open sets, discovered at runtime: lookup tables the writers upsert into.
-CREATE TABLE IF NOT EXISTS v2_maps (map_name TEXT PRIMARY KEY);
+CREATE TABLE IF NOT EXISTS maps (map_name TEXT PRIMARY KEY);
 CREATE TABLE IF NOT EXISTS game_modes (game_mode TEXT PRIMARY KEY);
 CREATE TABLE IF NOT EXISTS theaters (theater_name TEXT PRIMARY KEY);
 CREATE TABLE IF NOT EXISTS weapon_types (weapon_type TEXT PRIMARY KEY);
@@ -87,7 +87,7 @@ CREATE TABLE IF NOT EXISTS map_runs (
     map_run_id   BIGSERIAL PRIMARY KEY,
     booted_at    TIMESTAMPTZ NOT NULL REFERENCES server_boots,
     started_at   TIMESTAMPTZ NOT NULL UNIQUE,
-    map_name     TEXT NOT NULL REFERENCES v2_maps,
+    map_name     TEXT NOT NULL REFERENCES maps,
     game_mode    TEXT NOT NULL REFERENCES game_modes,
     theater      TEXT REFERENCES theaters,
     load_seconds REAL CHECK (load_seconds >= 0),

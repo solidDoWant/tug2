@@ -28,9 +28,9 @@ change. Any row can be rebuilt from the raw tables, and the schema test checks i
 | `hits` | every other `player_hurt` with a human on either side: both sides, positions, weapon, hitgroup, damage, health left, damage bits, attacker's stance and aim |
 | `objective_events`, `objective_participants` | `controlpoint_captured` / `_neutralized` (cappers), `object_destroyed` |
 | `revives`, `revive_helpers`, `heals`, `heal_holds` | bm2_respawn's `Stats_OnRevive`, `Stats_OnHealTick`, `Stats_OnHealHold` |
-| `v2_fire_support_calls` | FireSupport's `FireSupport_OnCallResult`, `FireSupport_OnRefund` |
-| `v2_player_rounds` | the game's round stats (score, capture ticks, resets) as deltas; suppressions, flashes |
-| `v2_player_round_weapons` | shots and shots that hit (as gg2_mstats2 attributes them), `weapon_reload`, `weapon_deploy`, `time_weapon` |
+| `fire_support_calls` | FireSupport's `FireSupport_OnCallResult`, `FireSupport_OnRefund` |
+| `player_rounds` | the game's round stats (score, capture ticks, resets) as deltas; suppressions, flashes |
+| `player_round_weapons` | shots and shots that hit (as gg2_mstats2 attributes them), `weapon_reload`, `weapon_deploy`, `time_weapon` |
 | `punitive-persistence.player_connections` | the client's IP at each new session |
 
 The forwards it listens to are declared in `include/gg2_stats.inc`.
@@ -76,13 +76,13 @@ starts a new map run. `sm_stats2_status` (server console) prints the plugin's st
 ## Enabling it on a server
 
 1. Nothing to create by hand: the `stats_*.sql` files make the tables in the database user's own
-   schema, where its unqualified names resolve. Four would clash with old tables still being
-   written, so they are `v2_maps`, `v2_player_rounds`, `v2_player_round_weapons` and
-   `v2_fire_support_calls` until the old tables are retired. Until the tables exist, the plugin
-   records nothing and logs why (it checks again each map start).
-2. The server's `database-migrations.cfg` lists the `stats_*.sql` files after the old ones
-   (`stats_04_old.sql` builds views over the old tables), and `player_connections.sql` under
-   `punitive-persistence`.
+   schema, where its unqualified names resolve. Until the tables exist, the plugin records nothing
+   and logs why (it checks again each map start).
+2. The server's `database-migrations.cfg` lists `stats_00_legacy_rename.sql` first, the other
+   `stats_*.sql` files after the old ones (`stats_04_old.sql` builds views over the old tables), and
+   `player_connections.sql` under `punitive-persistence`. While the old plugins still wrote, four v2
+   tables were `maps`, `player_rounds`, `player_round_weapons` and `fire_support_calls`;
+   `stats_00_legacy_rename.sql` renamed the old ones to `legacy_*` and gave v2 the names.
 3. The image ships `gg2_stats2.smx` (the `sourcemod-plugins-gg2-stats2` stage).
 4. Once, by hand, copy the old IP history across (the command is at the top of
    `player_connections.sql`), check it, then drop the old table with `retire_connection_log.sql`.

@@ -80,7 +80,7 @@ enum
 char g_tableInsert[T_COUNT][] = {
     "INSERT INTO kills (round_id, killed_at, victim_steam_id, victim_bot_name, victim_team, victim_bot_class_id, victim_x, victim_y, victim_z, attacker_steam_id, attacker_bot_name, attacker_team, attacker_bot_class_id, attacker_x, attacker_y, attacker_z, assister_steam_id, assister_bot_name, weapon_name, hitgroup, headshot, domination, revenge, savior, offensive, defensive, damagebits, customkill, attacker_stance, attacker_aim, damage) VALUES ",
     "INSERT INTO player_spans (round_id, steam_id, started_at, ended_at, team, squad, squad_slot, class_template) VALUES ",
-    "INSERT INTO v2_fire_support_calls (round_id, called_at, steam_id, support_type, target_x, target_y, target_z, failure_reason, refunded_at) VALUES ",
+    "INSERT INTO fire_support_calls (round_id, called_at, steam_id, support_type, target_x, target_y, target_z, failure_reason, refunded_at) VALUES ",
     "INSERT INTO survival_levels (round_id, level, reached_at) VALUES ",
     "INSERT INTO counterattacks (round_id, control_point, started_at, ended_at, finale) VALUES ",
     "INSERT INTO hits (round_id, hit_at, victim_steam_id, victim_bot_name, victim_team, victim_bot_class_id, victim_x, victim_y, victim_z, attacker_steam_id, attacker_bot_name, attacker_team, attacker_bot_class_id, attacker_x, attacker_y, attacker_z, weapon_name, hitgroup, damage, health_after, damagebits, attacker_stance, attacker_aim) VALUES "
@@ -2121,7 +2121,7 @@ public void FireSupport_OnRefund(int client)
     char ts[64], stmt[512];
     Ts(GetEngineTime(), ts, sizeof(ts));
     Format(stmt, sizeof(stmt),
-           "UPDATE v2_fire_support_calls SET refunded_at = %s WHERE call_id = (SELECT max(call_id) FROM v2_fire_support_calls WHERE steam_id = %s AND refunded_at IS NULL)",
+           "UPDATE fire_support_calls SET refunded_at = %s WHERE call_id = (SELECT max(call_id) FROM fire_support_calls WHERE steam_id = %s AND refunded_at IS NULL)",
            ts, g_sid[client]);
     AddStmt(stmt);
 }
@@ -2173,7 +2173,7 @@ void EmitCounters(int client)
     NotePlayer(g_sid[client]);
     char stmt[2048];
     Format(stmt, sizeof(stmt),
-           "INSERT INTO v2_player_rounds AS p (round_id, steam_id, score, capture_ticks, objective_resets, suppressions, times_suppressed, enemies_flashed, teammates_flashed) "
+           "INSERT INTO player_rounds AS p (round_id, steam_id, score, capture_ticks, objective_resets, suppressions, times_suppressed, enemies_flashed, teammates_flashed) "
          ... "SELECT id, %s, %d, %d, %d, %d, %d, %d, %d FROM r ON CONFLICT (round_id, steam_id) DO UPDATE SET "
          ... "score = p.score + EXCLUDED.score, capture_ticks = p.capture_ticks + EXCLUDED.capture_ticks, "
          ... "objective_resets = p.objective_resets + EXCLUDED.objective_resets, suppressions = p.suppressions + EXCLUDED.suppressions, "
@@ -2219,7 +2219,7 @@ void EmitWeaponRows(int client, const char[] values)
 {
     char stmt[4096];
     Format(stmt, sizeof(stmt),
-           "INSERT INTO v2_player_round_weapons AS w (round_id, steam_id, weapon_name, shots, shots_hit_enemy, shots_hit_friendly, reloads, deploys, seconds_drawn) "
+           "INSERT INTO player_round_weapons AS w (round_id, steam_id, weapon_name, shots, shots_hit_enemy, shots_hit_friendly, reloads, deploys, seconds_drawn) "
          ... "SELECT r.id, %s, v.* FROM r, (VALUES %s) v ON CONFLICT (round_id, steam_id, weapon_name) DO UPDATE SET "
          ... "shots = w.shots + EXCLUDED.shots, shots_hit_enemy = w.shots_hit_enemy + EXCLUDED.shots_hit_enemy, "
          ... "shots_hit_friendly = w.shots_hit_friendly + EXCLUDED.shots_hit_friendly, "

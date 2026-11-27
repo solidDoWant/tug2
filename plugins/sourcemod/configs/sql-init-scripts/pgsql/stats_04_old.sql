@@ -22,6 +22,7 @@ DECLARE
     -- so this is the database default, as it is for the plugins.
     zone text := current_setting('TimeZone');
     t text;
+    src text;
     cols text;
 BEGIN
     FOREACH t IN ARRAY ARRAY[
@@ -29,6 +30,9 @@ BEGIN
         'weapon_stats', 'bot_kills', 'map_stats', 'win_loss_log', 'maps', 'medics', 'medic_rounds',
         'fire_support', 'fire_support_calls', 'player_tks', 'player_tk_logs'
     ] LOOP
+        -- Four old tables gave their names to stats v2 (stats_00_legacy_rename.sql).
+        src := CASE WHEN t IN ('maps', 'player_rounds', 'player_round_weapons', 'fire_support_calls')
+                    THEN 'legacy_' || t ELSE t END;
         SELECT string_agg(
                    CASE WHEN data_type = 'timestamp without time zone'
                         THEN format('%I AT TIME ZONE %L AS %I', column_name, zone, column_name)
@@ -36,13 +40,13 @@ BEGIN
                    ', ' ORDER BY ordinal_position)
           INTO cols
           FROM information_schema.columns
-         WHERE table_schema = old_schema AND table_name = t;
+         WHERE table_schema = old_schema AND table_name = src;
 
         IF cols IS NULL THEN
-            RAISE EXCEPTION 'old table %.% not found: run the old stats migrations first', old_schema, t;
+            RAISE EXCEPTION 'old table %.% not found: run the old stats migrations first', old_schema, src;
         END IF;
 
         -- CREATE OR REPLACE, never DROP: the v2 views depend on these.
-        EXECUTE format('CREATE OR REPLACE VIEW %I AS SELECT %s FROM %I.%I', 'old_' || t, cols, old_schema, t);
+        EXECUTE format('CREATE OR REPLACE VIEW %I AS SELECT %s FROM %I.%I', 'old_' || t, cols, old_schema, src);
     END LOOP;
 END $$;

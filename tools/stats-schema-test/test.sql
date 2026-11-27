@@ -19,16 +19,16 @@ INSERT INTO "insurgency-test".player_stats
 VALUES ('76561198000000001', 'Alpha Tester', 100, 10, 1, 20, 40, 5, 12, 500, 6, 3, 4000,
         '2026-01-01 08:00', '2026-11-25 12:10');
 
-INSERT INTO "insurgency-test".player_rounds
+INSERT INTO "insurgency-test".legacy_player_rounds
     (steam_id, recorded_at, map_name, kills, deaths, suicides, headshot_given, suppressions, caps, score,
      wins, losses, killstreak, play_time_seconds, shots, enemy_hits, friendly_hits)
 VALUES ('76561198000000001', '2026-11-20 10:00', 'ministry', 10, 2, 0, 3, 5, 1, 50, 1, 0, 4, 600, 200, 50, 1),
        ('76561198000000001', '2026-11-25 12:06', 'ministry', 3, 1, 0, 1, 2, 0, 20, 1, 0, 3, 300, 40, 10, 0);
 
-INSERT INTO "insurgency-test".player_round_weapons (round_id, weapon_id, kills, shots, enemy_hits, friendly_hits)
+INSERT INTO "insurgency-test".legacy_player_round_weapons (round_id, weapon_id, kills, shots, enemy_hits, friendly_hits)
 SELECT r.id, w.weapon_id, v.k, v.s, v.e, v.f
 FROM (VALUES ('2026-11-20 10:00'::timestamp, 10, 200, 50, 1), ('2026-11-25 12:06', 3, 40, 10, 0)) v(t, k, s, e, f)
-JOIN "insurgency-test".player_rounds r ON r.recorded_at = v.t
+JOIN "insurgency-test".legacy_player_rounds r ON r.recorded_at = v.t
 JOIN "insurgency-test".weapon_stats w ON w.weapon_name = 'm4a1';
 
 INSERT INTO "insurgency-test".player_kills (steam_id, weapon_id, kill_count)
@@ -46,13 +46,13 @@ VALUES (76561198000000002, 76561198000000001, 'm4a1', '2026-11-20 10:00'),
        (76561198000000002, 76561198000000001, 'm4a1', '2026-11-25 12:04');
 
 INSERT INTO "insurgency-test".fire_support (steamId, arty_thrown) VALUES ('76561198000000001', 5);
-INSERT INTO "insurgency-test".fire_support_calls (steam_id, called_at)
+INSERT INTO "insurgency-test".legacy_fire_support_calls (steam_id, called_at)
 VALUES ('76561198000000001', '2026-11-20 10:00'), ('76561198000000001', '2026-11-25 12:02');
 
 INSERT INTO "insurgency-test".bot_kills (bot_name, weapon_id, kill_count, updated_at)
 SELECT 'Rifleman Jones', weapon_id, 5, '2026-11-25 12:06' FROM "insurgency-test".weapon_stats WHERE weapon_name = 'ak74';
 
-INSERT INTO "insurgency-test".maps (map_name, play_time, updated_at) VALUES ('ministry', '2 hours', '2026-11-25 12:06');
+INSERT INTO "insurgency-test".legacy_maps (map_name, play_time, updated_at) VALUES ('ministry', '2 hours', '2026-11-25 12:06');
 INSERT INTO "insurgency-test".win_loss_log (map_id, win, created_at)
 SELECT map_id, w, t FROM "insurgency-test".map_stats,
        (VALUES (true, '2026-11-19 10:00'::timestamp), (false, '2026-11-20 10:00'), (true, '2026-11-25 12:06')) v(w, t);
@@ -91,8 +91,8 @@ INSERT INTO kills (round_id, killed_at, victim_steam_id, victim_bot_name, victim
     (:round_id, '2026-11-25 12:03-05', 76561198000000001, NULL, 'security', NULL, 'Rifleman Jones', 'insurgents', 'ak74', false, false, false, false, false, false, 2, 0),
     (:round_id, '2026-11-25 12:04-05', 76561198000000002, NULL, 'security', 76561198000000001, NULL, 'security', 'm4a1', false, false, false, false, false, false, 2, 0);
 
-INSERT INTO v2_player_rounds (round_id, steam_id, score, suppressions) VALUES (:round_id, 76561198000000001, 20, 2);
-INSERT INTO v2_player_round_weapons (round_id, steam_id, weapon_name, shots, shots_hit_enemy)
+INSERT INTO player_rounds (round_id, steam_id, score, suppressions) VALUES (:round_id, 76561198000000001, 20, 2);
+INSERT INTO player_round_weapons (round_id, steam_id, weapon_name, shots, shots_hit_enemy)
 VALUES (:round_id, 76561198000000001, 'm4a1', 40, 10);
 -- One head hit that did not kill (v2's 1 of the 20 headshot hits below).
 INSERT INTO hits (round_id, hit_at, victim_bot_name, victim_team, attacker_steam_id, attacker_team, weapon_name,
@@ -103,7 +103,7 @@ INSERT INTO revives (round_id, started_at, revived_at, reviver_steam_id, revived
 VALUES (:round_id, '2026-11-25 12:04:10-05', '2026-11-25 12:04:20-05', 76561198000000001, 76561198000000002, 'defib');
 INSERT INTO heals (round_id, started_at, ended_at, healer_steam_id, patient_steam_id, hp_healed, to_full)
 VALUES (:round_id, '2026-11-25 12:05-05', '2026-11-25 12:05:20-05', 76561198000000001, 76561198000000002, 60, true);
-INSERT INTO v2_fire_support_calls (round_id, called_at, steam_id, support_type)
+INSERT INTO fire_support_calls (round_id, called_at, steam_id, support_type)
 VALUES (:round_id, '2026-11-25 12:02-05', 76561198000000001, 'artillery');
 
 -- ---------------------------------------------------------------- checks
@@ -171,7 +171,7 @@ DO $$ BEGIN
     EXCEPTION WHEN check_violation THEN NULL;
     END;
     BEGIN
-        INSERT INTO v2_player_round_weapons (round_id, steam_id, weapon_name, shots)
+        INSERT INTO player_round_weapons (round_id, steam_id, weapon_name, shots)
         VALUES ((SELECT max(round_id) FROM rounds), 76561198000000001, 'ak74', -1);
         RAISE EXCEPTION 'negative counter accepted';
     EXCEPTION WHEN check_violation THEN NULL;

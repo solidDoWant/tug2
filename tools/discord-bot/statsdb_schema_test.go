@@ -129,7 +129,7 @@ func grantedTables(t *testing.T, lists ...string) []string {
 	}
 	var tables []string
 	if len(lists) == 0 {
-		lists = []string{"allowed", "old_stats", "v2"}
+		lists = []string{"allowed", "v2"}
 	}
 	for _, name := range lists {
 		list := regexp.MustCompile(`(?s)` + name + ` text\[\] := ARRAY\[(.*?)\];`).FindSubmatch(sql)

@@ -22,7 +22,7 @@ SELECT COALESCE(w.round_id, wk.round_id) AS round_id, COALESCE(w.steam_id, wk.st
        COALESCE(wk.damage_enemy, 0) AS damage_enemy, COALESCE(wk.damage_friendly, 0) AS damage_friendly,
        COALESCE(w.reloads, 0) AS reloads, COALESCE(w.deploys, 0) AS deploys,
        COALESCE(w.seconds_drawn, 0) AS seconds_drawn
-FROM v2_player_round_weapons w
+FROM player_round_weapons w
 FULL JOIN wk ON wk.round_id = w.round_id AND wk.steam_id = w.steam_id AND wk.weapon_name = w.weapon_name
 JOIN rounds r ON r.round_id = COALESCE(w.round_id, wk.round_id)
 UNION ALL
