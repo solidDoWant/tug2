@@ -139,31 +139,31 @@ INSERT INTO spawns (spawn_id, round_id, steam_id, spawned_at) VALUES (1, 1, 7656
 INSERT INTO items (item_id, item_name) VALUES (1, 'weapon_m4a1'), (2, 'kevlar_heavy');
 INSERT INTO spawn_items VALUES (1, 1), (1, 2);
 
-INSERT INTO kills (kill_id, round_id, killed_at, victim_steam_id, victim_bot_name, victim_bot_team, victim_bot_class_id,
-                   victim_x, victim_y, victim_z, attacker_steam_id, attacker_bot_name, attacker_bot_team,
+INSERT INTO kills (kill_id, round_id, killed_at, victim_steam_id, victim_bot_name, victim_team, victim_bot_class_id,
+                   victim_x, victim_y, victim_z, attacker_steam_id, attacker_bot_name, attacker_team,
                    attacker_bot_class_id, attacker_x, attacker_y, attacker_z, assister_steam_id, weapon_name, hitgroup,
                    headshot, domination, revenge, savior, offensive, defensive, damagebits, customkill,
                    attacker_stance, attacker_aim) VALUES
     (1, 1, '2026-11-25 17:02Z', NULL, 'Rifleman Jones', 'insurgents', 1, 100, 200, 10,
-     76561198000000001, NULL, NULL, NULL, 150, 260, 10, NULL, 'm4a1', 'head', true, false, false, false, true, false, 2, 0, 'crouched', 'sights'),
+     76561198000000001, NULL, 'security', NULL, 150, 260, 10, NULL, 'm4a1', 'head', true, false, false, false, true, false, 2, 0, 'crouched', 'sights'),
     (2, 1, '2026-11-25 17:03Z', NULL, 'Rifleman Smith', 'insurgents', 1, 110, 210, 10,
-     76561198000000001, NULL, NULL, NULL, 150, 260, 10, NULL, 'm4a1', 'chest', false, false, false, false, true, false, 2, 0, 'standing', 'hip'),
+     76561198000000001, NULL, 'security', NULL, 150, 260, 10, NULL, 'm4a1', 'chest', false, false, false, false, true, false, 2, 0, 'standing', 'hip'),
     (3, 1, '2026-11-25 17:04Z', NULL, 'Rifleman Brown', 'insurgents', 1, 120, 220, 12,
-     76561198000000004, NULL, NULL, NULL, 160, 270, 12, 76561198000000001, 'ak74', 'stomach', false, false, false, false, false, true, 2, 0, 'prone', 'sights'),
-    (4, 1, '2026-11-25 17:05Z', 76561198000000001, NULL, NULL, NULL, 150, 260, 10,
+     76561198000000004, NULL, 'security', NULL, 160, 270, 12, 76561198000000001, 'ak74', 'stomach', false, false, false, false, false, true, 2, 0, 'prone', 'sights'),
+    (4, 1, '2026-11-25 17:05Z', 76561198000000001, NULL, 'security', NULL, 150, 260, 10,
      NULL, 'Rifleman Jones', 'insurgents', 1, 90, 190, 10, NULL, 'ak74', 'chest', false, false, false, false, false, false, 2, 0, NULL, NULL),
-    (5, 1, '2026-11-25 17:06Z', 76561198000000002, NULL, NULL, NULL, 155, 265, 10,
-     76561198000000001, NULL, NULL, NULL, 150, 260, 10, NULL, 'm4a1', 'right_leg', false, false, false, false, false, false, 2, 0, 'standing', 'hip'),
-    (6, 1, '2026-11-25 17:08Z', 76561198000000002, NULL, NULL, NULL, 155, 265, 10,
-     76561198000000002, NULL, NULL, NULL, 155, 265, 10, NULL, 'grenade_m67', 'generic', false, false, false, false, false, false, 64, 0, 'standing', 'hip'),
-    (7, 1, '2026-11-25 17:09Z', 76561198000000004, NULL, NULL, NULL, 170, 280, -50,
+    (5, 1, '2026-11-25 17:06Z', 76561198000000002, NULL, 'security', NULL, 155, 265, 10,
+     76561198000000001, NULL, 'security', NULL, 150, 260, 10, NULL, 'm4a1', 'right_leg', false, false, false, false, false, false, 2, 0, 'standing', 'hip'),
+    (6, 1, '2026-11-25 17:08Z', 76561198000000002, NULL, 'security', NULL, 155, 265, 10,
+     76561198000000002, NULL, 'security', NULL, 155, 265, 10, NULL, 'grenade_m67', 'generic', false, false, false, false, false, false, 64, 0, 'standing', 'hip'),
+    (7, 1, '2026-11-25 17:09Z', 76561198000000004, NULL, 'security', NULL, 170, 280, -50,
      NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, false, false, false, false, false, false, 32, 0, NULL, NULL),
     (8, 2, '2026-11-25 17:20Z', NULL, 'Rifleman Jones', 'insurgents', 1, 300, 400, 0,
-     76561198000000002, NULL, NULL, NULL, 320, 420, 0, NULL, 'ak74', 'head', true, false, false, false, true, false, 2, 0, 'standing', 'sights'),
-    (9, 2, '2026-11-25 17:25Z', 76561198000000004, NULL, NULL, NULL, 330, 430, 0,
+     76561198000000002, NULL, 'security', NULL, 320, 420, 0, NULL, 'ak74', 'head', true, false, false, false, true, false, 2, 0, 'standing', 'sights'),
+    (9, 2, '2026-11-25 17:25Z', 76561198000000004, NULL, 'security', NULL, 330, 430, 0,
      NULL, 'Rifleman Smith', 'insurgents', 1, 350, 450, 0, NULL, 'ak74', 'chest', false, false, false, false, false, false, 2, 0, NULL, NULL),
     (10, 3, '2026-11-26 00:06Z', NULL, 'Rifleman Lee', 'insurgents', 1, 500, 600, 5,
-     76561198000000001, NULL, NULL, NULL, 520, 620, 5, NULL, 'm4a1', 'chest', false, false, false, false, true, false, 2, 0, 'standing', 'sights');
+     76561198000000001, NULL, 'security', NULL, 520, 620, 5, NULL, 'm4a1', 'chest', false, false, false, false, true, false, 2, 0, 'standing', 'sights');
 INSERT INTO team_kill_forgives VALUES (5, '2026-11-25 17:06:10Z');
 
 INSERT INTO v2_player_rounds (round_id, steam_id, score, capture_ticks, suppressions, times_suppressed, damage_taken) VALUES
