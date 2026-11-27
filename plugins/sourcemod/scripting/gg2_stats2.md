@@ -22,7 +22,7 @@ change. Any row can be rebuilt from the raw tables, and the schema test checks i
 | `sessions`, `name_changes` | first admin check per SteamID, `player_disconnect`, `player_changename` |
 | `player_spans` | `player_team`, `player_pick_squad`, round start/end, disconnects |
 | `spawns`, `spawn_items` | `player_spawn` + 0.5 s: gear by theater name, weapons by classname |
-| `kills`, `team_kill_forgives` | `player_death` (positions, assister, deathflags, last hitgroup, killer's stance and aim); `TeamKill_OnForgiven` |
+| `kills`, `team_kill_forgives` | `player_death` (each side's team, positions, assister, deathflags, last hitgroup, killer's stance and aim); `TeamKill_OnForgiven` |
 | `objective_events`, `objective_participants` | `controlpoint_captured` / `_neutralized` (cappers), `object_destroyed` |
 | `revives`, `revive_helpers`, `heals`, `heal_holds` | bm2_respawn's `Stats_OnRevive`, `Stats_OnHealTick`, `Stats_OnHealHold` |
 | `v2_fire_support_calls` | FireSupport's `FireSupport_OnCallResult`, `FireSupport_OnRefund` |
