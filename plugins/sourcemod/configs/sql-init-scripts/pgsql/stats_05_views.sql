@@ -46,6 +46,19 @@ LEFT JOIN si a ON a.round_id = k.round_id AND a.steam_id = k.attacker_steam_id
 LEFT JOIN si v ON v.round_id = k.round_id AND v.steam_id = k.victim_steam_id
               AND k.killed_at >= v.from_at AND k.killed_at < v.to_at;
 
+-- Per-round results (stats_03_results.sql): cached rows plus the rounds not cached, computed live: exact at any moment.
+CREATE OR REPLACE VIEW player_round_results_current AS
+SELECT * FROM player_round_results
+UNION ALL
+SELECT * FROM stats_round_results(ARRAY(
+    SELECT r.round_id FROM rounds r WHERE NOT EXISTS (SELECT 1 FROM round_results_done d WHERE d.round_id = r.round_id)));
+
+CREATE OR REPLACE VIEW player_round_weapon_results_current AS
+SELECT * FROM player_round_weapon_results
+UNION ALL
+SELECT * FROM stats_round_weapon_results(ARRAY(
+    SELECT r.round_id FROM rounds r WHERE NOT EXISTS (SELECT 1 FROM round_results_done d WHERE d.round_id = r.round_id)));
+
 -- Best killstreak per player from v2 data: enemy kills between two deaths, carried across rounds and
 -- maps as the old plugin did. Built from each round's first, best and last streak
 -- (player_round_results): a streak still open at a round's end carries into the player's next round,

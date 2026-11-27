@@ -1,21 +1,16 @@
 -- =====================================================
 -- Stats v2 (issue #44), part 3b: per-round results, a cache of what each round's raw facts add up to.
 --
--- Totals are still defined by queries over the raw tables: stats_round_results() and
--- stats_round_weapon_results() below are those queries, for a set of rounds. Adding up every raw kill
--- for every lifetime total takes seconds at a year of data, so each round's result is also kept here
--- once the round is over: one row per player per round (about 76k a year on main), which the views
--- add up in milliseconds. Nothing is only here: any row can be recomputed exactly, and is.
---
---   - gg2_stats2 calls stats_refresh_round() in every flush for a round that is over (its end, and
---     anything written for it after), so a round's cached result always includes all of its rows.
---   - Rounds not cached (the one in progress, or one a crash left out) are computed live by the
---     *_current views, so the views are always exact, only slower for those rounds.
---   - round_results_done records which rounds are cached and with which definition (a hash of the
---     functions). When the definitions change, the end of this file recomputes every round on the next
---     boot; it also catches up rounds a crash left out.
---
--- The Discord bot is not granted these tables: it reads the v_* views, which are built on them.
+-- Every per-round stat is defined once, by stats_round_results() / stats_round_weapon_results()
+-- below, over the raw tables. Adding up every raw kill for lifetime totals takes seconds at a year,
+-- so each finished round's result is kept here (about 76k rows a year on main) and the views add
+-- those up. Nothing is only here: any row can be recomputed exactly, and is.
+--   - gg2_stats2 calls stats_refresh_round() in every flush for a round that is over.
+--   - Rounds not cached (in progress, or left out by a crash) are computed live by the *_current
+--     views (stats_05_views.sql), so the views are always exact.
+--   - round_results_done records the definitions' hash per round; the end of this file recomputes
+--     out-of-date and missed rounds on every boot.
+-- The Discord bot reads the v_* views built on these, not the tables.
 -- Needs stats_01..03_counters.
 -- =====================================================
 
@@ -235,59 +230,53 @@ SELECT md5(pg_get_functiondef('stats_round_kills(bigint[])'::regprocedure)
         || pg_get_functiondef('stats_round_weapon_results(bigint[])'::regprocedure))
 $f$;
 
--- Recomputes one round's cached result. Serialised per round by locking its row (a flush and a boot
--- can both refresh it). A failure leaves the round uncached, so the views compute it live, and never
--- fails the caller: gg2_stats2 runs this inside its flush, which must not be lost over a cache.
-CREATE OR REPLACE FUNCTION stats_refresh_round(p_round BIGINT) RETURNS VOID
+-- Recomputes the cached results of a set of rounds (one query for all of them: a boot recomputing
+-- every round does it in batches). Serialised per round by locking the rounds' rows (a flush and a
+-- boot can both refresh one). A failure leaves those rounds uncached, so the views compute them live,
+-- and never fails the caller: gg2_stats2 runs this inside its flush, which must not be lost over a
+-- cache.
+CREATE OR REPLACE FUNCTION stats_refresh_rounds(p_rounds BIGINT[]) RETURNS VOID
 LANGUAGE plpgsql AS $f$
 BEGIN
-    PERFORM 1 FROM rounds WHERE round_id = p_round FOR UPDATE;
+    PERFORM 1 FROM rounds WHERE round_id = ANY (p_rounds) ORDER BY round_id FOR UPDATE;
     BEGIN
-        DELETE FROM round_results_done WHERE round_id = p_round;
-        INSERT INTO round_results_done (round_id, def_hash) VALUES (p_round, stats_results_hash());
-        INSERT INTO player_round_results SELECT * FROM stats_round_results(ARRAY[p_round]);
-        INSERT INTO player_round_weapon_results SELECT * FROM stats_round_weapon_results(ARRAY[p_round]);
+        DELETE FROM round_results_done WHERE round_id = ANY (p_rounds);
+        INSERT INTO round_results_done (round_id, def_hash)
+        SELECT round_id, stats_results_hash() FROM rounds WHERE round_id = ANY (p_rounds);
+        INSERT INTO player_round_results SELECT * FROM stats_round_results(p_rounds);
+        INSERT INTO player_round_weapon_results SELECT * FROM stats_round_weapon_results(p_rounds);
     EXCEPTION WHEN OTHERS THEN
-        RAISE WARNING 'stats_refresh_round(%): % (left uncached)', p_round, SQLERRM;
+        RAISE WARNING 'stats_refresh_rounds(%): % (left uncached)', p_rounds, SQLERRM;
     END;
 END $f$;
+
+CREATE OR REPLACE FUNCTION stats_refresh_round(p_round BIGINT) RETURNS VOID
+LANGUAGE sql AS $f$ SELECT stats_refresh_rounds(ARRAY[p_round]) $f$;
 
 DO $$
 DECLARE f text;
 BEGIN
-    FOREACH f IN ARRAY ARRAY['stats_results_hash()', 'stats_refresh_round(bigint)'] LOOP
+    FOREACH f IN ARRAY ARRAY['stats_results_hash()', 'stats_refresh_rounds(bigint[])', 'stats_refresh_round(bigint)'] LOOP
         EXECUTE format('ALTER FUNCTION %s SET search_path = %I', f, current_schema());
     END LOOP;
 END $$;
 
--- Cached rows plus the rounds not cached, computed live: exact at any moment.
-CREATE OR REPLACE VIEW player_round_results_current AS
-SELECT * FROM player_round_results
-UNION ALL
-SELECT * FROM stats_round_results(ARRAY(
-    SELECT r.round_id FROM rounds r WHERE NOT EXISTS (SELECT 1 FROM round_results_done d WHERE d.round_id = r.round_id)));
-
-CREATE OR REPLACE VIEW player_round_weapon_results_current AS
-SELECT * FROM player_round_weapon_results
-UNION ALL
-SELECT * FROM stats_round_weapon_results(ARRAY(
-    SELECT r.round_id FROM rounds r WHERE NOT EXISTS (SELECT 1 FROM round_results_done d WHERE d.round_id = r.round_id)));
-
 -- Every boot: recompute rounds cached with other definitions, and cache rounds that are over but were
 -- never cached (a crash before their end was flushed). A round is over once it has ended, or once a
--- later map run started. The round in progress is left to its own end.
+-- later map run started. The round in progress is left to its own end. In batches of 1000 rounds.
 DO $$
-DECLARE r record; h text := stats_results_hash(); n int := 0;
+DECLARE b BIGINT[]; h TEXT := stats_results_hash(); n INT := 0;
 BEGIN
-    FOR r IN
-        SELECT ro.round_id FROM rounds ro
-        LEFT JOIN round_results_done d USING (round_id)
-        WHERE (d.round_id IS NULL OR d.def_hash <> h)
-          AND (ro.ended_at IS NOT NULL OR ro.map_run_id <> (SELECT max(map_run_id) FROM map_runs))
-        ORDER BY ro.round_id
+    FOR b IN
+        SELECT array_agg(round_id ORDER BY round_id) FROM (
+            SELECT ro.round_id, (row_number() OVER (ORDER BY ro.round_id) - 1) / 1000 AS batch
+            FROM rounds ro LEFT JOIN round_results_done d USING (round_id)
+            WHERE (d.round_id IS NULL OR d.def_hash <> h)
+              AND (ro.ended_at IS NOT NULL OR ro.map_run_id <> (SELECT max(map_run_id) FROM map_runs))) x
+        GROUP BY batch ORDER BY batch
     LOOP
-        PERFORM stats_refresh_round(r.round_id);
-        n := n + 1;
+        PERFORM stats_refresh_rounds(b);
+        n := n + cardinality(b);
     END LOOP;
     IF n > 0 THEN RAISE NOTICE 'stats: cached the results of % rounds', n; END IF;
 END $$;
