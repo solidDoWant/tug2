@@ -88,6 +88,9 @@ if [ -n "$FROM_REF" ]; then
     boot_twice "$FROM_SQL"
     (cd "$FROM_TEST" && psql "$USER_DB" -q -v ON_ERROR_STOP=1 -v old_tables="$OLD_TABLES" -f test.sql)
     (cd "$FROM_TEST" && psql "$USER_DB" -q -v ON_ERROR_STOP=1 -f plugin_sql.sql > /dev/null)
+    if [ -f "$FROM_TEST/results.sql" ]; then
+        (cd "$FROM_TEST" && psql "$USER_DB" -q -v ON_ERROR_STOP=1 -f results.sql > /dev/null)
+    fi
     snapshot > "$WORK/before"
     boot_twice "$SQL_DIR"
     snapshot > "$WORK/after"
