@@ -57,9 +57,10 @@ this tool adds no connection variables of its own. Set `DATABASE_URL` to a
 PostgreSQL connection string, or leave it empty and use the standard libpq
 environment variables, which pgx reads directly.
 
-The connection's `search_path` must select the server's stats schema, e.g.
-`DATABASE_URL=postgres://...?options=-csearch_path%3Dstats_main` (or
-`PGOPTIONS="-c search_path=stats_main"`); the API names no schema itself. Each
+The connection's `search_path` selects the server's schema; the API names no
+schema itself. Main's tables are in `public`, which the default finds; for test,
+`DATABASE_URL=postgres://...?options=-csearch_path%3Dinsurgency-test` (or
+`PGOPTIONS="-c search_path=insurgency-test"`). Each
 session is set to `TimeZone=UTC` on connect.
 
 - **Connection:** `PGHOST`, `PGPORT`, `PGDATABASE`, `PGUSER`, `PGPASSWORD`,
@@ -161,14 +162,14 @@ probe endpoints are unversioned. Every endpoint is a `GET`.
 
 ### Where the numbers come from
 
-The API reads the stats v2 schema (issue #44,
+The API reads the stats v2 views and tables (issue #44,
 `plugins/sourcemod/configs/sql-init-scripts/pgsql/stats_*.sql`). Facts are stored
 once and every total is a view: lifetime stats come from `v_player_lifetime`,
 `v_player_weapon_lifetime`, `v_maps`, `v_bot_weapon_kills` and `v_team_kills`,
 which combine v2 rows with the pre-v2 tables. The API does not re-derive any
 stat; it only sums the per-round views over a window, joins names in
 (`v_players`), pages and sorts. The schema itself is not named anywhere: the
-connection's `search_path` selects the server's `stats_*` schema (see
+connection's `search_path` selects the server's schema (see
 [Database connection](#database-connection)).
 
 - **SteamIDs** are JSON strings (a SteamID64 exceeds JavaScript's safe integers).
@@ -282,8 +283,8 @@ testdata/run-integration.sh   # integration test against a throwaway Postgres 18
 ```
 
 `testdata/run-integration.sh` starts `postgres:18` on a random port in a non-UTC
-zone, lays it out with `testdata/init-db.sh` (old tables in `public`, v2 in
-`stats_dev`, `testdata/seed.sql`'s fictional data in both), and runs
+zone, lays it out with `testdata/init-db.sh` (old and v2 tables side by side
+in `public`, `testdata/seed.sql`'s fictional data in both), and runs
 `integration_test.go` with `STATS_API_TEST_DB_URL` set: every endpoint's query
 runs, lifetime numbers are compared with the views, and the HTTP responses are
 checked for status codes, string SteamIDs and `null` pre-v2 stats.
@@ -291,7 +292,7 @@ checked for status codes, string SteamIDs and `null` pre-v2 stats.
 ### Local stack (docker-compose)
 
 `docker-compose.yml` brings up the same database (`testdata/init-db.sh`) alongside
-this service built from the `Dockerfile`, pointed at `search_path=stats_dev`:
+this service built from the `Dockerfile`:
 
 ```sh
 docker compose up --build      # start Postgres + stats-api

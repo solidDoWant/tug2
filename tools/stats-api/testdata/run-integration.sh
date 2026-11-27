@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Runs the integration test (integration_test.go) against a throwaway Postgres 18 laid out by
-# init-db.sh: old tables in public, stats v2 in stats_dev, seed.sql's data in both.
+# init-db.sh: old and stats v2 tables side by side in public, seed.sql's data in both.
 #
 #   tools/stats-api/testdata/run-integration.sh      # needs docker, psql and go
 #
@@ -27,7 +27,7 @@ URL="postgres://insurgency:pw@127.0.0.1:$PORT/sourcemod-insurgency-stats?sslmode
 # The entrypoint restarts the server after its init scripts, so wait for the seeded data over TCP
 # (with the host's psql: docker exec is unreliable in nested docker).
 for _ in $(seq 120); do
-    if psql "$URL" -Atc 'SELECT 1 FROM stats_dev.rounds LIMIT 1' 2> /dev/null | grep -q 1; then
+    if psql "$URL" -Atc 'SELECT 1 FROM rounds LIMIT 1' 2> /dev/null | grep -q 1; then
         break
     fi
     if [ "$(docker inspect -f '{{.State.Running}}' "$NAME")" != true ]; then
@@ -37,5 +37,5 @@ for _ in $(seq 120); do
     sleep 1
 done
 
-STATS_API_TEST_DB_URL="$URL&options=-csearch_path%3Dstats_dev" \
+STATS_API_TEST_DB_URL="$URL" \
     go test -count=1 -run Integration -v ./... "$@"

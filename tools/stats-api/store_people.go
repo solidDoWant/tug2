@@ -106,9 +106,9 @@ var fireSupportSorts = map[string]string{
 }
 
 // ListFireSupport returns a page of players by fire-support calls: the
-// successful calls from the per-player totals, failed and refunded calls from
-// v2's fire_support_calls, and the last successful call in either the v2 or
-// the old call log (filtered on called_at in a window).
+// successful calls from the per-player totals, and failed and refunded calls
+// and the last successful one from v_fire_support_calls (filtered on called_at
+// in a window).
 func (s *Store) ListFireSupport(ctx context.Context, w *Window, sort string, limit, offset int) ([]FireSupportStats, int, error) {
 	order, ok := fireSupportSorts[sort]
 	if !ok {
@@ -116,28 +116,22 @@ func (s *Store) ListFireSupport(ctx context.Context, w *Window, sort string, lim
 	}
 	var args []any
 	totals := playerTotals(w, &args, "")
-	v2Filter, oldFilter := "", ""
+	filter := ""
 	if w != nil {
-		in := w.bind(&args)
-		v2Filter = "WHERE " + in("called_at")
-		oldFilter = "AND " + in("called_at")
+		filter = "WHERE " + w.bind(&args)("called_at")
 	}
 	from := `
 		SELECT t.steam_id::text AS steam_id, p.name, t.fire_support_calls AS calls,
 		       COALESCE(f.failed, 0) AS failed, COALESCE(f.refunded, 0) AS refunded,
-		       GREATEST(f.last_called_at, o.last_called_at) AS last_called_at
+		       f.last_called_at
 		FROM (` + totals + `) t
 		LEFT JOIN v_players p ON p.steam_id = t.steam_id
 		LEFT JOIN (
 			SELECT steam_id, count(*) FILTER (WHERE failure_reason IS NOT NULL) AS failed,
 			       count(*) FILTER (WHERE refunded_at IS NOT NULL) AS refunded,
 			       max(called_at) FILTER (WHERE failure_reason IS NULL) AS last_called_at
-			FROM fire_support_calls ` + v2Filter + ` GROUP BY steam_id
+			FROM v_fire_support_calls ` + filter + ` GROUP BY steam_id
 		) f ON f.steam_id = t.steam_id
-		LEFT JOIN (
-			SELECT steam_id::bigint AS steam_id, max(called_at) AS last_called_at
-			FROM old_fire_support_calls WHERE steam_id ~ '^[0-9]+$' ` + oldFilter + ` GROUP BY 1
-		) o ON o.steam_id = t.steam_id
 		WHERE COALESCE(t.fire_support_calls, 0) > 0 OR COALESCE(f.failed, 0) > 0`
 	return page[FireSupportStats](ctx, s, from, args, order+", steam_id", limit, offset)
 }

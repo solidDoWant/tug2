@@ -1,5 +1,5 @@
 # Development stack for stats-api: a Postgres 18 instance laid out like
-# production (old stats tables in public, stats v2 in its own stats_dev schema,
+# production (old and stats v2 tables side by side in public, as on main,
 # dummy data in both), plus the API built from this directory's Dockerfile.
 #
 #   docker compose up --build        # start the stack
@@ -26,8 +26,7 @@ services:
       # Postgres 18+ stores data in a major-version subdirectory, so the volume
       # is mounted at /var/lib/postgresql (not .../data).
       - postgres-data:/var/lib/postgresql
-      # Run once on first initialisation of the data volume: creates stats_dev,
-      # applies the old plugins' files then the stats_*.sql files (as
+      # Run once on first initialisation of the data volume: applies the old plugins' files then the stats_*.sql files (as
       # DatabaseMigrator does, one transaction per file), then the seed.
       - ../../plugins/sourcemod/configs/sql-init-scripts/pgsql:/sql:ro
       - ./testdata/seed.sql:/seed.sql:ro
@@ -47,8 +46,8 @@ services:
     environment:
       LISTEN_ADDR: ":8080"
       METRICS_ADDR: ":9090"
-      # search_path selects the server's stats schema, as in production.
-      DATABASE_URL: "postgres://insurgency:insurgency@postgres:5432/sourcemod-insurgency-stats?sslmode=disable&options=-csearch_path%3Dstats_dev"
+      # The default search_path finds public, as on main.
+      DATABASE_URL: "postgres://insurgency:insurgency@postgres:5432/sourcemod-insurgency-stats?sslmode=disable"
     ports:
       - "8080:8080"
       - "9090:9090"

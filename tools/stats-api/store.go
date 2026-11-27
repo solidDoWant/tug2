@@ -22,7 +22,8 @@ var ErrNotFound = errors.New("not found")
 // over a window, joins names in, pages and sorts.
 //
 // The schema is not named anywhere: the connection's search_path selects the
-// server's stats_* schema (e.g. DATABASE_URL=...?options=-csearch_path=stats_main).
+// server's schema (public for main, which is the default; for test,
+// DATABASE_URL=...?options=-csearch_path=insurgency-test).
 type Store struct {
 	pool *pgxpool.Pool
 }

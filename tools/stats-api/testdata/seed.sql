@@ -18,11 +18,6 @@
 -- ...004 Delta Newcomer (v2 only).
 
 -- ---------------------------------------------------------------- old data
--- The old tables live in the user's own schema if there is one, else public (see stats_04_old.sql).
-DO $$ BEGIN
-    PERFORM set_config('search_path', CASE WHEN EXISTS (SELECT 1 FROM pg_namespace WHERE nspname = current_user)
-                                           THEN quote_ident(current_user) ELSE 'public' END, true);
-END $$;
 
 INSERT INTO weapon_stats (weapon_name) VALUES ('m4a1'), ('ak74'), ('m9');
 INSERT INTO map_stats (map_name) VALUES ('ministry'), ('buhriz');
@@ -99,14 +94,10 @@ JOIN (VALUES ('ministry', true, '2026-11-19 15:00Z'::timestamptz), ('ministry', 
      ON v.mn = m.map_name;
 
 -- ---------------------------------------------------------------- v2 data
-DO $$ BEGIN
-    PERFORM set_config('search_path', (SELECT quote_ident(nspname) FROM pg_namespace
-        WHERE nspname LIKE 'stats\_%' AND nspowner = (SELECT oid FROM pg_roles WHERE rolname = current_user)), true);
-END $$;
 
 INSERT INTO server_builds VALUES ('abc1234', '1.2.3');
 INSERT INTO server_boots VALUES ('2026-11-25 16:50Z', 'abc1234');
-INSERT INTO maps VALUES ('ministry'), ('sinjar');
+INSERT INTO v2_maps VALUES ('ministry'), ('sinjar');
 INSERT INTO game_modes VALUES ('checkpoint'), ('push');
 INSERT INTO theaters VALUES ('default');
 INSERT INTO map_runs (map_run_id, booted_at, started_at, map_name, game_mode, theater, load_seconds, game_over_at) VALUES
@@ -143,42 +134,44 @@ INSERT INTO player_spans (round_id, steam_id, started_at, ended_at, team, squad,
     (2, 76561198000000004, '2026-11-25 17:16Z', '2026-11-25 17:28Z', 'security', 1, 0, 'template_rifleman_security'),
     (3, 76561198000000001, '2026-11-26 00:00Z', '2026-11-26 00:10Z', 'security', 0, 1, 'template_rifleman_security');
 
+INSERT INTO bot_classes (bot_class_id, class_template) VALUES (1, 'template_rifleman_insurgent');
 INSERT INTO spawns (spawn_id, round_id, steam_id, spawned_at) VALUES (1, 1, 76561198000000001, '2026-11-25 17:00:05Z');
-INSERT INTO spawn_items VALUES (1, 'weapon_m4a1'), (1, 'kevlar_heavy');
+INSERT INTO items (item_id, item_name) VALUES (1, 'weapon_m4a1'), (2, 'kevlar_heavy');
+INSERT INTO spawn_items VALUES (1, 1), (1, 2);
 
-INSERT INTO kills (kill_id, round_id, killed_at, victim_steam_id, victim_bot_name, victim_bot_team, victim_bot_class,
+INSERT INTO kills (kill_id, round_id, killed_at, victim_steam_id, victim_bot_name, victim_bot_team, victim_bot_class_id,
                    victim_x, victim_y, victim_z, attacker_steam_id, attacker_bot_name, attacker_bot_team,
-                   attacker_bot_class, attacker_x, attacker_y, attacker_z, assister_steam_id, weapon_name, hitgroup,
+                   attacker_bot_class_id, attacker_x, attacker_y, attacker_z, assister_steam_id, weapon_name, hitgroup,
                    headshot, domination, revenge, savior, offensive, defensive, damagebits, customkill,
                    attacker_stance, attacker_aim) VALUES
-    (1, 1, '2026-11-25 17:02Z', NULL, 'Rifleman Jones', 'insurgents', 'template_rifleman_insurgent', 100, 200, 10,
+    (1, 1, '2026-11-25 17:02Z', NULL, 'Rifleman Jones', 'insurgents', 1, 100, 200, 10,
      76561198000000001, NULL, NULL, NULL, 150, 260, 10, NULL, 'm4a1', 'head', true, false, false, false, true, false, 2, 0, 'crouched', 'sights'),
-    (2, 1, '2026-11-25 17:03Z', NULL, 'Rifleman Smith', 'insurgents', 'template_rifleman_insurgent', 110, 210, 10,
+    (2, 1, '2026-11-25 17:03Z', NULL, 'Rifleman Smith', 'insurgents', 1, 110, 210, 10,
      76561198000000001, NULL, NULL, NULL, 150, 260, 10, NULL, 'm4a1', 'chest', false, false, false, false, true, false, 2, 0, 'standing', 'hip'),
-    (3, 1, '2026-11-25 17:04Z', NULL, 'Rifleman Brown', 'insurgents', 'template_rifleman_insurgent', 120, 220, 12,
+    (3, 1, '2026-11-25 17:04Z', NULL, 'Rifleman Brown', 'insurgents', 1, 120, 220, 12,
      76561198000000004, NULL, NULL, NULL, 160, 270, 12, 76561198000000001, 'ak74', 'stomach', false, false, false, false, false, true, 2, 0, 'prone', 'sights'),
     (4, 1, '2026-11-25 17:05Z', 76561198000000001, NULL, NULL, NULL, 150, 260, 10,
-     NULL, 'Rifleman Jones', 'insurgents', 'template_rifleman_insurgent', 90, 190, 10, NULL, 'ak74', 'chest', false, false, false, false, false, false, 2, 0, NULL, NULL),
+     NULL, 'Rifleman Jones', 'insurgents', 1, 90, 190, 10, NULL, 'ak74', 'chest', false, false, false, false, false, false, 2, 0, NULL, NULL),
     (5, 1, '2026-11-25 17:06Z', 76561198000000002, NULL, NULL, NULL, 155, 265, 10,
      76561198000000001, NULL, NULL, NULL, 150, 260, 10, NULL, 'm4a1', 'right_leg', false, false, false, false, false, false, 2, 0, 'standing', 'hip'),
     (6, 1, '2026-11-25 17:08Z', 76561198000000002, NULL, NULL, NULL, 155, 265, 10,
      76561198000000002, NULL, NULL, NULL, 155, 265, 10, NULL, 'grenade_m67', 'generic', false, false, false, false, false, false, 64, 0, 'standing', 'hip'),
     (7, 1, '2026-11-25 17:09Z', 76561198000000004, NULL, NULL, NULL, 170, 280, -50,
      NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, false, false, false, false, false, false, 32, 0, NULL, NULL),
-    (8, 2, '2026-11-25 17:20Z', NULL, 'Rifleman Jones', 'insurgents', 'template_rifleman_insurgent', 300, 400, 0,
+    (8, 2, '2026-11-25 17:20Z', NULL, 'Rifleman Jones', 'insurgents', 1, 300, 400, 0,
      76561198000000002, NULL, NULL, NULL, 320, 420, 0, NULL, 'ak74', 'head', true, false, false, false, true, false, 2, 0, 'standing', 'sights'),
     (9, 2, '2026-11-25 17:25Z', 76561198000000004, NULL, NULL, NULL, 330, 430, 0,
-     NULL, 'Rifleman Smith', 'insurgents', 'template_rifleman_insurgent', 350, 450, 0, NULL, 'ak74', 'chest', false, false, false, false, false, false, 2, 0, NULL, NULL),
-    (10, 3, '2026-11-26 00:06Z', NULL, 'Rifleman Lee', 'insurgents', 'template_rifleman_insurgent', 500, 600, 5,
+     NULL, 'Rifleman Smith', 'insurgents', 1, 350, 450, 0, NULL, 'ak74', 'chest', false, false, false, false, false, false, 2, 0, NULL, NULL),
+    (10, 3, '2026-11-26 00:06Z', NULL, 'Rifleman Lee', 'insurgents', 1, 500, 600, 5,
      76561198000000001, NULL, NULL, NULL, 520, 620, 5, NULL, 'm4a1', 'chest', false, false, false, false, true, false, 2, 0, 'standing', 'sights');
 INSERT INTO team_kill_forgives VALUES (5, '2026-11-25 17:06:10Z');
 
-INSERT INTO player_rounds (round_id, steam_id, score, capture_ticks, suppressions, times_suppressed, damage_taken) VALUES
+INSERT INTO v2_player_rounds (round_id, steam_id, score, capture_ticks, suppressions, times_suppressed, damage_taken) VALUES
     (1, 76561198000000001, 50, 4, 3, 1, 80), (1, 76561198000000002, 20, 4, 1, 0, 100),
     (1, 76561198000000004, 15, 0, 0, 2, 100), (2, 76561198000000001, 30, 0, 2, 0, 0),
     (2, 76561198000000002, 25, 0, 0, 1, 0), (2, 76561198000000004, 5, 0, 0, 0, 100),
     (3, 76561198000000001, 10, 0, 0, 0, 0);
-INSERT INTO player_round_weapons (round_id, steam_id, weapon_name, shots, shots_hit_enemy, shots_hit_friendly,
+INSERT INTO v2_player_round_weapons (round_id, steam_id, weapon_name, shots, shots_hit_enemy, shots_hit_friendly,
                                   hits_head, hits_chest, hits_stomach, hits_arms, hits_legs, damage_enemy,
                                   damage_friendly, reloads, deploys, seconds_drawn) VALUES
     (1, 76561198000000001, 'm4a1', 600, 150, 2, 10, 60, 30, 30, 20, 3000, 40, 20, 3, 800),
@@ -197,7 +190,7 @@ INSERT INTO heals (heal_id, round_id, started_at, ended_at, healer_steam_id, pat
 INSERT INTO heal_holds VALUES (1, '2026-11-25 17:07Z', '2026-11-25 17:07:20Z', 'full_health'),
                               (2, '2026-11-25 17:26Z', '2026-11-25 17:26:05Z', 'keys_released');
 
-INSERT INTO fire_support_calls (call_id, round_id, called_at, steam_id, support_type, target_x, target_y, target_z,
+INSERT INTO v2_fire_support_calls (call_id, round_id, called_at, steam_id, support_type, target_x, target_y, target_z,
                                 failure_reason, refunded_at) VALUES
     (1, 1, '2026-11-25 17:03Z', 76561198000000001, 'artillery', 400, 500, 0, NULL, NULL),
     (2, 1, '2026-11-25 17:04Z', 76561198000000001, 'artillery', NULL, NULL, NULL, 'player_cooldown', '2026-11-25 17:04:01Z'),
@@ -216,5 +209,5 @@ INSERT INTO survival_levels VALUES (1, 1, '2026-11-25 17:08Z');
 -- Explicit ids above: move the sequences past them.
 SELECT setval(pg_get_serial_sequence(t, c), 1000)
 FROM (VALUES ('map_runs', 'map_run_id'), ('rounds', 'round_id'), ('kills', 'kill_id'), ('revives', 'revive_id'),
-             ('heals', 'heal_id'), ('fire_support_calls', 'call_id'), ('objective_events', 'objective_event_id'),
-             ('spawns', 'spawn_id')) s(t, c);
+             ('heals', 'heal_id'), ('v2_fire_support_calls', 'call_id'), ('objective_events', 'objective_event_id'),
+             ('spawns', 'spawn_id'), ('bot_classes', 'bot_class_id'), ('items', 'item_id')) s(t, c);
