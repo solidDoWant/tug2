@@ -1,9 +1,8 @@
 -- =====================================================
 -- Stats v2 (issue #44), part 4: old_* views over this server's old stats tables.
 --
--- The old tables stay where they are (the user's own schema, or public) and stay the only copy of
--- everything recorded before v2. The v2 views read them through these pass-through views, so no
--- other file needs to know which schema the old tables are in.
+-- The old tables stay as they are, in the same schema, and stay the only copy of everything
+-- recorded before v2. The v2 views read them only through these pass-through views.
 --
 -- The old tables store `timestamp without time zone` holding the database's local wall-clock time
 -- (filled by CURRENT_TIMESTAMP in the plugins' sessions). Here they become timestamptz, converted
@@ -16,22 +15,9 @@
 -- =====================================================
 
 DO $$
-DECLARE n int;
-BEGIN
-    SELECT count(*) INTO n FROM pg_namespace
-    WHERE nspname LIKE 'stats\_%' AND nspowner = (SELECT oid FROM pg_roles WHERE rolname = current_user);
-    IF n <> 1 THEN
-        RAISE EXCEPTION 'expected exactly one stats_* schema owned by %, found %', current_user, n;
-    END IF;
-    PERFORM set_config('search_path', (SELECT quote_ident(nspname) FROM pg_namespace
-        WHERE nspname LIKE 'stats\_%' AND nspowner = (SELECT oid FROM pg_roles WHERE rolname = current_user)), true);
-END $$;
-
-DO $$
 DECLARE
-    -- Where unqualified names resolved for the old plugins: "$user", then public.
-    old_schema text := CASE WHEN EXISTS (SELECT 1 FROM pg_namespace WHERE nspname = current_user)
-                            THEN current_user ELSE 'public' END;
+    -- The old tables are in this server's own schema, beside the v2 ones.
+    old_schema text := current_schema();
     -- The zone the old plugins' CURRENT_TIMESTAMP was written in. The migrator never sets TimeZone,
     -- so this is the database default, as it is for the plugins.
     zone text := current_setting('TimeZone');

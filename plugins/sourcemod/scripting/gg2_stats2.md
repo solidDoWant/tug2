@@ -1,6 +1,7 @@
 # gg2_stats2 - stats v2 recorder (issue #44)
 
-Records raw game facts into a per-server `stats_*` schema. Nothing derived is stored: every total
+Records raw game facts into the stats v2 tables, beside the old stats tables in each server's own
+schema (`public` on main, `insurgency-test` on test). Nothing derived is stored: every total
 (lifetime kills, K/D, wins, accuracy, killstreaks, play and medic time, ...) is a view in
 `configs/sql-init-scripts/pgsql/stats_05..07_views.sql`. The design and its reasoning are in
 issue #44.
@@ -18,23 +19,20 @@ issue #44.
 | `kills`, `team_kill_forgives` | `player_death` (positions, assister, deathflags, last hitgroup, killer's stance and aim); `TeamKill_OnForgiven` |
 | `objective_events`, `objective_participants` | `controlpoint_captured` / `_neutralized` (cappers), `object_destroyed` |
 | `revives`, `revive_helpers`, `heals`, `heal_holds` | bm2_respawn's `Stats_OnRevive`, `Stats_OnHealTick`, `Stats_OnHealHold` |
-| `fire_support_calls` | FireSupport's `FireSupport_OnCallResult`, `FireSupport_OnRefund` |
-| `player_rounds` | the game's round stats (score, capture ticks, resets) as deltas; suppressions, flashes, damage taken, fall damage |
-| `player_round_weapons` | shots and hits (as gg2_mstats2 attributes them), hits by hitgroup, damage, `weapon_reload`, `weapon_deploy`, `time_weapon` |
+| `v2_fire_support_calls` | FireSupport's `FireSupport_OnCallResult`, `FireSupport_OnRefund` |
+| `v2_player_rounds` | the game's round stats (score, capture ticks, resets) as deltas; suppressions, flashes, damage taken, fall damage |
+| `v2_player_round_weapons` | shots and hits (as gg2_mstats2 attributes them), hits by hitgroup, damage, `weapon_reload`, `weapon_deploy`, `time_weapon` |
 | `punitive-persistence.player_connections` | the client's IP at each new session |
 
 The forwards it listens to are declared in `include/gg2_stats.inc`.
 
 ## Enabling it on a server
 
-1. The server's schema exists, owned by its database user. The game server's user cannot create
-   schemas, so it is declared in infra-mk3 (`backend/postgres/databases/sourcemod-insurgency-stats.yaml`,
-   CloudNativePG `Database.spec.schemas`): `stats_test` owned by `insurgency-test`, later `stats_main`
-   owned by `insurgency`. By hand it would be
-   `CREATE SCHEMA stats_test AUTHORIZATION "insurgency-test";` as a superuser.
-
-   The plugin and the `stats_*.sql` files find the one `stats_*` schema owned by the connecting
-   user. With none, the plugin records nothing and logs why; the SQL files fail and roll back.
+1. Nothing to create by hand: the `stats_*.sql` files make the tables in the database user's own
+   schema, where its unqualified names resolve. Four would clash with old tables still being
+   written, so they are `v2_maps`, `v2_player_rounds`, `v2_player_round_weapons` and
+   `v2_fire_support_calls` until the old tables are retired. Until the tables exist, the plugin
+   records nothing and logs why (it checks again each map start).
 2. The server's `database-migrations.cfg` lists the `stats_*.sql` files after the old ones
    (`stats_04_old.sql` builds views over the old tables), and `player_connections.sql` under
    `punitive-persistence`.

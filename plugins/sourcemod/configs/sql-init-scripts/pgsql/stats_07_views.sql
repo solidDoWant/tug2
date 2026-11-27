@@ -4,18 +4,6 @@
 -- old history for the time before any history existed. Needs stats_01..06.
 -- =====================================================
 
-DO $$
-DECLARE n int;
-BEGIN
-    SELECT count(*) INTO n FROM pg_namespace
-    WHERE nspname LIKE 'stats\_%' AND nspowner = (SELECT oid FROM pg_roles WHERE rolname = current_user);
-    IF n <> 1 THEN
-        RAISE EXCEPTION 'expected exactly one stats_* schema owned by %, found %', current_user, n;
-    END IF;
-    PERFORM set_config('search_path', (SELECT quote_ident(nspname) FROM pg_namespace
-        WHERE nspname LIKE 'stats\_%' AND nspowner = (SELECT oid FROM pg_roles WHERE rolname = current_user)), true);
-END $$;
-
 -- Lifetime per player and weapon.
 CREATE OR REPLACE VIEW v_player_weapon_lifetime AS
 WITH r AS (

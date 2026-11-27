@@ -649,8 +649,7 @@ FROM sourcemod-plugins-base AS sourcemod-plugins-gg2-stats2
 
 # Build gg2_stats2, the stats v2 recorder (issue #44), and ship its schema files: stats_*.sql for the
 # stats database and player_connections.sql for punitive-persistence. They are only applied on servers
-# whose database-migrations.cfg lists them, and the stats ones need an admin-created stats_* schema
-# (see stats_01_schema.sql). The plugin records nothing until that schema exists.
+# whose database-migrations.cfg lists them; the plugin records nothing until the stats tables exist.
 COPY plugins/sourcemod/gamedata/ /insurgency/addons/sourcemod/gamedata/
 RUN --mount=type=bind,source=./plugins/sourcemod,target=/plugin-source \
     /sourcemod/addons/sourcemod/scripting/spcomp --include=/plugin-source/scripting/include  /plugin-source/scripting/gg2_stats2.sp -o /insurgency/addons/sourcemod/plugins/gg2_stats2.smx && \

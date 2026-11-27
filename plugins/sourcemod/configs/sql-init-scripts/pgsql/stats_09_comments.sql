@@ -2,18 +2,6 @@
 -- Stats v2 (issue #44), part 9: descriptions of the event and counter tables (see stats_08).
 -- =====================================================
 
-DO $$
-DECLARE n int;
-BEGIN
-    SELECT count(*) INTO n FROM pg_namespace
-    WHERE nspname LIKE 'stats\_%' AND nspowner = (SELECT oid FROM pg_roles WHERE rolname = current_user);
-    IF n <> 1 THEN
-        RAISE EXCEPTION 'expected exactly one stats_* schema owned by %, found %', current_user, n;
-    END IF;
-    PERFORM set_config('search_path', (SELECT quote_ident(nspname) FROM pg_namespace
-        WHERE nspname LIKE 'stats\_%' AND nspowner = (SELECT oid FROM pg_roles WHERE rolname = current_user)), true);
-END $$;
-
 COMMENT ON TABLE player_spans IS 'Stretches of a round a player spent on one team and class. Play time = security spans; medic time = medic class spans.';
 COMMENT ON COLUMN player_spans.round_id IS 'rounds.round_id.';
 COMMENT ON COLUMN player_spans.steam_id IS 'players.steam_id.';
@@ -93,17 +81,17 @@ COMMENT ON COLUMN heal_holds.heal_id IS 'heals.heal_id.';
 COMMENT ON COLUMN heal_holds.started_at IS 'Hold start.';
 COMMENT ON COLUMN heal_holds.ended_at IS 'Hold end.';
 COMMENT ON COLUMN heal_holds.released_by IS 'Why it ended: full_health, keys_released, lost_target (looked away, out of range, switched weapon), death, disconnect, round_end, map_end.';
-COMMENT ON TABLE fire_support_calls IS 'Each fire support (artillery) call, including failed ones.';
-COMMENT ON COLUMN fire_support_calls.call_id IS 'Call key.';
-COMMENT ON COLUMN fire_support_calls.round_id IS 'rounds.round_id.';
-COMMENT ON COLUMN fire_support_calls.called_at IS 'When it was called.';
-COMMENT ON COLUMN fire_support_calls.steam_id IS 'Who called it.';
-COMMENT ON COLUMN fire_support_calls.support_type IS 'Kind of strike.';
-COMMENT ON COLUMN fire_support_calls.target_x IS 'Target position, world units.';
-COMMENT ON COLUMN fire_support_calls.target_y IS 'Target position, world units.';
-COMMENT ON COLUMN fire_support_calls.target_z IS 'Target position, world units (height).';
-COMMENT ON COLUMN fire_support_calls.failure_reason IS 'Why it was refused (cooldown, limit, no sky, ...); NULL = the strike went ahead.';
-COMMENT ON COLUMN fire_support_calls.refunded_at IS 'When the call was refunded; NULL if not.';
+COMMENT ON TABLE v2_fire_support_calls IS 'Each fire support (artillery) call, including failed ones.';
+COMMENT ON COLUMN v2_fire_support_calls.call_id IS 'Call key.';
+COMMENT ON COLUMN v2_fire_support_calls.round_id IS 'rounds.round_id.';
+COMMENT ON COLUMN v2_fire_support_calls.called_at IS 'When it was called.';
+COMMENT ON COLUMN v2_fire_support_calls.steam_id IS 'Who called it.';
+COMMENT ON COLUMN v2_fire_support_calls.support_type IS 'Kind of strike.';
+COMMENT ON COLUMN v2_fire_support_calls.target_x IS 'Target position, world units.';
+COMMENT ON COLUMN v2_fire_support_calls.target_y IS 'Target position, world units.';
+COMMENT ON COLUMN v2_fire_support_calls.target_z IS 'Target position, world units (height).';
+COMMENT ON COLUMN v2_fire_support_calls.failure_reason IS 'Why it was refused (cooldown, limit, no sky, ...); NULL = the strike went ahead.';
+COMMENT ON COLUMN v2_fire_support_calls.refunded_at IS 'When the call was refunded; NULL if not.';
 COMMENT ON TABLE objective_events IS 'Objectives taken: points captured or neutralized, caches destroyed.';
 COMMENT ON COLUMN objective_events.objective_event_id IS 'Objective event key.';
 COMMENT ON COLUMN objective_events.round_id IS 'rounds.round_id.';
@@ -118,32 +106,32 @@ COMMENT ON COLUMN objective_participants.objective_event_id IS 'objective_events
 COMMENT ON COLUMN objective_participants.steam_id IS 'players.steam_id.';
 COMMENT ON COLUMN objective_participants.role IS 'capper (on the point), attacker or assister (cache).';
 
-COMMENT ON TABLE player_rounds IS 'Per player per round counters the game alone knows, or whose events are too many to keep. Most stats are in v_player_round_stats instead.';
-COMMENT ON COLUMN player_rounds.round_id IS 'rounds.round_id.';
-COMMENT ON COLUMN player_rounds.steam_id IS 'players.steam_id.';
-COMMENT ON COLUMN player_rounds.score IS 'The game''s round score for the player (what the MVP is chosen by).';
-COMMENT ON COLUMN player_rounds.capture_ticks IS 'Capture progress ticks (each 10% of a capture).';
-COMMENT ON COLUMN player_rounds.objective_resets IS 'Times the player reset an enemy capture.';
-COMMENT ON COLUMN player_rounds.suppressions IS 'Times the player suppressed an enemy.';
-COMMENT ON COLUMN player_rounds.times_suppressed IS 'Times the player was suppressed.';
-COMMENT ON COLUMN player_rounds.enemies_flashed IS 'Enemies blinded by the player''s flashbangs.';
-COMMENT ON COLUMN player_rounds.teammates_flashed IS 'Teammates blinded by the player''s flashbangs.';
-COMMENT ON COLUMN player_rounds.damage_taken IS 'Health lost to damage from any source.';
-COMMENT ON COLUMN player_rounds.fall_damage IS 'Health lost to falls.';
-COMMENT ON TABLE player_round_weapons IS 'Per player per weapon per round counters. Kills are not here: count v_kills.';
-COMMENT ON COLUMN player_round_weapons.round_id IS 'rounds.round_id.';
-COMMENT ON COLUMN player_round_weapons.steam_id IS 'players.steam_id.';
-COMMENT ON COLUMN player_round_weapons.weapon_name IS 'weapons.weapon_name.';
-COMMENT ON COLUMN player_round_weapons.shots IS 'Rounds fired (a shotgun shell is one), or grenades thrown.';
-COMMENT ON COLUMN player_round_weapons.shots_hit_enemy IS 'Shots that hit at least one enemy. Accuracy = shots_hit_enemy / shots. Counted per shot, unlike hits_*.';
-COMMENT ON COLUMN player_round_weapons.shots_hit_friendly IS 'Shots that hit at least one teammate.';
-COMMENT ON COLUMN player_round_weapons.hits_head IS 'Hits on enemies'' heads, counted per hit (a shot can hit several times).';
-COMMENT ON COLUMN player_round_weapons.hits_chest IS 'Hits on enemies'' chests, per hit.';
-COMMENT ON COLUMN player_round_weapons.hits_stomach IS 'Hits on enemies'' stomachs, per hit.';
-COMMENT ON COLUMN player_round_weapons.hits_arms IS 'Hits on enemies'' arms, per hit.';
-COMMENT ON COLUMN player_round_weapons.hits_legs IS 'Hits on enemies'' legs, per hit.';
-COMMENT ON COLUMN player_round_weapons.damage_enemy IS 'Damage done to enemies, health points.';
-COMMENT ON COLUMN player_round_weapons.damage_friendly IS 'Damage done to teammates, health points.';
-COMMENT ON COLUMN player_round_weapons.reloads IS 'Reloads.';
-COMMENT ON COLUMN player_round_weapons.deploys IS 'Times switched to this weapon.';
-COMMENT ON COLUMN player_round_weapons.seconds_drawn IS 'Seconds this weapon was in hand.';
+COMMENT ON TABLE v2_player_rounds IS 'Per player per round counters the game alone knows, or whose events are too many to keep. Most stats are in v_player_round_stats instead.';
+COMMENT ON COLUMN v2_player_rounds.round_id IS 'rounds.round_id.';
+COMMENT ON COLUMN v2_player_rounds.steam_id IS 'players.steam_id.';
+COMMENT ON COLUMN v2_player_rounds.score IS 'The game''s round score for the player (what the MVP is chosen by).';
+COMMENT ON COLUMN v2_player_rounds.capture_ticks IS 'Capture progress ticks (each 10% of a capture).';
+COMMENT ON COLUMN v2_player_rounds.objective_resets IS 'Times the player reset an enemy capture.';
+COMMENT ON COLUMN v2_player_rounds.suppressions IS 'Times the player suppressed an enemy.';
+COMMENT ON COLUMN v2_player_rounds.times_suppressed IS 'Times the player was suppressed.';
+COMMENT ON COLUMN v2_player_rounds.enemies_flashed IS 'Enemies blinded by the player''s flashbangs.';
+COMMENT ON COLUMN v2_player_rounds.teammates_flashed IS 'Teammates blinded by the player''s flashbangs.';
+COMMENT ON COLUMN v2_player_rounds.damage_taken IS 'Health lost to damage from any source.';
+COMMENT ON COLUMN v2_player_rounds.fall_damage IS 'Health lost to falls.';
+COMMENT ON TABLE v2_player_round_weapons IS 'Per player per weapon per round counters. Kills are not here: count v_kills.';
+COMMENT ON COLUMN v2_player_round_weapons.round_id IS 'rounds.round_id.';
+COMMENT ON COLUMN v2_player_round_weapons.steam_id IS 'players.steam_id.';
+COMMENT ON COLUMN v2_player_round_weapons.weapon_name IS 'weapons.weapon_name.';
+COMMENT ON COLUMN v2_player_round_weapons.shots IS 'Rounds fired (a shotgun shell is one), or grenades thrown.';
+COMMENT ON COLUMN v2_player_round_weapons.shots_hit_enemy IS 'Shots that hit at least one enemy. Accuracy = shots_hit_enemy / shots. Counted per shot, unlike hits_*.';
+COMMENT ON COLUMN v2_player_round_weapons.shots_hit_friendly IS 'Shots that hit at least one teammate.';
+COMMENT ON COLUMN v2_player_round_weapons.hits_head IS 'Hits on enemies'' heads, counted per hit (a shot can hit several times).';
+COMMENT ON COLUMN v2_player_round_weapons.hits_chest IS 'Hits on enemies'' chests, per hit.';
+COMMENT ON COLUMN v2_player_round_weapons.hits_stomach IS 'Hits on enemies'' stomachs, per hit.';
+COMMENT ON COLUMN v2_player_round_weapons.hits_arms IS 'Hits on enemies'' arms, per hit.';
+COMMENT ON COLUMN v2_player_round_weapons.hits_legs IS 'Hits on enemies'' legs, per hit.';
+COMMENT ON COLUMN v2_player_round_weapons.damage_enemy IS 'Damage done to enemies, health points.';
+COMMENT ON COLUMN v2_player_round_weapons.damage_friendly IS 'Damage done to teammates, health points.';
+COMMENT ON COLUMN v2_player_round_weapons.reloads IS 'Reloads.';
+COMMENT ON COLUMN v2_player_round_weapons.deploys IS 'Times switched to this weapon.';
+COMMENT ON COLUMN v2_player_round_weapons.seconds_drawn IS 'Seconds this weapon was in hand.';

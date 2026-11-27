@@ -7,7 +7,6 @@
 --   2026-11-25 12:00   first v2 map run = the cutover; old and v2 writers both run from here
 --   2026-11-25 12:06   the round ends; the old plugins write their history for it too
 \set ON_ERROR_STOP on
-SET search_path TO stats_test, "insurgency-test";
 
 -- ---------------------------------------------------------------- old data (insurgency-test schema)
 INSERT INTO "insurgency-test".weapon_stats (weapon_name) VALUES ('m4a1'), ('ak74');
@@ -58,7 +57,7 @@ INSERT INTO "insurgency-test".win_loss_log (map_id, win, created_at)
 SELECT map_id, w, t FROM "insurgency-test".map_stats,
        (VALUES (true, '2026-11-19 10:00'::timestamp), (false, '2026-11-20 10:00'), (true, '2026-11-25 12:06')) v(w, t);
 
--- ---------------------------------------------------------------- v2 data (stats_test schema)
+-- ---------------------------------------------------------------- v2 data (same schema)
 -- The round key, then the same call a second later (a plugin reload): it must find the same round.
 SELECT stats_round_id('2026-11-25 11:00:00-05', 'abc123', 'test-0.0.1', '2026-11-25 12:00:00-05', 'ministry',
                       'checkpoint', NULL, 3.5, 1::smallint, '2026-11-25 12:00:00-05') AS round_id \gset
@@ -92,14 +91,14 @@ INSERT INTO kills (round_id, killed_at, victim_steam_id, victim_bot_name, victim
     (:round_id, '2026-11-25 12:03-05', 76561198000000001, NULL, NULL, NULL, 'Rifleman Jones', 'insurgents', 'ak74', false, false, false, false, false, false, 2, 0),
     (:round_id, '2026-11-25 12:04-05', 76561198000000002, NULL, NULL, 76561198000000001, NULL, NULL, 'm4a1', false, false, false, false, false, false, 2, 0);
 
-INSERT INTO player_rounds (round_id, steam_id, score, suppressions) VALUES (:round_id, 76561198000000001, 20, 2);
-INSERT INTO player_round_weapons (round_id, steam_id, weapon_name, shots, shots_hit_enemy, hits_head)
+INSERT INTO v2_player_rounds (round_id, steam_id, score, suppressions) VALUES (:round_id, 76561198000000001, 20, 2);
+INSERT INTO v2_player_round_weapons (round_id, steam_id, weapon_name, shots, shots_hit_enemy, hits_head)
 VALUES (:round_id, 76561198000000001, 'm4a1', 40, 10, 1);
 INSERT INTO revives (round_id, started_at, revived_at, reviver_steam_id, revived_steam_id, method)
 VALUES (:round_id, '2026-11-25 12:04:10-05', '2026-11-25 12:04:20-05', 76561198000000001, 76561198000000002, 'defib');
 INSERT INTO heals (round_id, started_at, ended_at, healer_steam_id, patient_steam_id, hp_healed, to_full)
 VALUES (:round_id, '2026-11-25 12:05-05', '2026-11-25 12:05:20-05', 76561198000000001, 76561198000000002, 60, true);
-INSERT INTO fire_support_calls (round_id, called_at, steam_id, support_type)
+INSERT INTO v2_fire_support_calls (round_id, called_at, steam_id, support_type)
 VALUES (:round_id, '2026-11-25 12:02-05', 76561198000000001, 'artillery');
 
 -- ---------------------------------------------------------------- checks
@@ -167,7 +166,7 @@ DO $$ BEGIN
     EXCEPTION WHEN check_violation THEN NULL;
     END;
     BEGIN
-        INSERT INTO player_round_weapons (round_id, steam_id, weapon_name, shots)
+        INSERT INTO v2_player_round_weapons (round_id, steam_id, weapon_name, shots)
         VALUES ((SELECT max(round_id) FROM rounds), 76561198000000001, 'ak74', -1);
         RAISE EXCEPTION 'negative counter accepted';
     EXCEPTION WHEN check_violation THEN NULL;
@@ -175,7 +174,9 @@ DO $$ BEGIN
 END $$;
 
 -- The Discord bot shows these descriptions to the model writing SQL: every v2 table, view and
--- column needs one. (old_* views are internal plumbing the bot is never granted.)
+-- column needs one. (old_* views are internal plumbing the bot is never granted; run.sh passes the
+-- tables the old schema files made as :old_tables.)
+CREATE TEMP TABLE old_tables AS SELECT unnest(string_to_array(:'old_tables', ',')) AS relname;
 DO $$
 DECLARE missing text;
 BEGIN
@@ -183,8 +184,8 @@ BEGIN
     FROM pg_class c
     LEFT JOIN pg_attribute a ON a.attrelid = c.oid AND a.attnum > 0 AND NOT a.attisdropped
                             AND col_description(c.oid, a.attnum) IS NULL
-    WHERE c.relnamespace = 'stats_test'::regnamespace AND c.relkind IN ('r', 'v')
-      AND c.relname NOT LIKE 'old\_%'
+    WHERE c.relnamespace = current_schema()::regnamespace AND c.relkind IN ('r', 'v')
+      AND c.relname NOT LIKE 'old\_%' AND c.relname NOT IN (SELECT relname FROM old_tables)
       AND (obj_description(c.oid, 'pg_class') IS NULL OR a.attname IS NOT NULL);
     ASSERT missing IS NULL, 'undocumented: ' || missing;
 END $$;

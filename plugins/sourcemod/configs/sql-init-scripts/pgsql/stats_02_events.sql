@@ -1,19 +1,7 @@
 -- =====================================================
 -- Stats v2 (issue #44), part 2: the player timeline and one row per game event.
--- Needs stats_01_schema.sql. See that file for how the stats_* schema is chosen.
+-- Needs stats_01_schema.sql.
 -- =====================================================
-
-DO $$
-DECLARE n int;
-BEGIN
-    SELECT count(*) INTO n FROM pg_namespace
-    WHERE nspname LIKE 'stats\_%' AND nspowner = (SELECT oid FROM pg_roles WHERE rolname = current_user);
-    IF n <> 1 THEN
-        RAISE EXCEPTION 'expected exactly one stats_* schema owned by %, found %', current_user, n;
-    END IF;
-    PERFORM set_config('search_path', (SELECT quote_ident(nspname) FROM pg_namespace
-        WHERE nspname LIKE 'stats\_%' AND nspowner = (SELECT oid FROM pg_roles WHERE rolname = current_user)), true);
-END $$;
 
 -- A stretch of one round on one team and class. Closed at any team or class change, disconnect or
 -- round end; spans still open are written when the round ends.
@@ -130,7 +118,7 @@ CREATE TABLE IF NOT EXISTS heal_holds (
     PRIMARY KEY (heal_id, started_at)
 );
 
-CREATE TABLE IF NOT EXISTS fire_support_calls (
+CREATE TABLE IF NOT EXISTS v2_fire_support_calls (
     call_id        BIGSERIAL PRIMARY KEY,
     round_id       BIGINT NOT NULL REFERENCES rounds,
     called_at      TIMESTAMPTZ NOT NULL,
@@ -140,8 +128,8 @@ CREATE TABLE IF NOT EXISTS fire_support_calls (
     failure_reason TEXT,
     refunded_at    TIMESTAMPTZ CHECK (refunded_at >= called_at)
 );
-CREATE INDEX IF NOT EXISTS idx_fire_support_calls_round_id ON fire_support_calls (round_id);
-CREATE INDEX IF NOT EXISTS idx_fire_support_calls_steam_id ON fire_support_calls (steam_id, called_at);
+CREATE INDEX IF NOT EXISTS idx_fire_support_calls_round_id ON v2_fire_support_calls (round_id);
+CREATE INDEX IF NOT EXISTS idx_fire_support_calls_steam_id ON v2_fire_support_calls (steam_id, called_at);
 
 CREATE TABLE IF NOT EXISTS objective_events (
     objective_event_id BIGSERIAL PRIMARY KEY,

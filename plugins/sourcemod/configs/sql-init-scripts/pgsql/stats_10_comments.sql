@@ -3,18 +3,6 @@
 -- meaning, so they are described once in the map below and applied to every v_* view that has them.
 -- =====================================================
 
-DO $$
-DECLARE n int;
-BEGIN
-    SELECT count(*) INTO n FROM pg_namespace
-    WHERE nspname LIKE 'stats\_%' AND nspowner = (SELECT oid FROM pg_roles WHERE rolname = current_user);
-    IF n <> 1 THEN
-        RAISE EXCEPTION 'expected exactly one stats_* schema owned by %, found %', current_user, n;
-    END IF;
-    PERFORM set_config('search_path', (SELECT quote_ident(nspname) FROM pg_namespace
-        WHERE nspname LIKE 'stats\_%' AND nspowner = (SELECT oid FROM pg_roles WHERE rolname = current_user)), true);
-END $$;
-
 COMMENT ON VIEW v_cutover IS 'When v2 recording began on this server (its first map run). Old history is used before it.';
 COMMENT ON VIEW v_kills IS 'kills plus each side''s team and the kind of death. Use this, not kills, for counting.';
 COMMENT ON VIEW v_killstreaks IS 'Best killstreak per player in v2 data: enemy kills between deaths, carried across rounds.';

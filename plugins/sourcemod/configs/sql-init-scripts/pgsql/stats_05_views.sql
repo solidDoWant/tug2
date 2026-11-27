@@ -9,18 +9,6 @@
 -- Needs stats_01..04.
 -- =====================================================
 
-DO $$
-DECLARE n int;
-BEGIN
-    SELECT count(*) INTO n FROM pg_namespace
-    WHERE nspname LIKE 'stats\_%' AND nspowner = (SELECT oid FROM pg_roles WHERE rolname = current_user);
-    IF n <> 1 THEN
-        RAISE EXCEPTION 'expected exactly one stats_* schema owned by %, found %', current_user, n;
-    END IF;
-    PERFORM set_config('search_path', (SELECT quote_ident(nspname) FROM pg_namespace
-        WHERE nspname LIKE 'stats\_%' AND nspowner = (SELECT oid FROM pg_roles WHERE rolname = current_user)), true);
-END $$;
-
 CREATE OR REPLACE VIEW v_cutover AS
 SELECT COALESCE(min(started_at), 'infinity'::timestamptz) AS cutover_at FROM map_runs;
 
@@ -77,7 +65,7 @@ GROUP BY steam_id;
 CREATE OR REPLACE VIEW v_player_round_stats AS
 WITH keys AS (
     SELECT round_id, steam_id FROM player_spans
-    UNION SELECT round_id, steam_id FROM player_rounds
+    UNION SELECT round_id, steam_id FROM v2_player_rounds
     UNION SELECT round_id, attacker_steam_id FROM kills WHERE attacker_steam_id IS NOT NULL
     UNION SELECT round_id, victim_steam_id FROM kills WHERE victim_steam_id IS NOT NULL
 ),
@@ -125,13 +113,13 @@ he AS (
 ),
 fs AS (
     SELECT round_id, steam_id, count(*) FILTER (WHERE failure_reason IS NULL) AS fire_support_calls
-    FROM fire_support_calls GROUP BY 1, 2
+    FROM v2_fire_support_calls GROUP BY 1, 2
 ),
 wp AS (
     SELECT round_id, steam_id, sum(shots) AS shots, sum(shots_hit_enemy) AS shots_hit_enemy,
            sum(shots_hit_friendly) AS shots_hit_friendly, sum(hits_head) AS headshot_hits,
            sum(damage_enemy) AS damage_enemy
-    FROM player_round_weapons GROUP BY 1, 2
+    FROM v2_player_round_weapons GROUP BY 1, 2
 )
 SELECT k.round_id, k.steam_id, COALESCE(r.ended_at, r.started_at) AS at, 'v2'::text AS source,
        COALESCE(kk.kills, 0) AS kills, COALESCE(kd.deaths, 0) AS deaths,
@@ -159,7 +147,7 @@ LEFT JOIN ka USING (round_id, steam_id) LEFT JOIN ob USING (round_id, steam_id)
 LEFT JOIN sp USING (round_id, steam_id) LEFT JOIN rv USING (round_id, steam_id)
 LEFT JOIN rd USING (round_id, steam_id) LEFT JOIN he USING (round_id, steam_id)
 LEFT JOIN fs USING (round_id, steam_id) LEFT JOIN wp USING (round_id, steam_id)
-LEFT JOIN player_rounds pr USING (round_id, steam_id)
+LEFT JOIN v2_player_rounds pr USING (round_id, steam_id)
 UNION ALL
 SELECT NULL, o.steam_id::bigint, o.recorded_at, 'old',
        o.kills, o.deaths, o.suicides, NULL, NULL, NULL, NULL, NULL, o.headshot_given,

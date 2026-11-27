@@ -5,19 +5,7 @@
 -- Needs stats_01_schema.sql.
 -- =====================================================
 
-DO $$
-DECLARE n int;
-BEGIN
-    SELECT count(*) INTO n FROM pg_namespace
-    WHERE nspname LIKE 'stats\_%' AND nspowner = (SELECT oid FROM pg_roles WHERE rolname = current_user);
-    IF n <> 1 THEN
-        RAISE EXCEPTION 'expected exactly one stats_* schema owned by %, found %', current_user, n;
-    END IF;
-    PERFORM set_config('search_path', (SELECT quote_ident(nspname) FROM pg_namespace
-        WHERE nspname LIKE 'stats\_%' AND nspowner = (SELECT oid FROM pg_roles WHERE rolname = current_user)), true);
-END $$;
-
-CREATE TABLE IF NOT EXISTS player_rounds (
+CREATE TABLE IF NOT EXISTS v2_player_rounds (
     round_id          BIGINT NOT NULL REFERENCES rounds,
     steam_id          BIGINT NOT NULL REFERENCES players,
     score             INTEGER NOT NULL DEFAULT 0,
@@ -31,9 +19,9 @@ CREATE TABLE IF NOT EXISTS player_rounds (
     fall_damage       INTEGER NOT NULL DEFAULT 0 CHECK (fall_damage >= 0),
     PRIMARY KEY (round_id, steam_id)
 );
-CREATE INDEX IF NOT EXISTS idx_player_rounds_steam_id ON player_rounds (steam_id);
+CREATE INDEX IF NOT EXISTS idx_player_rounds_steam_id ON v2_player_rounds (steam_id);
 
-CREATE TABLE IF NOT EXISTS player_round_weapons (
+CREATE TABLE IF NOT EXISTS v2_player_round_weapons (
     round_id           BIGINT NOT NULL,
     steam_id           BIGINT NOT NULL,
     weapon_name        TEXT NOT NULL REFERENCES weapons,
@@ -51,9 +39,9 @@ CREATE TABLE IF NOT EXISTS player_round_weapons (
     deploys            INTEGER NOT NULL DEFAULT 0 CHECK (deploys >= 0),
     seconds_drawn      INTEGER NOT NULL DEFAULT 0 CHECK (seconds_drawn >= 0),
     PRIMARY KEY (round_id, steam_id, weapon_name),
-    FOREIGN KEY (round_id, steam_id) REFERENCES player_rounds
+    FOREIGN KEY (round_id, steam_id) REFERENCES v2_player_rounds
 );
-CREATE INDEX IF NOT EXISTS idx_player_round_weapons_weapon ON player_round_weapons (weapon_name);
+CREATE INDEX IF NOT EXISTS idx_player_round_weapons_weapon ON v2_player_round_weapons (weapon_name);
 
 -- The one way writers name a round. Every argument is something the game server already knows, so a
 -- plugin never waits on the database to learn an id: gg2_rounds formats this call and every writer
@@ -75,7 +63,6 @@ CREATE OR REPLACE FUNCTION stats_round_id(
     p_round_started  TIMESTAMPTZ
 ) RETURNS BIGINT
 LANGUAGE plpgsql
-SET search_path FROM CURRENT
 AS $$
 DECLARE
     v_boot    TIMESTAMPTZ;
@@ -98,7 +85,7 @@ BEGIN
       AND map_name = p_map_name
     ORDER BY abs(extract(epoch FROM started_at - p_map_started_at)) LIMIT 1;
     IF v_run IS NULL THEN
-        INSERT INTO maps (map_name) VALUES (p_map_name) ON CONFLICT DO NOTHING;
+        INSERT INTO v2_maps (map_name) VALUES (p_map_name) ON CONFLICT DO NOTHING;
         INSERT INTO game_modes (game_mode) VALUES (p_game_mode) ON CONFLICT DO NOTHING;
         IF p_theater IS NOT NULL THEN
             INSERT INTO theaters (theater_name) VALUES (p_theater) ON CONFLICT DO NOTHING;
@@ -124,4 +111,8 @@ BEGIN
         END IF;
     END IF;
     RETURN v_round;
+END $$;
+-- Resolve names in this server's schema only, never a fall-through to public.
+DO $$ BEGIN
+    EXECUTE format('ALTER FUNCTION stats_round_id(timestamptz, text, text, timestamptz, text, text, text, real, smallint, timestamptz) SET search_path = %I', current_schema());
 END $$;

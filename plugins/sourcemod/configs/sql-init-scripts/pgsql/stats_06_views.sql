@@ -7,18 +7,6 @@
 -- the same transaction. Needs stats_01..05.
 -- =====================================================
 
-DO $$
-DECLARE n int;
-BEGIN
-    SELECT count(*) INTO n FROM pg_namespace
-    WHERE nspname LIKE 'stats\_%' AND nspowner = (SELECT oid FROM pg_roles WHERE rolname = current_user);
-    IF n <> 1 THEN
-        RAISE EXCEPTION 'expected exactly one stats_* schema owned by %, found %', current_user, n;
-    END IF;
-    PERFORM set_config('search_path', (SELECT quote_ident(nspname) FROM pg_namespace
-        WHERE nspname LIKE 'stats\_%' AND nspowner = (SELECT oid FROM pg_roles WHERE rolname = current_user)), true);
-END $$;
-
 -- One row per player per weapon per round; old history rows (before the cutover) have no round_id.
 CREATE OR REPLACE VIEW v_player_round_weapon_stats AS
 WITH wk AS (
@@ -38,7 +26,7 @@ SELECT COALESCE(w.round_id, wk.round_id) AS round_id, COALESCE(w.steam_id, wk.st
        COALESCE(w.damage_enemy, 0) AS damage_enemy, COALESCE(w.damage_friendly, 0) AS damage_friendly,
        COALESCE(w.reloads, 0) AS reloads, COALESCE(w.deploys, 0) AS deploys,
        COALESCE(w.seconds_drawn, 0) AS seconds_drawn
-FROM player_round_weapons w
+FROM v2_player_round_weapons w
 FULL JOIN wk ON wk.round_id = w.round_id AND wk.steam_id = w.steam_id AND wk.weapon_name = w.weapon_name
 JOIN rounds r ON r.round_id = COALESCE(w.round_id, wk.round_id)
 UNION ALL

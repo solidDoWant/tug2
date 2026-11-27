@@ -223,15 +223,8 @@ func TestSchemaFromMigrations(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer adminMig.Close(ctx)
-	// The servers' own schemas, and the stats v2 ones an admin creates (stats_01_schema.sql): only
-	// test lists the v2 files so far.
-	for _, stmt := range []string{
-		`CREATE SCHEMA "insurgency-test" AUTHORIZATION "insurgency-test"`,
-		`CREATE SCHEMA stats_test AUTHORIZATION "insurgency-test"`,
-	} {
-		if err := exec(adminMig, stmt); err != nil {
-			t.Fatal(err)
-		}
+	if err := exec(adminMig, `CREATE SCHEMA "insurgency-test" AUTHORIZATION "insurgency-test"`); err != nil {
+		t.Fatal(err)
 	}
 
 	for _, run := range []struct{ role, server string }{{"insurgency", "main"}, {"insurgency-test", "test"}} {

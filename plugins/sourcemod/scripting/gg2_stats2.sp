@@ -1,6 +1,6 @@
 // gg2_stats2 - stats v2 recorder (issue #44).
 //
-// Records raw game facts into the server's stats_* schema: the match timeline (build, boot, map runs,
+// Records raw game facts into the stats v2 tables: the match timeline (build, boot, map runs,
 // rounds, survival levels, counterattacks), who was on which team and class when, every death with a
 // human on either side, objectives, revives, heals, fire support calls, loadouts at spawn, and the
 // per-round counters that are too many to keep one row each (shots, hits, damage, ...). Totals are never
@@ -14,14 +14,14 @@
 //     stats_round_id(boot, build, map start, map, mode, theater, load, round number, round start), which
 //     creates whatever is missing. Nothing waits on the database to learn an id.
 //   - Events are buffered and flushed every FLUSH_INTERVAL seconds or FLUSH_ROWS rows, and at round
-//     start/end, disconnect and map end, in one transaction that first points search_path at the
-//     stats_* schema. A crash loses at most one interval.
+//     start/end, disconnect and map end, in one transaction. A crash loses at most one interval.
 //   - Times are boot time + engine time (to_timestamp(<boot unix> + <engine seconds>)): sub-second, and
 //     never a 32-bit float of a Unix time, which would be ~2 minutes coarse.
 //   - Connection errors are retried; anything else (a constraint the data broke) is logged with the
 //     query and dropped, since resending it can never succeed and would block every later flush.
-//   - Recording is off unless exactly one stats_* schema owned by the database user exists, so a server
-//     whose schema an admin has not created yet (main, until its turn) records nothing.
+//   - Recording is off until the stats_*.sql migrations have created the v2 tables in the server's
+//     schema (checked at connect and each map start), so a server that does not list them records
+//     nothing.
 
 #pragma semicolon 1
 #pragma newdecls required
@@ -76,7 +76,7 @@ enum
 char g_tableInsert[T_COUNT][] = {
     "INSERT INTO kills (round_id, killed_at, victim_steam_id, victim_bot_name, victim_bot_team, victim_bot_class, victim_x, victim_y, victim_z, attacker_steam_id, attacker_bot_name, attacker_bot_team, attacker_bot_class, attacker_x, attacker_y, attacker_z, assister_steam_id, assister_bot_name, weapon_name, hitgroup, headshot, domination, revenge, savior, offensive, defensive, damagebits, customkill, attacker_stance, attacker_aim) VALUES ",
     "INSERT INTO player_spans (round_id, steam_id, started_at, ended_at, team, squad, squad_slot, class_template) VALUES ",
-    "INSERT INTO fire_support_calls (round_id, called_at, steam_id, support_type, target_x, target_y, target_z, failure_reason, refunded_at) VALUES ",
+    "INSERT INTO v2_fire_support_calls (round_id, called_at, steam_id, support_type, target_x, target_y, target_z, failure_reason, refunded_at) VALUES ",
     "INSERT INTO survival_levels (round_id, level, reached_at) VALUES ",
     "INSERT INTO counterattacks (round_id, control_point, started_at, ended_at, finale) VALUES "
 };
@@ -102,9 +102,8 @@ int       g_bufferedRows;
 
 Database g_db;
 Database g_adminDb;           // punitive-persistence, for player_connections
-bool     g_ready;             // connected and the stats_* schema found
-bool     g_disabled;          // no stats_* schema for this server: record nothing
-char     g_schema[160];       // quoted, ready for SET LOCAL search_path
+bool     g_ready;             // connected and the v2 tables found
+bool     g_disabled;          // no v2 tables in this server's schema: record nothing
 
 int   g_bootUnix;             // Unix seconds the engine clock started at
 char  g_buildCommit[96] = "unknown";
@@ -330,11 +329,15 @@ public void OnDatabaseConnected(Database db, const char[] error, any data)
         return;
     }
     g_db = db;
-    // The one stats_* schema the database user owns. None (an admin has not created it yet) means
-    // this server does not record v2 stats; more than one is a misconfiguration.
-    g_db.Query(OnSchemaFound,
-               "SELECT quote_ident(nspname) FROM pg_namespace WHERE nspname LIKE 'stats\\_%' "
-             ... "AND nspowner = (SELECT oid FROM pg_roles WHERE rolname = current_user)");
+    CheckTables();
+}
+
+// The v2 tables exist once the stats_*.sql migrations have run in this server's schema; stats_round_id
+// stands for them all. Without them this server does not record v2 stats. ::int, since FetchInt reads
+// a PostgreSQL boolean as 0.
+void CheckTables()
+{
+    g_db.Query(OnTablesChecked, "SELECT (to_regproc('stats_round_id') IS NOT NULL)::int, current_schema()");
 }
 
 public Action Timer_Reconnect(Handle timer)
@@ -344,25 +347,26 @@ public Action Timer_Reconnect(Handle timer)
     return Plugin_Stop;
 }
 
-public void OnSchemaFound(Database db, DBResultSet results, const char[] error, any data)
+public void OnTablesChecked(Database db, DBResultSet results, const char[] error, any data)
 {
-    if (results == null)
+    if (results == null || !results.FetchRow())
     {
-        LogError("[STATS2] Schema lookup failed: %s", error);
+        LogError("[STATS2] Table check failed: %s", error);
         return;
     }
-    if (results.RowCount != 1)
+    char schema[128];
+    results.FetchString(1, schema, sizeof(schema));
+    if (results.FetchInt(0) == 0)
     {
-        LogMessage("[STATS2] %d stats_* schemas owned by this database user (need exactly 1): not recording",
-                   results.RowCount);
+        if (!g_disabled)
+            LogMessage("[STATS2] No stats v2 tables in schema %s (stats_*.sql not applied): not recording", schema);
         g_disabled = true;
         ClearBuffers();
         return;
     }
-    results.FetchRow();
-    results.FetchString(0, g_schema, sizeof(g_schema));
+    g_disabled = false;
     g_ready = true;
-    LogMessage("[STATS2] Recording into schema %s", g_schema);
+    LogMessage("[STATS2] Recording into schema %s", schema);
 }
 
 public void OnAdminDatabaseConnected(Database db, const char[] error, any data)
@@ -543,9 +547,6 @@ void Flush()
     ArrayList queries = new ArrayList(ByteCountToCells(STMT_MAX + 1));
     char stmt[STMT_MAX + 1];
 
-    Format(stmt, sizeof(stmt), "SET LOCAL search_path TO %s", g_schema);
-    queries.PushString(stmt);
-
     // Players and weapons first: everything references them.
     BuildKeyInsert(queries, g_flushPlayers, "INSERT INTO players (steam_id) VALUES ", "", " ON CONFLICT DO NOTHING");
     BuildKeyInsert(queries, g_flushWeapons, "INSERT INTO weapons (weapon_name) VALUES ", "'", " ON CONFLICT DO NOTHING");
@@ -719,6 +720,9 @@ public void OnMapStart()
     float now = GetEngineTime();
     g_loadSeconds = g_lastMapEnd >= 0.0 ? now - g_lastMapEnd : -1.0;
     StartMap(now);
+    // A first boot can connect before DatabaseMigrator has created the tables.
+    if (g_disabled && g_db != null)
+        CheckTables();
 }
 
 void StartMap(float startedAt)
@@ -1850,7 +1854,7 @@ public void FireSupport_OnRefund(int client)
     char ts[64], stmt[512];
     Ts(GetEngineTime(), ts, sizeof(ts));
     Format(stmt, sizeof(stmt),
-           "UPDATE fire_support_calls SET refunded_at = %s WHERE call_id = (SELECT max(call_id) FROM fire_support_calls WHERE steam_id = %s AND refunded_at IS NULL)",
+           "UPDATE v2_fire_support_calls SET refunded_at = %s WHERE call_id = (SELECT max(call_id) FROM v2_fire_support_calls WHERE steam_id = %s AND refunded_at IS NULL)",
            ts, g_sid[client]);
     AddStmt(stmt);
 }
@@ -1903,7 +1907,7 @@ void EmitCounters(int client)
     NotePlayer(g_sid[client]);
     char stmt[2048];
     Format(stmt, sizeof(stmt),
-           "INSERT INTO player_rounds AS p (round_id, steam_id, score, capture_ticks, objective_resets, suppressions, times_suppressed, enemies_flashed, teammates_flashed, damage_taken, fall_damage) "
+           "INSERT INTO v2_player_rounds AS p (round_id, steam_id, score, capture_ticks, objective_resets, suppressions, times_suppressed, enemies_flashed, teammates_flashed, damage_taken, fall_damage) "
          ... "SELECT id, %s, %d, %d, %d, %d, %d, %d, %d, %d, %d FROM r ON CONFLICT (round_id, steam_id) DO UPDATE SET "
          ... "score = p.score + EXCLUDED.score, capture_ticks = p.capture_ticks + EXCLUDED.capture_ticks, "
          ... "objective_resets = p.objective_resets + EXCLUDED.objective_resets, suppressions = p.suppressions + EXCLUDED.suppressions, "
@@ -1953,7 +1957,7 @@ void EmitWeaponRows(int client, const char[] values)
 {
     char stmt[4096];
     Format(stmt, sizeof(stmt),
-           "INSERT INTO player_round_weapons AS w (round_id, steam_id, weapon_name, shots, shots_hit_enemy, shots_hit_friendly, hits_head, hits_chest, hits_stomach, hits_arms, hits_legs, damage_enemy, damage_friendly, reloads, deploys, seconds_drawn) "
+           "INSERT INTO v2_player_round_weapons AS w (round_id, steam_id, weapon_name, shots, shots_hit_enemy, shots_hit_friendly, hits_head, hits_chest, hits_stomach, hits_arms, hits_legs, damage_enemy, damage_friendly, reloads, deploys, seconds_drawn) "
          ... "SELECT r.id, %s, v.* FROM r, (VALUES %s) v ON CONFLICT (round_id, steam_id, weapon_name) DO UPDATE SET "
          ... "shots = w.shots + EXCLUDED.shots, shots_hit_enemy = w.shots_hit_enemy + EXCLUDED.shots_hit_enemy, "
          ... "shots_hit_friendly = w.shots_hit_friendly + EXCLUDED.shots_hit_friendly, hits_head = w.hits_head + EXCLUDED.hits_head, "
