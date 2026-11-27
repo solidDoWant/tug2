@@ -82,14 +82,14 @@ INSERT INTO player_spans (round_id, steam_id, started_at, ended_at, team, class_
     (:round_id, 76561198000000002, '2026-11-25 12:00-05', '2026-11-25 12:06-05', 'security', 'template_rifleman_security');
 
 INSERT INTO weapons (weapon_name) VALUES ('m4a1'), ('ak74');
-INSERT INTO kills (round_id, killed_at, victim_steam_id, victim_bot_name, victim_bot_team, attacker_steam_id,
-                   attacker_bot_name, attacker_bot_team, weapon_name, headshot, domination, revenge, savior,
+INSERT INTO kills (round_id, killed_at, victim_steam_id, victim_bot_name, victim_team, attacker_steam_id,
+                   attacker_bot_name, attacker_team, weapon_name, headshot, domination, revenge, savior,
                    offensive, defensive, damagebits, customkill) VALUES
-    (:round_id, '2026-11-25 12:02-05', NULL, 'Rifleman Jones', 'insurgents', 76561198000000001, NULL, NULL, 'm4a1', true, false, false, false, false, false, 2, 0),
-    (:round_id, '2026-11-25 12:02:10-05', NULL, 'Rifleman Smith', 'insurgents', 76561198000000001, NULL, NULL, 'm4a1', false, false, false, false, false, false, 2, 0),
-    (:round_id, '2026-11-25 12:02:20-05', NULL, 'Rifleman Brown', 'insurgents', 76561198000000001, NULL, NULL, 'm4a1', false, false, false, false, false, false, 2, 0),
-    (:round_id, '2026-11-25 12:03-05', 76561198000000001, NULL, NULL, NULL, 'Rifleman Jones', 'insurgents', 'ak74', false, false, false, false, false, false, 2, 0),
-    (:round_id, '2026-11-25 12:04-05', 76561198000000002, NULL, NULL, 76561198000000001, NULL, NULL, 'm4a1', false, false, false, false, false, false, 2, 0);
+    (:round_id, '2026-11-25 12:02-05', NULL, 'Rifleman Jones', 'insurgents', 76561198000000001, NULL, 'security', 'm4a1', true, false, false, false, false, false, 2, 0),
+    (:round_id, '2026-11-25 12:02:10-05', NULL, 'Rifleman Smith', 'insurgents', 76561198000000001, NULL, 'security', 'm4a1', false, false, false, false, false, false, 2, 0),
+    (:round_id, '2026-11-25 12:02:20-05', NULL, 'Rifleman Brown', 'insurgents', 76561198000000001, NULL, 'security', 'm4a1', false, false, false, false, false, false, 2, 0),
+    (:round_id, '2026-11-25 12:03-05', 76561198000000001, NULL, 'security', NULL, 'Rifleman Jones', 'insurgents', 'ak74', false, false, false, false, false, false, 2, 0),
+    (:round_id, '2026-11-25 12:04-05', 76561198000000002, NULL, 'security', 76561198000000001, NULL, 'security', 'm4a1', false, false, false, false, false, false, 2, 0);
 
 INSERT INTO v2_player_rounds (round_id, steam_id, score, suppressions) VALUES (:round_id, 76561198000000001, 20, 2);
 INSERT INTO v2_player_round_weapons (round_id, steam_id, weapon_name, shots, shots_hit_enemy, hits_head)

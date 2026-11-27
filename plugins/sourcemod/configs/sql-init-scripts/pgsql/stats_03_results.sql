@@ -71,30 +71,26 @@ CREATE TABLE IF NOT EXISTS player_round_weapon_results (
 );
 CREATE INDEX IF NOT EXISTS idx_player_round_weapon_results_steam_id ON player_round_weapon_results (steam_id);
 
--- The given rounds' kills with the kind of death, as v_kills has it (a human's team comes from the
--- span they were in; each span lasts until their next one starts).
+-- The kind of a death: the one definition, used by v_kills and the cache.
+CREATE OR REPLACE FUNCTION stats_kill_kind(p_attacker BIGINT, p_attacker_bot TEXT, p_victim BIGINT,
+                                           p_attacker_team team, p_victim_team team)
+RETURNS TEXT LANGUAGE sql IMMUTABLE AS $f$
+SELECT CASE
+           WHEN p_attacker IS NULL AND p_attacker_bot IS NULL THEN 'world'
+           WHEN p_attacker = p_victim THEN 'suicide'
+           WHEN p_attacker_team = p_victim_team THEN 'team_kill'
+           ELSE 'enemy'
+       END
+$f$;
+
+-- The given rounds' kills with the kind of death.
 CREATE OR REPLACE FUNCTION stats_round_kills(p_rounds BIGINT[])
 RETURNS TABLE (round_id BIGINT, killed_at TIMESTAMPTZ, attacker_steam_id BIGINT, victim_steam_id BIGINT,
                assister_steam_id BIGINT, weapon_name TEXT, headshot BOOLEAN, kind TEXT)
 LANGUAGE sql STABLE AS $f$
-WITH si AS (
-    SELECT s.round_id, s.steam_id, s.team, s.started_at AS from_at,
-           COALESCE(lead(s.started_at) OVER (PARTITION BY s.round_id, s.steam_id ORDER BY s.started_at), 'infinity') AS to_at
-    FROM player_spans s WHERE s.round_id = ANY (p_rounds)
-)
 SELECT k.round_id, k.killed_at, k.attacker_steam_id, k.victim_steam_id, k.assister_steam_id, k.weapon_name, k.headshot,
-       CASE
-           WHEN k.attacker_steam_id IS NULL AND k.attacker_bot_name IS NULL THEN 'world'
-           WHEN k.attacker_steam_id = k.victim_steam_id THEN 'suicide'
-           WHEN COALESCE(k.attacker_bot_team, a.team) = COALESCE(k.victim_bot_team, v.team) THEN 'team_kill'
-           ELSE 'enemy'
-       END
-FROM kills k
-LEFT JOIN si a ON a.round_id = k.round_id AND a.steam_id = k.attacker_steam_id
-              AND k.killed_at >= a.from_at AND k.killed_at < a.to_at
-LEFT JOIN si v ON v.round_id = k.round_id AND v.steam_id = k.victim_steam_id
-              AND k.killed_at >= v.from_at AND k.killed_at < v.to_at
-WHERE k.round_id = ANY (p_rounds)
+       stats_kill_kind(k.attacker_steam_id, k.attacker_bot_name, k.victim_steam_id, k.attacker_team, k.victim_team)
+FROM kills k WHERE k.round_id = ANY (p_rounds)
 $f$;
 
 -- One row per player per round for the given rounds: the definition of every per-round stat.
@@ -217,7 +213,7 @@ $f$;
 DO $$
 DECLARE f text;
 BEGIN
-    FOREACH f IN ARRAY ARRAY['stats_round_kills(bigint[])', 'stats_round_results(bigint[])', 'stats_round_weapon_results(bigint[])'] LOOP
+    FOREACH f IN ARRAY ARRAY['stats_kill_kind(bigint,text,bigint,team,team)', 'stats_round_kills(bigint[])', 'stats_round_results(bigint[])', 'stats_round_weapon_results(bigint[])'] LOOP
         EXECUTE format('ALTER FUNCTION %s SET search_path = %I', f, current_schema());
     END LOOP;
 END $$;
@@ -225,7 +221,8 @@ END $$;
 -- Identifies the current definitions: a cached round computed with other ones is out of date.
 CREATE OR REPLACE FUNCTION stats_results_hash() RETURNS TEXT
 LANGUAGE sql STABLE AS $f$
-SELECT md5(pg_get_functiondef('stats_round_kills(bigint[])'::regprocedure)
+SELECT md5(pg_get_functiondef('stats_kill_kind(bigint,text,bigint,team,team)'::regprocedure)
+        || pg_get_functiondef('stats_round_kills(bigint[])'::regprocedure)
         || pg_get_functiondef('stats_round_results(bigint[])'::regprocedure)
         || pg_get_functiondef('stats_round_weapon_results(bigint[])'::regprocedure))
 $f$;

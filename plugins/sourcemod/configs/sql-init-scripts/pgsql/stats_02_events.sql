@@ -33,19 +33,20 @@ CREATE TABLE IF NOT EXISTS spawn_items (
     PRIMARY KEY (spawn_id, item_id)
 );
 
--- Every player_death with a human on either side.
+-- Every player_death with a human on either side. Each side's team is as the game had it at the death
+-- (humans and bots alike), so a kill's kind needs nothing but its own row.
 CREATE TABLE IF NOT EXISTS kills (
     kill_id            BIGSERIAL PRIMARY KEY,
     round_id           BIGINT NOT NULL REFERENCES rounds,
     killed_at          TIMESTAMPTZ NOT NULL,
     victim_steam_id    BIGINT REFERENCES players,
     victim_bot_name    TEXT,
-    victim_bot_team    team,
+    victim_team        team,
     victim_bot_class_id SMALLINT REFERENCES bot_classes,
     victim_x REAL, victim_y REAL, victim_z REAL,
     attacker_steam_id  BIGINT REFERENCES players,
     attacker_bot_name  TEXT,
-    attacker_bot_team  team,
+    attacker_team      team,
     attacker_bot_class_id SMALLINT REFERENCES bot_classes,
     attacker_x REAL, attacker_y REAL, attacker_z REAL,
     assister_steam_id  BIGINT REFERENCES players,
@@ -65,8 +66,8 @@ CREATE TABLE IF NOT EXISTS kills (
     CHECK (num_nonnulls(victim_steam_id, victim_bot_name) = 1),
     CHECK (num_nonnulls(attacker_steam_id, attacker_bot_name) <= 1),
     CHECK (num_nonnulls(assister_steam_id, assister_bot_name) <= 1),
-    CHECK (victim_bot_name IS NOT NULL OR (victim_bot_team IS NULL AND victim_bot_class_id IS NULL)),
-    CHECK (attacker_bot_name IS NOT NULL OR (attacker_bot_team IS NULL AND attacker_bot_class_id IS NULL))
+    CHECK (victim_bot_name IS NOT NULL OR victim_bot_class_id IS NULL),
+    CHECK (attacker_bot_name IS NOT NULL OR attacker_bot_class_id IS NULL)
 );
 CREATE INDEX IF NOT EXISTS idx_kills_round_id ON kills (round_id);
 -- Kills arrive in time order, so a BRIN index serves time ranges at a few hundred KB a year instead

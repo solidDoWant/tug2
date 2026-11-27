@@ -76,7 +76,7 @@ enum
 };
 
 char g_tableInsert[T_COUNT][] = {
-    "INSERT INTO kills (round_id, killed_at, victim_steam_id, victim_bot_name, victim_bot_team, victim_bot_class_id, victim_x, victim_y, victim_z, attacker_steam_id, attacker_bot_name, attacker_bot_team, attacker_bot_class_id, attacker_x, attacker_y, attacker_z, assister_steam_id, assister_bot_name, weapon_name, hitgroup, headshot, domination, revenge, savior, offensive, defensive, damagebits, customkill, attacker_stance, attacker_aim) VALUES ",
+    "INSERT INTO kills (round_id, killed_at, victim_steam_id, victim_bot_name, victim_team, victim_bot_class_id, victim_x, victim_y, victim_z, attacker_steam_id, attacker_bot_name, attacker_team, attacker_bot_class_id, attacker_x, attacker_y, attacker_z, assister_steam_id, assister_bot_name, weapon_name, hitgroup, headshot, domination, revenge, savior, offensive, defensive, damagebits, customkill, attacker_stance, attacker_aim) VALUES ",
     "INSERT INTO player_spans (round_id, steam_id, started_at, ended_at, team, squad, squad_slot, class_template) VALUES ",
     "INSERT INTO v2_fire_support_calls (round_id, called_at, steam_id, support_type, target_x, target_y, target_z, failure_reason, refunded_at) VALUES ",
     "INSERT INTO survival_levels (round_id, level, reached_at) VALUES ",
@@ -1305,7 +1305,7 @@ public Action Event_PlayerDeath(Event event, const char[] name, bool dontBroadca
     char ts[64];
     Ts(GetEngineTime(), ts, sizeof(ts));
 
-    // Victim: SteamID, or bot name, team and class.
+    // Victim: team, and SteamID or bot name and class.
     char vsid[24] = "NULL", vbot[140] = "NULL", vteam[24] = "NULL", vcls[200] = "NULL";
     DescribeSide(victim, vsid, vbot, vteam, vcls);
 
@@ -1367,6 +1367,7 @@ void DescribeSide(int client, char sid[24], char bot[140], char team[24], char c
     {
         strcopy(sid, 24, g_sid[client]);
         NotePlayer(g_sid[client]);
+        TeamName(GetClientTeam(client), team, 24);
         return;
     }
     if (!IsFakeClient(client)) return;    // an unauthenticated human: leave the side anonymous

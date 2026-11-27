@@ -13,38 +13,17 @@
 CREATE OR REPLACE VIEW v_cutover AS
 SELECT COALESCE(min(started_at), 'infinity'::timestamptz) AS cutover_at FROM map_runs;
 
--- kills, plus the bots' class names, each side's team (bots: their own column; humans: the span they were in at the time),
--- whether the round was live, and what kind of death it was.
---
--- A human's span is found with a hash join on (round, player) and an interval test rather than a
--- per-kill lookup (4x faster at a year of data): each span is taken to last until the player's next
--- span starts, so the intervals never overlap and every kill matches at most one.
+-- kills, plus the bots' class names, whether the round was live, and what kind of death it was.
 CREATE OR REPLACE VIEW v_kills AS
-WITH si AS (
-    SELECT round_id, steam_id, team, started_at AS from_at,
-           COALESCE(lead(started_at) OVER (PARTITION BY round_id, steam_id ORDER BY started_at), 'infinity') AS to_at
-    FROM player_spans
-)
 SELECT k.*,
        vc.class_template AS victim_bot_class, ac.class_template AS attacker_bot_class,
-       COALESCE(k.attacker_bot_team, a.team) AS attacker_team,
-       COALESCE(k.victim_bot_team, v.team)   AS victim_team,
        (r.live_at IS NOT NULL AND k.killed_at >= r.live_at
             AND (r.ended_at IS NULL OR k.killed_at <= r.ended_at)) AS during_live,
-       CASE
-           WHEN k.attacker_steam_id IS NULL AND k.attacker_bot_name IS NULL THEN 'world'
-           WHEN k.attacker_steam_id = k.victim_steam_id THEN 'suicide'
-           WHEN COALESCE(k.attacker_bot_team, a.team) = COALESCE(k.victim_bot_team, v.team) THEN 'team_kill'
-           ELSE 'enemy'
-       END AS kind
+       stats_kill_kind(k.attacker_steam_id, k.attacker_bot_name, k.victim_steam_id, k.attacker_team, k.victim_team) AS kind
 FROM kills k
 JOIN rounds r USING (round_id)
 LEFT JOIN bot_classes vc ON vc.bot_class_id = k.victim_bot_class_id
-LEFT JOIN bot_classes ac ON ac.bot_class_id = k.attacker_bot_class_id
-LEFT JOIN si a ON a.round_id = k.round_id AND a.steam_id = k.attacker_steam_id
-              AND k.killed_at >= a.from_at AND k.killed_at < a.to_at
-LEFT JOIN si v ON v.round_id = k.round_id AND v.steam_id = k.victim_steam_id
-              AND k.killed_at >= v.from_at AND k.killed_at < v.to_at;
+LEFT JOIN bot_classes ac ON ac.bot_class_id = k.attacker_bot_class_id;
 
 -- Per-round results (stats_03_results.sql): cached rows plus the rounds not cached, computed live: exact at any moment.
 CREATE OR REPLACE VIEW player_round_results_current AS

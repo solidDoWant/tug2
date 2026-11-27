@@ -25,15 +25,15 @@ FROM sr, (VALUES (76561198000000021), (76561198000000022), (76561198000000023)) 
 
 -- Each player: 0-40 events per round at whole seconds (so kills and deaths sometimes share an
 -- instant), each an enemy kill (70%), a death to a bot, a suicide or a team kill by another player.
-INSERT INTO kills (round_id, killed_at, victim_steam_id, victim_bot_name, victim_bot_team, attacker_steam_id,
-                   attacker_bot_name, attacker_bot_team, weapon_name, headshot, domination, revenge, savior,
+INSERT INTO kills (round_id, killed_at, victim_steam_id, victim_bot_name, victim_team, attacker_steam_id,
+                   attacker_bot_name, attacker_team, weapon_name, headshot, domination, revenge, savior,
                    offensive, defensive, damagebits, customkill)
 SELECT e.round_id, e.t,
        CASE WHEN e.r < 0.7 THEN NULL ELSE e.steam_id END,
-       CASE WHEN e.r < 0.7 THEN 'Bot ' || (e.i % 7) END, CASE WHEN e.r < 0.7 THEN 'insurgents'::team END,
+       CASE WHEN e.r < 0.7 THEN 'Bot ' || (e.i % 7) END, CASE WHEN e.r < 0.7 THEN 'insurgents' ELSE 'security' END::team,
        CASE WHEN e.r < 0.7 THEN e.steam_id WHEN e.r < 0.8 THEN e.steam_id
             WHEN e.r < 0.85 THEN 76561198000000021 + (e.steam_id - 76561198000000020) % 3 END,
-       CASE WHEN e.r >= 0.85 THEN 'Bot ' || (e.i % 7) END, CASE WHEN e.r >= 0.85 THEN 'insurgents'::team END,
+       CASE WHEN e.r >= 0.85 THEN 'Bot ' || (e.i % 7) END, CASE WHEN e.r >= 0.85 THEN 'insurgents' ELSE 'security' END::team,
        'm4a1', e.r < 0.2, false, false, false, false, false, 2, 0
 FROM (SELECT sr.round_id, p.steam_id, g.i, random() AS r,
              sr.t0 + (floor(random() * 600) || ' seconds')::interval AS t
@@ -112,9 +112,9 @@ BEGIN
 END $$;
 
 -- A cached round that gains rows is out of date until refreshed; a refresh brings it back in line.
-INSERT INTO kills (round_id, killed_at, victim_bot_name, victim_bot_team, attacker_steam_id, weapon_name, headshot,
+INSERT INTO kills (round_id, killed_at, victim_bot_name, victim_team, attacker_steam_id, attacker_team, weapon_name, headshot,
                    domination, revenge, savior, offensive, defensive, damagebits, customkill)
-SELECT round_id, t0 + interval '1 minute', 'Bot 9', 'insurgents', 76561198000000021, 'm4a1', false,
+SELECT round_id, t0 + interval '1 minute', 'Bot 9', 'insurgents', 76561198000000021, 'security', 'm4a1', false,
        false, false, false, false, false, 2, 0 FROM sr WHERE n = 2;
 SELECT stats_refresh_round(round_id) FROM sr WHERE n = 2;
 DO $$ BEGIN
