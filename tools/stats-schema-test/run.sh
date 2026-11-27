@@ -57,4 +57,10 @@ done
 
 psql "$USER_DB" -q -v ON_ERROR_STOP=1 -v old_tables="$OLD_TABLES" -f test.sql
 psql "$USER_DB" -q -v ON_ERROR_STOP=1 -f plugin_sql.sql > /dev/null
+psql "$USER_DB" -q -v ON_ERROR_STOP=1 -f results.sql > /dev/null
+# A boot recomputes rounds cached by an older definition (results.sql marked two).
+apply stats_03_results.sql
+if [ "$(psql "$USER_DB" -Atc "SELECT count(*) FROM round_results_done WHERE def_hash <> stats_results_hash()")" != 0 ]; then
+    echo "FAIL: a boot left rounds cached by an older definition"; exit 1
+fi
 echo "OK"

@@ -1,10 +1,16 @@
 # gg2_stats2 - stats v2 recorder (issue #44)
 
 Records raw game facts into the stats v2 tables, beside the old stats tables in each server's own
-schema (`public` on main, `insurgency-test` on test). Nothing derived is stored: every total
-(lifetime kills, K/D, wins, accuracy, killstreaks, play and medic time, ...) is a view in
+schema (`public` on main, `insurgency-test` on test). Every total (lifetime kills, K/D, wins,
+accuracy, killstreaks, play and medic time, ...) is a view in
 `configs/sql-init-scripts/pgsql/stats_05..07_views.sql`. The design and its reasoning are in
 issue #44.
+
+The one thing kept that could be derived is a cache: each finished round's per-player results
+(`player_round_results`, `stats_03_results.sql`), so lifetime totals add up rounds instead of every
+raw kill. The plugin recomputes a round's cache in every flush once the round is over; rounds not
+cached yet are computed live by the views, and a boot recomputes every round when the definitions
+change. Any row can be rebuilt from the raw tables, and the schema test checks it is.
 
 ## What it records
 
@@ -44,7 +50,9 @@ The forwards it listens to are declared in `include/gg2_stats.inc`.
 
 `tools/stats-schema-test/run.sh` (docker + psql) builds a database laid out like production, applies
 every file twice the way DatabaseMigrator does, checks the views' arithmetic against old data written
-by both systems, and replays two of this plugin's flushes statement for statement.
+by both systems, and replays two of this plugin's flushes statement for statement. `results.sql`
+checks the per-round cache: killstreaks built from rounds equal the plain definition over every
+kill, caching changes no view's output, and every cached row equals its round's live computation.
 
 ## Still to confirm on the test server
 

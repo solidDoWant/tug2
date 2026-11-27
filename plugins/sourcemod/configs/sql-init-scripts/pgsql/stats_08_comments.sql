@@ -15,6 +15,12 @@ COMMENT ON COLUMN weapon_types.weapon_type IS 'Category name, e.g. rifle_automat
 COMMENT ON TABLE weapons IS 'Every weapon seen. Names have no weapon_ prefix; explosives are named by projectile (rocket_rpg7, grenade_m67, grenade_c4).';
 COMMENT ON COLUMN weapons.weapon_name IS 'Weapon name (ak74, m4a1, rocket_rpg7).';
 COMMENT ON COLUMN weapons.weapon_type IS 'weapon_types.weapon_type; NULL until classified.';
+COMMENT ON TABLE bot_classes IS 'Every bot class template seen, keyed small for kills.';
+COMMENT ON COLUMN bot_classes.bot_class_id IS 'Class key (kills.victim_bot_class_id, attacker_bot_class_id).';
+COMMENT ON COLUMN bot_classes.class_template IS 'Class template name from the theater, e.g. template_rifleman_insurgent.';
+COMMENT ON TABLE items IS 'Every theater item seen in a loadout, keyed small for spawn_items.';
+COMMENT ON COLUMN items.item_id IS 'Item key (spawn_items.item_id).';
+COMMENT ON COLUMN items.item_name IS 'Theater item name (gear), or weapon classname.';
 
 COMMENT ON TABLE players IS 'Every human player seen by v2. Names, first/last seen and totals are in v_players and v_player_lifetime.';
 COMMENT ON COLUMN players.steam_id IS 'SteamID64 (bigint). The player key in every table.';

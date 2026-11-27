@@ -19,6 +19,8 @@
 //     never a 32-bit float of a Unix time, which would be ~2 minutes coarse.
 //   - Connection errors are retried; anything else (a constraint the data broke) is logged with the
 //     query and dropped, since resending it can never succeed and would block every later flush.
+//   - A flush for a round that is over (its end, and anything after) ends with stats_refresh_round(), which
+//     recomputes the round's cached results (stats_03_results.sql) from everything written for it.
 //   - Recording is off until the stats_*.sql migrations have created the v2 tables in the server's
 //     schema (checked at connect and each map start), so a server that does not list them records
 //     nothing.
@@ -74,7 +76,7 @@ enum
 };
 
 char g_tableInsert[T_COUNT][] = {
-    "INSERT INTO kills (round_id, killed_at, victim_steam_id, victim_bot_name, victim_bot_team, victim_bot_class, victim_x, victim_y, victim_z, attacker_steam_id, attacker_bot_name, attacker_bot_team, attacker_bot_class, attacker_x, attacker_y, attacker_z, assister_steam_id, assister_bot_name, weapon_name, hitgroup, headshot, domination, revenge, savior, offensive, defensive, damagebits, customkill, attacker_stance, attacker_aim) VALUES ",
+    "INSERT INTO kills (round_id, killed_at, victim_steam_id, victim_bot_name, victim_bot_team, victim_bot_class_id, victim_x, victim_y, victim_z, attacker_steam_id, attacker_bot_name, attacker_bot_team, attacker_bot_class_id, attacker_x, attacker_y, attacker_z, assister_steam_id, assister_bot_name, weapon_name, hitgroup, headshot, domination, revenge, savior, offensive, defensive, damagebits, customkill, attacker_stance, attacker_aim) VALUES ",
     "INSERT INTO player_spans (round_id, steam_id, started_at, ended_at, team, squad, squad_slot, class_template) VALUES ",
     "INSERT INTO v2_fire_support_calls (round_id, called_at, steam_id, support_type, target_x, target_y, target_z, failure_reason, refunded_at) VALUES ",
     "INSERT INTO survival_levels (round_id, level, reached_at) VALUES ",
@@ -94,6 +96,8 @@ ArrayList g_stmts;            // whole round-scoped statements (each may use r),
 ArrayList g_plainStmts;       // statements needing no round (sessions, names), run first
 StringMap g_flushPlayers;     // steam ids referenced by buffered rows
 StringMap g_flushWeapons;     // weapon names referenced by buffered rows
+StringMap g_flushBotClasses;  // bot class templates referenced by buffered kills
+StringMap g_flushItems;       // theater item names referenced by buffered loadouts
 int       g_bufferedRows;
 
 // ---------------------------------------------------------------------------------------------------
@@ -119,6 +123,7 @@ int   g_round;                // current round number; 0 = no round yet on this 
 float g_roundStart;
 bool  g_roundHumans;          // a human was on a team this round, so the round is written at all
 bool  g_roundOver;            // round_end fired; no spans until the next round_start
+bool  g_closingRound;         // CloseAllAndFlush: the round's last rows (map end, next round, unload)
 float g_roundLive;            // engine time play started (round_freeze_end); 0 = not yet
 char  g_roundKey[1024];       // stats_round_id(...) for the current round
 
@@ -213,11 +218,13 @@ public void OnPluginStart()
     CreateConVar("gg2_stats2_version", PLUGIN_VERSION, "gg2_stats2 version", FCVAR_NOTIFY | FCVAR_DONTRECORD);
 
     for (int t = 0; t < T_COUNT; t++)
-        g_rows[t] = new ArrayList(ByteCountToCells(1024));
+        g_rows[t] = new ArrayList(ByteCountToCells(1536));   // a kill row with two bot classes is the longest
     g_stmts         = new ArrayList(ByteCountToCells(4096));
     g_plainStmts    = new ArrayList(ByteCountToCells(1024));
     g_flushPlayers  = new StringMap();
     g_flushWeapons  = new StringMap();
+    g_flushBotClasses = new StringMap();
+    g_flushItems    = new StringMap();
     g_sessionStart  = new StringMap();
 
     // Whole seconds of wall time minus engine uptime; a reload can land a second off, which
@@ -387,6 +394,8 @@ void ClearBuffers()
     g_plainStmts.Clear();
     g_flushPlayers.Clear();
     g_flushWeapons.Clear();
+    g_flushBotClasses.Clear();
+    g_flushItems.Clear();
     g_bufferedRows = 0;
 }
 
@@ -550,6 +559,12 @@ void Flush()
     // Players and weapons first: everything references them.
     BuildKeyInsert(queries, g_flushPlayers, "INSERT INTO players (steam_id) VALUES ", "", " ON CONFLICT DO NOTHING");
     BuildKeyInsert(queries, g_flushWeapons, "INSERT INTO weapons (weapon_name) VALUES ", "'", " ON CONFLICT DO NOTHING");
+    // Small-id lookups: insert only names not there yet, so their identity sequences don't advance
+    // on every flush (ON CONFLICT alone would use up a smallint key in weeks).
+    BuildKeyInsert(queries, g_flushBotClasses, "INSERT INTO bot_classes (class_template) SELECT n FROM (VALUES ", "'",
+                   ") v(n) WHERE NOT EXISTS (SELECT 1 FROM bot_classes b WHERE b.class_template = v.n) ON CONFLICT DO NOTHING");
+    BuildKeyInsert(queries, g_flushItems, "INSERT INTO items (item_name) SELECT n FROM (VALUES ", "'",
+                   ") v(n) WHERE NOT EXISTS (SELECT 1 FROM items i WHERE i.item_name = v.n) ON CONFLICT DO NOTHING");
 
     for (int i = 0; i < g_plainStmts.Length; i++)
     {
@@ -568,6 +583,13 @@ void Flush()
             char body[STMT_MAX - 1100];
             g_stmts.GetString(i, body, sizeof(body));
             Format(stmt, sizeof(stmt), "%s%s", head, body);
+            queries.PushString(stmt);
+        }
+        // A round that is over gets its cached results (re)computed with everything written for it,
+        // in the same transaction (stats_03_results.sql). It never fails the flush.
+        if (g_roundOver || g_closingRound)
+        {
+            Format(stmt, sizeof(stmt), "%sSELECT stats_refresh_round((SELECT id FROM r))", head);
             queries.PushString(stmt);
         }
     }
@@ -619,7 +641,7 @@ void BuildKeyInsert(ArrayList queries, StringMap keys, const char[] insert, cons
 void BuildTupleInserts(ArrayList queries, const char[] head, int table)
 {
     if (g_rows[table].Length == 0) return;
-    char stmt[STMT_MAX + 1], tuple[1024];
+    char stmt[STMT_MAX + 1], tuple[1536];
     int  base = strlen(head) + strlen(g_tableInsert[table]) + strlen(g_tableSuffix[table]);
     stmt[0]   = '\0';
     for (int i = 0; i < g_rows[table].Length; i++)
@@ -764,7 +786,9 @@ void CloseAllAndFlush()
         EndCounterattack(now);
         EmitAllCounters();
     }
+    g_closingRound = true;
     Flush();
+    g_closingRound = false;
 }
 
 public Action Event_RoundStart(Event event, const char[] name, bool dontBroadcast)
@@ -1239,7 +1263,7 @@ public Action Timer_RecordSpawn(Handle timer, DataPack pack)
     NotePlayer(g_sid[client]);
     if (values[0] != '\0')
     {
-        Format(stmt, sizeof(stmt), "%sINSERT INTO spawn_items (spawn_id, item_name) SELECT s.spawn_id, v.item FROM s, (VALUES %s) v(item) ON CONFLICT DO NOTHING",
+        Format(stmt, sizeof(stmt), "%sINSERT INTO spawn_items (spawn_id, item_id) SELECT s.spawn_id, i.item_id FROM s, (VALUES %s) v(item) JOIN items i ON i.item_name = v.item ON CONFLICT DO NOTHING",
                stmt, values);
     }
     else
@@ -1256,6 +1280,7 @@ void AppendItem(StringMap seen, const char[] item, char[] values, int maxlen)
     bool dummy;
     if (seen.GetValue(item, dummy)) return;
     seen.SetValue(item, true);
+    g_flushItems.SetValue(item, true);
     char q[200];
     Quote(item, q, sizeof(q));
     if (values[0] != '\0') StrCat(values, maxlen, ",");
@@ -1281,10 +1306,10 @@ public Action Event_PlayerDeath(Event event, const char[] name, bool dontBroadca
     Ts(GetEngineTime(), ts, sizeof(ts));
 
     // Victim: SteamID, or bot name, team and class.
-    char vsid[24] = "NULL", vbot[140] = "NULL", vteam[24] = "NULL", vcls[140] = "NULL";
+    char vsid[24] = "NULL", vbot[140] = "NULL", vteam[24] = "NULL", vcls[200] = "NULL";
     DescribeSide(victim, vsid, vbot, vteam, vcls);
 
-    char asid[24] = "NULL", abot[140] = "NULL", ateam[24] = "NULL", acls[140] = "NULL";
+    char asid[24] = "NULL", abot[140] = "NULL", ateam[24] = "NULL", acls[200] = "NULL";
     char ax[16] = "NULL", ay[16] = "NULL", az[16] = "NULL", stance[16] = "NULL", aim[16] = "NULL";
     if (attacker >= 1 && attacker <= MaxClients && IsClientInGame(attacker))
     {
@@ -1301,7 +1326,7 @@ public Action Event_PlayerDeath(Event event, const char[] name, bool dontBroadca
         }
     }
 
-    char ssid[24] = "NULL", sbot[140] = "NULL", dummyTeam[24], dummyCls[140];
+    char ssid[24] = "NULL", sbot[140] = "NULL", dummyTeam[24], dummyCls[200];
     if (assister >= 1 && assister <= MaxClients && IsClientInGame(assister) && assister != attacker)
         DescribeSide(assister, ssid, sbot, dummyTeam, dummyCls);
 
@@ -1320,7 +1345,7 @@ public Action Event_PlayerDeath(Event event, const char[] name, bool dontBroadca
         HitgroupName(g_lastHitgroup[victim], hitgroup, sizeof(hitgroup));
 
     int flags = event.GetInt("deathflags");
-    char tuple[1024];
+    char tuple[1536];
     Format(tuple, sizeof(tuple),
            "%s,%s,%s,%s,%s,%.1f,%.1f,%.1f,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%d,%d,%s,%s",
            ts, vsid, vbot, vteam, vcls,
@@ -1335,7 +1360,8 @@ public Action Event_PlayerDeath(Event event, const char[] name, bool dontBroadca
 }
 
 // One side of a kill: a human's SteamID, or a bot's name, team and class.
-void DescribeSide(int client, char sid[24], char bot[140], char team[24], char cls[140])
+// A bot's class is written as its bot_classes key, looked up by name in the insert.
+void DescribeSide(int client, char sid[24], char bot[140], char team[24], char cls[200])
 {
     if (IsHuman(client))
     {
@@ -1349,7 +1375,12 @@ void DescribeSide(int client, char sid[24], char bot[140], char team[24], char c
     Quote(name, bot, 140);
     TeamName(GetClientTeam(client), team, 24);
     if (ClassTemplate_Get(client, c, sizeof(c)) && c[0] != '\0')
-        Quote(c, cls, 140);
+    {
+        char q[140];
+        Quote(c, q, sizeof(q));
+        Format(cls, 200, "(SELECT bot_class_id FROM bot_classes WHERE class_template = %s)", q);
+        g_flushBotClasses.SetValue(c, true);
+    }
 }
 
 // m_iCurrentStance: 0 standing, 1 crouched, 2 prone (CINSPlayerShared).

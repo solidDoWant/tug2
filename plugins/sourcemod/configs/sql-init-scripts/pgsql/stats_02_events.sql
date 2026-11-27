@@ -28,9 +28,9 @@ CREATE TABLE IF NOT EXISTS spawns (
 CREATE INDEX IF NOT EXISTS idx_spawns_round_id ON spawns (round_id);
 
 CREATE TABLE IF NOT EXISTS spawn_items (
-    spawn_id  BIGINT NOT NULL REFERENCES spawns,
-    item_name TEXT NOT NULL,
-    PRIMARY KEY (spawn_id, item_name)
+    spawn_id BIGINT NOT NULL REFERENCES spawns,
+    item_id  SMALLINT NOT NULL REFERENCES items,
+    PRIMARY KEY (spawn_id, item_id)
 );
 
 -- Every player_death with a human on either side.
@@ -41,12 +41,12 @@ CREATE TABLE IF NOT EXISTS kills (
     victim_steam_id    BIGINT REFERENCES players,
     victim_bot_name    TEXT,
     victim_bot_team    team,
-    victim_bot_class   TEXT,
+    victim_bot_class_id SMALLINT REFERENCES bot_classes,
     victim_x REAL, victim_y REAL, victim_z REAL,
     attacker_steam_id  BIGINT REFERENCES players,
     attacker_bot_name  TEXT,
     attacker_bot_team  team,
-    attacker_bot_class TEXT,
+    attacker_bot_class_id SMALLINT REFERENCES bot_classes,
     attacker_x REAL, attacker_y REAL, attacker_z REAL,
     assister_steam_id  BIGINT REFERENCES players,
     assister_bot_name  TEXT,
@@ -65,13 +65,16 @@ CREATE TABLE IF NOT EXISTS kills (
     CHECK (num_nonnulls(victim_steam_id, victim_bot_name) = 1),
     CHECK (num_nonnulls(attacker_steam_id, attacker_bot_name) <= 1),
     CHECK (num_nonnulls(assister_steam_id, assister_bot_name) <= 1),
-    CHECK (victim_bot_name IS NOT NULL OR (victim_bot_team IS NULL AND victim_bot_class IS NULL)),
-    CHECK (attacker_bot_name IS NOT NULL OR (attacker_bot_team IS NULL AND attacker_bot_class IS NULL))
+    CHECK (victim_bot_name IS NOT NULL OR (victim_bot_team IS NULL AND victim_bot_class_id IS NULL)),
+    CHECK (attacker_bot_name IS NOT NULL OR (attacker_bot_team IS NULL AND attacker_bot_class_id IS NULL))
 );
 CREATE INDEX IF NOT EXISTS idx_kills_round_id ON kills (round_id);
-CREATE INDEX IF NOT EXISTS idx_kills_killed_at ON kills (killed_at);
-CREATE INDEX IF NOT EXISTS idx_kills_attacker ON kills (attacker_steam_id, killed_at) WHERE attacker_steam_id IS NOT NULL;
-CREATE INDEX IF NOT EXISTS idx_kills_victim ON kills (victim_steam_id, killed_at) WHERE victim_steam_id IS NOT NULL;
+-- Kills arrive in time order, so a BRIN index serves time ranges at a few hundred KB a year instead
+-- of ~55 MB for a b-tree. The per-player indexes hold only the SteamID: b-tree deduplication then
+-- keeps each player's entries compact, and a player's time range combines it with the BRIN one.
+CREATE INDEX IF NOT EXISTS idx_kills_killed_at ON kills USING brin (killed_at);
+CREATE INDEX IF NOT EXISTS idx_kills_attacker ON kills (attacker_steam_id) WHERE attacker_steam_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_kills_victim ON kills (victim_steam_id) WHERE victim_steam_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_kills_attacker_bot ON kills (attacker_bot_name) WHERE attacker_bot_name IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS team_kill_forgives (

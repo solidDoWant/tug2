@@ -76,22 +76,28 @@ DECLARE
         'attacker_team', 'Killer''s team at the time; NULL for world deaths or unknown.',
         'victim_team', 'Victim''s team at the time.',
         'during_live', 'The round was live (not preround or after the end).',
-        'kind', 'enemy, team_kill, suicide or world.'
+        'kind', 'enemy, team_kill, suicide or world.',
+        'victim_bot_class', 'Bot victim''s class template; NULL for humans.',
+        'attacker_bot_class', 'Bot killer''s class template; NULL for humans.'
     );
     r record;
+    base regclass;
 BEGIN
     FOR r IN
         SELECT c.relname, a.attname
         FROM pg_class c JOIN pg_attribute a ON a.attrelid = c.oid
-        WHERE c.relnamespace = current_schema()::regnamespace AND c.relkind = 'v'
-          AND c.relname LIKE 'v\_%' AND a.attnum > 0 AND NOT a.attisdropped
+        WHERE c.relnamespace = current_schema()::regnamespace
+          AND ((c.relkind = 'v' AND c.relname LIKE 'v\_%')
+               OR c.relname IN ('player_round_results', 'player_round_weapon_results',
+                                'player_round_results_current', 'player_round_weapon_results_current'))
+          AND a.attnum > 0 AND NOT a.attisdropped
     LOOP
-        IF r.relname = 'v_kills' AND EXISTS (SELECT 1 FROM pg_attribute
-                                             WHERE attrelid = 'kills'::regclass AND attname = r.attname) THEN
-            -- v_kills repeats the kills columns; reuse their descriptions.
-            EXECUTE format('COMMENT ON COLUMN v_kills.%I IS %L', r.attname,
-                           col_description('kills'::regclass,
-                                           (SELECT attnum FROM pg_attribute WHERE attrelid = 'kills'::regclass AND attname = r.attname)));
+        -- Views that repeat a table's columns reuse their descriptions.
+        base := CASE r.relname WHEN 'v_kills' THEN 'kills'::regclass
+ END;
+        IF base IS NOT NULL AND EXISTS (SELECT 1 FROM pg_attribute WHERE attrelid = base AND attname = r.attname) THEN
+            EXECUTE format('COMMENT ON COLUMN %I.%I IS %L', r.relname, r.attname,
+                           col_description(base, (SELECT attnum FROM pg_attribute WHERE attrelid = base AND attname = r.attname)));
         ELSIF d ? r.attname THEN
             EXECUTE format('COMMENT ON COLUMN %I.%I IS %L', r.relname, r.attname, d ->> r.attname);
         END IF;
@@ -104,3 +110,29 @@ COMMENT ON COLUMN v_maps.losses IS 'Rounds the players lost on this map.';
 COMMENT ON COLUMN v_maps.play_seconds IS 'Seconds played on this map, all time.';
 COMMENT ON COLUMN v_bot_weapon_kills.kills IS 'Human players killed by this bot name with this weapon.';
 COMMENT ON COLUMN v_team_kills.weapon_name IS 'Weapon used.';
+
+-- The per-round results cache (stats_03_results.sql). Its other columns share the descriptions above.
+COMMENT ON TABLE round_results_done IS 'Internal: which rounds have their results cached in player_round_results, and with which definition. Use the v_* views.';
+COMMENT ON COLUMN round_results_done.round_id IS 'rounds.round_id.';
+COMMENT ON COLUMN round_results_done.def_hash IS 'stats_results_hash() when it was computed; a different one means out of date.';
+COMMENT ON COLUMN round_results_done.computed_at IS 'When it was computed.';
+COMMENT ON TABLE player_round_results IS 'Internal cache: each finished round''s per-player results, recomputable from the raw tables. Use v_player_round_stats.';
+COMMENT ON TABLE player_round_weapon_results IS 'Internal cache: each finished round''s kills per player and weapon. Use v_player_round_weapon_stats.';
+COMMENT ON VIEW player_round_results_current IS 'Internal: player_round_results plus rounds not cached yet, computed live.';
+COMMENT ON VIEW player_round_weapon_results_current IS 'Internal: player_round_weapon_results plus rounds not cached yet, computed live.';
+DO $$
+DECLARE t text;
+BEGIN
+    FOREACH t IN ARRAY ARRAY['player_round_results', 'player_round_results_current'] LOOP
+        EXECUTE format('COMMENT ON COLUMN %I.round_id IS %L', t, 'rounds.round_id.');
+        EXECUTE format('COMMENT ON COLUMN %I.at IS %L', t, 'When the round ended (its start if it has not).');
+        EXECUTE format('COMMENT ON COLUMN %I.kills_before_first_death IS %L', t, 'Enemy kills before the first death in the round (all of them if none).');
+        EXECUTE format('COMMENT ON COLUMN %I.best_streak_inside IS %L', t, 'Most enemy kills between two deaths in the round.');
+        EXECUTE format('COMMENT ON COLUMN %I.kills_after_last_death IS %L', t, 'Enemy kills after the last death in the round (all of them if none).');
+        EXECUTE format('COMMENT ON COLUMN %I.died IS %L', t, 'The player died in the round.');
+    END LOOP;
+    FOREACH t IN ARRAY ARRAY['player_round_weapon_results', 'player_round_weapon_results_current'] LOOP
+        EXECUTE format('COMMENT ON COLUMN %I.round_id IS %L', t, 'rounds.round_id.');
+        EXECUTE format('COMMENT ON COLUMN %I.kills IS %L', t, 'Kills of enemies with this weapon.');
+    END LOOP;
+END $$;

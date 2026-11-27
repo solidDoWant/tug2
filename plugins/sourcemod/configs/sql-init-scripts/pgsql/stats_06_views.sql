@@ -9,11 +9,7 @@
 
 -- One row per player per weapon per round; old history rows (before the cutover) have no round_id.
 CREATE OR REPLACE VIEW v_player_round_weapon_stats AS
-WITH wk AS (
-    SELECT round_id, attacker_steam_id AS steam_id, weapon_name, count(*) AS kills
-    FROM v_kills WHERE kind = 'enemy' AND attacker_steam_id IS NOT NULL AND weapon_name IS NOT NULL
-    GROUP BY 1, 2, 3
-)
+WITH wk AS (SELECT round_id, steam_id, weapon_name, kills FROM player_round_weapon_results_current)
 SELECT COALESCE(w.round_id, wk.round_id) AS round_id, COALESCE(w.steam_id, wk.steam_id) AS steam_id,
        COALESCE(w.weapon_name, wk.weapon_name) AS weapon_name,
        COALESCE(r.ended_at, r.started_at) AS at, 'v2'::text AS source,
