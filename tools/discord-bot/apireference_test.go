@@ -28,7 +28,7 @@ func TestAPIReferenceTool(t *testing.T) {
 	}
 	encoded, _ := json.Marshal(out)
 	s := string(encoded)
-	for _, want := range []string{`"base_url":"https://stats.example.com"`, `"docs_url":"https://stats.example.com/docs"`, `"/api/v1/fire-support"`, "not publicly available"} {
+	for _, want := range []string{`"base_url":"https://stats.example.com"`, `"docs_url":"https://stats.example.com/docs"`, `"/api/v2/fire-support"`, "not publicly available"} {
 		if !strings.Contains(s, want) {
 			t.Errorf("reference missing %s", want)
 		}

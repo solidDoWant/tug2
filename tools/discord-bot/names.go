@@ -51,7 +51,7 @@ func nameCandidates(display string) []string {
 	return out
 }
 
-// playerNameQuery is the /api/v1/players query for a name search.
+// playerNameQuery is the players query for a name search.
 func playerNameQuery(name string) url.Values {
 	q := pageQuery(10, 0)
 	q.Set("name", name)
@@ -73,7 +73,7 @@ func findPlayersByNames(ctx context.Context, stats *StatsClient, server, discord
 	out := &nameMatches{DiscordName: discordName, Searched: names, Players: []map[string]any{}}
 	byID := map[string]map[string]any{}
 	for _, name := range names {
-		res, err := stats.Get(ctx, server, "/api/v1/players", playerNameQuery(name))
+		res, err := stats.Get(ctx, server, playersPath, playerNameQuery(name))
 		if err != nil {
 			return nil, err
 		}

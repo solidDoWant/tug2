@@ -73,14 +73,14 @@ var leaderboards = map[string]struct {
 	sorts    []string
 	windowed bool // takes period/since/until
 }{
-	"players":          {"/api/v1/players", []string{"score", "kills", "deaths", "wins", "killstreak", "caps", "kd", "play_time", "accuracy", "updated_at"}, true},
-	"weapons":          {"/api/v1/weapons", []string{"kills", "shots", "accuracy"}, true},
-	"maps":             {"/api/v1/maps", []string{"rounds", "play_time", "last_played"}, false},
-	"bots":             {"/api/v1/bots", nil, false},
-	"medics":           {"/api/v1/medics", []string{"time", "heals", "revives"}, true},
-	"teamkills":        {"/api/v1/teamkills", nil, true},
-	"teamkill_weapons": {"/api/v1/teamkills/weapons", nil, true},
-	"fire_support":     {"/api/v1/fire-support", nil, true},
+	"players":          {"/api/v2/players", []string{"score", "kills", "deaths", "kd", "assists", "wins", "play_time", "accuracy", "revives", "heals", "caps", "headshot_kills", "killstreak", "last_seen"}, true},
+	"weapons":          {"/api/v2/weapons", []string{"kills", "shots", "accuracy"}, true},
+	"maps":             {"/api/v2/maps", []string{"rounds", "play_time", "last_played", "win_rate"}, false},
+	"bots":             {"/api/v2/bots", nil, false},
+	"medics":           {"/api/v2/medics", []string{"medic_time", "revives", "heals", "hp_healed"}, true},
+	"teamkills":        {"/api/v2/teamkills", []string{"team_kills", "team_killed", "forgiven"}, true},
+	"teamkill_weapons": {"/api/v2/teamkills/weapons", nil, true},
+	"fire_support":     {"/api/v2/fire-support", []string{"calls", "failed", "last_called"}, true},
 }
 
 // sortedKeys gives a stable order, which keeps the tool definitions (and so
@@ -233,8 +233,9 @@ func (p periodInput) set(q url.Values) url.Values {
 func (p periodInput) any() bool { return p.Period != "" || p.Since != "" || p.Until != "" }
 
 // periodNote is how the stats tools explain the time window to the model.
-const periodNote = " Pass period (e.g. 30d) or since/until for stats over a time window instead of lifetime totals; the response's window then gives the range and history_since, " +
-	"when per-round history starts (November 2026; December 2025 for team kills). A window reaching back before history_since only covers the part since then, so say so; lifetime totals are the only record of earlier play."
+const periodNote = " Pass period (e.g. 30d) or since/until for stats over a time window instead of lifetime totals; the response's window gives the range. " +
+	"Per-round history only reaches back to November 2026 (December 2025 for team kills), so a window starting earlier only covers the part since then: say so. " +
+	"Lifetime totals also include play from before that. Stats marked null were not recorded for that period (they only exist since stats v2)."
 
 func clampPage(limit, offset int) (int, int) {
 	if limit <= 0 {
@@ -284,12 +285,14 @@ func (ts *Toolset) addStatsTools(serverProp map[string]any, defaultServer string
 			case name == "":
 				return nil, errors.New("give a name to search for, or set me to true")
 			}
-			return stats.Get(ctx, server, "/api/v1/players", playerNameQuery(name))
+			return stats.Get(ctx, server, playersPath, playerNameQuery(name))
 		})
 
 	ts.add("get_player",
-		"Get one player's full lifetime stats (kills, deaths, suicides, headshots given/taken, suppressions, caps, best killstreak, score, wins, losses, playtime (play_time_seconds, time on the Security team, only counted since November 2026), accuracy (shots = rounds fired, enemy_hits / friendly_hits = rounds that damaged an enemy / a teammate, enemy_hit_rate = enemy_hits/shots in %; only counted since November 2026), first/last seen) "+
-			"and their kills, shots and hits per weapon. Times are UTC."+periodNote,
+		"Get one player's stats (lifetime, or in a time window): kills, deaths, kd, assists, score, wins, losses, rounds played, play time and medic time (seconds), "+
+			"suicides, deaths with no killer, team kills given/taken, headshot kills and headshot hits, caps and caches, revives given/received, full heals and HP healed, "+
+			"fire support calls, suppressions, shots and accuracy (shots_hit_enemy/shots in %), damage dealt/taken, best killstreak (lifetime only), first/last seen, and name history; "+
+			"plus per weapon (kills, shots, accuracy, hits by body part, damage, reloads, seconds in hand) and per class (time, kills, deaths). Times are UTC."+periodNote,
 		periodProps(map[string]any{
 			"steam_id": prop("string", "The player's 64-bit SteamID (17 digits), e.g. from find_players."),
 			"server":   serverProp,
@@ -303,11 +306,11 @@ func (ts *Toolset) addStatsTools(serverProp map[string]any, defaultServer string
 			if err := decode(raw, &in); err != nil {
 				return nil, err
 			}
-			if _, err := strconv.ParseUint(in.SteamID, 10, 64); err != nil || len(in.SteamID) != 17 {
-				return nil, errors.New("steam_id must be a 17-digit SteamID64")
+			if err := checkSteamID(in.SteamID); err != nil {
+				return nil, err
 			}
 			server := pickServer(in.Server, defaultServer)
-			path := "/api/v1/players/" + url.PathEscape(in.SteamID)
+			path := playersPath + "/" + url.PathEscape(in.SteamID)
 			q := in.periodInput.set(nil)
 			player, err := stats.Get(ctx, server, path, q)
 			if errors.Is(err, errNotFound) {
@@ -320,20 +323,52 @@ func (ts *Toolset) addStatsTools(serverProp map[string]any, defaultServer string
 			if err != nil {
 				return nil, err
 			}
-			return map[string]any{"player": player, "kills_by_weapon": weapons}, nil
+			classes, err := stats.Get(ctx, server, path+"/classes", q)
+			if err != nil {
+				return nil, err
+			}
+			return map[string]any{"player": player, "weapons": weapons, "classes": classes}, nil
+		})
+
+	ts.add("get_player_rounds",
+		"One player's round-by-round history, newest first: map, result, whether they were MVP, and their stats in each round. "+
+			"Rows from before stats v2 (source old) have no round_id and fewer stats.",
+		periodProps(map[string]any{
+			"steam_id": prop("string", "The player's 64-bit SteamID (17 digits)."),
+			"limit":    intProp("How many rounds (default 10).", 1, maxPageSize),
+			"offset":   intProp("Rounds to skip, for older pages.", 0, 100000),
+			"server":   serverProp,
+		}), []string{"steam_id"},
+		func(ctx context.Context, _ *toolContext, raw json.RawMessage) (any, error) {
+			var in struct {
+				SteamID       string `json:"steam_id"`
+				Server        string
+				Limit, Offset int
+				periodInput
+			}
+			if err := decode(raw, &in); err != nil {
+				return nil, err
+			}
+			if err := checkSteamID(in.SteamID); err != nil {
+				return nil, err
+			}
+			q := in.periodInput.set(pageQuery(clampPage(in.Limit, in.Offset)))
+			return stats.Get(ctx, pickServer(in.Server, defaultServer), playersPath+"/"+url.PathEscape(in.SteamID)+"/rounds", q)
 		})
 
 	boardNames := sortedKeys(leaderboards)
 	ts.add("leaderboard",
-		"Read a ranked leaderboard. Boards: players (sort: score, kills, deaths, wins, killstreak, caps, kd, play_time, accuracy (enemy hit rate, players with 500+ shots first), updated_at), "+
-			"weapons (all players' totals per weapon: kills, rounds fired, enemy/friendly hits and enemy hit rate; sort: kills, shots, accuracy (weapons with 1000+ shots first)), maps (win/loss and playtime; sort: rounds, play_time, last_played), "+
-			"bots (bots ranked by kills on players), medics (time spent as medic in seconds, full heals given and revives completed, heals/revives counted since November 2026; sort: time, heals, revives), teamkills (players by team kills given, with forgiven count), "+
-			"teamkill_weapons (weapons by team kills), fire_support (players by artillery calls). "+
+		"Read a ranked leaderboard. Boards: players (sort: score, kills, deaths, kd, assists, wins, play_time, accuracy (players with 500+ shots first), revives, heals, caps, headshot_kills, killstreak, last_seen), "+
+			"weapons (all players' totals per weapon: kills, players with a kill, shots, hits and accuracy; sort: kills, shots, accuracy (weapons with 1000+ shots first)), "+
+			"maps (rounds, wins, losses, win rate, play time, last played; sort: rounds, play_time, last_played, win_rate), "+
+			"bots (bots ranked by kills on players), medics (medic time in seconds, revives, full heals, HP healed, average seconds to revive; sort: medic_time, revives, heals, hp_healed), "+
+			"teamkills (players by team kills, with team kills taken and forgiven; sort: team_kills, team_killed, forgiven), "+
+			"teamkill_weapons (weapons by team kills), fire_support (players by fire support calls that went ahead, with refused and refunded calls; sort: calls, failed, last_called). "+
 			"Results are descending and paginated; the response's total is the number of entries on the whole board."+
 			periodNote+" Time windows work on every board except maps and bots.",
 		periodProps(map[string]any{
 			"board":  enumProp("Which leaderboard.", boardNames),
-			"sort":   prop("string", "Order, only for the players, weapons, medics and maps boards (see the description). Omit for the default."),
+			"sort":   prop("string", "Order (see the description for each board's choices). Omit for the default."),
 			"limit":  intProp("How many entries (default 10).", 1, maxPageSize),
 			"offset": intProp("Entries to skip, for later pages.", 0, 100000),
 			"server": serverProp,
@@ -353,11 +388,7 @@ func (ts *Toolset) addStatsTools(serverProp map[string]any, defaultServer string
 			}
 			q := pageQuery(clampPage(in.Limit, in.Offset))
 			if in.Sort != "" {
-				valid := false
-				for _, s := range board.sorts {
-					valid = valid || s == in.Sort
-				}
-				if !valid {
+				if !slices.Contains(board.sorts, in.Sort) {
 					return nil, fmt.Errorf("board %q does not accept sort %q (valid: %v)", in.Board, in.Sort, board.sorts)
 				}
 				q.Set("sort", in.Sort)
@@ -372,10 +403,11 @@ func (ts *Toolset) addStatsTools(serverProp map[string]any, defaultServer string
 		})
 
 	ts.add("recent_matches",
-		"List the most recent round results, newest first: map, whether the players (Security) won, and when (UTC).",
+		"List the most recent games (map runs), newest first: map, mode, when it started, whether it was played to game over, rounds won and lost, "+
+			"and how long the map took to load (seconds). Use get_match with a map_run_id for its rounds, MVPs and scoreboard.",
 		map[string]any{
-			"limit":  intProp("How many results (default 10).", 1, maxPageSize),
-			"offset": intProp("Results to skip, for older pages.", 0, 100000),
+			"limit":  intProp("How many games (default 10).", 1, maxPageSize),
+			"offset": intProp("Games to skip, for older pages.", 0, 100000),
 			"server": serverProp,
 		}, nil,
 		func(ctx context.Context, _ *toolContext, raw json.RawMessage) (any, error) {
@@ -386,12 +418,55 @@ func (ts *Toolset) addStatsTools(serverProp map[string]any, defaultServer string
 			if err := decode(raw, &in); err != nil {
 				return nil, err
 			}
-			return stats.Get(ctx, pickServer(in.Server, defaultServer), "/api/v1/matches", pageQuery(clampPage(in.Limit, in.Offset)))
+			return stats.Get(ctx, pickServer(in.Server, defaultServer), "/api/v2/map-runs", pageQuery(clampPage(in.Limit, in.Offset)))
+		})
+
+	ts.add("get_match",
+		"One game (map run) by map_run_id: its rounds (result, how they ended, round MVP) and a scoreboard of every player's kills, deaths, assists, score, revives, heals, caps and play time.",
+		map[string]any{
+			"map_run_id": intProp("The game's map_run_id, from recent_matches.", 1, 1<<53),
+			"server":     serverProp,
+		}, []string{"map_run_id"},
+		func(ctx context.Context, _ *toolContext, raw json.RawMessage) (any, error) {
+			var in struct {
+				MapRunID int64 `json:"map_run_id"`
+				Server   string
+			}
+			if err := decode(raw, &in); err != nil {
+				return nil, err
+			}
+			res, err := stats.Get(ctx, pickServer(in.Server, defaultServer), "/api/v2/map-runs/"+strconv.FormatInt(in.MapRunID, 10), nil)
+			if errors.Is(err, errNotFound) {
+				return map[string]any{"found": false}, nil
+			}
+			return res, err
+		})
+
+	ts.add("get_round",
+		"One round by round_id: result, how it ended, MVP, and a timeline of what happened in order: kills (who, whom, weapon, headshot, team kill), "+
+			"objectives taken (who capped), counterattacks, revives and survival levels. Long rounds have long timelines: summarise.",
+		map[string]any{
+			"round_id": intProp("The round_id, from get_match or get_player_rounds.", 1, 1<<53),
+			"server":   serverProp,
+		}, []string{"round_id"},
+		func(ctx context.Context, _ *toolContext, raw json.RawMessage) (any, error) {
+			var in struct {
+				RoundID int64 `json:"round_id"`
+				Server  string
+			}
+			if err := decode(raw, &in); err != nil {
+				return nil, err
+			}
+			res, err := stats.Get(ctx, pickServer(in.Server, defaultServer), "/api/v2/rounds/"+strconv.FormatInt(in.RoundID, 10), nil)
+			if errors.Is(err, errNotFound) {
+				return map[string]any{"found": false}, nil
+			}
+			return res, err
 		})
 
 	ts.add("weapon_accuracy",
-		"The most accurate players with one weapon: enemy hit rate (rounds that damaged an enemy / rounds fired, %), with shots and friendly hits. "+
-			"Only players with at least min_shots recorded shots with it are ranked. Shots and hits have only been recorded since November 2026. "+
+		"The most accurate players with one weapon: accuracy (shots that hit an enemy / shots fired, %), with kills and shots. "+
+			"Only players with at least min_shots recorded shots with it are ranked. Shots have only been recorded since November 2026. "+
 			"Use a weapon name as the weapons board or a player's weapons list it (e.g. m4a1)."+periodNote,
 		periodProps(map[string]any{
 			"weapon":    prop("string", "Weapon name, e.g. m4a1."),
@@ -415,15 +490,16 @@ func (ts *Toolset) addStatsTools(serverProp map[string]any, defaultServer string
 				return nil, errors.New("weapon must not be empty")
 			}
 			q := pageQuery(clampPage(in.Limit, in.Offset))
+			q.Set("sort", "accuracy")
 			if in.MinShots > 0 {
 				q.Set("min_shots", strconv.Itoa(in.MinShots))
 			}
 			q = in.periodInput.set(q)
-			return stats.Get(ctx, pickServer(in.Server, defaultServer), "/api/v1/weapons/"+url.PathEscape(weapon)+"/accuracy", q)
+			return stats.Get(ctx, pickServer(in.Server, defaultServer), "/api/v2/weapons/"+url.PathEscape(weapon), q)
 		})
 
 	ts.add("get_bot_weapons",
-		"Kills on players by one bot, per weapon. Use a bot name exactly as the bots leaderboard lists it.",
+		"Kills on players by one bot, per weapon. Use a bot name exactly as the bots leaderboard lists it. Bot names repeat, so a name is not one bot.",
 		map[string]any{
 			"bot_name": prop("string", "The bot's name, exactly as listed."),
 			"server":   serverProp,
@@ -439,8 +515,18 @@ func (ts *Toolset) addStatsTools(serverProp map[string]any, defaultServer string
 			if in.BotName == "" {
 				return nil, errors.New("bot_name must not be empty")
 			}
-			return stats.Get(ctx, pickServer(in.Server, defaultServer), "/api/v1/bots/"+url.PathEscape(in.BotName)+"/weapons", nil)
+			return stats.Get(ctx, pickServer(in.Server, defaultServer), "/api/v2/bots/"+url.PathEscape(in.BotName)+"/weapons", nil)
 		})
+}
+
+// playersPath is the stats-api players collection.
+const playersPath = "/api/v2/players"
+
+func checkSteamID(id string) error {
+	if _, err := strconv.ParseUint(id, 10, 64); err != nil || len(id) != 17 {
+		return errors.New("steam_id must be a 17-digit SteamID64")
+	}
+	return nil
 }
 
 func (ts *Toolset) addServerStatusTool(cfg *Config, choices []string) {

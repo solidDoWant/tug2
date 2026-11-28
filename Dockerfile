@@ -1451,6 +1451,8 @@ COPY --from=sourcemod-plugins-gg2-kill-entities --chown=0:0 /insurgency /opt/ins
 COPY --from=sourcemod-plugins-gg2-medic-tracker --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
 COPY --from=sourcemod-plugins-gg2-messages --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
 COPY --from=sourcemod-plugins-gg2-mstats2 --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
+# Stats v2 (issue #44).
+COPY --from=sourcemod-plugins-gg2-stats2 --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
 # This seems unnecessary for now
 # COPY --from=sourcemod-plugins-gg2-playlist-hax --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
 COPY --from=sourcemod-plugins-gg2-hint --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
@@ -1602,7 +1604,7 @@ COPY --from=sourcemod-plugins-gg2-bot-smoke-suppress --chown=0:0 /insurgency /op
 COPY --from=sourcemod-plugins-gg2-medic-tracker --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
 COPY --from=sourcemod-plugins-gg2-messages --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
 COPY --from=sourcemod-plugins-gg2-mstats2 --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
-# Stats v2 (issue #44): test server only until main moves over (phase 3).
+# Stats v2 (issue #44).
 COPY --from=sourcemod-plugins-gg2-stats2 --chown=0:0 /insurgency /opt/insurgency-server/insurgency/
 # This seems unnecessary for now
 # COPY --from=sourcemod-plugins-gg2-playlist-hax --chown=0:0 /insurgency /opt/insurgency-server/insurgency/

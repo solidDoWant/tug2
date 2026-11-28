@@ -118,17 +118,20 @@ func TestRefreshQueryStatsDoc(t *testing.T) {
 	}
 }
 
-// grantedTables reads the table lists from discord_bot_grants.sql: the ones
-// granted everywhere, the old stats tables and the stats v2 ones (each granted
-// where it applies).
-func grantedTables(t *testing.T) []string {
+// grantedTables reads table lists from discord_bot_grants.sql: allowed (granted
+// everywhere), old_stats (until a server records stats v2) and v2 (once it
+// does); all three when none are named.
+func grantedTables(t *testing.T, lists ...string) []string {
 	t.Helper()
 	sql, err := os.ReadFile(filepath.Join(pgsqlScripts, "discord_bot_grants.sql"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	var tables []string
-	for _, name := range []string{"allowed", "old_stats", "v2"} {
+	if len(lists) == 0 {
+		lists = []string{"allowed", "old_stats", "v2"}
+	}
+	for _, name := range lists {
 		list := regexp.MustCompile(`(?s)` + name + ` text\[\] := ARRAY\[(.*?)\];`).FindSubmatch(sql)
 		if list == nil {
 			t.Fatalf("no %s table list in discord_bot_grants.sql", name)
@@ -268,7 +271,7 @@ func TestSchemaFromMigrations(t *testing.T) {
 	}
 	// Stats v2 (issue #44): a server that records it shows the v2 tables and v_* views, which
 	// include the old history, instead of the old stats tables; old_* views are plumbing.
-	for server, v2 := range map[string]bool{"main": false, "test": true} {
+	for server, v2 := range map[string]bool{"main": true, "test": true} {
 		has := map[string]bool{}
 		for _, table := range schemas[server] {
 			has[table.Name] = true
@@ -288,7 +291,8 @@ func TestSchemaFromMigrations(t *testing.T) {
 	if strings.Contains(doc, "connection_log") || strings.Contains(doc, "ip_address") {
 		t.Error("the bot can see connection_log")
 	}
-	for _, table := range grantedTables(t) {
+	// Both servers record stats v2, so the old stats tables are granted nowhere.
+	for _, table := range grantedTables(t, "allowed", "v2") {
 		if !strings.Contains(doc, "\n- "+table+" ") && !strings.Contains(doc, "\n- "+table+":") {
 			t.Errorf("granted table %s missing from the doc", table)
 		}

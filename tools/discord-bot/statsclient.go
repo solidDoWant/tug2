@@ -29,7 +29,7 @@ var errNotFound = errors.New("not found")
 // maxStatsResponse bounds what one call can feed into the model's context.
 const maxStatsResponse = 64 << 10
 
-// Get fetches path (e.g. "/api/v1/players") with the query from the named
+// Get fetches path (e.g. "/api/v2/players") with the query from the named
 // server's stats API and returns the decoded JSON with the "$schema" link
 // removed, since it is noise to the model.
 func (c *StatsClient) Get(ctx context.Context, server, path string, query url.Values) (any, error) {
