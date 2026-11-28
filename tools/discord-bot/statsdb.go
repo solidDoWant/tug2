@@ -43,11 +43,12 @@ const (
 	statsDBMaxConns = 2
 )
 
-// statsDB runs one read-only query in a server's schema, and lists the tables
-// it can read there.
+// statsDB runs one read-only query in a server's schema, lists the tables it
+// can read there, and runs find_players' name search.
 type statsDB interface {
 	Query(ctx context.Context, schema, sql string) (*QueryResult, error)
 	Schema(ctx context.Context, schema string) ([]schemaTable, error)
+	FindPlayers(ctx context.Context, schema, name string) ([]PlayerMatch, int, error)
 }
 
 // QueryResult is what query_stats returns to the model.
@@ -91,13 +92,35 @@ func (d *PostgresStatsDB) Close() { d.pool.Close() }
 
 var errQueryTimeout = fmt.Errorf("the query ran longer than %s and was stopped; make it simpler or more selective", queryStatementTimeout)
 
-func (d *PostgresStatsDB) Query(ctx context.Context, schema, sql string) (res *QueryResult, err error) {
+func (d *PostgresStatsDB) Query(ctx context.Context, schema, sql string) (*QueryResult, error) {
+	var res *QueryResult
+	err := d.inReadOnlyTx(ctx, schema, func(ctx context.Context, tx pgx.Tx) error {
+		var err error
+		res, err = readRows(ctx, tx, wrapQuery(sql))
+		return err
+	})
+	if errors.Is(err, errRowLimit) {
+		// The SQL got around the LIMIT. readRows dropped the connection rather
+		// than read the rest.
+		return res, nil
+	}
+	if err != nil {
+		return nil, describeQueryError(err)
+	}
+	return res, nil
+}
+
+// inReadOnlyTx runs fn in a READ ONLY transaction on its own connection, with
+// the query limits and search_path set for schema, then rolls it back and
+// resets the connection. errRowLimit from fn is returned as is, with the
+// connection dropped rather than reset.
+func (d *PostgresStatsDB) inReadOnlyTx(ctx context.Context, schema string, fn func(context.Context, pgx.Tx) error) error {
 	ctx, cancel := context.WithTimeout(ctx, queryDeadline)
 	defer cancel()
 
 	conn, err := d.pool.Acquire(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("connecting to the stats database: %w", err)
+		return fmt.Errorf("connecting to the stats database: %w", err)
 	}
 	// Keep the connection only if it was cleanly reset.
 	clean := false
@@ -110,7 +133,7 @@ func (d *PostgresStatsDB) Query(ctx context.Context, schema, sql string) (res *Q
 
 	tx, err := conn.BeginTx(ctx, pgx.TxOptions{AccessMode: pgx.ReadOnly})
 	if err != nil {
-		return nil, fmt.Errorf("starting the query: %w", err)
+		return fmt.Errorf("starting the query: %w", err)
 	}
 	_, err = tx.Exec(ctx,
 		"SELECT set_config('statement_timeout', $1, true), set_config('lock_timeout', $2, true), "+
@@ -118,22 +141,17 @@ func (d *PostgresStatsDB) Query(ctx context.Context, schema, sql string) (res *Q
 		fmt.Sprint(queryStatementTimeout.Milliseconds()), fmt.Sprint(queryLockTimeout.Milliseconds()),
 		fmt.Sprint(queryDeadline.Milliseconds()), pgx.Identifier{schema}.Sanitize())
 	if err == nil {
-		res, err = readRows(ctx, tx, wrapQuery(sql))
+		err = fn(ctx, tx)
 	}
 	if errors.Is(err, errRowLimit) {
-		// The SQL got around the LIMIT. readRows dropped the connection rather
-		// than read the rest.
-		return res, nil
+		return err
 	}
 	if rbErr := tx.Rollback(ctx); rbErr == nil && (err == nil || isQueryError(err)) {
 		if _, dErr := conn.Exec(ctx, "DISCARD ALL"); dErr == nil {
 			clean = true
 		}
 	}
-	if err != nil {
-		return nil, describeQueryError(err)
-	}
-	return res, nil
+	return err
 }
 
 var errRowLimit = errors.New("row limit reached")

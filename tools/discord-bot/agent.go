@@ -107,7 +107,7 @@ func buildSystemPrompt(cfg *Config, issuesEnabled bool) string {
 
 	sql := ""
 	if len(cfg.statsDBServers()) > 0 {
-		sql = "\n- When the other stats tools can't answer a question (averages, ranks, comparisons, filters, combinations), use query_stats to run your own SQL. Say briefly how you computed the figure when it involves a choice, such as leaving out players with no deaths."
+		sql = "\n- When the other stats tools can't answer a question (averages, ranks, comparisons, filters, combinations), use query_stats to run your own SQL. Say briefly how you computed the figure when it involves a choice, such as leaving out players with no deaths. When the question is about particular players, look them up with find_players first and filter your SQL by their steam_id; never match names in SQL."
 	}
 
 	issues := "You cannot file bug reports or feature requests right now; if asked, say that reporting is not set up and suggest telling an admin."

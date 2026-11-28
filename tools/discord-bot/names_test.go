@@ -37,42 +37,31 @@ func TestNameCandidates(t *testing.T) {
 	}
 }
 
-// fakeStats serves /api/v1/players?name=&name_match=fuzzy from a fixed player
-// list, roughly like the real API: exact and substring case-insensitively,
-// normalised ignoring everything but letters and digits. It checks the bot
-// asks for the fuzzy match.
+// normName is roughly the database's normalised form, for the fakes.
+func normName(s string) string {
+	return strings.Map(func(r rune) rune {
+		if unicode.IsLetter(r) || unicode.IsDigit(r) {
+			return unicode.ToLower(r)
+		}
+		return -1
+	}, s)
+}
+
+// fakeStats serves /api/v1/players?name= from a fixed player list like the
+// real API: a case-insensitive substring match.
 func fakeStats(t *testing.T, players map[string]string, searched *[]string) *StatsClient {
 	t.Helper()
-	norm := func(s string) string {
-		return strings.Map(func(r rune) rune {
-			if unicode.IsLetter(r) || unicode.IsDigit(r) {
-				return unicode.ToLower(r)
-			}
-			return -1
-		}, s)
-	}
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		name := r.URL.Query().Get("name")
-		if r.URL.Query().Get("name_match") != "fuzzy" {
-			t.Errorf("search for %q is not fuzzy", name)
+		if r.URL.Query().Has("name_match") {
+			t.Errorf("search for %q sends name_match, which the API doesn't have", name)
 		}
 		*searched = append(*searched, name)
-		ids := slices.Sorted(maps.Keys(players))
 		items := []map[string]any{}
-		for _, id := range ids {
-			n := players[id]
-			kind := ""
-			switch {
-			case strings.EqualFold(n, name):
-				kind = "exact"
-			case strings.Contains(strings.ToLower(n), strings.ToLower(name)):
-				kind = "substring"
-			case norm(name) != "" && strings.Contains(norm(n), norm(name)):
-				kind = "normalised"
-			default:
-				continue
+		for _, id := range slices.Sorted(maps.Keys(players)) {
+			if n := players[id]; strings.Contains(strings.ToLower(n), strings.ToLower(name)) {
+				items = append(items, map[string]any{"steam_id": id, "name": n})
 			}
-			items = append(items, map[string]any{"steam_id": id, "name": n, "name_match": kind})
 		}
 		total := len(items)
 		if len(items) > 2 {
@@ -84,19 +73,59 @@ func fakeStats(t *testing.T, players map[string]string, searched *[]string) *Sta
 	return NewStatsClient(map[string]GameServer{"main": {Name: "main", StatsAPIURL: srv.URL}})
 }
 
-func TestMatchRank(t *testing.T) {
-	if matchRank("exact") != 0 || matchRank("loose") != 3 || matchRank("bogus") != 4 {
-		t.Error("ranks out of order")
+// fakeNameDB is a statsDB whose FindPlayers ranks a fixed player list roughly
+// like findPlayersSQL (TestPostgresFindPlayers checks the real one).
+type fakeNameDB struct {
+	fakeStatsDB
+	players  map[string]string
+	searched []string
+	schema   string
+}
+
+func (f *fakeNameDB) FindPlayers(_ context.Context, schema, name string) ([]PlayerMatch, int, error) {
+	f.searched = append(f.searched, name)
+	f.schema = schema
+	var out []PlayerMatch
+	for _, id := range slices.Sorted(maps.Keys(f.players)) {
+		n := f.players[id]
+		kind := ""
+		switch {
+		case strings.EqualFold(n, name):
+			kind = "exact"
+		case strings.Contains(strings.ToLower(n), strings.ToLower(name)):
+			kind = "substring"
+		case normName(name) != "" && strings.Contains(normName(n), normName(name)):
+			kind = "normalised"
+		default:
+			continue
+		}
+		out = append(out, PlayerMatch{SteamID: id, Name: n, NameMatch: kind})
 	}
-	// An older stats API leaves name_match out of a plain substring search.
-	if matchRank(nil) != matchRank("substring") {
-		t.Error("a missing name_match is not a substring match")
+	slices.SortStableFunc(out, func(a, b PlayerMatch) int { return matchRank(a.NameMatch) - matchRank(b.NameMatch) })
+	total := len(out)
+	if len(out) > 2 {
+		out = out[:2] // pretend the page is short, to see more_matches
+	}
+	return out, total, nil
+}
+
+// nameTestConfig is one server with a stats database schema.
+func nameTestConfig() *Config {
+	return &Config{
+		StatsDBURL:  "postgres:///",
+		Servers:     map[string]GameServer{"main": {Name: "main", StatsAPIURL: "unused", StatsDBSchema: "public"}},
+		ServerOrder: []string{"main"},
+	}
+}
+
+func TestMatchRank(t *testing.T) {
+	if matchRank("exact") != 0 || matchRank("loose") != 3 || matchRank("bogus") != 4 || matchRank(nil) != 4 {
+		t.Error("ranks out of order")
 	}
 }
 
 func TestFindPlayersConfidence(t *testing.T) {
-	var searched []string
-	stats := fakeStats(t, map[string]string{
+	db := &fakeNameDB{players: map[string]string{
 		"76561198000000001": "Jane Doe",
 		"76561198000000002": "JaneDoeFan",
 		"76561198000000003": "J_Smith",
@@ -104,9 +133,12 @@ func TestFindPlayersConfidence(t *testing.T) {
 		"76561198000000005": "TestPlayerAlpha",
 		"76561198000000006": "TestPlayerBravo",
 		"76561198000000007": "TestPlayerCharlie",
-	}, &searched)
-	cfg := &Config{Servers: map[string]GameServer{"main": {Name: "main", StatsAPIURL: "unused"}}, ServerOrder: []string{"main"}}
-	ts := NewToolset(cfg, stats, nil, nil, nil)
+	}}
+	cfg := nameTestConfig()
+	ts := NewToolset(cfg, NewStatsClient(cfg.Servers), nil, nil, db)
+	if !strings.Contains(ts.tools["find_players"].param.Description.Value, "forgiving") {
+		t.Error("find_players doesn't describe the forgiving match")
+	}
 
 	for _, c := range []struct {
 		name, confidence string
@@ -143,15 +175,14 @@ func TestFindPlayersConfidence(t *testing.T) {
 }
 
 func TestFindPlayersMe(t *testing.T) {
-	var searched []string
-	stats := fakeStats(t, map[string]string{
+	db := &fakeNameDB{players: map[string]string{
 		"76561198000000001": "Test Player Beta",
 		"76561198000000002": "[TAG] TestPlayerGamma",
-	}, &searched)
-	cfg := &Config{Servers: map[string]GameServer{"main": {Name: "main", StatsAPIURL: "unused"}}, ServerOrder: []string{"main"}}
-	ts := NewToolset(cfg, stats, nil, nil, nil)
+	}}
+	cfg := nameTestConfig()
+	ts := NewToolset(cfg, NewStatsClient(cfg.Servers), nil, nil, db)
 	run := func(asker, input string) (any, error) {
-		searched = nil
+		db.searched = nil
 		return ts.Run(context.Background(), &toolContext{asker: asker}, "find_players", json.RawMessage(input))
 	}
 
@@ -164,8 +195,8 @@ func TestFindPlayersMe(t *testing.T) {
 		!reflect.DeepEqual(res.Players[0]["matched_by"], []string{"Test Player Beta"}) {
 		t.Errorf("players = %v", res.Players)
 	}
-	if !reflect.DeepEqual(searched, []string{"discordalpha [Test Player Beta]", "discordalpha", "Test Player Beta"}) {
-		t.Errorf("searched %q", searched)
+	if !reflect.DeepEqual(db.searched, []string{"discordalpha [Test Player Beta]", "discordalpha", "Test Player Beta"}) || db.schema != "public" {
+		t.Errorf("searched %q in %q", db.searched, db.schema)
 	}
 
 	if res.Confidence != confidenceExact {
@@ -183,8 +214,8 @@ func TestFindPlayersMe(t *testing.T) {
 	}
 
 	// A plain name search is unchanged.
-	if _, err := run("whoever", `{"name":"Beta"}`); err != nil || !reflect.DeepEqual(searched, []string{"Beta"}) {
-		t.Errorf("name search: %v, searched %q", err, searched)
+	if _, err := run("whoever", `{"name":"Beta"}`); err != nil || !reflect.DeepEqual(db.searched, []string{"Beta"}) {
+		t.Errorf("name search: %v, searched %q", err, db.searched)
 	}
 
 	for _, c := range []struct{ asker, input string }{
@@ -197,5 +228,60 @@ func TestFindPlayersMe(t *testing.T) {
 		if _, err := run(c.asker, c.input); err == nil {
 			t.Errorf("%q %s: no error", c.asker, c.input)
 		}
+	}
+}
+
+// Without a stats database, find_players falls back to the stats API's
+// substring search, still telling an exact match apart.
+func TestFindPlayersWithoutDatabase(t *testing.T) {
+	var searched []string
+	stats := fakeStats(t, map[string]string{
+		"76561198000000001": "TestPlayerAlphaFan",
+		"76561198000000002": "TestPlayerAlpha",
+		"76561198000000003": "Jane Doe",
+	}, &searched)
+	cfg := &Config{Servers: map[string]GameServer{"main": {Name: "main", StatsAPIURL: "unused"}}, ServerOrder: []string{"main"}}
+	ts := NewToolset(cfg, stats, nil, nil, nil)
+	if strings.Contains(ts.tools["find_players"].param.Description.Value, "forgiving") {
+		t.Error("find_players claims the forgiving match without a database")
+	}
+	for _, c := range []struct{ name, confidence, first string }{
+		{"testplayeralpha", confidenceExact, "TestPlayerAlpha"},
+		{"AlphaFan", confidenceClear, "TestPlayerAlphaFan"},
+		{"TestPlayer", confidenceAmbiguous, "TestPlayerAlphaFan"},
+		{"JaneDoe", confidenceNone, ""}, // only the forgiving match finds it
+	} {
+		out, err := ts.Run(context.Background(), &toolContext{}, "find_players", json.RawMessage(`{"name":`+strconv.Quote(c.name)+`}`))
+		if err != nil {
+			t.Fatalf("%q: %v", c.name, err)
+		}
+		res := out.(*nameMatches)
+		first := ""
+		if len(res.Players) > 0 {
+			first, _ = res.Players[0]["name"].(string)
+		}
+		if res.Confidence != c.confidence || first != c.first {
+			t.Errorf("%q: confidence %q, first %q; want %q, %q", c.name, res.Confidence, first, c.confidence, c.first)
+		}
+	}
+
+	// A server without a stats schema uses the API even when there is a database.
+	db := &fakeNameDB{}
+	if _, err := NewToolset(cfg, stats, nil, nil, db).Run(context.Background(), &toolContext{}, "find_players", json.RawMessage(`{"name":"x"}`)); err != nil || len(db.searched) != 0 {
+		t.Errorf("searched the database for a server without a schema: %v %q", err, db.searched)
+	}
+}
+
+// query_stats and the system prompt send player lookups through find_players
+// rather than name matching in SQL.
+func TestPlayerSQLRule(t *testing.T) {
+	cfg := nameTestConfig()
+	ts := NewToolset(cfg, NewStatsClient(cfg.Servers), nil, nil, &fakeNameDB{})
+	desc := ts.tools["query_stats"].param.Description.Value
+	if !strings.Contains(desc, playerSQLRule) || !strings.Contains(playerSQLRule, "find_players") || !strings.Contains(playerSQLRule, "steam_id") {
+		t.Errorf("query_stats description lacks the player rule: %q", desc)
+	}
+	if !strings.Contains(buildSystemPrompt(cfg, false), "filter your SQL by their steam_id; never match names in SQL") {
+		t.Error("system prompt lacks the player rule")
 	}
 }

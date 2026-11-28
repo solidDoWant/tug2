@@ -14,10 +14,11 @@ the reporter to press **Confirm**.
   searches the asker's Discord display name whole and in parts, so a Steam
   name in brackets ("discordname [SteamName]") is found too. Name searches
   forgive spacing, separators, punctuation and leetspeak ("Jane Doe" finds
-  "JaneDoe" and "J4ne.D0e") and words apart ("Jane the Doe"), using the stats
-  API's `name_match=fuzzy`. Each search says how confident it is; when only
-  such looser matches or several equal ones are found, the bot lists the
-  candidates by Steam name and asks which one is meant rather than guessing. For anything the
+  "JaneDoe" and "J4ne.D0e") and words apart ("Jane the Doe"); see
+  [Finding players by name](#finding-players-by-name). Each search says how
+  confident it is; when only such looser matches or several equal ones are
+  found, the bot lists the candidates by Steam name and asks which one is
+  meant rather than guessing. For anything the
   stats tools don't cover (averages, ranks, comparisons, filters), the model
   can write its own read-only SQL; see [SQL access](#sql-access).
 - **Live server state:** map, players (names, scores, time connected), round
@@ -338,6 +339,30 @@ description is given. A description helps the model pick the right channel:
 ```
 
 Pass it inline or as a file with `CHANNEL_DESCRIPTIONS_FILE`.
+
+## Finding players by name
+
+`find_players` ranks every recorded name against the search, best kind of
+match first, then by score: exact (case-insensitively), substring, the same
+once lowercased with common leetspeak digits folded (0→o, 1→i, 3→e, 4→a, 5→s,
+7→t) and everything but letters and digits dropped, and the search's words in
+order with anything between them. It returns the best 10 per name, with
+headline stats, and a `confidence` (`exact`, `clear`, `ambiguous`, `low`,
+`none`) that tells the model whether to use the player or ask.
+
+The bot runs this itself, as one fixed, parameterised query on its
+`STATS_DB_URL` connection (under the same read-only transaction and limits as
+`query_stats`, on `player_stats`), because ranking has to see every name before
+the result is cut to a page. The search text is only ever a bound parameter;
+LIKE metacharacters in it are escaped and nothing is used as a regex
+([`namematch.go`](namematch.go)). The stats API's own `name` filter stays a
+plain substring match. A server without a `stats_db_schema`, or a bot without
+`STATS_DB_URL`, falls back to it: only exact and substring matches.
+
+`query_stats` doesn't match names itself: its description and the system
+prompt tell the model to resolve players with `find_players` first and filter
+its SQL by `steam_id`, so a SQL question gets the same forgiving match and the
+same "ask when unsure".
 
 ## SQL access
 

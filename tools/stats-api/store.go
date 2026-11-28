@@ -163,45 +163,36 @@ const playerColumns = `steam_id, name, kills, deaths, suicides, headshot_given, 
 // ListPlayers returns a page of players ordered by the given column (descending)
 // along with the total number of matching players. A non-empty name keeps only
 // players whose recorded name contains it, case-insensitively; LIKE wildcards
-// in it are matched literally. With fuzzy, it also keeps players whose name
-// matches it in a looser way (see nameMatchRank), sets each player's NameMatch,
-// and lists the better matches first. With a window, only players with stats
-// in it are listed, ranked by those.
-func (s *Store) ListPlayers(ctx context.Context, w *Window, sort, name string, fuzzy bool, limit, offset int) ([]PlayerStats, int, error) {
+// in it are matched literally. With a window, only players with stats in it
+// are listed, ranked by those.
+func (s *Store) ListPlayers(ctx context.Context, w *Window, sort, name string, limit, offset int) ([]PlayerStats, int, error) {
 	column, ok := validSortColumns[sort]
 	if !ok {
 		column = "score"
 	}
 
-	var args []any
-	source := `WITH src AS (` + playerSource(w, &args) + `)`
-	var filter string
-	order := column + ` DESC, steam_id`
-	columns := playerColumns + `, NULL::int`
-	switch {
-	case name != "" && fuzzy:
-		source += `, ranked AS (SELECT *, ` + nameMatchRank("name", name, &args) + ` AS name_rank FROM src)`
-		filter = `FROM ranked WHERE active AND name_rank IS NOT NULL`
-		order = `name_rank, ` + order
-		columns = playerColumns + `, name_rank`
-	case name != "":
-		args = append(args, "%"+likeEscaper.Replace(name)+"%")
-		filter = `FROM src WHERE active AND name ILIKE $` + strconv.Itoa(len(args))
-	default:
-		filter = `FROM src WHERE active`
+	// $1 is NULL when no name filter is given, which matches every row.
+	var pattern *string
+	if name != "" {
+		p := "%" + likeEscaper.Replace(name) + "%"
+		pattern = &p
 	}
 
-	total, err := s.count(ctx, source+` SELECT COUNT(*) `+filter, args...)
+	args := []any{pattern}
+	source := `WITH src AS (` + playerSource(w, &args) + `)`
+	filter := `WHERE active AND ($1::text IS NULL OR name ILIKE $1)`
+
+	total, err := s.count(ctx, source+` SELECT COUNT(*) FROM src `+filter, args...)
 	if err != nil {
 		return nil, 0, err
 	}
 
 	args = append(args, limit, offset)
-	// #nosec G201 -- column is whitelisted via validSortColumns above; the
-	// name is only ever a bound parameter.
+	// #nosec G201 -- column is whitelisted via validSortColumns above.
 	query := source + `
-		SELECT ` + columns + ` ` + filter + `
-		ORDER BY ` + order + `
+		SELECT ` + playerColumns + `
+		FROM src ` + filter + `
+		ORDER BY ` + column + ` DESC, steam_id
 		LIMIT $` + strconv.Itoa(len(args)-1) + ` OFFSET $` + strconv.Itoa(len(args))
 
 	rows, err := s.pool.Query(ctx, query, args...)
@@ -210,7 +201,7 @@ func (s *Store) ListPlayers(ctx context.Context, w *Window, sort, name string, f
 	}
 	defer rows.Close()
 
-	players, err := scanPlayers(rows, true)
+	players, err := scanPlayers(rows)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -234,7 +225,7 @@ func (s *Store) GetPlayer(ctx context.Context, w *Window, steamID string) (*Play
 	}
 	defer rows.Close()
 
-	players, err := scanPlayers(rows, false)
+	players, err := scanPlayers(rows)
 	if err != nil {
 		return nil, err
 	}
@@ -846,29 +837,19 @@ func (s *Store) ListFireSupport(ctx context.Context, w *Window, limit, offset in
 	return players, total, rows.Err()
 }
 
-// scanPlayers reads a full set of player_stats rows into a slice. With
-// ranked, each row has a name match rank (index into nameMatchKinds, or NULL)
-// after the playerColumns, which sets NameMatch.
-func scanPlayers(rows pgx.Rows, ranked bool) ([]PlayerStats, error) {
+// scanPlayers reads a full set of player_stats rows into a slice.
+func scanPlayers(rows pgx.Rows) ([]PlayerStats, error) {
 	players := []PlayerStats{}
 	for rows.Next() {
 		var player PlayerStats
-		var rank *int
-		dest := []any{
+		if err := rows.Scan(
 			&player.SteamID, &player.Name, &player.Kills, &player.Deaths, &player.Suicides,
 			&player.HeadshotGiven, &player.HeadshotTaken, &player.Suppressions,
 			&player.Caps, &player.Killstreak, &player.Score, &player.Wins,
 			&player.Losses, &player.PlayTimeSeconds, &player.Shots, &player.EnemyHits,
 			&player.FriendlyHits, &player.EnemyHitRate, &player.CreatedAt, &player.UpdatedAt,
-		}
-		if ranked {
-			dest = append(dest, &rank)
-		}
-		if err := rows.Scan(dest...); err != nil {
+		); err != nil {
 			return nil, err
-		}
-		if rank != nil && *rank >= 0 && *rank < len(nameMatchKinds) {
-			player.NameMatch = &nameMatchKinds[*rank]
 		}
 		players = append(players, player)
 	}

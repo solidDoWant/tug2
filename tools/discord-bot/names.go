@@ -52,34 +52,25 @@ func nameCandidates(display string) []string {
 	return out
 }
 
-// playerNameQuery is the /api/v1/players query for a name search. The fuzzy
-// match also finds spellings that differ in case, spacing, separators,
-// punctuation or leetspeak, and words with something between them, and says
-// for each player how their name matched (name_match).
+// playerNameQuery is the /api/v1/players query for a name search, used when
+// there is no stats database to run the forgiving search on: a plain
+// case-insensitive substring match.
 func playerNameQuery(name string) url.Values {
-	q := pageQuery(10, 0)
+	q := pageQuery(maxNameMatches, 0)
 	q.Set("name", name)
-	q.Set("name_match", "fuzzy")
 	q.Set("sort", "score")
 	return q
 }
 
-// matchKinds are the stats API's name_match values, best first.
-var matchKinds = []string{"exact", "substring", "normalised", "loose"}
-
-// matchRank is the position of a name_match value in matchKinds; unknown
-// values rank last. A stats API without name_match=fuzzy leaves name_match
-// out and does a plain substring search, so a missing one is a substring.
+// matchRank is the position of a name_match value in nameMatchKinds; unknown
+// values rank last.
 func matchRank(kind any) int {
-	if kind == nil {
-		kind = "substring"
-	}
-	for i, k := range matchKinds {
+	for i, k := range nameMatchKinds {
 		if k == kind {
 			return i
 		}
 	}
-	return len(matchKinds)
+	return len(nameMatchKinds)
 }
 
 // nameMatches is what find_players returns.
@@ -153,26 +144,77 @@ func (m *nameMatches) judge() {
 	}
 }
 
+// playerSearch is where find_players looks names up: the forgiving search on
+// the stats database when the server has a schema there, else the stats API's
+// substring search.
+type playerSearch struct {
+	stats   *StatsClient
+	db      statsDB
+	schemas map[string]string // server -> stats database schema
+}
+
+// fuzzy reports whether server's searches use the forgiving match.
+func (s *playerSearch) fuzzy(server string) bool {
+	return s.db != nil && s.schemas[server] != ""
+}
+
+// search returns one name's matches, best first, and how many there were.
+func (s *playerSearch) search(ctx context.Context, server, name string) ([]map[string]any, int, error) {
+	if s.fuzzy(server) {
+		found, total, err := s.db.FindPlayers(ctx, s.schemas[server], name)
+		if err != nil {
+			return nil, 0, err
+		}
+		out := make([]map[string]any, len(found))
+		for i, p := range found {
+			out[i] = p.toMap()
+		}
+		return out, total, nil
+	}
+	res, err := s.stats.Get(ctx, server, "/api/v1/players", playerNameQuery(name))
+	if err != nil {
+		return nil, 0, err
+	}
+	obj, _ := res.(map[string]any)
+	items, _ := obj["items"].([]any)
+	var out []map[string]any
+	for _, it := range items {
+		p, ok := it.(map[string]any)
+		if !ok {
+			continue
+		}
+		// The API only matches substrings; an exact one is told apart here.
+		p["name_match"] = "substring"
+		if n, _ := p["name"].(string); strings.EqualFold(n, name) {
+			p["name_match"] = "exact"
+		}
+		out = append(out, p)
+	}
+	total := len(out)
+	if t, ok := obj["total"].(float64); ok {
+		total = int(t)
+	}
+	// Exact matches first, otherwise the API's order (by score).
+	slices.SortStableFunc(out, func(a, b map[string]any) int {
+		return matchRank(a["name_match"]) - matchRank(b["name_match"])
+	})
+	return out, total, nil
+}
+
 // findPlayersByNames runs a name search for each name, merges the results and
 // judges how confident the match is.
-func findPlayersByNames(ctx context.Context, stats *StatsClient, server, discordName string, names []string) (*nameMatches, error) {
+func findPlayersByNames(ctx context.Context, search *playerSearch, server, discordName string, names []string) (*nameMatches, error) {
 	out := &nameMatches{DiscordName: discordName, Searched: names, Players: []map[string]any{}}
 	byID := map[string]map[string]any{}
 	for _, name := range names {
-		res, err := stats.Get(ctx, server, "/api/v1/players", playerNameQuery(name))
+		items, total, err := search.search(ctx, server, name)
 		if err != nil {
 			return nil, err
 		}
-		obj, _ := res.(map[string]any)
-		items, _ := obj["items"].([]any)
-		if total, ok := obj["total"].(float64); ok && int(total) > len(items) {
+		if total > len(items) {
 			out.More = true
 		}
-		for _, it := range items {
-			p, ok := it.(map[string]any)
-			if !ok {
-				continue
-			}
+		for _, p := range items {
 			id, _ := p["steam_id"].(string)
 			if prev, ok := byID[id]; ok && id != "" {
 				prev["matched_by"] = append(prev["matched_by"].([]string), name)
@@ -186,7 +228,7 @@ func findPlayersByNames(ctx context.Context, stats *StatsClient, server, discord
 			out.Players = append(out.Players, p)
 		}
 	}
-	// Stable, so equally good matches keep the API's order (by score).
+	// Stable, so equally good matches keep their search's order (by score).
 	slices.SortStableFunc(out.Players, func(a, b map[string]any) int {
 		return matchRank(a["name_match"]) - matchRank(b["name_match"])
 	})
