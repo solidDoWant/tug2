@@ -91,6 +91,9 @@ if [ -n "$FROM_REF" ]; then
     if [ -f "$FROM_TEST/results.sql" ]; then
         (cd "$FROM_TEST" && psql "$USER_DB" -q -v ON_ERROR_STOP=1 -f results.sql > /dev/null)
     fi
+    # A boot on the old files first, as the server had before the upgrade: results.sql leaves rounds
+    # marked out of date, which any boot recomputes, so they would differ for that reason alone.
+    apply "$FROM_SQL" stats_03_results.sql
     snapshot > "$WORK/before"
     boot_twice "$SQL_DIR"
     snapshot > "$WORK/after"
