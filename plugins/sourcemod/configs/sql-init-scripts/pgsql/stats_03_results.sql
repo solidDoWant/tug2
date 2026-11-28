@@ -71,7 +71,9 @@ CREATE TABLE IF NOT EXISTS player_round_weapon_results (
 );
 CREATE INDEX IF NOT EXISTS idx_player_round_weapon_results_steam_id ON player_round_weapon_results (steam_id);
 
--- The kind of a death: the one definition, used by v_kills and the cache.
+-- The kind of a death: the one definition, used by v_kills and the cache. It reads no tables, so it
+-- is left without a pinned search_path: a SET clause would stop it being inlined, and it would then
+-- run as a call per kill.
 CREATE OR REPLACE FUNCTION stats_kill_kind(p_attacker BIGINT, p_attacker_bot TEXT, p_victim BIGINT,
                                            p_attacker_team team, p_victim_team team)
 RETURNS TEXT LANGUAGE sql IMMUTABLE AS $f$
@@ -213,7 +215,7 @@ $f$;
 DO $$
 DECLARE f text;
 BEGIN
-    FOREACH f IN ARRAY ARRAY['stats_kill_kind(bigint,text,bigint,team,team)', 'stats_round_kills(bigint[])', 'stats_round_results(bigint[])', 'stats_round_weapon_results(bigint[])'] LOOP
+    FOREACH f IN ARRAY ARRAY['stats_round_kills(bigint[])', 'stats_round_results(bigint[])', 'stats_round_weapon_results(bigint[])'] LOOP
         EXECUTE format('ALTER FUNCTION %s SET search_path = %I', f, current_schema());
     END LOOP;
 END $$;

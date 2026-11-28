@@ -112,8 +112,11 @@ LEFT JOIN overlap ON overlap.map_name = COALESCE(r.map_name, o.map_name);
 CREATE OR REPLACE VIEW v_team_kills AS
 SELECT k.kill_id, k.killed_at, k.attacker_steam_id, k.victim_steam_id, k.weapon_name,
        f.forgiven_at IS NOT NULL AS forgiven, 'v2'::text AS source
-FROM v_kills k LEFT JOIN team_kill_forgives f USING (kill_id)
-WHERE k.kind = 'team_kill' AND k.attacker_steam_id IS NOT NULL
+FROM kills k LEFT JOIN team_kill_forgives f USING (kill_id)
+-- kind = 'team_kill' with a human killer (stats_kill_kind), spelled out so idx_kills_team_kills
+-- serves it: team kills are a few a day among thousands of kills.
+WHERE k.attacker_steam_id IS NOT NULL AND k.attacker_team = k.victim_team
+  AND k.attacker_steam_id IS DISTINCT FROM k.victim_steam_id
 UNION ALL
 SELECT NULL, t.created_at, t.attacker_steam_id, t.victim_steam_id, t.weapon, t.forgiven, 'old'
 FROM old_player_tk_logs t, v_cutover c

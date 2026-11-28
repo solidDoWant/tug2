@@ -77,6 +77,8 @@ CREATE INDEX IF NOT EXISTS idx_kills_killed_at ON kills USING brin (killed_at);
 CREATE INDEX IF NOT EXISTS idx_kills_attacker ON kills (attacker_steam_id) WHERE attacker_steam_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_kills_victim ON kills (victim_steam_id) WHERE victim_steam_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_kills_attacker_bot ON kills (attacker_bot_name) WHERE attacker_bot_name IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_kills_team_kills ON kills (killed_at)
+    WHERE attacker_steam_id IS NOT NULL AND attacker_team = victim_team;
 
 CREATE TABLE IF NOT EXISTS team_kill_forgives (
     kill_id     BIGINT PRIMARY KEY REFERENCES kills,

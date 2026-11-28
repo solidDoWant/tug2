@@ -77,6 +77,17 @@ BEGIN
     ASSERT bad IS NULL, 'killstreaks (live) differ from the plain definition: ' || bad;
 END $$;
 
+-- v_team_kills spells out the team-kill test for its index: it must pick exactly the team kills.
+DO $$ BEGIN
+    ASSERT (SELECT count(*) FROM v_kills WHERE kind = 'team_kill' AND attacker_steam_id IS NOT NULL) > 0, 'random team kills made';
+    ASSERT (SELECT count(*) FROM (
+        (SELECT kill_id FROM v_team_kills WHERE source = 'v2'
+         EXCEPT ALL SELECT kill_id FROM v_kills WHERE kind = 'team_kill' AND attacker_steam_id IS NOT NULL)
+        UNION ALL
+        (SELECT kill_id FROM v_kills WHERE kind = 'team_kill' AND attacker_steam_id IS NOT NULL
+         EXCEPT ALL SELECT kill_id FROM v_team_kills WHERE source = 'v2')) d) = 0, 'v_team_kills = kind team_kill';
+END $$;
+
 -- Everything live, then everything cached.
 SELECT pg_temp.take('live');
 SELECT count(stats_refresh_round(round_id)) FROM rounds;
