@@ -289,7 +289,7 @@ func (ts *Toolset) addStatsTools(serverProp map[string]any, defaultServer string
 
 	ts.add("get_player",
 		"Get one player's full lifetime stats (kills, deaths, suicides, headshots given/taken, suppressions, caps, best killstreak, score, wins, losses, playtime (play_time_seconds, time on the Security team, only counted since November 2026), accuracy (shots = rounds fired, enemy_hits / friendly_hits = rounds that damaged an enemy / a teammate, enemy_hit_rate = enemy_hits/shots in %; only counted since November 2026), first/last seen) "+
-			"and their kills, shots and hits per weapon. Times are UTC."+periodNote,
+			"and their kills, shots and hits per weapon. Times are UTC, each also as Unix seconds in <field>_unix."+periodNote,
 		periodProps(map[string]any{
 			"steam_id": prop("string", "The player's 64-bit SteamID (17 digits), e.g. from find_players."),
 			"server":   serverProp,
@@ -372,7 +372,7 @@ func (ts *Toolset) addStatsTools(serverProp map[string]any, defaultServer string
 		})
 
 	ts.add("recent_matches",
-		"List the most recent round results, newest first: map, whether the players (Security) won, and when (UTC).",
+		"List the most recent round results, newest first: map, whether the players (Security) won, and when (UTC, and as Unix seconds in played_at_unix).",
 		map[string]any{
 			"limit":  intProp("How many results (default 10).", 1, maxPageSize),
 			"offset": intProp("Results to skip, for older pages.", 0, 100000),

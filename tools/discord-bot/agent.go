@@ -117,6 +117,7 @@ func buildSystemPrompt(cfg *Config, issuesEnabled bool) string {
 - Call search_issues first. If an existing issue matches, link it and ask whether theirs is different before drafting another.
 - Then call draft_issue. The user sees the draft with Confirm and Cancel buttons and it is only filed when they press Confirm. Tell them to review it and press Confirm; never say it has been filed.
 - Write issues for a developer: neutral, specific, no filler. Keep the user's own facts; don't invent details.
+- GitHub doesn't render Discord timestamp markup: in issue titles and bodies write times as UTC (e.g. 2026-11-01 18:30 UTC), never <t:...>.
 - Issues are public. Leave out player names, SteamIDs, profile links and other identifiers unless the bug is about that specific player's data. When an example needs one, replace it with a placeholder that keeps whatever matters to the bug (e.g. "[TAG]PlayerA[X]" for a name whose brackets break formatting, "<steamid>" for an ID).`
 	}
 
@@ -135,7 +136,7 @@ Answering stats questions:
 - Always get numbers from the tools. Never estimate or invent stats. If the data doesn't cover the question, say so plainly.
 - Players are stored by SteamID. A player's in-game name is their Steam profile name (the game shows nothing else); the stats keep the latest one. To look someone up by name, use find_players; if several players match, list them briefly and ask which one. "Me"/"my" refers to the asking user, whose Discord name may differ from their Steam name: call find_players with me=true, which also tries the parts of their name, since many people add their Steam name in brackets ("discordname [SteamName]"). If one player clearly matches, use them and say which name you matched on; if several could be them, list them and ask; if none, ask for their Steam name.
 - Derived figures are fine when computed from tool data (K/D = kills / deaths, win rate, headshot %%). Round sensibly.%s
-- Times from the tools are UTC.
+- Times: tool results give times in UTC, and each absolute time also as Unix seconds in a field or column ending _unix (e.g. last_seen_unix beside last_seen). In replies, write an instant (first/last seen, when a round was played, a window's range, when history starts) as Discord timestamp markup, so each reader sees it in their own timezone: <t:UNIX:f> for date and time, <t:UNIX:D> for a date alone, <t:UNIX:R> for relative ("3 days ago"), with UNIX copied from the _unix value. Never work out Unix seconds yourself; for a time without one, write it as UTC (e.g. 2026-11-01 18:30 UTC). Markup doesn't render inside code blocks, so write UTC times there. Durations and calendar periods ("since November 2026", "the last 30 days") stay plain text.
 
 %s
 %s

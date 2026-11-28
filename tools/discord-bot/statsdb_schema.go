@@ -36,7 +36,9 @@ const schemaDocLoading = "The table descriptions haven't loaded yet. List the ta
 
 const (
 	schemaDocHeader = "Tables (PostgreSQL; each server has its own copy, selected by the server parameter, so never schema-qualify names). " +
-		"Each table and column is described below; timestamps are UTC (timestamp without time zone)."
+		"Each table and column is described below. timestamp (without time zone) columns hold the database's local wall-clock time, not UTC: " +
+		"results show them converted to UTC, and every timestamp column in a result also comes as <column>_unix (Unix seconds), appended after your columns. " +
+		"Comparing them with now() in SQL works as is; for Unix seconds in SQL use extract(epoch FROM col::timestamptz), never extract(epoch FROM col)."
 	schemaDocFooter = "Counts are lifetime totals per server. For K/D, divide by NULLIF(deaths, 0) and say how you treated players with no deaths; " +
 		"for averages, consider leaving out players with very few kills or deaths and say so."
 )

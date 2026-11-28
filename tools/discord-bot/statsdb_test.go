@@ -154,6 +154,9 @@ func TestPostgresStatsDB(t *testing.T) {
 		`DROP ROLE IF EXISTS bot_reader`,
 		`CREATE ROLE bot_reader LOGIN PASSWORD 'pw' CONNECTION LIMIT 2`,
 		`ALTER ROLE bot_reader SET temp_file_limit = '64MB'`,
+		// The plugins' timestamps are wall-clock times in the session's default
+		// zone, which need not be UTC: here UTC+3 (POSIX sign is inverted).
+		`ALTER ROLE bot_reader SET TimeZone = 'Etc/GMT-3'`,
 		`CREATE TABLE public.player_stats (steam_id varchar PRIMARY KEY, name varchar, kills int, deaths int, updated_at timestamp)`,
 		`INSERT INTO public.player_stats SELECT '765611980000000' || lpad(i::text, 2, '0'), 'TestPlayer' || i, i * 10, i, '2026-11-10 06:37:04' FROM generate_series(1, 30) i`,
 		`CREATE TABLE public.maps (map_name varchar PRIMARY KEY, play_time interval)`,
@@ -182,8 +185,14 @@ func TestPostgresStatsDB(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := mustJSON(res); got != `{"columns":["players","avg_kd","last"],"rows":[[30,10,"2026-11-10 06:37:04"]]}` {
+	// 06:37:04 at UTC+3 is 03:37:04 UTC, and the timestamp gets a Unix-seconds column.
+	if got := mustJSON(res); got != `{"columns":["players","avg_kd","last","last_unix"],"rows":[[30,10,"2026-11-10 03:37:04",1794281824]]}` {
 		t.Errorf("aggregate = %s", got)
+	}
+	// timestamptz values are instants already; NULLs stay NULL.
+	if res, err := db.Query(ctx, "public", "SELECT '2026-11-10 06:37:04+00'::timestamptz AS at, NULL::timestamp AS never"); err != nil ||
+		mustJSON(res) != `{"columns":["at","never","at_unix","never_unix"],"rows":[["2026-11-10 06:37:04",null,1794292624,null]]}` {
+		t.Errorf("timestamptz: %v %s", err, mustJSON(res))
 	}
 	if res, err := db.Query(ctx, "public", "SELECT map_name, play_time FROM maps"); err != nil || mustJSON(res.Rows) != `[["test_map",86490]]` {
 		t.Errorf("interval: %v %v", err, res)

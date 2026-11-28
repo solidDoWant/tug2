@@ -15,6 +15,13 @@ the reporter to press **Confirm**.
   name in brackets ("discordname [SteamName]") is found too. For anything the
   stats tools don't cover (averages, ranks, comparisons, filters), the model
   can write its own read-only SQL; see [SQL access](#sql-access).
+- **Times in the reader's timezone:** first/last seen, round times, window
+  ranges and the like are written as Discord timestamps (`<t:UNIX:f>`), which
+  each reader's client shows in their own timezone. The model doesn't convert
+  dates itself: the stats tools add `<field>_unix` beside every time,
+  `read_channel`/`search_channels` add `posted_unix`, and `query_stats` adds a
+  `<column>_unix` column for each timestamp column. Code blocks and issue
+  drafts (GitHub doesn't render the markup) get UTC times instead.
 - **Live server state:** map, players (names, scores, time connected), round
   number, objective progress, and whether the map vote is up. This comes from
   the Source server query (A2S) on the game port, so it needs no RCON password.
@@ -372,6 +379,15 @@ and the bot:
   than read further. `set_config` is refused outright, since it could raise
   `work_mem` within the query.
 - The per-question tool and token limits apply as for every other tool.
+
+**Timestamps.** The plugins' `timestamp without time zone` columns are filled
+by `CURRENT_TIMESTAMP`, so they hold wall-clock time in the database's default
+`TimeZone`, which need not be UTC. Like the stats API, the bot reads each new
+connection's session `TimeZone` and scans timestamps in it, so results show
+real UTC times and correct `<column>_unix` values. SQL comparisons with
+`now()` need nothing special; the tool description tells the model to use
+`extract(epoch FROM col::timestamptz)`, not `extract(epoch FROM col)`, if it
+needs Unix seconds in SQL.
 
 Connection settings beyond `STATS_DB_URL` come from the standard libpq
 variables (`PGHOST`, `PGSSLCERT`, ...). Client certificates are re-read from
