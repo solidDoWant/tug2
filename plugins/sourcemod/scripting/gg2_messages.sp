@@ -14,6 +14,10 @@
 
 #define MAX_MESSAGES          64
 
+// The "just hold the healthkit/defib" tip (see Event_WeaponDeploy).
+#define HOLD_TIP_DURATION     2.0
+#define HOLD_TIP_COOLDOWN     300.0
+
 Database   g_Database                        = null;
 
 int        g_rotating_player_messages_offset = 0;
@@ -22,6 +26,7 @@ char       rotating_player_messages[MAX_MESSAGES][MAX_MESSAGE_LENGTH];
 char       rotating_admin_messages[MAX_MESSAGES][MAX_MESSAGE_LENGTH];
 char       player_join_messages[MAX_MESSAGES][MAX_MESSAGE_LENGTH];
 bool       g_has_player_seen_first_connect_message[MAXPLAYERS + 1];
+float      g_next_hold_tip_time[MAXPLAYERS + 1];
 
 bool       g_is_last_cap_cache;
 
@@ -285,17 +290,24 @@ public Action Event_WeaponDeploy(Event event, const char[] name, bool dontBroadc
     char weapon_name[64];
     GetClientWeapon(client, weapon_name, sizeof(weapon_name));
 
+    char phrase[32];
     if (StrEqual(weapon_name, healthkit_weapon_name, false))
-    {
-        HintShow(client, "hold_tip", HINT_PRI_NOTICE, 4.0, "%T", "justholdit", client);
+        strcopy(phrase, sizeof(phrase), "justholdit");
+    else if (StrEqual(weapon_name, defib_weapon_name, false))
+        strcopy(phrase, sizeof(phrase), "justholditdefib");
+    else
         return Plugin_Continue;
-    }
 
-    if (StrEqual(weapon_name, defib_weapon_name, false))
-    {
-        HintShow(client, "hold_tip", HINT_PRI_NOTICE, 4.0, "%T", "justholditdefib", client);
-    }
+    // A reminder, not news, so it must never hide what the player needs while healing (#61). As a
+    // NOTICE for 4s it outranked bm2_respawn's healing/reviving readouts (ACTIVITY) and the health
+    // display, and medics pull the defib out constantly, so it covered the patient's HP over and
+    // over. STATUS lets the healing readout take the box as soon as it starts; the short duration
+    // gives the health display back quickly; the cooldown stops it repeating every deploy.
+    float now = GetEngineTime();
+    if (now < g_next_hold_tip_time[client]) return Plugin_Continue;
+    g_next_hold_tip_time[client] = now + HOLD_TIP_COOLDOWN;
 
+    HintShow(client, "hold_tip", HINT_PRI_STATUS, HOLD_TIP_DURATION, "%T", phrase, client);
     return Plugin_Continue;
 }
 
@@ -601,6 +613,7 @@ public void Event_PlayerSpawnInit(Event event, const char[] name, bool dontBroad
 public void OnClientDisconnect_Post(int client)
 {
     g_has_player_seen_first_connect_message[client] = false;
+    g_next_hold_tip_time[client]                   = 0.0;
 }
 
 public bool IsValidPlayer(int client)
