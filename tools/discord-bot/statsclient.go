@@ -32,7 +32,8 @@ const maxStatsResponse = 64 << 10
 // Get fetches path (e.g. "/api/v1/players") with the query from the named
 // server's stats API and returns the decoded JSON with the "$schema" link
 // removed, since it is noise to the model, and Unix seconds beside each time
-// (see addUnixTimes).
+// (see addUnixTimes) and a name_md beside each player name (see
+// addNameMarkdown).
 func (c *StatsClient) Get(ctx context.Context, server, path string, query url.Values) (any, error) {
 	gs, ok := c.servers[server]
 	if !ok || gs.StatsAPIURL == "" {
@@ -74,6 +75,7 @@ func (c *StatsClient) Get(ctx context.Context, server, path string, query url.Va
 		delete(obj, "$schema")
 	}
 	addUnixTimes(decoded)
+	addNameMarkdown(decoded)
 	return decoded, nil
 }
 

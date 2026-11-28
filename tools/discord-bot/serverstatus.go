@@ -40,7 +40,10 @@ type ServerStatus struct {
 
 // StatusPlayer is one connected player as the query reports them.
 type StatusPlayer struct {
-	Name          string `json:"name"`
+	Name string `json:"name"`
+	// NameMD is the name formatted for a reply (bold, escaped). The query
+	// gives no SteamID, so it has no profile link.
+	NameMD        string `json:"name_md"`
 	Score         int    `json:"score"`
 	ConnectedMins int    `json:"connected_minutes"`
 }
@@ -111,6 +114,7 @@ func QueryServer(name, address string, timeout time.Duration) ServerStatus {
 			}
 			status.PlayerList = append(status.PlayerList, StatusPlayer{
 				Name:          p.Name,
+				NameMD:        playerNameMarkdown(p.Name, ""),
 				Score:         int(p.Score),
 				ConnectedMins: int(p.Duration / 60),
 			})

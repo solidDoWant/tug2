@@ -122,7 +122,8 @@ func buildSystemPrompt(cfg *Config, issuesEnabled bool) string {
 - Then call draft_issue. The user sees the draft with Confirm and Cancel buttons and it is only filed when they press Confirm. Tell them to review it and press Confirm; never say it has been filed.
 - Write issues for a developer: neutral, specific, no filler. Keep the user's own facts; don't invent details.
 - GitHub doesn't render Discord timestamp markup: in issue titles and bodies write times as UTC (e.g. 2026-11-01 18:30 UTC), never <t:...>.
-- Issues are public. Leave out player names, SteamIDs, profile links and other identifiers unless the bug is about that specific player's data. When an example needs one, replace it with a placeholder that keeps whatever matters to the bug (e.g. "[TAG]PlayerA[X]" for a name whose brackets break formatting, "<steamid>" for an ID).`
+- Issues are public. Leave out player names, SteamIDs, profile links and other identifiers unless the bug is about that specific player's data. When an example needs one, replace it with a placeholder that keeps whatever matters to the bug (e.g. "[TAG]PlayerA[X]" for a name whose brackets break formatting, "<steamid>" for an ID).
+- The player name formatting below is for Discord only. Issue titles and bodies use plain names or placeholders, never name_md or profile links.`
 	}
 
 	limits := usageLimitsPrompt(cfg, issuesEnabled)
@@ -145,8 +146,9 @@ Answering stats questions:
 %s
 %s
 Style:
-- You're replying in Discord. Be brief and friendly: usually a few lines, a short list, or a small table in a code block for leaderboards. Stay under 1500 characters.
+- You're replying in Discord. Be brief and friendly: usually a few lines or a short numbered list (for leaderboards too). Stay under 1500 characters.
 - Use Discord markdown. Don't use headings for short answers. Never @mention anyone and never use @everyone or @here.
+- Write every player name the same way, so readers can spot names at a glance: tool results give name_md beside each player's name (bold, with markdown characters escaped, linked to their Steam profile when the SteamID is known); copy it exactly, every time the name appears. In a list of more than 10 players, drop the links to save space: use only the bold part of name_md. A player name without name_md (e.g. from read_channel, or query_stats without steam_id) goes in bold, with a backslash before each of \ * _ ~ `+"`"+` | < > [ ] in it. Markdown doesn't render in code blocks, so don't put player names in one.
 - Stay on topic: this server's stats, live status, and bug/feature reports. Politely decline anything else.
 
 Each user message starts with when it was posted (UTC) and the poster's Discord display name, in square brackets; the newest message's time is the current time. [to you] after the name means the message @mentions you or replies to you.
@@ -362,14 +364,27 @@ func (a *Agent) runTools(ctx context.Context, tc *toolContext, resp *anthropic.M
 			add(use.ID, "Error: "+err.Error(), true)
 			continue
 		}
-		encoded, err := json.Marshal(out)
+		encoded, err := encodeToolResult(out)
 		if err != nil {
 			add(use.ID, "Error: could not encode result", true)
 			continue
 		}
-		add(use.ID, string(encoded), false)
+		add(use.ID, encoded, false)
 	}
 	return results, int64(chars/charsPerToken + 1)
+}
+
+// encodeToolResult is JSON without HTML escaping: the model copies some
+// values into its reply as they are, such as name_md's <url> links, and
+// json.Marshal would hand it \u003c and \u003e instead.
+func encodeToolResult(v any) (string, error) {
+	var b strings.Builder
+	enc := json.NewEncoder(&b)
+	enc.SetEscapeHTML(false)
+	if err := enc.Encode(v); err != nil {
+		return "", err
+	}
+	return strings.TrimSuffix(b.String(), "\n"), nil
 }
 
 // buildMessages turns the Discord history into alternating user/assistant

@@ -32,6 +32,15 @@ the reporter to press **Confirm**.
   (class and named ones: gear, and each weapon with its optics and
   attachments), by SteamID or by name through `find_players`; see
   [Saved loadouts](#saved-loadouts).
+- **Player names stand out:** every player name in a reply is bold and, when
+  the SteamID is known, links to the player's Steam profile (without a link
+  preview). The model doesn't build these itself: the stats tools,
+  `server_status` and `query_stats` (when the query selects `steam_id` with
+  `name`) return a ready-made `name_md` beside each name, with Discord
+  markdown characters escaped, so a name like `*x*` or `[TAG]x` can't break
+  the formatting. Leaderboards are numbered lists rather than code blocks,
+  since markdown doesn't render in code blocks; lists of more than 10 players
+  drop the links to save space. Issue drafts keep names plain.
 - **Live server state:** map, players (names, scores, time connected), round
   number, objective progress, and whether the map vote is up. This comes from
   the Source server query (A2S) on the game port, so it needs no RCON password.
