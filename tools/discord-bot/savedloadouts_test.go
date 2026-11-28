@@ -55,7 +55,7 @@ func TestAssembleLoadouts(t *testing.T) {
 		`"gear":["sec_heavy_armor","sec_tactical_carrier"],"weapons":[` +
 		`{"slot":"primary","weapon":"m4a1","upgrades":["optic_aimpoint","underbarrel_foregrip_sec1"]},` +
 		`{"slot":"secondary","weapon":"m9"},{"slot":"explosive","weapon":"m67","quantity":3}],` +
-		`"unattached_upgrades":["ammo_ap_m9"],"last_saved":"2026-11-20 23:30","first_saved":"2026-11-20 23:30","times_saved":3},` +
+		`"unattached_upgrades":["ammo_ap_m9"],"last_saved":"2026-11-20 23:30","last_saved_unix":1795217400,"first_saved":"2026-11-20 23:30","first_saved_unix":1795217400,"times_saved":3},` +
 		`{"name":"Night Ops","kind":"named","class":"recon","class_template":"template_recon_security_coop","empty":true,"times_saved":1}]`
 	if got != want {
 		t.Errorf("assembleLoadouts =\n%s\nwant\n%s", got, want)
@@ -207,7 +207,11 @@ func TestPostgresLoadoutDB(t *testing.T) {
 		if err != nil || time.Since(saved) > 2*time.Minute || time.Since(saved) < -2*time.Minute {
 			t.Errorf("loadout %d saved at %q, not about now in UTC", i, loadouts[i].SavedAt)
 		}
+		if loadouts[i].SavedUnix/60 != saved.Unix()/60 || loadouts[i].FirstUnix == 0 {
+			t.Errorf("loadout %d: last_saved_unix %d for %q, first_saved_unix %d", i, loadouts[i].SavedUnix, loadouts[i].SavedAt, loadouts[i].FirstUnix)
+		}
 		loadouts[i].SavedAt, loadouts[i].CreatedAt = "", ""
+		loadouts[i].SavedUnix, loadouts[i].FirstUnix = 0, 0
 	}
 	want := `[{"kind":"class","class":"rifleman","class_template":"template_rifleman_security_coop","gear":["sec_heavy_armor"],` +
 		`"weapons":[{"slot":"primary","weapon":"m4a1","upgrades":["optic_aimpoint"]},{"slot":"explosive","weapon":"m67","quantity":2}],"times_saved":1},` +
