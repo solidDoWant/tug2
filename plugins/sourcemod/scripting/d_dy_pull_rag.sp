@@ -11,7 +11,6 @@
 #define PLUGIN_DESCRIPTION "Plugin for Pulling prop_ragdoll bodies"
 
 #define IN_SPRINT          IN_ALT2    // sprint key in insurgency
-#define MAX_BUTTONS        25
 
 //(button == IN_MOVELEFT || button == IN_MOVERIGHT || button == IN_JUMP) Ones jump
 //(button == IN_BACK || button == IN_LEFT || button == IN_RIGHT) one is Z
@@ -400,12 +399,11 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
     }
     else
     {
-        for (int i = 0; i < MAX_BUTTONS; i++)
-        {
-            int button = (1 << i);
-            if ((buttons & button))
-                OnButtonPress(client, button, buttons);
-        }
+        // The claim on a body only lasts for the ticks it is actually being dragged. Without letting
+        // go here, the last body a hold-mode player touched stayed in g_playerCurrentRag after they
+        // released sprint, and FindDragTarget refused it to everyone else until the ragdoll was
+        // destroyed by a revive (#62).
+        if (!HoldDragTick(client, buttons)) ReleaseDrag(client);
     }
 
     g_LastButtons[client] = buttons;
@@ -524,13 +522,13 @@ void MoveRagdoll(int client, int clientTargetRagdoll, const float ragPos[3])
     TeleportEntity(clientTargetRagdoll, destination, NULL_VECTOR, _fForce);
 }
 
-// Original hold-to-drag path, for players in hold mode.
-Action OnButtonPress(int client, int button, int buttons)
+// Original hold-to-drag path, for players in hold mode. Returns whether a body was dragged this tick.
+bool HoldDragTick(int client, int buttons)
 {
-    if (button != IN_SPRINT || !DragGatesOpen(buttons)) return Plugin_Continue;
+    if (!(buttons & IN_SPRINT) || !DragGatesOpen(buttons)) return false;
 
     int clientTargetRagdoll = FindDragTarget(client);
-    if (clientTargetRagdoll == -1) return Plugin_Continue;
+    if (clientTargetRagdoll == -1) return false;
 
     float ragPos[3];
     GetEntPropVector(clientTargetRagdoll, Prop_Send, "m_vecOrigin", ragPos);
@@ -538,7 +536,7 @@ Action OnButtonPress(int client, int button, int buttons)
     g_playerCurrentRag[client] = EntIndexToEntRef(clientTargetRagdoll);
     MoveRagdoll(client, clientTargetRagdoll, ragPos);
 
-    return Plugin_Continue;
+    return true;
 }
 
 stock bool CheckIfBodyIsStuck(ent)
