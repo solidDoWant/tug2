@@ -70,10 +70,10 @@ func TestAskRouting(t *testing.T) {
 	// /ask goes where an @mention would: route with mentioned=true.
 	const botChan, bot = "100", "900"
 	userThread := &discordgo.Channel{ID: "201", ParentID: botChan, OwnerID: "u1", Type: discordgo.ChannelTypeGuildPublicThread}
-	if id, ok := route(botChan, bot, "201", userThread, true); !ok || id != "201" {
+	if id, ok := route([]string{botChan}, bot, "201", userThread, true); !ok || id != "201" {
 		t.Errorf("user thread: %q %v", id, ok)
 	}
-	if _, ok := route(botChan, bot, "555", &discordgo.Channel{ID: "555", Type: discordgo.ChannelTypeGuildText}, true); ok {
+	if _, ok := route([]string{botChan}, bot, "555", &discordgo.Channel{ID: "555", Type: discordgo.ChannelTypeGuildText}, true); ok {
 		t.Error("/ask outside the bot channel was accepted")
 	}
 	if askCommandDef.Options[0].MaxLength != maxAskQuestionLen || !askCommandDef.Options[0].Required {

@@ -80,7 +80,11 @@ the reporter to press **Confirm**.
 
 ## How conversations work
 
-- Mention the bot in the configured channel, or use Discord's reply on one of
+`DISCORD_CHANNEL_ID` names the bot channel, or several separated by commas.
+Each listed channel works exactly as described here for "the bot channel",
+independently of the others; every other channel is ignored.
+
+- Mention the bot in a configured channel, or use Discord's reply on one of
   its messages (with or without the ping). It starts a thread named after
   the question's first words and answers there. Meanwhile a separate small
   model call (no tools, about 1k tokens, a fraction of a cent on Haiku) writes
@@ -90,10 +94,10 @@ the reporter to press **Confirm**.
   posts the question publicly as the command's response (Discord shows "used
   /ask" above it) and answers it exactly like a mention: a new thread in the
   bot channel, or in place inside a thread. Elsewhere it replies, visible
-  only to the asker, pointing to the bot channel. `/ask` is registered as a
-  guild command in the bot channel's server at startup, so it appears
-  immediately. To limit it to the bot channel in the `/` menu too, use
-  Server Settings → Integrations → the bot → `/ask`.
+  only to the asker, pointing to the bot channels in that server. `/ask` is
+  registered as a guild command at startup in every server that holds a bot
+  channel, so it appears immediately. To limit it to the bot channels in the
+  `/` menu too, use Server Settings → Integrations → the bot → `/ask`.
 - Follow-ups in that thread don't need a mention. The thread itself is the
   conversation history: the bot re-reads it on every message (up to
   `HISTORY_MESSAGES`), so nothing is stored and restarts lose nothing.
@@ -200,6 +204,8 @@ permissions. Discord updates the existing bot in place.
 
 1. Copy the bot channel's ID (User Settings → Advanced → Developer Mode, then
    right-click the channel → **Copy Channel ID**) for `DISCORD_CHANNEL_ID`.
+   For several bot channels, list their IDs separated by commas, and give the
+   bot the posting permissions above in each.
 2. Start the bot and check its log:
    - `registered slash commands`: `/ask` and `/resetlimits` are available. A warning that mentions
      `applications.commands` means the scope is missing; re-invite with it.
@@ -345,7 +351,7 @@ to**, without configuration. Access is decided by Discord permissions:
 - A channel is readable when the bot has **View Channel** and **Read Message
   History** in it. Grant or revoke these on the bot's role or on the channel,
   and the change applies to the next question. No restart is needed.
-- The bot's own question channel is never read. Voice channels, forums and
+- The bot's own question channels are never read. Voice channels, forums and
   threads aren't read either.
 - `list_channels` gives the model the readable channels with their
   category and topic. `read_channel` reads recent messages from one of them,
@@ -509,7 +515,7 @@ liveness probe at `/livez` and readiness at `/readyz` on `HEALTH_ADDR`.
 | Variable                        | Default            | Description                                                                                                         |
 | ------------------------------- | ------------------ | ------------------------------------------------------------------------------------------------------------------- |
 | `DISCORD_TOKEN`                 | _(required)_       | Bot token.                                                                                                          |
-| `DISCORD_CHANNEL_ID`            | _(required)_       | The channel the bot answers mentions in.                                                                            |
+| `DISCORD_CHANNEL_ID`            | _(required)_       | The channel the bot answers mentions in, or several channel IDs separated by commas (`111,222`).                    |
 | `ANTHROPIC_API_KEY`             | _(one of)_         | Claude API key. Alternatively use workload identity federation; see [Claude API authentication](#claude-api-authentication). |
 | `ANTHROPIC_FEDERATION_RULE_ID`  | _(one of)_         | Workload identity federation: the federation rule's ID.                                                             |
 | `ANTHROPIC_ORGANIZATION_ID`     | _(with WIF)_       | Workload identity federation: your Anthropic organization ID.                                                       |

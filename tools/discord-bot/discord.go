@@ -28,7 +28,7 @@ type Bot struct {
 
 	mu                 sync.Mutex
 	inFlight           map[string]bool // users with a question being answered
-	commandsRegistered bool            // /ask is registered in the bot channel's guild
+	commandsRegistered map[string]bool // guilds holding a bot channel where /ask is registered
 
 	// nicks caches server nicknames by user ID; see authorName.
 	nicks *nickCache
@@ -60,6 +60,8 @@ func NewBot(ctx context.Context, cfg *Config, session *discordgo.Session, agent 
 		ctx:      ctx,
 		inFlight: map[string]bool{},
 		nicks:    newNickCache(),
+
+		commandsRegistered: map[string]bool{},
 	}
 	session.AddHandler(b.onMessage)
 	session.AddHandler(b.onInteraction)
@@ -137,7 +139,7 @@ func addressesBot(m *discordgo.Message, botID string) bool {
 	return m.Type == discordgo.MessageTypeReply && ref != nil && ref.Author != nil && ref.Author.ID == botID
 }
 
-// onMessage answers an @mention or reply to the bot in the configured channel
+// onMessage answers an @mention or reply to the bot in a configured channel
 // by starting a thread, any message in a thread the bot started there, and an
 // @mention or reply to the bot in a thread someone else started there.
 func (b *Bot) onMessage(s *discordgo.Session, m *discordgo.MessageCreate) {
@@ -146,13 +148,13 @@ func (b *Bot) onMessage(s *discordgo.Session, m *discordgo.MessageCreate) {
 	}
 
 	var ch *discordgo.Channel
-	if m.ChannelID != b.cfg.ChannelID {
+	if !slices.Contains(b.cfg.ChannelIDs, m.ChannelID) {
 		var err error
 		if ch, err = b.channel(m.ChannelID); err != nil {
 			return
 		}
 	}
-	threadID, ok := route(b.cfg.ChannelID, s.State.User.ID, m.ChannelID, ch, b.mentionsMe(m.Message))
+	threadID, ok := route(b.cfg.ChannelIDs, s.State.User.ID, m.ChannelID, ch, b.mentionsMe(m.Message))
 	if !ok {
 		return
 	}
@@ -171,17 +173,17 @@ func (b *Bot) onMessage(s *discordgo.Session, m *discordgo.MessageCreate) {
 }
 
 // route decides whether a message gets an answer and in which thread. ch is
-// the message's channel, nil when it is the bot channel itself. mentioned
-// means the message is addressed to the bot: an @mention or a reply to it. In
-// the bot channel it answers those in a new thread (threadID ""). In a thread
-// of the bot channel it answers every message if the bot started the thread,
-// and only those addressed to it if someone else did, since people may be
-// talking among themselves there. Elsewhere it ignores the message.
-func route(botChannelID, botUserID, channelID string, ch *discordgo.Channel, mentioned bool) (threadID string, ok bool) {
-	if channelID == botChannelID {
+// the message's channel, nil when it is a bot channel itself. botChannelIDs
+// are the configured bot channels. mentioned means the message is addressed
+// to the bot: an @mention or a reply to it. In a bot channel it answers those
+// in a new thread (threadID ""). In a thread of a bot channel it answers
+// every message if the bot started the thread, and only those addressed to it
+// if someone else did, since people may be talking among themselves there. Elsewhere it ignores the message.
+func route(botChannelIDs []string, botUserID, channelID string, ch *discordgo.Channel, mentioned bool) (threadID string, ok bool) {
+	if slices.Contains(botChannelIDs, channelID) {
 		return "", mentioned
 	}
-	if ch == nil || !ch.IsThread() || ch.ParentID != botChannelID {
+	if ch == nil || !ch.IsThread() || !slices.Contains(botChannelIDs, ch.ParentID) {
 		return "", false
 	}
 	return ch.ID, ch.OwnerID == botUserID || mentioned

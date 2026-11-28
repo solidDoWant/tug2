@@ -1,8 +1,8 @@
 package main
 
 import (
-	"fmt"
 	"log/slog"
+	"slices"
 	"strings"
 
 	"github.com/bwmarrin/discordgo"
@@ -13,8 +13,8 @@ import (
 //
 // The command's response is a normal message from the bot holding the
 // question, which Discord shows under "<user> used /ask". From there it is
-// handled exactly like an @mention of that message: in the bot channel it
-// starts a thread, in a thread of the bot channel it is answered there. When
+// handled exactly like an @mention of that message: in a bot channel it
+// starts a thread, in a thread of a bot channel it is answered there. When
 // the history is rebuilt, asAsker turns that bot message back into the user's
 // question.
 
@@ -37,17 +37,17 @@ var askCommandDef = &discordgo.ApplicationCommand{
 	}},
 }
 
-// registerCommands creates /ask and /resetlimits in the guild that holds the bot channel, once
-// per process. Guild commands appear immediately; a bulk overwrite is
-// idempotent and removes commands the bot no longer has.
+// registerCommands creates /ask and /resetlimits in a guild that holds a bot
+// channel, once per guild per process. Bot channels may be spread over
+// several guilds; each gets the commands. Guild commands appear immediately;
+// a bulk overwrite is idempotent and removes commands the bot no longer has.
 func (b *Bot) registerCommands(s *discordgo.Session, guildID string) {
-	ch, err := s.State.Channel(b.cfg.ChannelID)
-	if err != nil || ch.GuildID != guildID {
+	if len(botChannelsIn(s, b.cfg.ChannelIDs, guildID)) == 0 {
 		return
 	}
 	b.mu.Lock()
-	done := b.commandsRegistered
-	b.commandsRegistered = true
+	done := b.commandsRegistered[guildID]
+	b.commandsRegistered[guildID] = true
 	b.mu.Unlock()
 	if done {
 		return
@@ -60,7 +60,7 @@ func (b *Bot) registerCommands(s *discordgo.Session, guildID string) {
 	if _, err := s.ApplicationCommandBulkOverwrite(appID, guildID, []*discordgo.ApplicationCommand{askCommandDef, resetLimitsCommandDef}); err != nil {
 		slog.Warn("registering slash commands (was the bot invited with the applications.commands scope?)", "guild", guildID, "err", err)
 		b.mu.Lock()
-		b.commandsRegistered = false
+		delete(b.commandsRegistered, guildID)
 		b.mu.Unlock()
 		return
 	}
@@ -88,14 +88,14 @@ func (b *Bot) onAsk(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		return
 	}
 
-	// Same places as an @mention: the bot channel, or a thread in it.
+	// Same places as an @mention: a bot channel, or a thread in one.
 	var ch *discordgo.Channel
-	if i.ChannelID != b.cfg.ChannelID {
+	if !slices.Contains(b.cfg.ChannelIDs, i.ChannelID) {
 		ch, _ = b.channel(i.ChannelID)
 	}
-	threadID, ok := route(b.cfg.ChannelID, s.State.User.ID, i.ChannelID, ch, true)
+	threadID, ok := route(b.cfg.ChannelIDs, s.State.User.ID, i.ChannelID, ch, true)
 	if !ok {
-		b.ephemeral(i, fmt.Sprintf("Ask me in <#%s>.", b.cfg.ChannelID))
+		b.ephemeral(i, askElsewhereMessage(botChannelsIn(s, b.cfg.ChannelIDs, i.GuildID)))
 		return
 	}
 
@@ -135,6 +135,34 @@ func (b *Bot) onAsk(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		defer b.finishQuestion(user.ID)
 		b.answer(&q, threadID)
 	}()
+}
+
+// botChannelsIn returns the bot channels that are in a guild, as far as the
+// state cache knows.
+func botChannelsIn(s *discordgo.Session, ids []string, guildID string) []string {
+	var in []string
+	for _, id := range ids {
+		if ch, err := s.State.Channel(id); err == nil && ch.GuildID == guildID {
+			in = append(in, id)
+		}
+	}
+	return in
+}
+
+// askElsewhereMessage points someone who used /ask outside the bot channels
+// to the ones in their server.
+func askElsewhereMessage(ids []string) string {
+	if len(ids) == 0 {
+		return "I only answer in my own channels, and there are none in this server."
+	}
+	links := make([]string, len(ids))
+	for i, id := range ids {
+		links[i] = "<#" + id + ">"
+	}
+	if len(links) == 1 {
+		return "Ask me in " + links[0] + "."
+	}
+	return "Ask me in " + strings.Join(links[:len(links)-1], ", ") + " or " + links[len(links)-1] + "."
 }
 
 // asAsker returns an /ask response as the question it holds: the same message
