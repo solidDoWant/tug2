@@ -45,6 +45,15 @@ Each hit is stored once: a killing blow as its `kills` row (`kills.damage`), any
 row. Damage dealt and taken, and hits by body part, are added up from the two by the per-round
 cache, not counted separately.
 
+Two things the game reports need correcting:
+
+- `player_hurt`'s `hitgroup` is the victim's last hit location, even for damage that has none (a fall
+  after a bullet hit came through as `right_arm`). Only bullets and melee keep it; anything else is
+  `generic`, for hits and for the kill's hitgroup.
+- A restart or crash ends every session without a `player_disconnect`. When the plugin first reaches
+  the database after a boot, it closes sessions earlier boots left open at this boot's start, with
+  `disconnect_reason` `server restarted`.
+
 ### Loading mid-map
 
 A plugin loaded during a map (`sm plugins load`, or a changed `.smx` reloaded at a map change once

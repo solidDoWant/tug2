@@ -318,9 +318,10 @@ BEGIN
     END LOOP;
 END $$;
 
--- Every boot: recompute rounds cached with other definitions, and cache rounds that are over but were
+-- Every boot: recompute rounds cached with other definitions (any round: one cached while still
+-- going, as at a shutdown mid-round, is out of date too), and cache rounds that are over but were
 -- never cached (a crash before their end was flushed). A round is over once it has ended, or once a
--- later map run started. The round in progress is left to its own end. In batches of 1000 rounds.
+-- later map run started; one in progress and never cached is left to its own end. In batches of 1000.
 DO $$
 DECLARE b BIGINT[]; h TEXT := stats_results_hash(); n INT := 0;
 BEGIN
@@ -328,8 +329,8 @@ BEGIN
         SELECT array_agg(round_id ORDER BY round_id) FROM (
             SELECT ro.round_id, (row_number() OVER (ORDER BY ro.round_id) - 1) / 1000 AS batch
             FROM rounds ro LEFT JOIN round_results_done d USING (round_id)
-            WHERE (d.round_id IS NULL OR d.def_hash <> h)
-              AND (ro.ended_at IS NOT NULL OR ro.map_run_id <> (SELECT max(map_run_id) FROM map_runs))) x
+            WHERE d.def_hash <> h
+               OR (d.round_id IS NULL AND (ro.ended_at IS NOT NULL OR ro.map_run_id <> (SELECT max(map_run_id) FROM map_runs)))) x
         GROUP BY batch ORDER BY batch
     LOOP
         PERFORM stats_refresh_rounds(b);

@@ -434,10 +434,26 @@ public void OnTablesChecked(Database db, DBResultSet results, const char[] error
     }
     g_disabled = false;
     LogMessage("[STATS2] Recording into schema %s", schema);
+    CloseEarlierBootsSessions();
     if (g_resuming)
         ResumeFromDatabase();
     else
         g_ready = true;
+}
+
+// A restart or crash ends every session without a player_disconnect, so sessions an earlier boot left
+// open are closed at this boot's start (the latest they can have lasted). Once per plugin load.
+void CloseEarlierBootsSessions()
+{
+    static bool done;
+    if (done) return;
+    done = true;
+    char stmt[300];
+    Format(stmt, sizeof(stmt),
+           "UPDATE sessions SET disconnected_at = to_timestamp(%d), disconnect_reason = 'server restarted' "
+         ... "WHERE disconnected_at IS NULL AND connected_at < to_timestamp(%d) - interval '5 seconds'",
+           g_bootUnix, g_bootUnix);
+    AddPlain(stmt);
 }
 
 // Late load, part two: the map run and round this server already wrote, by this boot and map, and the
@@ -1604,7 +1620,9 @@ public void Event_PlayerHurt(Event event, const char[] name, bool dontBroadcast)
     int victim   = GetClientOfUserId(event.GetInt("userid"));
     int attacker = GetClientOfUserId(event.GetInt("attacker"));
     if (victim < 1) return;
-    int hitgroup = event.GetInt("hitgroup");
+    // The game reports the victim's last hit location even for damage that has none: a fall after a
+    // bullet hit came through as right_arm. Only bullets and melee land on a body part.
+    int hitgroup = (event.GetInt("damagebits") & (DMG_BULLET | DMG_SLASH | DMG_CLUB)) ? event.GetInt("hitgroup") : 0;
     g_lastHitgroup[victim] = hitgroup;
     g_lastHitTick[victim]  = GetGameTickCount();
     if (!HaveRound()) return;
