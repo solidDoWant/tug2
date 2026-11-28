@@ -51,9 +51,10 @@ type UserLimit struct {
 // Config is the bot's runtime configuration, read from the environment.
 type Config struct {
 	DiscordToken string
-	// ChannelID is the one channel the bot answers @mentions in. Follow-ups in
-	// the threads it starts there need no mention.
-	ChannelID string
+	// ChannelIDs are the channels the bot answers @mentions in, from the
+	// comma-separated DISCORD_CHANNEL_ID. Follow-ups in the threads it starts
+	// there need no mention.
+	ChannelIDs []string
 
 	// StatsDBURL is the connection string for read-only SQL access to the
 	// stats database (query_stats). Empty disables the tool. Unset parts come
@@ -181,7 +182,7 @@ func ParseConfig() (*Config, error) {
 	var errs []error
 	c := &Config{
 		DiscordToken: getEnv("DISCORD_TOKEN", ""),
-		ChannelID:    getEnv("DISCORD_CHANNEL_ID", ""),
+		ChannelIDs:   splitList(getEnv("DISCORD_CHANNEL_ID", "")),
 		Model:        getEnv("LLM_MODEL", "claude-haiku-5-5"),
 		Effort:       getEnv("LLM_EFFORT", "low"),
 		IssueLabels:  splitList(getEnv("GITHUB_ISSUE_LABELS", "from-discord")),
@@ -197,8 +198,13 @@ func ParseConfig() (*Config, error) {
 	if c.DiscordToken == "" {
 		errs = append(errs, errors.New("DISCORD_TOKEN is required"))
 	}
-	if c.ChannelID == "" {
+	if len(c.ChannelIDs) == 0 {
 		errs = append(errs, errors.New("DISCORD_CHANNEL_ID is required"))
+	}
+	for _, id := range c.ChannelIDs {
+		if _, err := strconv.ParseUint(id, 10, 64); err != nil {
+			errs = append(errs, fmt.Errorf("DISCORD_CHANNEL_ID: %q is not a Discord channel ID (want IDs separated by commas)", id))
+		}
 	}
 
 	switch c.Effort {

@@ -159,9 +159,9 @@ func testSession(t *testing.T) *discordgo.Session {
 
 func TestDiscordChannelsReadable(t *testing.T) {
 	d := &DiscordChannels{
-		session:      testSession(t),
-		botChannelID: "400000000000000006",
-		descriptions: map[string]string{"400000000000000002": "Server update notes, newest first"},
+		session:       testSession(t),
+		botChannelIDs: []string{"400000000000000006"},
+		descriptions:  map[string]string{"400000000000000002": "Server update notes, newest first"},
 	}
 	got, err := d.Readable("200000000000000000")
 	if err != nil {

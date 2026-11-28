@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"github.com/bwmarrin/discordgo"
 	"os"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -306,6 +307,99 @@ func TestParseConfig(t *testing.T) {
 	}
 }
 
+func TestParseConfigChannelIDs(t *testing.T) {
+	t.Setenv("DISCORD_TOKEN", "x")
+	t.Setenv("ANTHROPIC_API_KEY", "test")
+	t.Setenv("SERVERS", `[{"name":"main","query_address":"h:27000"}]`)
+	for _, tt := range []struct {
+		raw  string
+		want []string
+		err  string
+	}{
+		{"100000000000000001", []string{"100000000000000001"}, ""},
+		{" 100000000000000001 ,100000000000000002,  ", []string{"100000000000000001", "100000000000000002"}, ""},
+		{" , ", nil, "DISCORD_CHANNEL_ID is required"},
+		{"100000000000000001, #bot-questions", nil, `"#bot-questions" is not a Discord channel ID`},
+	} {
+		t.Setenv("DISCORD_CHANNEL_ID", tt.raw)
+		cfg, err := ParseConfig()
+		if tt.err != "" {
+			if err == nil || !strings.Contains(err.Error(), tt.err) {
+				t.Errorf("%q: err = %v, want %q", tt.raw, err, tt.err)
+			}
+			continue
+		}
+		if err != nil {
+			t.Fatalf("%q: %v", tt.raw, err)
+		}
+		if !slices.Equal(cfg.ChannelIDs, tt.want) {
+			t.Errorf("%q: ChannelIDs = %q, want %q", tt.raw, cfg.ChannelIDs, tt.want)
+		}
+	}
+}
+
+func TestRouteMultipleChannels(t *testing.T) {
+	const bot, user = "900", "901"
+	botChans := []string{"100", "101"}
+	thread := func(id, parent, owner string) *discordgo.Channel {
+		return &discordgo.Channel{ID: id, ParentID: parent, OwnerID: owner, Type: discordgo.ChannelTypeGuildPublicThread}
+	}
+	for _, c := range botChans {
+		if id, ok := route(botChans, bot, c, nil, true); !ok || id != "" {
+			t.Errorf("mention in bot channel %s: (%q, %v)", c, id, ok)
+		}
+	}
+	if id, ok := route(botChans, bot, "300", thread("300", "101", bot), false); !ok || id != "300" {
+		t.Errorf("follow-up in a bot thread of the second channel: (%q, %v)", id, ok)
+	}
+	if _, ok := route(botChans, bot, "301", thread("301", "101", user), false); ok {
+		t.Error("unaddressed message in a user thread of the second channel was answered")
+	}
+	if _, ok := route(botChans, bot, "555", &discordgo.Channel{ID: "555", Type: discordgo.ChannelTypeGuildText}, true); ok {
+		t.Error("mention in an unlisted channel was answered")
+	}
+}
+
+func TestAskElsewhereMessage(t *testing.T) {
+	for _, tt := range []struct {
+		ids  []string
+		want string
+	}{
+		{[]string{"1"}, "Ask me in <#1>."},
+		{[]string{"1", "2"}, "Ask me in <#1> or <#2>."},
+		{[]string{"1", "2", "3"}, "Ask me in <#1>, <#2> or <#3>."},
+	} {
+		if got := askElsewhereMessage(tt.ids); got != tt.want {
+			t.Errorf("askElsewhereMessage(%v) = %q, want %q", tt.ids, got, tt.want)
+		}
+	}
+	if got := askElsewhereMessage(nil); strings.Contains(got, "<#") {
+		t.Errorf("no channels in this server, but got %q", got)
+	}
+}
+
+func TestBotChannelsIn(t *testing.T) {
+	s := &discordgo.Session{State: discordgo.NewState()}
+	for _, g := range []*discordgo.Guild{
+		{ID: "10", Channels: []*discordgo.Channel{{ID: "100", GuildID: "10"}, {ID: "101", GuildID: "10"}, {ID: "102", GuildID: "10"}}},
+		{ID: "20", Channels: []*discordgo.Channel{{ID: "200", GuildID: "20"}}},
+	} {
+		if err := s.State.GuildAdd(g); err != nil {
+			t.Fatal(err)
+		}
+	}
+	ids := []string{"100", "200", "102", "999"}
+	if got := botChannelsIn(s, ids, "10"); !slices.Equal(got, []string{"100", "102"}) {
+		t.Errorf("guild 10: %v", got)
+	}
+	if got := botChannelsIn(s, ids, "20"); !slices.Equal(got, []string{"200"}) {
+		t.Errorf("guild 20: %v", got)
+	}
+	if got := botChannelsIn(s, ids, "30"); len(got) != 0 {
+		t.Errorf("guild without bot channels: %v", got)
+	}
+}
+
 func TestRoute(t *testing.T) {
 	const botChan, bot, user = "100", "900", "901"
 	thread := func(id, parent, owner string) *discordgo.Channel {
@@ -330,7 +424,7 @@ func TestRoute(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, ok := route(botChan, bot, tt.channelID, tt.ch, tt.mentioned)
+			got, ok := route([]string{botChan}, bot, tt.channelID, tt.ch, tt.mentioned)
 			if got != tt.thread || ok != tt.ok {
 				t.Errorf("route = (%q, %v), want (%q, %v)", got, ok, tt.thread, tt.ok)
 			}

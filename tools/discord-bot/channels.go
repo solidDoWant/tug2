@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -40,13 +41,13 @@ const readPermissions = discordgo.PermissionViewChannel | discordgo.PermissionRe
 
 // DiscordChannels discovers readable channels from Discord: every text or
 // announcement channel in the guild where the bot has View Channel and Read
-// Message History, except the bot's own question channel. Access is decided
+// Message History, except the bot's own question channels. Access is decided
 // by Discord permissions alone, so granting or revoking the bot's access to a
 // channel takes effect immediately with no configuration change.
 type DiscordChannels struct {
-	session      *discordgo.Session
-	botChannelID string
-	descriptions map[string]string
+	session       *discordgo.Session
+	botChannelIDs []string
+	descriptions  map[string]string
 	// refreshMember re-fetches the bot's roles before each listing (off in
 	// tests, which have no API to call).
 	refreshMember bool
@@ -99,8 +100,8 @@ func (d *DiscordChannels) Readable(guildID string) ([]ReadableChannel, error) {
 		if ch.Type != discordgo.ChannelTypeGuildText && ch.Type != discordgo.ChannelTypeGuildNews {
 			continue
 		}
-		if ch.ID == d.botChannelID {
-			continue // its own Q&A channel: other people's questions, not information
+		if slices.Contains(d.botChannelIDs, ch.ID) {
+			continue // its own Q&A channels: other people's questions, not information
 		}
 		perms, err := d.session.State.UserChannelPermissions(me, ch.ID)
 		if err != nil {
