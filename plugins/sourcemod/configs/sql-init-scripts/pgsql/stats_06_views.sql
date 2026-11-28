@@ -9,17 +9,17 @@
 
 -- One row per player per weapon per round; old history rows (before the cutover) have no round_id.
 CREATE OR REPLACE VIEW v_player_round_weapon_stats AS
-WITH wk AS (SELECT round_id, steam_id, weapon_name, kills FROM player_round_weapon_results_current)
+WITH wk AS (SELECT * FROM player_round_weapon_results_current)
 SELECT COALESCE(w.round_id, wk.round_id) AS round_id, COALESCE(w.steam_id, wk.steam_id) AS steam_id,
        COALESCE(w.weapon_name, wk.weapon_name) AS weapon_name,
        COALESCE(r.ended_at, r.started_at) AS at, 'v2'::text AS source,
        COALESCE(wk.kills, 0) AS kills,
        COALESCE(w.shots, 0) AS shots, COALESCE(w.shots_hit_enemy, 0) AS shots_hit_enemy,
        COALESCE(w.shots_hit_friendly, 0) AS shots_hit_friendly,
-       COALESCE(w.hits_head, 0) AS hits_head, COALESCE(w.hits_chest, 0) AS hits_chest,
-       COALESCE(w.hits_stomach, 0) AS hits_stomach, COALESCE(w.hits_arms, 0) AS hits_arms,
-       COALESCE(w.hits_legs, 0) AS hits_legs,
-       COALESCE(w.damage_enemy, 0) AS damage_enemy, COALESCE(w.damage_friendly, 0) AS damage_friendly,
+       COALESCE(wk.hits_head, 0) AS hits_head, COALESCE(wk.hits_chest, 0) AS hits_chest,
+       COALESCE(wk.hits_stomach, 0) AS hits_stomach, COALESCE(wk.hits_arms, 0) AS hits_arms,
+       COALESCE(wk.hits_legs, 0) AS hits_legs,
+       COALESCE(wk.damage_enemy, 0) AS damage_enemy, COALESCE(wk.damage_friendly, 0) AS damage_friendly,
        COALESCE(w.reloads, 0) AS reloads, COALESCE(w.deploys, 0) AS deploys,
        COALESCE(w.seconds_drawn, 0) AS seconds_drawn
 FROM v2_player_round_weapons w

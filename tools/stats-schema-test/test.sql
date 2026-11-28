@@ -92,8 +92,13 @@ INSERT INTO kills (round_id, killed_at, victim_steam_id, victim_bot_name, victim
     (:round_id, '2026-11-25 12:04-05', 76561198000000002, NULL, 'security', 76561198000000001, NULL, 'security', 'm4a1', false, false, false, false, false, false, 2, 0);
 
 INSERT INTO v2_player_rounds (round_id, steam_id, score, suppressions) VALUES (:round_id, 76561198000000001, 20, 2);
-INSERT INTO v2_player_round_weapons (round_id, steam_id, weapon_name, shots, shots_hit_enemy, hits_head)
-VALUES (:round_id, 76561198000000001, 'm4a1', 40, 10, 1);
+INSERT INTO v2_player_round_weapons (round_id, steam_id, weapon_name, shots, shots_hit_enemy)
+VALUES (:round_id, 76561198000000001, 'm4a1', 40, 10);
+-- One head hit that did not kill (v2's 1 of the 20 headshot hits below).
+INSERT INTO hits (round_id, hit_at, victim_bot_name, victim_team, attacker_steam_id, attacker_team, weapon_name,
+                  hitgroup, damage, health_after, damagebits)
+VALUES (:round_id, '2026-11-25 12:01:50-05', 'Rifleman Jones', 'insurgents', 76561198000000001, 'security', 'm4a1',
+        'head', 30, 70, 2);
 INSERT INTO revives (round_id, started_at, revived_at, reviver_steam_id, revived_steam_id, method)
 VALUES (:round_id, '2026-11-25 12:04:10-05', '2026-11-25 12:04:20-05', 76561198000000001, 76561198000000002, 'defib');
 INSERT INTO heals (round_id, started_at, ended_at, healer_steam_id, patient_steam_id, hp_healed, to_full)

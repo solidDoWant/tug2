@@ -63,12 +63,26 @@ CREATE TABLE IF NOT EXISTS kills (
     customkill         SMALLINT NOT NULL,
     attacker_stance    stance,
     attacker_aim       aim_mode,
+    damage             SMALLINT CHECK (damage >= 0),
     CHECK (num_nonnulls(victim_steam_id, victim_bot_name) = 1),
     CHECK (num_nonnulls(attacker_steam_id, attacker_bot_name) <= 1),
     CHECK (num_nonnulls(assister_steam_id, assister_bot_name) <= 1),
     CHECK (victim_bot_name IS NOT NULL OR victim_bot_class_id IS NULL),
     CHECK (attacker_bot_name IS NOT NULL OR attacker_bot_class_id IS NULL)
 );
+-- Added after the first deploy, at the end like a fresh table has it. Every stats view is dropped first,
+-- because v_kills selects k.* and a view's columns cannot be inserted before its last; stats_05..07
+-- create them all again in this same boot.
+DO $$
+DECLARE v text;
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_attribute WHERE attrelid = 'kills'::regclass AND attname = 'damage' AND NOT attisdropped) THEN
+        FOR v IN SELECT viewname FROM pg_views WHERE schemaname = current_schema() AND (viewname LIKE 'v\_%' OR viewname LIKE '%\_current') LOOP
+            EXECUTE format('DROP VIEW IF EXISTS %I CASCADE', v);
+        END LOOP;
+        ALTER TABLE kills ADD COLUMN damage SMALLINT CHECK (damage >= 0);
+    END IF;
+END $$;
 CREATE INDEX IF NOT EXISTS idx_kills_round_id ON kills (round_id);
 -- Kills arrive in time order, so a BRIN index serves time ranges at a few hundred KB a year instead
 -- of ~55 MB for a b-tree. The per-player indexes hold only the SteamID: b-tree deduplication then
@@ -79,6 +93,41 @@ CREATE INDEX IF NOT EXISTS idx_kills_victim ON kills (victim_steam_id) WHERE vic
 CREATE INDEX IF NOT EXISTS idx_kills_attacker_bot ON kills (attacker_bot_name) WHERE attacker_bot_name IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_kills_team_kills ON kills (killed_at)
     WHERE attacker_steam_id IS NOT NULL AND attacker_team = victim_team;
+
+-- Every player_hurt with a human on either side that did not kill: the hit that kills is its kill row
+-- (kills.damage). Together they are each hit once. damage is the health the hit took, which on a
+-- killing blow is less than the game's dmg_health (that is the whole uncapped damage).
+CREATE TABLE IF NOT EXISTS hits (
+    round_id              BIGINT NOT NULL REFERENCES rounds,
+    hit_at                TIMESTAMPTZ NOT NULL,
+    victim_steam_id       BIGINT REFERENCES players,
+    victim_bot_name       TEXT,
+    victim_team           team,
+    victim_bot_class_id   SMALLINT REFERENCES bot_classes,
+    victim_x REAL, victim_y REAL, victim_z REAL,
+    attacker_steam_id     BIGINT REFERENCES players,
+    attacker_bot_name     TEXT,
+    attacker_team         team,
+    attacker_bot_class_id SMALLINT REFERENCES bot_classes,
+    attacker_x REAL, attacker_y REAL, attacker_z REAL,
+    weapon_name           TEXT REFERENCES weapons,
+    hitgroup              hitgroup,
+    damage                SMALLINT NOT NULL CHECK (damage >= 0),
+    health_after          SMALLINT NOT NULL CHECK (health_after > 0),
+    damagebits            INTEGER NOT NULL,
+    attacker_stance       stance,
+    attacker_aim          aim_mode,
+    CHECK (num_nonnulls(victim_steam_id, victim_bot_name) = 1),
+    CHECK (num_nonnulls(attacker_steam_id, attacker_bot_name) <= 1),
+    CHECK (victim_steam_id IS NOT NULL OR attacker_steam_id IS NOT NULL),
+    CHECK (victim_bot_name IS NOT NULL OR victim_bot_class_id IS NULL),
+    CHECK (attacker_bot_name IS NOT NULL OR attacker_bot_class_id IS NULL)
+);
+-- Rows arrive in round and time order, so BRIN indexes find a round or a time range for a few hundred
+-- KB a year. Per-player totals come from the per-round cache; the victim index answers "what hit me".
+CREATE INDEX IF NOT EXISTS idx_hits_round_id ON hits USING brin (round_id) WITH (pages_per_range = 16);
+CREATE INDEX IF NOT EXISTS idx_hits_hit_at ON hits USING brin (hit_at);
+CREATE INDEX IF NOT EXISTS idx_hits_victim ON hits (victim_steam_id) WHERE victim_steam_id IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS team_kill_forgives (
     kill_id     BIGINT PRIMARY KEY REFERENCES kills,
