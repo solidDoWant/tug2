@@ -87,6 +87,10 @@ func (f *fakeStatsDB) Query(_ context.Context, schema, sql string) (*QueryResult
 	return &QueryResult{Columns: []string{"x"}, Rows: [][]any{{1}}}, nil
 }
 
+func (f *fakeStatsDB) FindPlayers(context.Context, string, string) ([]PlayerMatch, int, error) {
+	return nil, 0, nil
+}
+
 func (f *fakeStatsDB) Schema(_ context.Context, schema string) ([]schemaTable, error) {
 	return f.tables[schema], f.schemaErr
 }
