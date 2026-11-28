@@ -8,8 +8,8 @@ ENV GOTOOLCHAIN=auto
 # Keep in sync with SOURCEMOD_VERSION in the repository's root Dockerfile (Renovate updates both,
 # version and digest, in one PR).
 # renovate: datasource=custom.alliedmodders depName=alliedmodders/sourcemod versioning=loose
-ARG SOURCEMOD_VERSION=1.12.0.7260
-ARG SOURCEMOD_DIGEST=b01719e6143bc7d5bb63aae8086d031574da6ef838f041ba4b8ab72c8c75b888
+ARG SOURCEMOD_VERSION=1.12.0.7263
+ARG SOURCEMOD_DIGEST=42b2289a0089790661714d661b389135151fd926d309848565e2f7e64f8e7983
 
 # renovate: datasource=github-release-attachments depName=wagoodman/dive
 ARG DIVE_VERSION=v0.13.1

@@ -15,8 +15,8 @@ ARG METAMOD_VERSION=1.12.0.1230
 ARG METAMOD_DIGEST=22dab1bbd312025e700dd526f136e2f6e3efcda6fcf6c1b66c0319488f513882
 # Keep in sync with .devcontainer/Dockerfile (Renovate updates both in one PR).
 # renovate: datasource=custom.alliedmodders depName=alliedmodders/sourcemod versioning=loose
-ARG SOURCEMOD_VERSION=1.12.0.7260
-ARG SOURCEMOD_DIGEST=b01719e6143bc7d5bb63aae8086d031574da6ef838f041ba4b8ab72c8c75b888
+ARG SOURCEMOD_VERSION=1.12.0.7263
+ARG SOURCEMOD_DIGEST=42b2289a0089790661714d661b389135151fd926d309848565e2f7e64f8e7983
 
 # Third-party plugin sources fetched from GitHub by commit.
 # renovate: datasource=git-refs depName=NullifidianSF/insurgency_public branch=main
