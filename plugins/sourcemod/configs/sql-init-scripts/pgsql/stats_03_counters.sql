@@ -5,7 +5,7 @@
 -- Needs stats_01_schema.sql.
 -- =====================================================
 
-CREATE TABLE IF NOT EXISTS v2_player_rounds (
+CREATE TABLE IF NOT EXISTS player_rounds (
     round_id          BIGINT NOT NULL REFERENCES rounds,
     steam_id          BIGINT NOT NULL REFERENCES players,
     score             INTEGER NOT NULL DEFAULT 0,
@@ -17,9 +17,9 @@ CREATE TABLE IF NOT EXISTS v2_player_rounds (
     teammates_flashed INTEGER NOT NULL DEFAULT 0 CHECK (teammates_flashed >= 0),
     PRIMARY KEY (round_id, steam_id)
 );
-CREATE INDEX IF NOT EXISTS idx_player_rounds_steam_id ON v2_player_rounds (steam_id);
+CREATE INDEX IF NOT EXISTS idx_player_rounds_steam_id ON player_rounds (steam_id);
 
-CREATE TABLE IF NOT EXISTS v2_player_round_weapons (
+CREATE TABLE IF NOT EXISTS player_round_weapons (
     round_id           BIGINT NOT NULL,
     steam_id           BIGINT NOT NULL,
     weapon_name        TEXT NOT NULL REFERENCES weapons,
@@ -30,9 +30,9 @@ CREATE TABLE IF NOT EXISTS v2_player_round_weapons (
     deploys            INTEGER NOT NULL DEFAULT 0 CHECK (deploys >= 0),
     seconds_drawn      INTEGER NOT NULL DEFAULT 0 CHECK (seconds_drawn >= 0),
     PRIMARY KEY (round_id, steam_id, weapon_name),
-    FOREIGN KEY (round_id, steam_id) REFERENCES v2_player_rounds
+    FOREIGN KEY (round_id, steam_id) REFERENCES player_rounds
 );
-CREATE INDEX IF NOT EXISTS idx_player_round_weapons_weapon ON v2_player_round_weapons (weapon_name);
+CREATE INDEX IF NOT EXISTS idx_player_round_weapons_weapon ON player_round_weapons (weapon_name);
 
 -- Damage and hits by body part were counters here until the hits table (stats_02_events.sql) recorded
 -- every hit; they are now added up from it, so the counters go. The stats views that read them are
@@ -40,13 +40,13 @@ CREATE INDEX IF NOT EXISTS idx_player_round_weapons_weapon ON v2_player_round_we
 DO $$
 DECLARE v text;
 BEGIN
-    IF EXISTS (SELECT 1 FROM pg_attribute WHERE attrelid = 'v2_player_round_weapons'::regclass AND attname = 'damage_enemy' AND NOT attisdropped) THEN
+    IF EXISTS (SELECT 1 FROM pg_attribute WHERE attrelid = 'player_round_weapons'::regclass AND attname = 'damage_enemy' AND NOT attisdropped) THEN
         FOR v IN SELECT viewname FROM pg_views WHERE schemaname = current_schema() AND (viewname LIKE 'v\_%' OR viewname LIKE '%\_current') LOOP
             EXECUTE format('DROP VIEW IF EXISTS %I CASCADE', v);
         END LOOP;
-        ALTER TABLE v2_player_round_weapons DROP COLUMN hits_head, DROP COLUMN hits_chest, DROP COLUMN hits_stomach,
+        ALTER TABLE player_round_weapons DROP COLUMN hits_head, DROP COLUMN hits_chest, DROP COLUMN hits_stomach,
             DROP COLUMN hits_arms, DROP COLUMN hits_legs, DROP COLUMN damage_enemy, DROP COLUMN damage_friendly;
-        ALTER TABLE v2_player_rounds DROP COLUMN damage_taken, DROP COLUMN fall_damage;
+        ALTER TABLE player_rounds DROP COLUMN damage_taken, DROP COLUMN fall_damage;
     END IF;
 END $$;
 
@@ -92,7 +92,7 @@ BEGIN
       AND map_name = p_map_name
     ORDER BY abs(extract(epoch FROM started_at - p_map_started_at)) LIMIT 1;
     IF v_run IS NULL THEN
-        INSERT INTO v2_maps (map_name) VALUES (p_map_name) ON CONFLICT DO NOTHING;
+        INSERT INTO maps (map_name) VALUES (p_map_name) ON CONFLICT DO NOTHING;
         INSERT INTO game_modes (game_mode) VALUES (p_game_mode) ON CONFLICT DO NOTHING;
         IF p_theater IS NOT NULL THEN
             INSERT INTO theaters (theater_name) VALUES (p_theater) ON CONFLICT DO NOTHING;

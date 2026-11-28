@@ -4,8 +4,8 @@
 -- every table and column is described: what it holds, its unit, what NULL means, and any trap.
 -- =====================================================
 
-COMMENT ON TABLE v2_maps IS 'Every map played since v2 began. For per-map totals use v_maps.';
-COMMENT ON COLUMN v2_maps.map_name IS 'Map name, e.g. ministry.';
+COMMENT ON TABLE maps IS 'Every map played since v2 began. For per-map totals use v_maps.';
+COMMENT ON COLUMN maps.map_name IS 'Map name, e.g. ministry.';
 COMMENT ON TABLE game_modes IS 'Game modes seen (mp_gamemode).';
 COMMENT ON COLUMN game_modes.game_mode IS 'Mode name: checkpoint, conquer, survival, ...';
 COMMENT ON TABLE theaters IS 'Theater overrides seen (mp_theater_override).';
@@ -46,7 +46,7 @@ COMMENT ON TABLE map_runs IS 'Each time a map was loaded and played. Rounds hang
 COMMENT ON COLUMN map_runs.map_run_id IS 'Map run key.';
 COMMENT ON COLUMN map_runs.booted_at IS 'server_boots.booted_at: the server process it ran in.';
 COMMENT ON COLUMN map_runs.started_at IS 'When the map started.';
-COMMENT ON COLUMN map_runs.map_name IS 'v2_maps.map_name.';
+COMMENT ON COLUMN map_runs.map_name IS 'maps.map_name.';
 COMMENT ON COLUMN map_runs.game_mode IS 'game_modes.game_mode.';
 COMMENT ON COLUMN map_runs.theater IS 'theaters.theater_name; NULL when no theater override was set.';
 COMMENT ON COLUMN map_runs.load_seconds IS 'Seconds the server took to change to this map; NULL for the first map after a server start.';

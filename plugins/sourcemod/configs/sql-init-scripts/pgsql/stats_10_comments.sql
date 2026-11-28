@@ -97,7 +97,7 @@ BEGIN
     LOOP
         -- Views that repeat a table's columns reuse their descriptions.
         base := CASE r.relname WHEN 'v_kills' THEN 'kills'::regclass WHEN 'v_hits' THEN 'hits'::regclass
-                               WHEN 'v_fire_support_calls' THEN 'v2_fire_support_calls'::regclass END;
+                               WHEN 'v_fire_support_calls' THEN 'fire_support_calls'::regclass END;
         IF base IS NOT NULL AND EXISTS (SELECT 1 FROM pg_attribute WHERE attrelid = base AND attname = r.attname) THEN
             EXECUTE format('COMMENT ON COLUMN %I.%I IS %L', r.relname, r.attname,
                            col_description(base, (SELECT attnum FROM pg_attribute WHERE attrelid = base AND attname = r.attname)));

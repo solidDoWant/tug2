@@ -23,48 +23,28 @@ DECLARE
         'gg2_messages_rotating_admin',
         'gg2_messages_join_player'
     ];
-    -- The old stats tables: granted until stats v2 (issue #44) is recorded on this server.
-    old_stats text[] := ARRAY[
-        'player_stats',
-        'player_kills',
-        'player_shots',
-        'player_rounds',
-        'player_round_weapons',
-        'weapon_stats',
-        'bot_kills',
-        'map_stats',
-        'win_loss_log',
-        'maps',
-        'medics',
-        'medic_rounds',
-        'fire_support',
-        'fire_support_calls',
-        'player_tks',
-        'player_tk_logs'
-    ];
-    -- Stats v2 (stats_01..03): granted, with every v_* view, once its tables exist here. The v_*
-    -- views already include the old tables' history, so those are then revoked: one source of
-    -- truth for the model. The old_* views are plumbing and never granted.
+    -- Stats v2 (stats_01..03), with every v_* view. The old stats tables are not granted: the v_*
+    -- views include their history, one source of truth for the model. The old_* views are plumbing
+    -- and never granted either.
     v2 text[] := ARRAY[
-        'v2_maps', 'game_modes', 'theaters', 'weapon_types', 'weapons', 'bot_classes', 'items', 'players', 'sessions',
+        'maps', 'game_modes', 'theaters', 'weapon_types', 'weapons', 'bot_classes', 'items', 'players', 'sessions',
         'name_changes', 'server_builds', 'server_boots', 'map_runs', 'rounds', 'survival_levels',
-        'counterattacks', 'v2_player_rounds', 'v2_player_round_weapons', 'player_spans', 'spawns',
+        'counterattacks', 'player_rounds', 'player_round_weapons', 'player_spans', 'spawns',
         'spawn_items', 'kills', 'hits', 'team_kill_forgives', 'revives', 'revive_helpers', 'heals',
-        'heal_holds', 'v2_fire_support_calls', 'objective_events', 'objective_participants'
+        'heal_holds', 'fire_support_calls', 'objective_events', 'objective_participants'
     ];
-    have_v2 boolean := to_regproc('stats_round_id') IS NOT NULL;
     r record;
 BEGIN
     IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'discord-bot') THEN
         RAISE NOTICE 'role discord-bot does not exist; skipping its grants';
         RETURN;
     END IF;
-    allowed := allowed || CASE WHEN have_v2 THEN v2 ELSE old_stats END;
+    allowed := allowed || v2;
 
     EXECUTE format('GRANT USAGE ON SCHEMA %I TO "discord-bot"', current_schema());
     FOR r IN SELECT c.relname, c.relkind FROM pg_class c
              WHERE c.relnamespace = current_schema()::regnamespace AND c.relkind IN ('r', 'v', 'm', 'p') LOOP
-        IF r.relname = ANY (allowed) OR (have_v2 AND r.relkind = 'v' AND r.relname LIKE 'v\_%') THEN
+        IF r.relname = ANY (allowed) OR (r.relkind = 'v' AND r.relname LIKE 'v\_%') THEN
             EXECUTE format('GRANT SELECT ON %I.%I TO "discord-bot"', current_schema(), r.relname);
         ELSE
             EXECUTE format('REVOKE ALL ON %I.%I FROM "discord-bot"', current_schema(), r.relname);

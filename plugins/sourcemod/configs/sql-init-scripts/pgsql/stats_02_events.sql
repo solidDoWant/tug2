@@ -173,7 +173,7 @@ CREATE TABLE IF NOT EXISTS heal_holds (
     PRIMARY KEY (heal_id, started_at)
 );
 
-CREATE TABLE IF NOT EXISTS v2_fire_support_calls (
+CREATE TABLE IF NOT EXISTS fire_support_calls (
     call_id        BIGSERIAL PRIMARY KEY,
     round_id       BIGINT NOT NULL REFERENCES rounds,
     called_at      TIMESTAMPTZ NOT NULL,
@@ -183,8 +183,8 @@ CREATE TABLE IF NOT EXISTS v2_fire_support_calls (
     failure_reason TEXT,
     refunded_at    TIMESTAMPTZ CHECK (refunded_at >= called_at)
 );
-CREATE INDEX IF NOT EXISTS idx_fire_support_calls_round_id ON v2_fire_support_calls (round_id);
-CREATE INDEX IF NOT EXISTS idx_fire_support_calls_steam_id ON v2_fire_support_calls (steam_id, called_at);
+CREATE INDEX IF NOT EXISTS idx_fire_support_calls_round_id ON fire_support_calls (round_id);
+CREATE INDEX IF NOT EXISTS idx_fire_support_calls_steam_id ON fire_support_calls (steam_id, called_at);
 
 CREATE TABLE IF NOT EXISTS objective_events (
     objective_event_id BIGSERIAL PRIMARY KEY,

@@ -31,7 +31,6 @@ ConVar   g_cvarBanTime;
 // Amnesty criteria CVars
 ConVar   g_cvarAmnestyMinKPTK;         // Minimum kills-per-TK ratio for amnesty
 ConVar   g_cvarAmnestyMinKillCount;    // Minimum total kills required for amnesty
-ConVar   g_cvarAmnestyTimeCutoff;      // Time cutoff in seconds (players must have been seen within this period)
 // Stores the timestamps (Unix epoch seconds) of the last 3 teamkills for each player.
 // Array contents: [player index][0-2] = timestamp of each TK, with older entries shifting left when full
 int      g_PlayerTKTimestamps[MAXPLAYERS + 1][3];
@@ -59,7 +58,9 @@ public void OnPluginStart()
     g_cvarBanTime             = CreateConVar("tk_ban_basetime", "60", "Base ban time (min)", FCVAR_PROTECTED);
     g_cvarAmnestyMinKPTK      = CreateConVar("tk_amnesty_min_kptk", "250", "Minimum kills-per-TK ratio for amnesty", FCVAR_PROTECTED);
     g_cvarAmnestyMinKillCount = CreateConVar("tk_amnesty_min_kills", "1000", "Minimum total kills required for amnesty", FCVAR_PROTECTED);
-    g_cvarAmnestyTimeCutoff   = CreateConVar("tk_amnesty_time_cutoff", "7776000", "Amnesty time cutoff in seconds (default: 90 days)", FCVAR_PROTECTED);
+    // Kept so existing configs that set it still load; amnesty is only ever checked for connected
+    // players, who always pass an activity cutoff (see QueryAmnestyPlayers).
+    CreateConVar("tk_amnesty_time_cutoff", "7776000", "Unused since stats v2 (issue #44): only connected players are checked, and they are always recent", FCVAR_PROTECTED);
     HookEvent("round_start", Event_RoundStart);
     HookEvent("player_death", Event_PlayerDeath);
 
@@ -92,8 +93,6 @@ public void OnDatabaseConnected(Database db, const char[] error, any data)
 
     g_Database = db;
     LogMessage("[GG2 TEAMKILL] Successfully connected to database");
-
-    // Refresh amnesty and offender lists on connect
     QueryAmnestyPlayers();
     QueryOffenderPlayers();
 }
@@ -118,8 +117,6 @@ public void OnDatabaseReconnected(Database db, const char[] error, any data)
 
     g_Database = db;
     LogMessage("[GG2 TEAMKILL] Successfully reconnected to database");
-
-    // Refresh lists after reconnection
     QueryAmnestyPlayers();
     QueryOffenderPlayers();
 }
@@ -221,55 +218,13 @@ public Action Timer_RefreshOffenderList(Handle timer)
     return Plugin_Continue;
 }
 
+// The forgive is recorded by gg2_stats2 (team_kill_forgives) from this forward.
 public void UpdateTKForgivenInDB(int attacker, int victim)
 {
     Call_StartForward(g_StatsForgivenForward);
     Call_PushCell(victim);
     Call_PushCell(attacker);
     Call_Finish();
-
-    if (g_Database == null) return;
-
-    // Use cached Steam IDs - if not available, the player disconnected
-    if (g_ConnectedSteamIDs[attacker][0] == '\0' || g_ConnectedSteamIDs[victim][0] == '\0') return;
-
-    char query[1024];
-    g_Database.Format(query, sizeof(query),
-                      "UPDATE player_tk_logs SET forgiven = TRUE \
-                      WHERE id = ( \
-                          SELECT id \
-                          FROM player_tk_logs \
-                          WHERE victim_steam_id = %s AND attacker_steam_id = %s \
-                          ORDER BY id DESC LIMIT 1 \
-                      )",
-                      g_ConnectedSteamIDs[victim], g_ConnectedSteamIDs[attacker]);
-
-    g_Database.Query(OnTKForgivenUpdated, query);
-}
-
-public void OnTKForgivenUpdated(Database db, DBResultSet results, const char[] error, any data)
-{
-    HandleQueryError(results, error, "update TK forgiven status");
-}
-
-public void UpdatePlayerLastSeen(int client)
-{
-    if (g_Database == null) return;
-
-    // Use cached Steam ID - if not available, player already disconnected or never connected properly
-    if (g_ConnectedSteamIDs[client][0] == '\0') return;
-
-    char query[256];
-    g_Database.Format(query, sizeof(query),
-                      "UPDATE player_tks SET last_seen = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE steam_id = %s",
-                      g_ConnectedSteamIDs[client]);
-
-    g_Database.Query(OnLastSeenUpdated, query);
-}
-
-public void OnLastSeenUpdated(Database db, DBResultSet results, const char[] error, any data)
-{
-    HandleQueryError(results, error, "update last_seen");
 }
 
 public bool PlayerHasAmnesty(int attacker_client)
@@ -291,44 +246,23 @@ public bool PlayerHasAmnesty(int attacker_client)
     return false;
 }
 
-// Amnesty criteria are unchanged from the original: at least tk_amnesty_min_kills lifetime kills,
-// a kill/TK ratio above tk_amnesty_min_kptk, and activity within tk_amnesty_time_cutoff.
-//
-// Kills are read from player_stats (maintained by gg2_mstats2). This query used to read
-// player_tks.kills, which nothing ever wrote, so it was always 0 and no player ever qualified.
-// That column has since been removed.
-// player_stats is flushed at the end of every round and when a player disconnects, so a player's
-// ratio trails the current round rather than tracking it live.
+// Amnesty: at least tk_amnesty_min_kills lifetime kills and a kill/TK ratio above
+// tk_amnesty_min_kptk. Both come from the stats v2 view v_player_lifetime (kills of enemies, team
+// kills given), which covers all of a player's recorded play. Only connected players are looked up,
+// so the old "active within tk_amnesty_time_cutoff" test is always met and is not repeated.
 public void QueryAmnestyPlayers()
 {
     if (g_Database == null) return;
 
-    // Build lists of connected player Steam IDs, quoted for player_stats (a text column) and bare
-    // for player_tks (a numeric column). Both let the lookup hit each table's primary key.
-    char statsSteamIdList[2560];
-    int  count = BuildConnectedSteamIDList(statsSteamIdList, sizeof(statsSteamIdList), true);
+    char steamIdList[2048];
+    if (BuildConnectedSteamIDList(steamIdList, sizeof(steamIdList)) == 0) return;
 
-    // No players connected, nothing to query
-    if (count == 0) return;
-
-    char tkSteamIdList[2048];
-    BuildConnectedSteamIDList(tkSteamIdList, sizeof(tkSteamIdList));
-
-    int  time_cutoff_seconds = g_cvarAmnestyTimeCutoff.IntValue;
-    int  min_kills           = g_cvarAmnestyMinKillCount.IntValue;
-    int  min_kptk            = g_cvarAmnestyMinKPTK.IntValue;
-
-    char query[5120];
+    char query[3072];
     Format(query, sizeof(query),
-           "SELECT ps.steam_id FROM player_stats ps \
-           JOIN player_tks pt ON pt.steam_id::TEXT = ps.steam_id \
-           WHERE ps.steam_id IN (%s) \
-           AND pt.steam_id IN (%s) \
-           AND ps.kills >= %i \
-           AND pt.tk_given > 0 \
-           AND (ps.kills::NUMERIC / pt.tk_given) > %i \
-           AND pt.last_seen > NOW() - INTERVAL '%i seconds'",
-           statsSteamIdList, tkSteamIdList, min_kills, min_kptk, time_cutoff_seconds);
+           "SELECT steam_id::text FROM v_player_lifetime "
+         ... "WHERE steam_id = ANY(ARRAY[%s]::bigint[]) AND kills >= %i AND team_kills > 0 "
+         ... "AND (kills::numeric / team_kills) > %i",
+           steamIdList, g_cvarAmnestyMinKillCount.IntValue, g_cvarAmnestyMinKPTK.IntValue);
 
     g_Database.Query(OnAmnestyPlayersLoaded, query);
 }
@@ -367,38 +301,21 @@ public void OnAmnestyPlayersLoaded(Database db, DBResultSet results, const char[
     }
 }
 
-// Offender criteria are unchanged: at least 500 lifetime kills, a kill/TK ratio under 100, and
-// activity in the last 90 days.
-//
-// Kills are read from player_stats for the same reason as QueryAmnestyPlayers - this query used
-// to read player_tks.kills, which nothing ever wrote, so it was always 0 and no player was ever
-// flagged. That column has since been removed.
+// Offenders: at least 500 lifetime kills and a kill/TK ratio under 100, from v_player_lifetime as
+// for amnesty. The old "active in the last 90 days" test is always met by a connected player.
 public void QueryOffenderPlayers()
 {
     if (g_Database == null) return;
 
-    // Build lists of connected player Steam IDs, quoted for player_stats (a text column) and bare
-    // for player_tks (a numeric column). Both let the lookup hit each table's primary key.
-    char statsSteamIdList[2560];
-    int  count = BuildConnectedSteamIDList(statsSteamIdList, sizeof(statsSteamIdList), true);
+    char steamIdList[2048];
+    if (BuildConnectedSteamIDList(steamIdList, sizeof(steamIdList)) == 0) return;
 
-    // No players connected, nothing to query
-    if (count == 0) return;
-
-    char tkSteamIdList[2048];
-    BuildConnectedSteamIDList(tkSteamIdList, sizeof(tkSteamIdList));
-
-    char query[5120];
+    char query[3072];
     Format(query, sizeof(query),
-           "SELECT ps.steam_id FROM player_stats ps \
-           JOIN player_tks pt ON pt.steam_id::TEXT = ps.steam_id \
-           WHERE ps.steam_id IN (%s) \
-           AND pt.steam_id IN (%s) \
-           AND ps.kills >= 500 \
-           AND pt.tk_given > 0 \
-           AND (ps.kills::NUMERIC / pt.tk_given) < 100 \
-           AND pt.last_seen > NOW() - INTERVAL '90 days'",
-           statsSteamIdList, tkSteamIdList);
+           "SELECT steam_id::text FROM v_player_lifetime "
+         ... "WHERE steam_id = ANY(ARRAY[%s]::bigint[]) AND kills >= 500 AND team_kills > 0 "
+         ... "AND (kills::numeric / team_kills) < 100",
+           steamIdList);
 
     g_Database.Query(OnOffenderPlayersLoaded, query);
 }
@@ -470,9 +387,6 @@ public void OnMapStart()
 public void OnClientDisconnect(int client)
 {
     if (IsFakeClient(client)) return;
-
-    // Update last_seen before clearing Steam ID
-    UpdatePlayerLastSeen(client);
 
     ResetPlayerTKData(client);
 
@@ -605,63 +519,6 @@ public bool ShouldLogWeapon(char[] weapon)
     */
 }
 
-// Record a teamkill to the database
-void RecordTKToDatabase(int attacker, int victim, const char[] weapon)
-{
-    if (g_Database == null) return;
-
-    // Use cached Steam IDs - if not available, the player disconnected
-    if (g_ConnectedSteamIDs[attacker][0] == '\0')
-    {
-        LogError("[GG2 TEAMKILL] Cannot record TK: no cached steam_id for attacker %N", attacker);
-        return;
-    }
-
-    if (g_ConnectedSteamIDs[victim][0] == '\0')
-    {
-        LogError("[GG2 TEAMKILL] Cannot record TK: no cached steam_id for victim %N", victim);
-        return;
-    }
-
-    // Execute both queries in a single transaction for atomicity
-    Transaction txn = new Transaction();
-
-    // Upsert both players in a single query, incrementing their respective counters and updating last_seen
-    char        upsertBothPlayersQuery[1536];
-    g_Database.Format(upsertBothPlayersQuery, sizeof(upsertBothPlayersQuery),
-                      "INSERT INTO player_tks (steam_id, tk_given, tk_taken, last_seen) VALUES (%s, 1, 0, CURRENT_TIMESTAMP), (%s, 0, 1, CURRENT_TIMESTAMP) \
-           ON CONFLICT (steam_id) DO UPDATE SET tk_given = player_tks.tk_given + EXCLUDED.tk_given, tk_taken = player_tks.tk_taken + EXCLUDED.tk_taken, last_seen = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP",
-                      g_ConnectedSteamIDs[attacker], g_ConnectedSteamIDs[victim]);
-    txn.AddQuery(upsertBothPlayersQuery);
-
-    // Insert TK record
-    char insertQuery[512];
-    g_Database.Format(insertQuery, sizeof(insertQuery),
-                      "INSERT INTO player_tk_logs (attacker_steam_id, victim_steam_id, weapon, forgiven) \
-                      VALUES (%s, %s, '%s', FALSE)",
-                      g_ConnectedSteamIDs[attacker], g_ConnectedSteamIDs[victim], weapon);
-    txn.AddQuery(insertQuery);
-
-    // Execute transaction
-    g_Database.Execute(txn, OnTKTransactionSuccess, OnTKTransactionFailure);
-}
-
-public void OnTKTransactionSuccess(Database db, any data, int numQueries, DBResultSet[] results, any[] queryData)
-{
-    // Do nothing
-}
-
-public void OnTKTransactionFailure(Database db, any data, int numQueries, const char[] error, int failIndex, any[] queryData)
-{
-    LogError("[GG2 TEAMKILL] Transaction failed at query %d/%d: %s", failIndex + 1, numQueries, error);
-
-    // Check if the error is due to lost connection
-    if (StrContains(error, "no connection to the server", false) == -1) return;
-
-    LogError("[GG2 TEAMKILL] Lost connection to database during TK recording - attempting to reconnect");
-    ReconnectDatabase();
-}
-
 bool ShouldTriggerAutoBan(int client)
 {
     int span = g_PlayerTKTimestamps[client][2] - g_PlayerTKTimestamps[client][0];
@@ -712,8 +569,7 @@ public Action Event_PlayerDeath(Event event, const char[] name, bool dontBroadca
 
     LogMessage("[GG TK_AUTO_BAN] %N killed a teammate (%N)", attacker, victim);
 
-    // Record the teamkill to database
-    RecordTKToDatabase(attacker, victim, weapon);
+    // The team kill itself is recorded by gg2_stats2 (a kills row of kind team_kill).
 
     // Both Discord lines below name the victim and the weapon, so build them once here.
     //

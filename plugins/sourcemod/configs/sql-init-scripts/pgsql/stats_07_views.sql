@@ -126,7 +126,7 @@ WHERE t.created_at < c.cutover_at;
 CREATE OR REPLACE VIEW v_fire_support_calls AS
 SELECT call_id, round_id, called_at, steam_id, support_type, target_x, target_y, target_z,
        failure_reason, refunded_at, 'v2'::text AS source
-FROM v2_fire_support_calls
+FROM fire_support_calls
 UNION ALL
 SELECT NULL, NULL, f.called_at, f.steam_id::bigint, NULL, NULL, NULL, NULL, NULL, NULL, 'old'
 FROM old_fire_support_calls f, v_cutover c

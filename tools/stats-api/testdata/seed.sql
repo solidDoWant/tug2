@@ -34,7 +34,7 @@ VALUES
      '2026-02-01 13:00Z'::timestamptz::timestamp, '2026-10-01 12:00Z'::timestamptz::timestamp);
 
 -- Per-round history: two rows before the cutover and one dual-written for v2 round 1.
-INSERT INTO player_rounds
+INSERT INTO legacy_player_rounds
     (steam_id, recorded_at, map_name, kills, deaths, suicides, headshot_given, suppressions, caps, score,
      wins, losses, killstreak, play_time_seconds, shots, enemy_hits, friendly_hits)
 VALUES
@@ -42,12 +42,12 @@ VALUES
     ('76561198000000002', '2026-11-20 15:00Z'::timestamptz::timestamp, 'ministry', 4, 3, 0, 1, 2, 0, 20, 1, 0, 2, 600, 100, 20, 0),
     ('76561198000000001', '2026-11-25 17:15Z'::timestamptz::timestamp, 'ministry', 2, 1, 0, 1, 3, 1, 50, 1, 0, 2, 900, 600, 150, 2);
 
-INSERT INTO player_round_weapons (round_id, weapon_id, kills, shots, enemy_hits, friendly_hits)
+INSERT INTO legacy_player_round_weapons (round_id, weapon_id, kills, shots, enemy_hits, friendly_hits)
 SELECT r.id, w.weapon_id, v.k, v.s, v.e, v.f
 FROM (VALUES ('76561198000000001', '2026-11-20 15:00Z'::timestamptz, 'm4a1', 10, 200, 50, 1),
              ('76561198000000002', '2026-11-20 15:00Z', 'ak74', 4, 100, 20, 0),
              ('76561198000000001', '2026-11-25 17:15Z', 'm4a1', 2, 600, 150, 2)) v(sid, t, wn, k, s, e, f)
-JOIN player_rounds r ON r.steam_id = v.sid AND r.recorded_at = v.t::timestamp
+JOIN legacy_player_rounds r ON r.steam_id = v.sid AND r.recorded_at = v.t::timestamp
 JOIN weapon_stats w ON w.weapon_name = v.wn;
 
 -- Lifetime per weapon (they include all the history above).
@@ -74,7 +74,7 @@ INSERT INTO player_tk_logs (victim_steam_id, attacker_steam_id, weapon, forgiven
     (76561198000000002, 76561198000000001, 'm4a1', true, '2026-11-25 17:06Z'::timestamptz::timestamp);
 
 INSERT INTO fire_support (steamId, arty_thrown) VALUES ('76561198000000001', 5);
-INSERT INTO fire_support_calls (steam_id, called_at)
+INSERT INTO legacy_fire_support_calls (steam_id, called_at)
 VALUES ('76561198000000001', '2026-11-20 15:00Z'::timestamptz::timestamp),
        ('76561198000000001', '2026-11-25 17:03Z'::timestamptz::timestamp);
 
@@ -84,7 +84,7 @@ FROM (VALUES ('Rifleman Jones', 'ak74', 5, '2026-11-25 17:06Z'::timestamptz),
              ('Old Sniper', 'm9', 7, '2026-10-01 12:00Z')) v(bot, wn, n, t)
 JOIN weapon_stats w ON w.weapon_name = v.wn;
 
-INSERT INTO maps (map_name, play_time, last_start, updated_at) VALUES
+INSERT INTO legacy_maps (map_name, play_time, last_start, updated_at) VALUES
     ('ministry', '2 hours', '2026-11-25 17:00Z'::timestamptz::timestamp, '2026-11-25 17:15Z'::timestamptz::timestamp),
     ('buhriz', '1 hour', '2026-11-01 12:00Z'::timestamptz::timestamp, '2026-11-01 13:00Z'::timestamptz::timestamp);
 INSERT INTO win_loss_log (map_id, win, created_at)
@@ -97,7 +97,7 @@ JOIN (VALUES ('ministry', true, '2026-11-19 15:00Z'::timestamptz), ('ministry', 
 
 INSERT INTO server_builds VALUES ('abc1234', '1.2.3');
 INSERT INTO server_boots VALUES ('2026-11-25 16:50Z', 'abc1234');
-INSERT INTO v2_maps VALUES ('ministry'), ('sinjar');
+INSERT INTO maps VALUES ('ministry'), ('sinjar');
 INSERT INTO game_modes VALUES ('checkpoint'), ('push');
 INSERT INTO theaters VALUES ('default');
 INSERT INTO map_runs (map_run_id, booted_at, started_at, map_name, game_mode, theater, load_seconds, game_over_at) VALUES
@@ -166,12 +166,12 @@ INSERT INTO kills (kill_id, round_id, killed_at, victim_steam_id, victim_bot_nam
      76561198000000001, NULL, 'security', NULL, 520, 620, 5, NULL, 'm4a1', 'chest', false, false, false, false, true, false, 2, 0, 'standing', 'sights', 100);
 INSERT INTO team_kill_forgives VALUES (5, '2026-11-25 17:06:10Z');
 
-INSERT INTO v2_player_rounds (round_id, steam_id, score, capture_ticks, suppressions, times_suppressed) VALUES
+INSERT INTO player_rounds (round_id, steam_id, score, capture_ticks, suppressions, times_suppressed) VALUES
     (1, 76561198000000001, 50, 4, 3, 1), (1, 76561198000000002, 20, 4, 1, 0),
     (1, 76561198000000004, 15, 0, 0, 2), (2, 76561198000000001, 30, 0, 2, 0),
     (2, 76561198000000002, 25, 0, 0, 1), (2, 76561198000000004, 5, 0, 0, 0),
     (3, 76561198000000001, 10, 0, 0, 0);
-INSERT INTO v2_player_round_weapons (round_id, steam_id, weapon_name, shots, shots_hit_enemy, shots_hit_friendly,
+INSERT INTO player_round_weapons (round_id, steam_id, weapon_name, shots, shots_hit_enemy, shots_hit_friendly,
                                   reloads, deploys, seconds_drawn) VALUES
     (1, 76561198000000001, 'm4a1', 600, 150, 2, 20, 3, 800),
     (1, 76561198000000004, 'ak74', 100, 30, 0, 4, 1, 850),
@@ -208,7 +208,7 @@ INSERT INTO heals (heal_id, round_id, started_at, ended_at, healer_steam_id, pat
 INSERT INTO heal_holds VALUES (1, '2026-11-25 17:07Z', '2026-11-25 17:07:20Z', 'full_health'),
                               (2, '2026-11-25 17:26Z', '2026-11-25 17:26:05Z', 'keys_released');
 
-INSERT INTO v2_fire_support_calls (call_id, round_id, called_at, steam_id, support_type, target_x, target_y, target_z,
+INSERT INTO fire_support_calls (call_id, round_id, called_at, steam_id, support_type, target_x, target_y, target_z,
                                 failure_reason, refunded_at) VALUES
     (1, 1, '2026-11-25 17:03Z', 76561198000000001, 'artillery', 400, 500, 0, NULL, NULL),
     (2, 1, '2026-11-25 17:04Z', 76561198000000001, 'artillery', NULL, NULL, NULL, 'player_cooldown', '2026-11-25 17:04:01Z'),
@@ -227,5 +227,5 @@ INSERT INTO survival_levels VALUES (1, 1, '2026-11-25 17:08Z');
 -- Explicit ids above: move the sequences past them.
 SELECT setval(pg_get_serial_sequence(t, c), 1000)
 FROM (VALUES ('map_runs', 'map_run_id'), ('rounds', 'round_id'), ('kills', 'kill_id'), ('revives', 'revive_id'),
-             ('heals', 'heal_id'), ('v2_fire_support_calls', 'call_id'), ('objective_events', 'objective_event_id'),
+             ('heals', 'heal_id'), ('fire_support_calls', 'call_id'), ('objective_events', 'objective_event_id'),
              ('spawns', 'spawn_id'), ('bot_classes', 'bot_class_id'), ('items', 'item_id')) s(t, c);

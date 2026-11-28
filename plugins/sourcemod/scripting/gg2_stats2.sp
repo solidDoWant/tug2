@@ -6,8 +6,9 @@
 // per-round counters that are too many to keep one row each (shots, hits, damage, ...). Totals are never
 // stored: the views in stats_05..07.sql derive them. See stats_01_schema.sql for the tables.
 //
-// It runs beside the old stats plugins (gg2_mstats2, gg2_medic_tracker, ...) while both are written, and
-// touches none of their tables.
+// It replaced the old stats plugins (gg2_mstats2, gg2_medic_tracker, map_logger, gg2_connection_tracker),
+// whose tables are now read-only history (stats_12_retire_old.sql). It also shows players their score at
+// round end, as gg2_mstats2 did.
 //
 // Writing:
 //   - Every row names its round by values the server already knows; the round key is one SQL call,
@@ -79,7 +80,7 @@ enum
 char g_tableInsert[T_COUNT][] = {
     "INSERT INTO kills (round_id, killed_at, victim_steam_id, victim_bot_name, victim_team, victim_bot_class_id, victim_x, victim_y, victim_z, attacker_steam_id, attacker_bot_name, attacker_team, attacker_bot_class_id, attacker_x, attacker_y, attacker_z, assister_steam_id, assister_bot_name, weapon_name, hitgroup, headshot, domination, revenge, savior, offensive, defensive, damagebits, customkill, attacker_stance, attacker_aim, damage) VALUES ",
     "INSERT INTO player_spans (round_id, steam_id, started_at, ended_at, team, squad, squad_slot, class_template) VALUES ",
-    "INSERT INTO v2_fire_support_calls (round_id, called_at, steam_id, support_type, target_x, target_y, target_z, failure_reason, refunded_at) VALUES ",
+    "INSERT INTO fire_support_calls (round_id, called_at, steam_id, support_type, target_x, target_y, target_z, failure_reason, refunded_at) VALUES ",
     "INSERT INTO survival_levels (round_id, level, reached_at) VALUES ",
     "INSERT INTO counterattacks (round_id, control_point, started_at, ended_at, finale) VALUES ",
     "INSERT INTO hits (round_id, hit_at, victim_steam_id, victim_bot_name, victim_team, victim_bot_class_id, victim_x, victim_y, victim_z, attacker_steam_id, attacker_bot_name, attacker_team, attacker_bot_class_id, attacker_x, attacker_y, attacker_z, weapon_name, hitgroup, damage, health_after, damagebits, attacker_stance, attacker_aim) VALUES "
@@ -1015,6 +1016,7 @@ public void Event_RoundFreezeEnd(Event event, const char[] name, bool dontBroadc
 
 public void Event_RoundEnd(Event event, const char[] name, bool dontBroadcast)
 {
+    ShowRoundScores();
     if (!HaveRound()) return;
     float now = GetEngineTime();
 
@@ -1061,6 +1063,18 @@ public void Event_RoundEnd(Event event, const char[] name, bool dontBroadcast)
     EmitAllCounters();
     g_roundOver = true;
     Flush();
+}
+
+// Each player who scored this round sees their total score, as gg2_mstats2 showed it before stats v2.
+void ShowRoundScores()
+{
+    int resource = GetPlayerResourceEntity();
+    if (resource == -1) return;
+    for (int client = 1; client <= MaxClients; client++)
+    {
+        if (!IsClientInGame(client) || IsFakeClient(client) || GameStat(client, 20) <= 0) continue;
+        PrintToChat(client, "GG2 // Player: %N Score: %i", client, GetEntProp(resource, Prop_Send, "m_iPlayerScore", _, client));
+    }
 }
 
 public void Event_RoundLevelAdvanced(Event event, const char[] name, bool dontBroadcast)
@@ -2107,7 +2121,7 @@ public void FireSupport_OnRefund(int client)
     char ts[64], stmt[512];
     Ts(GetEngineTime(), ts, sizeof(ts));
     Format(stmt, sizeof(stmt),
-           "UPDATE v2_fire_support_calls SET refunded_at = %s WHERE call_id = (SELECT max(call_id) FROM v2_fire_support_calls WHERE steam_id = %s AND refunded_at IS NULL)",
+           "UPDATE fire_support_calls SET refunded_at = %s WHERE call_id = (SELECT max(call_id) FROM fire_support_calls WHERE steam_id = %s AND refunded_at IS NULL)",
            ts, g_sid[client]);
     AddStmt(stmt);
 }
@@ -2159,7 +2173,7 @@ void EmitCounters(int client)
     NotePlayer(g_sid[client]);
     char stmt[2048];
     Format(stmt, sizeof(stmt),
-           "INSERT INTO v2_player_rounds AS p (round_id, steam_id, score, capture_ticks, objective_resets, suppressions, times_suppressed, enemies_flashed, teammates_flashed) "
+           "INSERT INTO player_rounds AS p (round_id, steam_id, score, capture_ticks, objective_resets, suppressions, times_suppressed, enemies_flashed, teammates_flashed) "
          ... "SELECT id, %s, %d, %d, %d, %d, %d, %d, %d FROM r ON CONFLICT (round_id, steam_id) DO UPDATE SET "
          ... "score = p.score + EXCLUDED.score, capture_ticks = p.capture_ticks + EXCLUDED.capture_ticks, "
          ... "objective_resets = p.objective_resets + EXCLUDED.objective_resets, suppressions = p.suppressions + EXCLUDED.suppressions, "
@@ -2205,7 +2219,7 @@ void EmitWeaponRows(int client, const char[] values)
 {
     char stmt[4096];
     Format(stmt, sizeof(stmt),
-           "INSERT INTO v2_player_round_weapons AS w (round_id, steam_id, weapon_name, shots, shots_hit_enemy, shots_hit_friendly, reloads, deploys, seconds_drawn) "
+           "INSERT INTO player_round_weapons AS w (round_id, steam_id, weapon_name, shots, shots_hit_enemy, shots_hit_friendly, reloads, deploys, seconds_drawn) "
          ... "SELECT r.id, %s, v.* FROM r, (VALUES %s) v ON CONFLICT (round_id, steam_id, weapon_name) DO UPDATE SET "
          ... "shots = w.shots + EXCLUDED.shots, shots_hit_enemy = w.shots_hit_enemy + EXCLUDED.shots_hit_enemy, "
          ... "shots_hit_friendly = w.shots_hit_friendly + EXCLUDED.shots_hit_friendly, "
