@@ -115,8 +115,10 @@ If any error occurs during execution, the transaction is automatically rolled ba
 
 ### File Size Limits
 
-- Maximum SQL file size: ~16KB
-- If you need larger migrations, split them into multiple files
+- Each file is read whole into a buffer of its own size, so there is no per-line or practical
+  per-file limit.
+- The ceiling is 1 MB (`MAX_SQL_FILE_SIZE`), set by the plugin's `#pragma dynamic` memory. A larger
+  file fails its migration with an error; it is never run in part.
 
 ## Usage
 
@@ -286,11 +288,11 @@ This ensures server operators are aware of migration issues.
 
 ### File Too Large
 
-**Symptom**: Migration truncated or incomplete
+**Symptom**: `Migration file too large (N bytes, max 1048576)` and the migration fails
 
 **Solution**:
-- Split large migrations into multiple smaller files
-- Current buffer limit is 16KB
+- Split the migration into smaller files, or raise `MAX_SQL_FILE_SIZE` together with
+  `#pragma dynamic` (in cells of 4 bytes; it must cover the largest file plus some headroom)
 
 ## Advanced Usage
 

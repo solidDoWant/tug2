@@ -4,6 +4,8 @@
 
 #pragma semicolon 1
 #pragma newdecls required
+// Heap and stack in cells (4 bytes): room for one migration file of MAX_SQL_FILE_SIZE, read whole.
+#pragma dynamic 327680
 
 #include <sourcemod>
 
@@ -11,8 +13,7 @@
 #define MAX_DATABASES         32
 #define MAX_MIGRATIONS_PER_DB 128
 #define MAX_PATH_LENGTH       PLATFORM_MAX_PATH
-#define SQL_BUFFER_SIZE       16384
-#define SQL_LINE_SIZE         1024
+#define MAX_SQL_FILE_SIZE     1048576    // 1 MB; the buffer is sized to each file, this is only a ceiling
 
 public Plugin myinfo =
 {
@@ -387,23 +388,22 @@ void ExecuteMigrationFile(int dbIndex, int migrationIndex, DatabaseMigration dbM
         return;
     }
 
-    // Check file size to ensure it fits in our buffer
     // Get file size by seeking to end
     file.Seek(0, SEEK_END);
     int fileSize = file.Position;
 
-    // Fail if file is too large for our buffer (leaving room for transaction wrapper)
-    if (fileSize >= SQL_BUFFER_SIZE - 256)
+    // The buffer is sized to the file; this ceiling only bounds the plugin's memory (#pragma dynamic).
+    if (fileSize > MAX_SQL_FILE_SIZE)
     {
         delete file;
         LogError("  Migration file too large (%d bytes, max %d): %s",
-                 fileSize, SQL_BUFFER_SIZE - 256, migration.filePath);
+                 fileSize, MAX_SQL_FILE_SIZE, migration.filePath);
         LogError("  Please split this migration into smaller files");
 
         migration.executed  = true;
         migration.succeeded = false;
         Format(migration.errorMessage, sizeof(migration.errorMessage),
-               "File too large: %d bytes (max %d)", fileSize, SQL_BUFFER_SIZE - 256);
+               "File too large: %d bytes (max %d)", fileSize, MAX_SQL_FILE_SIZE);
 
         dbMigration.migrations.SetArray(migrationIndex, migration);
         g_MigrationFailed = true;
@@ -417,15 +417,30 @@ void ExecuteMigrationFile(int dbIndex, int migrationIndex, DatabaseMigration dbM
     // Reset to the beginning of the file
     file.Seek(0, SEEK_SET);
 
-    // Read entire file into a buffer
-    char sqlBuffer[SQL_BUFFER_SIZE];
-    char line[SQL_LINE_SIZE];
+    // Read the entire file into a buffer of its own size, in one read. A short read (the file changed
+    // under us, or holds a NUL byte) fails the migration rather than running part of it.
+    char[] sqlBuffer = new char[fileSize + 1];
     sqlBuffer[0] = '\0';
-
-    while (file.ReadLine(line, sizeof(line)))
-        StrCat(sqlBuffer, sizeof(sqlBuffer), line);
-
+    int read = fileSize > 0 ? file.ReadString(sqlBuffer, fileSize + 1, fileSize) : 0;
     delete file;
+
+    if (read != fileSize)
+    {
+        LogError("  Could not read migration file (%d of %d bytes): %s", read, fileSize, migration.filePath);
+
+        migration.executed  = true;
+        migration.succeeded = false;
+        Format(migration.errorMessage, sizeof(migration.errorMessage),
+               "Short read: %d of %d bytes", read, fileSize);
+
+        dbMigration.migrations.SetArray(migrationIndex, migration);
+        g_MigrationFailed = true;
+        g_PendingExecutions--;
+
+        if (g_PendingExecutions <= 0)
+            FinalizeMigration();
+        return;
+    }
 
     // Empty files are treated as successful no-ops (already applied or intentionally empty)
     if (sqlBuffer[0] == '\0')
