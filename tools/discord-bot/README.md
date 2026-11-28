@@ -124,6 +124,11 @@ independently of the others; every other channel is ignored.
   forwards the same way. Discord doesn't include the original author.
 - Drafts live in the message embed. Confirming reads the draft back from the
   message, so pending drafts survive restarts too.
+- Only the latest draft in a thread can be filed. When the reporter asks for
+  changes and the bot posts a revised draft, the earlier one loses its
+  buttons and is marked "replaced by a newer draft". Confirm also checks the
+  thread when clicked, so an earlier draft whose buttons survived (a failed
+  edit, or a click at the same moment) is refused rather than filed twice.
 - Replies never ping anyone (`allowed_mentions` is empty), whatever the text.
 
 ## Discord setup
@@ -710,7 +715,7 @@ per-user detail is in the logs.
 | `discordbot_model_tokens_total`                | counter   | `model`, `type`    | Billed tokens: `input` (uncached), `cache_read`, `cache_write`, `output` (thinking included).            |
 | `discordbot_tool_calls_total`                  | counter   | `tool`, `result`   | `ok`, `error`, `skipped` (not run because of a limit).                                                  |
 | `discordbot_tool_call_duration_seconds`        | histogram | `tool`             |                                                                                                         |
-| `discordbot_issues_total`                      | counter   | `kind`, `action`   | `drafted`, `filed`, `cancelled`, `failed`, `rate_limited`.                                              |
+| `discordbot_issues_total`                      | counter   | `kind`, `action`   | `drafted`, `filed`, `cancelled`, `superseded`, `failed`, `rate_limited`.                                              |
 | `discordbot_discord_connected`                 | gauge     |                    | 1 while the gateway connection is up.                                                                   |
 | `discordbot_discord_connection_events_total`   | counter   | `event`            | `connect`, `disconnect`, `resume`.                                                                      |
 | `discordbot_info`                              | gauge     | `model`, `effort`, `tokens_per_question`, `issues_enabled` | Always 1; the running configuration.                       |

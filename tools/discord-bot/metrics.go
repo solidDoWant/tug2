@@ -105,7 +105,7 @@ func NewMetrics(cfg *Config) *Metrics {
 		}, []string{"tool"}),
 		issues: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "discordbot_issues_total",
-			Help: "Issue drafts by kind (bug, feature) and action: drafted, filed, cancelled, failed (GitHub rejected the filing), rate_limited (reporter over their daily limit).",
+			Help: "Issue drafts by kind (bug, feature) and action: drafted, filed, cancelled, superseded (Confirm pressed on a draft a newer one replaced), failed (GitHub rejected the filing), rate_limited (reporter over their daily limit).",
 		}, []string{"kind", "action"}),
 		discordConnected: prometheus.NewGauge(prometheus.GaugeOpts{
 			Name: "discordbot_discord_connected",

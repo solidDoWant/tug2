@@ -509,15 +509,20 @@ func (b *Bot) sendAnswer(log *slog.Logger, threadID, userID string, ans Answer) 
 	for i, chunk := range chunks {
 		send := &discordgo.MessageSend{Content: chunk, AllowedMentions: noMentions}
 		if i == len(chunks)-1 && ans.Draft != nil {
-			send.Embeds = []*discordgo.MessageEmbed{draftEmbed(*ans.Draft, "awaiting confirmation")}
+			send.Embeds = []*discordgo.MessageEmbed{draftEmbed(*ans.Draft, pendingDraftState)}
 			send.Components = draftButtons(ans.Draft.Kind, userID, false)
 		}
 		if send.Content == "" && len(send.Embeds) == 0 {
 			continue
 		}
-		if _, err := b.session.ChannelMessageSendComplex(threadID, send); err != nil {
+		sent, err := b.session.ChannelMessageSendComplex(threadID, send)
+		if err != nil {
 			log.Error("sending answer", "err", err)
 			return
+		}
+		if len(send.Embeds) > 0 {
+			// The new draft replaces any earlier one still pending here.
+			supersedeDrafts(log, b.session, threadID, b.session.State.User.ID, sent.ID)
 		}
 	}
 }
@@ -656,6 +661,22 @@ func (b *Bot) onInteraction(s *discordgo.Session, i *discordgo.InteractionCreate
 
 	if b.issues == nil {
 		b.ephemeral(i, "Issue filing isn't configured right now.")
+		return
+	}
+	// Only the latest draft in the thread can be filed. Posting a newer one
+	// normally removed these buttons already; this catches a failed edit or
+	// a click that raced it.
+	if newer, err := newerDraft(b.session, i.ChannelID, s.State.User.ID, i.Message.ID); err != nil || newer {
+		if err != nil {
+			slog.Error("checking for a newer draft", "user", user.ID, "err", err)
+			b.ephemeral(i, "I couldn't check that this is the latest draft; please try again in a bit.")
+			return
+		}
+		b.metrics.Issue(draft.Kind, "superseded")
+		b.updateDraft(i, supersededEmbed(embed))
+		_, _ = s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
+			Content: "A newer draft replaced this one. Use the buttons on the latest draft.", Flags: discordgo.MessageFlagsEphemeral,
+		})
 		return
 	}
 	if ok, wait := b.limits.AllowIssue(user.ID); !ok {
