@@ -101,10 +101,14 @@ independently of the others; every other channel is ignored.
 - Follow-ups in that thread don't need a mention. The thread itself is the
   conversation history: the bot re-reads it on every message (up to
   `HISTORY_MESSAGES`), so nothing is stored and restarts lose nothing.
-- In a thread someone else started in the configured channel, the bot answers
-  only when mentioned or replied to, since people may be talking among themselves there.
-- In its own threads the bot sees every message, but people often discuss its
-  results among themselves there. Messages that @mention or reply to the bot
+- In a thread someone else started in a bot channel, the bot stays
+  out of it until it is mentioned or replied to there. Once it has answered in
+  that thread, it treats the thread like one of its own and follow-ups need no
+  mention. Nothing is stored for this: the bot checks whether one of its
+  messages is among the thread's last `HISTORY_MESSAGES`, so a thread where
+  its last reply has scrolled out of that window needs a mention again.
+- In its own threads (and threads it has joined) the bot sees every message,
+  but people often discuss its results among themselves there. Messages that @mention or reply to the bot
   (or use `/ask`) are always answered. For any other message the model judges
   from the conversation whether it's meant for the bot, and when it clearly
   isn't, the bot stays silent (beyond a moment of "typing"). Those don't count
