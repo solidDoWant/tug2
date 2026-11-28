@@ -163,6 +163,20 @@ the surviving melee entry occupies purchase index 0, so the first weapon it boug
 Other slots are deliberately not excluded. A medic's healthkit is refunded by `inventory_sell_all`
 like anything else, so re-buying it is symmetric and costs what it originally cost.
 
+## Loading while dead
+
+`!loadlo` (bare or named) typed while dead is fetched and checked straight away — an unknown or
+ambiguous name, or a cross-class load that is disabled, is reported then — but nothing is bought.
+The request is held and applied 1 second after the player's next `player_spawn`, through the same
+`ApplyLoadout` path as a live load. Typing it again while dead replaces the held one; a bare
+`!loadlo` resolves to the class the player actually spawns as. While a load is held, the class-pick
+auto-load stands aside so it cannot overwrite it.
+
+No new purchase path is involved, so nothing can be bought that a live load could not buy: every
+item still goes through `inventory_buy_*`, which applies class restrictions and supply cost, and the
+usual "N item(s) could not be equipped" read-back runs after it. The automatic class-pick and
+`inventory_reset` loads are not held — they were dropped while dead before and still are.
+
 ## Failure modes
 
 | Situation | Behaviour |

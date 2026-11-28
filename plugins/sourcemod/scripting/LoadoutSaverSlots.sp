@@ -217,6 +217,16 @@ char     g_LastLoadName[MAXPLAYERS + 1][MAX_LOADOUT_NAME + 1];
 bool     g_OverwriteConfirmed[MAXPLAYERS + 1];
 #define NAMED_LOADOUT_CAP   15
 
+// A !loadlo typed while dead, held until the next spawn. Nothing is bought while dead: the loadout
+// is fetched and checked (so a bad name is reported straight away), but the buy itself waits for
+// player_spawn and then runs through exactly the same path as a load while alive - the game's own
+// inventory_buy_* commands, so class restrictions and supply cost are judged as for any purchase.
+// Empty name = this class's own loadout, resolved against whatever class the player spawns as.
+bool     g_PendingLoad[MAXPLAYERS + 1];
+char     g_PendingLoadName[MAXPLAYERS + 1][MAX_LOADOUT_NAME + 1];
+// Same settle delay as the class-pick auto-load, so the spawn has finished before anything is bought.
+#define PENDING_LOAD_DELAY  1.0
+
 // Game limits. Upper bounds only - the real counts come from the send table at runtime
 // (GetEntPropArraySize), which is what stops this plugin inheriting the original's two short
 // bounds. These are sized above what the game networks so a future theater cannot overflow them.
@@ -310,6 +320,7 @@ public void OnPluginStart()
 
     // Hook events
     HookEvent("player_pick_squad", Event_PlayerPickSquad);
+    HookEvent("player_spawn", Event_PlayerSpawn);
 
     g_ClassByHandle = new StringMap();
 
@@ -463,6 +474,8 @@ public void OnClientAuthorized(int client, const char[] auth)
     g_LastLoadDropped[client]       = 0;
     g_LastLoadName[client][0]       = '\0';
     g_OverwriteConfirmed[client]    = false;
+    g_PendingLoad[client]           = false;
+    g_PendingLoadName[client][0]    = '\0';
 
     // Update last_seen_at
     if (g_Database != null)
@@ -480,6 +493,8 @@ public void OnClientDisconnect(int client)
     g_LastLoadDropped[client]       = 0;
     g_LastLoadName[client][0]       = '\0';
     g_OverwriteConfirmed[client]    = false;
+    g_PendingLoad[client]           = false;
+    g_PendingLoadName[client][0]    = '\0';
 }
 
 // =====================================================
@@ -577,8 +592,49 @@ public Action Timer_AutoLoadLoadout(Handle timer, int userid)
     // spawn the event announced has actually happened.
     LearnPlayerClass(client);
 
+    // A load the player asked for while dead outranks the automatic one; it runs on spawn instead.
+    if (g_PendingLoad[client]) return Plugin_Handled;
+
     LoadPlayerLoadout(client, false, "");    // Auto-load silently, this class only
     return Plugin_Handled;
+}
+
+public void Event_PlayerSpawn(Event event, const char[] name, bool dontBroadcast)
+{
+    int client = GetClientOfUserId(event.GetInt("userid"));
+    if (client < 1 || IsFakeClient(client) || !g_PendingLoad[client]) return;
+
+    CreateTimer(PENDING_LOAD_DELAY, Timer_PendingLoad, GetClientUserId(client), TIMER_FLAG_NO_MAPCHANGE);
+}
+
+public Action Timer_PendingLoad(Handle timer, int userid)
+{
+    int client = GetClientOfUserId(userid);
+    if (client < 1 || !IsClientInGame(client) || !g_PendingLoad[client]) return Plugin_Handled;
+    // Died again inside the delay: keep it for the spawn after.
+    if (!IsPlayerAlive(client)) return Plugin_Handled;
+
+    char pending[MAX_LOADOUT_NAME + 1];
+    strcopy(pending, sizeof(pending), g_PendingLoadName[client]);
+    g_PendingLoad[client]        = false;
+    g_PendingLoadName[client][0] = '\0';
+
+    LearnPlayerClass(client);
+    LoadPlayerLoadout(client, true, pending);
+    g_LastLoadTime[client] = GetGameTime();
+    return Plugin_Handled;
+}
+
+// Called once a manual load has been fetched and checked but the player is not alive to receive it.
+void QueuePendingLoad(int client, const char[] name)
+{
+    g_PendingLoad[client] = true;
+    strcopy(g_PendingLoadName[client], sizeof(g_PendingLoadName[]), name);
+
+    if (name[0] == '\0')
+        CPrintToChat(client, "{olivedrab}[Loadout]{default} You're dead - your class loadout will load when you respawn.");
+    else
+        CPrintToChat(client, "{olivedrab}[Loadout]{default} You're dead - {green}%s{default} will load when you respawn.", name);
 }
 
 // =====================================================
@@ -2001,7 +2057,14 @@ bool GearCounterpart(const char[] gear, char[] counterpart, int maxlen)
 void ApplyLoadout(int client, LoadoutItem[] items, int count, bool showMessages, const char[] name, const char[] savedClass)
 {
     if (!IsClientInGame(client)) return;
-    if (!IsPlayerAlive(client)) return;
+    if (!IsPlayerAlive(client))
+    {
+        // Only a load the player typed is held for the spawn (showMessages is set for exactly those).
+        // The automatic class-pick and inventory_reset loads stay dropped, as before: the class-pick
+        // one already fires for the class being spawned as.
+        if (showMessages) QueuePendingLoad(client, name);
+        return;
+    }
 
     if (!TheaterItem_Ready())
     {
