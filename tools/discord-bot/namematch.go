@@ -122,6 +122,11 @@ func (p PlayerMatch) toMap() map[string]any {
 	if p.UpdatedAt != nil {
 		m["updated_at"] = p.UpdatedAt.UTC().Format("2006-01-02 15:04:05")
 	}
+	// The stats API's players get name_md in StatsClient.Get; these don't
+	// pass through it.
+	if md := playerNameMarkdown(p.Name, p.SteamID); md != "" {
+		m["name_md"] = md
+	}
 	return m
 }
 

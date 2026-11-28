@@ -195,6 +195,9 @@ func TestFindPlayersMe(t *testing.T) {
 		!reflect.DeepEqual(res.Players[0]["matched_by"], []string{"Test Player Beta"}) {
 		t.Errorf("players = %v", res.Players)
 	}
+	if md := res.Players[0]["name_md"]; md != playerNameMarkdown("Test Player Beta", "76561198000000001") || md == "" {
+		t.Errorf("name_md = %v", md)
+	}
 	if !reflect.DeepEqual(db.searched, []string{"discordalpha [Test Player Beta]", "discordalpha", "Test Player Beta"}) || db.schema != "public" {
 		t.Errorf("searched %q in %q", db.searched, db.schema)
 	}
