@@ -42,7 +42,7 @@ BUILD_DIR := $(PROJECT_DIR)/build
 
 BINARY_DIR = $(BUILD_DIR)/binaries
 BINARY_NAME = discord-bot
-GO_SOURCE_FILES = $(wildcard *.go)
+GO_SOURCE_FILES = $(wildcard *.go) theater_loadouts.json
 GO_LDFLAGS := -s -w
 
 LOCALOS := $(shell uname -s | tr '[:upper:]' '[:lower:]')

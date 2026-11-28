@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"maps"
 	"net/url"
 	"slices"
@@ -110,6 +111,12 @@ func NewToolset(cfg *Config, stats *StatsClient, issues *IssueTracker, channels 
 
 	if issues != nil {
 		ts.addIssueTools(issues)
+	}
+
+	if d, err := embeddedLoadoutData(); err != nil {
+		slog.Error("the embedded loadout data doesn't load; random_loadout is not offered", "err", err)
+	} else {
+		ts.addLoadoutTool(cfg, d)
 	}
 
 	if cfg.hasPublicStatsAPI() {
