@@ -38,6 +38,7 @@ var (
 		{"/api/v1/players", "Players with lifetime stats (or stats in a time window), descending.", append([]apiParam{
 			{"sort", "score (default), kills, deaths, wins, killstreak, caps, kd, play_time, accuracy (players with 500+ shots, by enemy hit rate), updated_at"},
 			{"name", "only players whose latest in-game name contains this, case-insensitive"},
+			{"name_match", "substring (default) or fuzzy: also names that differ in spaces, separators, punctuation or leetspeak, or have other text between the words; each player then has name_match (exact, substring, normalised, loose), best first"},
 		}, windowedPage...)},
 		{"/api/v1/players/{steam_id}", "One player's stats by SteamID64 (lifetime, or in a time window); 404 if unknown.", periodParams},
 		{"/api/v1/players/{steam_id}/weapons", "One player's kills, rounds fired, enemy/friendly hits and enemy hit rate per weapon (a plain array, not paginated).", periodParams},

@@ -251,14 +251,19 @@ func clampPage(limit, offset int) (int, int) {
 
 func (ts *Toolset) addStatsTools(serverProp map[string]any, defaultServer string, stats *StatsClient) {
 	ts.add("find_players",
-		"Search players by name (case-insensitive substring of their most recent name). A player's in-game name is their Steam profile name, so search Steam names here. "+
-			"Use this to turn a name into a steam_id before calling get_player. Returns up to 10 matches per name searched, with their headline stats. "+
+		"Search players by name. A player's in-game name is their Steam profile name (the most recent one is kept), so search Steam names here. "+
+			"Use this to turn a name into a steam_id before calling get_player. Returns up to 10 matches per name searched, best first, with their headline stats. "+
+			"Matching is forgiving: besides names that contain the search (case-insensitive), it finds spellings that differ in spaces, separators, punctuation or leetspeak "+
+			"(\"Jane Doe\" finds \"JaneDoe\", \"jane_doe\", \"J4ne.D0e\") and names with other text between its words (\"Jane the Doe\"). "+
+			"Each player's name_match says how they matched: exact, substring, normalised or loose (best to worst). "+
+			"The result's confidence and advice say what to do: with exact or clear, use that player; with ambiguous or low, don't pick one: "+
+			"list the candidates by their Steam name and ask the user which one they mean. "+
 			"Set me=true instead of name to look up the asking user: it searches their Discord display name whole and in parts, "+
 			"because many people put their Steam name in brackets after their Discord name (\"discordname [SteamName]\"). "+
-			"Brackets can also hold a clan tag or be part of the name, so check which part each player matched before assuming. "+
+			"Brackets can also hold a clan tag or be part of the name, so check which part each player matched (matched_by) before assuming. "+
 			"A player who has never had a name recorded cannot be found this way.",
 		map[string]any{
-			"name":   prop("string", "Part of the player's Steam (in-game) name. Omit when me is true."),
+			"name":   prop("string", "The player's Steam (in-game) name, or part of it. Omit when me is true."),
 			"me":     prop("boolean", "True to search for the asking user by their Discord display name and its parts."),
 			"server": serverProp,
 		}, nil,
@@ -284,7 +289,7 @@ func (ts *Toolset) addStatsTools(serverProp map[string]any, defaultServer string
 			case name == "":
 				return nil, errors.New("give a name to search for, or set me to true")
 			}
-			return stats.Get(ctx, server, "/api/v1/players", playerNameQuery(name))
+			return findPlayersByNames(ctx, stats, server, "", []string{name})
 		})
 
 	ts.add("get_player",

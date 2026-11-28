@@ -12,7 +12,12 @@ the reporter to press **Confirm**.
   from each server's [stats-api](../stats-api), including lookups by in-game
   name ("how's TestPlayerAlpha doing?", "top 5 by K/D on test"). "My stats"
   searches the asker's Discord display name whole and in parts, so a Steam
-  name in brackets ("discordname [SteamName]") is found too. For anything the
+  name in brackets ("discordname [SteamName]") is found too. Name searches
+  forgive spacing, separators, punctuation and leetspeak ("Jane Doe" finds
+  "JaneDoe" and "J4ne.D0e") and words apart ("Jane the Doe"), using the stats
+  API's `name_match=fuzzy`. Each search says how confident it is; when only
+  such looser matches or several equal ones are found, the bot lists the
+  candidates by Steam name and asks which one is meant rather than guessing. For anything the
   stats tools don't cover (averages, ranks, comparisons, filters), the model
   can write its own read-only SQL; see [SQL access](#sql-access).
 - **Live server state:** map, players (names, scores, time connected), round

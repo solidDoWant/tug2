@@ -94,8 +94,9 @@ type PageInput struct {
 }
 
 type ListPlayersInput struct {
-	Sort string `query:"sort" default:"score" enum:"kills,deaths,score,wins,killstreak,caps,kd,play_time,accuracy,updated_at" doc:"Column to order by, descending. accuracy ranks players with at least 500 recorded shots by enemy hit rate; everyone else follows."`
-	Name string `query:"name" maxLength:"128" doc:"Only players whose most recent in-game name contains this text (case-insensitive)."`
+	Sort      string `query:"sort" default:"score" enum:"kills,deaths,score,wins,killstreak,caps,kd,play_time,accuracy,updated_at" doc:"Column to order by, descending. accuracy ranks players with at least 500 recorded shots by enemy hit rate; everyone else follows."`
+	Name      string `query:"name" maxLength:"128" doc:"Only players whose most recent in-game name contains this text (case-insensitive)."`
+	NameMatch string `query:"name_match" default:"substring" enum:"substring,fuzzy" doc:"How name matches. substring: the name contains it, case-insensitively. fuzzy: also names that contain it after lowercasing, folding leetspeak digits (0=o, 1=i, 3=e, 4=a, 5=s, 7=t) and dropping spaces, separators and punctuation (Jane Doe finds JaneDoe, jane_doe and J4ne.D0e), and names with its words in order and anything between them (Jane Doe finds Jane the Doe); each player then has name_match (exact, substring, normalised or loose) and better matches come first."`
 	PageInput
 	PeriodInput
 }
@@ -358,7 +359,7 @@ func (s *Server) listPlayers(ctx context.Context, in *ListPlayersInput) (*Player
 	if err != nil {
 		return nil, err
 	}
-	players, total, err := s.store.ListPlayers(ctx, w, in.Sort, in.Name, in.Limit, in.Offset)
+	players, total, err := s.store.ListPlayers(ctx, w, in.Sort, in.Name, in.NameMatch == "fuzzy", in.Limit, in.Offset)
 	if err != nil {
 		return nil, huma.Error500InternalServerError("failed to list players")
 	}

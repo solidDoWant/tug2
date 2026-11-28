@@ -32,6 +32,13 @@ type PlayerStats struct {
 	// shots recorded.
 	EnemyHitRate *float64  `json:"enemy_hit_rate"`
 	CreatedAt    time.Time `json:"created_at"`
+	// NameMatch is set in a name_match=fuzzy search: how the player's name
+	// matched the searched name, best first: exact (the whole name,
+	// case-insensitively), substring (contains it), normalised (contains it
+	// once both are lowercased, common leetspeak digits are folded and
+	// everything but letters and digits is dropped), loose (contains its
+	// words in order, with anything between them).
+	NameMatch *string `json:"name_match,omitempty" enum:"exact,substring,normalised,loose"`
 	// Window is set on a single player's stats when the request asked for a
 	// time window; the stats are then those in it.
 	Window    *WindowInfo `json:"window,omitempty"`

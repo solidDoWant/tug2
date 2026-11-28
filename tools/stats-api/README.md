@@ -136,7 +136,7 @@ endpoints are unversioned.
 | ---------------------------------------- | ------------------------------------------------------------------ |
 | `GET /livez`                             | Liveness probe. Does not touch the DB; use for restart decisions.  |
 | `GET /readyz`                            | Readiness probe. Pings the DB; use for load-balancer rotation.     |
-| `GET /api/v1/players`                    | List players. `?sort=&name=&limit=&offset=`.                       |
+| `GET /api/v1/players`                    | List players. `?sort=&name=&name_match=&limit=&offset=`.          |
 | `GET /api/v1/players/{steam_id}`         | Single player's stats.                                             |
 | `GET /api/v1/players/{steam_id}/weapons` | Per-weapon kills, shots and hits for a player (unpaginated sub-resource). |
 | `GET /api/v1/weapons`                    | Weapons across all players: kills, shots, hits. `?sort=&limit=&offset=`. |
@@ -206,6 +206,19 @@ contains it, case-insensitively (`%` and `_` are matched literally). Names are
 recorded by `gg2_mstats2` whenever it records a player, so `name` is `null` for
 players who haven't connected since that started. The medic, team-kill and
 fire-support leaderboards include each player's `name` too.
+
+`name_match=fuzzy` loosens `name` for people who don't know a name's exact
+spelling. Besides names that contain it, it finds names that contain it once
+both are lowercased, common leetspeak digits are folded (`0`→o, `1`→i, `3`→e,
+`4`→a, `5`→s, `7`→t) and everything but letters and digits is dropped
+(`Jane Doe` finds `JaneDoe`, `jane_doe` and `J4ne.D0e`), and names with its words
+in order and anything between them (`Jane Doe` finds `Jane the Doe`). Each
+player then has `name_match`: `exact`, `substring`, `normalised` or `loose`, and
+better matches come first, then `sort`. The search text is only ever a bound
+parameter, never part of a regex, and LIKE wildcards in it stay literal. It is
+a sequential scan of `player_stats` like the plain search (no index serves
+`%...%`), with a `regexp_replace` per row: about 4x the plain search's cost,
+~160 ms for 100k players on a dev machine.
 
 `play_time_seconds` on a player is their time on the Security team. It has only
 been counted since 2026-11, so it is low or 0 for earlier play.
