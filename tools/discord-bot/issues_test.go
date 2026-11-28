@@ -92,7 +92,7 @@ func TestIssueTrackerGitHubApp(t *testing.T) {
 	if want := []string{"area:gameplay", "area:stats", "area:discord-relay", "area:discord-bot", "server:main", "server:test"}; !slices.Equal(createdLabels, want) {
 		t.Errorf("created labels %v, want %v", createdLabels, want)
 	}
-	if _, err := tracker.Create(context.Background(), IssueDraft{Kind: IssueBug, Title: "x", Body: "y", Labels: []string{"wontfix"}}, ""); err == nil {
+	if _, err := tracker.Create(context.Background(), IssueDraft{Kind: IssueBug, Title: "x", Body: "y", Labels: []string{"wontfix"}}, "", nil, 0); err == nil {
 		t.Error("a label outside the list was accepted")
 	}
 
@@ -106,7 +106,7 @@ func TestIssueTrackerGitHubApp(t *testing.T) {
 
 	url, err := tracker.Create(context.Background(),
 		IssueDraft{Kind: IssueBug, Title: "Medics can't revive", Body: "Steps...", Labels: []string{"server:test", "area:gameplay"}},
-		"https://discord.com/channels/1/2")
+		"https://discord.com/channels/1/2", nil, 0)
 	if err != nil {
 		t.Fatal(err)
 	}

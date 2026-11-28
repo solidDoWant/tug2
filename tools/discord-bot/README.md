@@ -36,6 +36,9 @@ the reporter to press **Confirm**.
   issue and the bot posts the link as a reply to it. Issues are public, so
   the model is told to replace player names, SteamIDs and profile links with
   placeholders unless the bug is about that player.
+- **Screenshots:** with `GITHUB_ATTACHMENTS_REPO` set, images the reporter
+  attached to their own messages in the conversation are added to the issue;
+  see [Screenshots in issues](#screenshots-in-issues).
 
 ## How conversations work
 
@@ -225,7 +228,8 @@ install it on.
    - Homepage URL: anything, e.g. the repository URL.
    - Webhook: untick **Active**. The bot doesn't need events.
    - Repository permissions: **Issues: Read and write**. Metadata (read-only)
-     is selected automatically. Nothing else.
+     is selected automatically. Nothing else, unless you want
+     [screenshots in issues](#screenshots-in-issues).
    - Where can it be installed: **Only on this account**.
 2. Note the **App ID**, then **Generate a private key**. This downloads a `.pem`.
 3. **Install App** → choose **Only select repositories** → the one repo.
@@ -240,6 +244,49 @@ short-lived installation tokens as needed.
 
 Without the app settings the bot still runs: the issue tools are not offered,
 and it says reporting isn't set up.
+
+### Screenshots in issues
+
+GitHub's API can't upload images to an issue (the web UI's upload needs a
+browser session), and Discord's attachment links are signed and stop working
+after about a day, so linking them would leave broken images. Instead the bot
+commits each screenshot to a separate **public** repository and the issue
+embeds it from there. Nothing new to run: it uses the same GitHub App.
+
+1. Create a public repository for the images, e.g. `<owner>/tug2-issue-media`,
+   with one commit (a README) so it has a default branch.
+2. In the GitHub App's settings → **Permissions**, add **Contents: Read and
+   write**, and accept the new permission on the installation (GitHub asks
+   the account owner).
+3. Add the new repository to the installation (**Install App** → configure →
+   select it alongside the issues repo).
+4. Set `GITHUB_ATTACHMENTS_REPO=<owner>/tug2-issue-media`, and optionally
+   `GITHUB_ATTACHMENTS_BRANCH` (default: the repo's default branch).
+
+The bot asks GitHub for tokens limited to what each use needs: the issues
+token to issues on `GITHUB_REPO`, the screenshots token to contents on
+`GITHUB_ATTACHMENTS_REPO`. So the app's new Contents permission can't be
+used on the issues repository by the bot. At startup it checks the repository
+is reachable and public, and refuses to start if not.
+
+How it behaves:
+
+- When the bot drafts an issue, it lists up to 5 images the reporter attached
+  to their own messages in the conversation (the thread, its first message,
+  and what that builds on), under **Screenshots (public on GitHub once
+  filed)**. Other people's images, files that aren't images, and images over
+  10 MB are left out. The model sees attachment names only, not the images.
+- On **Confirm**, the bot re-reads those messages (for fresh download links),
+  commits each image to `discord/<thread id>/<attachment id>-<name>` and
+  embeds it under a **Screenshots** heading. A reporter who doesn't want an
+  image public can delete its message before confirming; it is then left
+  out. An image that can't be copied is logged, and the issue says how many
+  are only in the Discord thread.
+- Committed images stay in that repository's history. To remove one, rewrite
+  the history there; deleting the file only hides it from new issues.
+
+Without `GITHUB_ATTACHMENTS_REPO`, drafts carry no screenshots and the
+issue links the Discord thread as before.
 
 ### Issue labels
 
@@ -431,6 +478,8 @@ liveness probe at `/livez` and readiness at `/readyz` on `HEALTH_ADDR`.
 | `GITHUB_APP_ID`                 | _(empty)_          | The GitHub App's ID.                                                                                                |
 | `GITHUB_APP_PRIVATE_KEY_FILE`   | _(empty)_          | Path to the app's private key (`.pem`). Or pass the PEM itself in `GITHUB_APP_PRIVATE_KEY`.                         |
 | `GITHUB_APP_INSTALLATION_ID`    | _(looked up)_      | Optional; skips the startup lookup of the app's installation on the repo.                                           |
+| `GITHUB_ATTACHMENTS_REPO`       | _(empty)_          | Public `owner/name` repo that screenshots are committed to; see [Screenshots in issues](#screenshots-in-issues). Empty: no screenshots. |
+| `GITHUB_ATTACHMENTS_BRANCH`     | _(default branch)_ | Branch for screenshot commits.                                                                                      |
 | `GITHUB_ISSUE_LABELS`           | `from-discord`     | Comma-separated labels added to every filed issue.                                                                  |
 | `GITHUB_BUG_LABEL`              | `bug`              | Extra label for bug reports (empty for none).                                                                       |
 | `GITHUB_FEATURE_LABEL`          | `enhancement`      | Extra label for feature requests (empty for none).                                                                  |

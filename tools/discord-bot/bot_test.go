@@ -266,6 +266,24 @@ func TestParseConfigGitHubApp(t *testing.T) {
 			t.Error("two key sources accepted")
 		}
 	})
+	t.Run("attachments repo", func(t *testing.T) {
+		t.Setenv("GITHUB_ATTACHMENTS_REPO", "example/media")
+		t.Setenv("GITHUB_ATTACHMENTS_BRANCH", "screenshots")
+		cfg, err := ParseConfig()
+		if err != nil || cfg.GitHubAttachmentsOwner != "example" || cfg.GitHubAttachmentsRepo != "media" || cfg.GitHubAttachmentsBranch != "screenshots" {
+			t.Errorf("err=%v cfg=%+v", err, cfg)
+		}
+		t.Setenv("GITHUB_ATTACHMENTS_REPO", "media")
+		if _, err := ParseConfig(); err == nil {
+			t.Error("attachments repo without an owner accepted")
+		}
+		t.Setenv("GITHUB_ATTACHMENTS_REPO", "example/media")
+		t.Setenv("GITHUB_APP_ID", "")
+		t.Setenv("GITHUB_APP_PRIVATE_KEY_FILE", "")
+		if _, err := ParseConfig(); err == nil {
+			t.Error("attachments repo without the app accepted")
+		}
+	})
 	t.Run("no app means issues off", func(t *testing.T) {
 		t.Setenv("GITHUB_APP_ID", "")
 		t.Setenv("GITHUB_APP_PRIVATE_KEY_FILE", "")

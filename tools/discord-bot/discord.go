@@ -257,12 +257,13 @@ func (b *Bot) answer(m *discordgo.Message, threadID string) {
 	stopTyping := b.keepTyping(ctx, threadID)
 	defer stopTyping()
 
-	history, err := b.history(threadID)
+	thread, msgs, err := b.threadMessages(threadID)
 	if err != nil {
 		log.Error("reading thread history", "err", err)
 		b.replyTo(m, threadID, "Sorry, I couldn't read this thread.")
 		return
 	}
+	history := b.turns(thread, msgs)
 
 	if newThread && b.cfg.ThreadTitles {
 		go b.retitle(log, threadID, history)
@@ -293,6 +294,9 @@ func (b *Bot) answer(m *discordgo.Message, threadID string) {
 	}
 	if ans.Draft != nil {
 		b.metrics.Issue(ans.Draft.Kind, "drafted")
+		if b.issues != nil && b.issues.media != nil {
+			ans.Draft.Attachments = reporterImages(msgs, m.Author.ID, m.GuildID)
+		}
 	}
 	if err != nil {
 		b.replyTo(m, threadID, "Sorry, something went wrong while answering. Try again in a bit.")
@@ -384,13 +388,14 @@ func displayName(m *discordgo.Message) string {
 	return m.Author.Username
 }
 
-// history returns the conversation in a bot thread, oldest first: the message
-// that started the thread (it lives in the parent channel and shares the
-// thread's ID), then the thread's messages.
-func (b *Bot) history(threadID string) ([]Turn, error) {
+// threadMessages returns the messages of a bot thread's conversation, oldest
+// first: what the first message builds on, the message that started the
+// thread (it lives in the parent channel and shares the thread's ID), then
+// the thread's messages.
+func (b *Bot) threadMessages(threadID string) (*discordgo.Channel, []*discordgo.Message, error) {
 	thread, err := b.channel(threadID)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	me := b.session.State.User.ID
@@ -417,13 +422,18 @@ func (b *Bot) history(threadID string) ([]Turn, error) {
 	}
 	recent, err := b.session.ChannelMessages(threadID, limit, "", "", "")
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	slices.Reverse(recent) // the API returns newest first
 	for _, m := range recent {
 		msgs = append(msgs, asAsker(m, me))
 	}
+	return thread, msgs, nil
+}
 
+// turns is the conversation as the model sees it.
+func (b *Bot) turns(thread *discordgo.Channel, msgs []*discordgo.Message) []Turn {
+	me := b.session.State.User.ID
 	var turns []Turn
 	for _, m := range msgs {
 		if m.Author == nil || (m.Type != discordgo.MessageTypeDefault && m.Type != discordgo.MessageTypeReply && !isAsk(m)) {
@@ -436,10 +446,23 @@ func (b *Bot) history(threadID string) ([]Turn, error) {
 		if m.Author.Bot {
 			continue
 		}
-		turns = append(turns, Turn{Author: b.authorName(thread.GuildID, m), Text: withForwarded(b.cleanContent(m), m, b.channelName), Posted: m.Timestamp,
+		turns = append(turns, Turn{Author: b.authorName(thread.GuildID, m), Text: withAttachments(withForwarded(b.cleanContent(m), m, b.channelName), m), Posted: m.Timestamp,
 			ToBot: addressesBot(m, me) || isAsk(m)})
 	}
-	return turns, nil
+	return turns
+}
+
+// withAttachments adds the names of a message's files to its text, so the
+// model knows a screenshot was posted.
+func withAttachments(text string, m *discordgo.Message) string {
+	if len(m.Attachments) == 0 {
+		return text
+	}
+	names := make([]string, len(m.Attachments))
+	for i, a := range m.Attachments {
+		names[i] = a.Filename
+	}
+	return strings.TrimSpace(text + "\n[attached: " + strings.Join(names, ", ") + "]")
 }
 
 // Bounds on the messages before a thread's first message that count as part of
@@ -580,6 +603,9 @@ func draftEmbed(d IssueDraft, state string) *discordgo.MessageEmbed {
 	if len(d.Labels) > 0 {
 		embed.Fields = []*discordgo.MessageEmbedField{{Name: draftLabelsField, Value: "`" + strings.Join(d.Labels, "` `") + "`"}}
 	}
+	if len(d.Attachments) > 0 {
+		embed.Fields = append(embed.Fields, attachmentsField(d.Attachments))
+	}
 	return embed
 }
 
@@ -644,7 +670,7 @@ func (b *Bot) onInteraction(s *discordgo.Session, i *discordgo.InteractionCreate
 		return
 	}
 	embed := i.Message.Embeds[0]
-	draft := IssueDraft{Kind: IssueKind(kind), Title: embed.Title, Body: embed.Description, Labels: draftLabels(embed)}
+	draft := IssueDraft{Kind: IssueKind(kind), Title: embed.Title, Body: embed.Description, Labels: draftLabels(embed), Attachments: draftAttachments(embed)}
 
 	if action == cancelPrefix {
 		b.metrics.Issue(draft.Kind, "cancelled")
@@ -675,11 +701,22 @@ func (b *Bot) onInteraction(s *discordgo.Session, i *discordgo.InteractionCreate
 	components := draftButtons(draft.Kind, ownerID, true)
 	_, _ = s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{Components: &components})
 
-	ctx, cancel := context.WithTimeout(b.ctx, 30*time.Second)
+	// Copying screenshots downloads and commits each one, so allow for that.
+	ctx, cancel := context.WithTimeout(b.ctx, 30*time.Second+time.Duration(len(draft.Attachments))*20*time.Second)
 	defer cancel()
+	var images []IssueImage
+	var missing int
+	if len(draft.Attachments) > 0 {
+		if b.issues.media == nil {
+			missing = len(draft.Attachments) // drafted before storage was turned off
+		} else {
+			images, missing = copyAttachments(ctx, slog.With("user", user.ID, "thread", i.ChannelID), b.session, b.session.Client,
+				b.issues.media, i.ChannelID, draft.Attachments)
+		}
+	}
 	// Drafts are only posted in threads, so this links the whole conversation.
 	link := fmt.Sprintf("https://discord.com/channels/%s/%s", i.GuildID, i.ChannelID)
-	issueURL, err := b.issues.Create(ctx, draft, link)
+	issueURL, err := b.issues.Create(ctx, draft, link, images, missing)
 	if err != nil {
 		slog.Error("filing issue", "user", user.ID, "err", err)
 		b.metrics.Issue(draft.Kind, "failed")

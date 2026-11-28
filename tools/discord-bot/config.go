@@ -101,6 +101,12 @@ type Config struct {
 	// GitHubOwner/GitHubRepo is where bug reports and feature requests go.
 	GitHubOwner string
 	GitHubRepo  string
+	// GitHubAttachmentsOwner/Repo, when set, is the public repository that
+	// the reporter's screenshots are committed to so filed issues can show
+	// them; see attachments.go. Branch is empty for the default branch.
+	GitHubAttachmentsOwner  string
+	GitHubAttachmentsRepo   string
+	GitHubAttachmentsBranch string
 	// Labels applied to every filed issue, plus one per kind.
 	IssueLabels   []string
 	BugLabel      string
@@ -370,6 +376,15 @@ func (c *Config) parseGitHub() error {
 		c.GitHubOwner, c.GitHubRepo = owner, name
 	}
 
+	if repo := getEnv("GITHUB_ATTACHMENTS_REPO", ""); repo != "" {
+		owner, name, ok := strings.Cut(repo, "/")
+		if !ok || owner == "" || name == "" || strings.Contains(name, "/") {
+			errs = append(errs, fmt.Errorf("GITHUB_ATTACHMENTS_REPO must be owner/name, got %q", repo))
+		}
+		c.GitHubAttachmentsOwner, c.GitHubAttachmentsRepo = owner, name
+	}
+	c.GitHubAttachmentsBranch = getEnv("GITHUB_ATTACHMENTS_BRANCH", "")
+
 	if raw := getEnv("GITHUB_APP_ID", ""); raw != "" {
 		id, err := strconv.ParseInt(raw, 10, 64)
 		if err != nil || id <= 0 {
@@ -407,6 +422,8 @@ func (c *Config) parseGitHub() error {
 		errs = append(errs, errors.New("GITHUB_APP_ID and a GitHub App private key must be set together"))
 	case appSet && c.GitHubRepo == "":
 		errs = append(errs, errors.New("GITHUB_REPO is required when a GitHub App is configured"))
+	case c.GitHubAttachmentsRepo != "" && !appSet:
+		errs = append(errs, errors.New("GITHUB_ATTACHMENTS_REPO needs the GitHub App settings"))
 	}
 	c.IssuesEnabled = appSet && c.GitHubRepo != "" && len(errs) == 0
 	return errors.Join(errs...)

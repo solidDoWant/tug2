@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/bradleyfalzon/ghinstallation/v2"
+	ghinst "github.com/google/go-github/v88/github" // the version ghinstallation's token options use
 	"github.com/google/go-github/v93/github"
 )
 
@@ -29,6 +30,9 @@ type IssueDraft struct {
 	// issuelabels.go. The kind's label and GITHUB_ISSUE_LABELS are added
 	// when filing.
 	Labels []string
+	// Attachments are the reporter's images to include; see attachments.go.
+	// Set by the bot, not the model.
+	Attachments []AttachmentRef
 }
 
 // Limits keep a draft inside a single Discord embed (title 256, description
@@ -46,6 +50,9 @@ type IssueTracker struct {
 	bugLabel     string
 	featureLabel string
 	labelChoices []labelChoice
+	// media holds the reporter's screenshots for filed issues; nil when
+	// GITHUB_ATTACHMENTS_REPO is not set, and then drafts carry none.
+	media MediaStore
 }
 
 // NewIssueTracker authenticates as the GitHub App's installation on the
@@ -84,12 +91,59 @@ func NewIssueTracker(ctx context.Context, cfg *Config) (*IssueTracker, error) {
 		installationID = installation.GetID()
 	}
 
-	client, err := github.NewClient(clientOpts(ghinstallation.NewFromAppsTransport(appTransport, installationID))...)
+	// Each token is limited to what its client needs, so granting the app
+	// Contents access for screenshots doesn't extend to the issues repo.
+	issuesTransport := ghinstallation.NewFromAppsTransport(appTransport, installationID)
+	issuesTransport.InstallationTokenOptions = &ghinst.InstallationTokenOptions{
+		Repositories: []string{cfg.GitHubRepo},
+		Permissions:  &ghinst.InstallationPermissions{Issues: new("write"), Metadata: new("read")},
+	}
+	client, err := github.NewClient(clientOpts(issuesTransport)...)
 	if err != nil {
 		return nil, err
 	}
 
+	var media MediaStore
+	if cfg.GitHubAttachmentsRepo != "" {
+		owner, repo := cfg.GitHubAttachmentsOwner, cfg.GitHubAttachmentsRepo
+		mediaInstallation := installationID
+		if owner != cfg.GitHubOwner {
+			appClient, err := github.NewClient(clientOpts(appTransport)...)
+			if err != nil {
+				return nil, err
+			}
+			installation, _, err := appClient.Apps.GetRepositoryInstallation(ctx, owner, repo)
+			if err != nil {
+				return nil, fmt.Errorf("finding the GitHub App's installation on %s/%s (is the app installed on that repository?): %w", owner, repo, err)
+			}
+			mediaInstallation = installation.GetID()
+		}
+		mediaTransport := ghinstallation.NewFromAppsTransport(appTransport, mediaInstallation)
+		mediaTransport.InstallationTokenOptions = &ghinst.InstallationTokenOptions{
+			Repositories: []string{repo},
+			Permissions:  &ghinst.InstallationPermissions{Contents: new("write"), Metadata: new("read")},
+		}
+		mediaClient, err := github.NewClient(clientOpts(mediaTransport)...)
+		if err != nil {
+			return nil, err
+		}
+		// Fails fast if the app can't reach the repo, and finds the branch.
+		r, _, err := mediaClient.Repositories.Get(ctx, owner, repo)
+		if err != nil {
+			return nil, fmt.Errorf("checking GITHUB_ATTACHMENTS_REPO %s/%s (is the app installed on it, with Contents: Read and write?): %w", owner, repo, err)
+		}
+		if r.GetPrivate() {
+			return nil, fmt.Errorf("GITHUB_ATTACHMENTS_REPO %s/%s is private, so issues couldn't show its images", owner, repo)
+		}
+		branch := cfg.GitHubAttachmentsBranch
+		if branch == "" {
+			branch = r.GetDefaultBranch()
+		}
+		media = &githubMediaStore{client: mediaClient, owner: owner, repo: repo, branch: branch}
+	}
+
 	return &IssueTracker{
+		media:        media,
 		client:       client,
 		owner:        cfg.GitHubOwner,
 		repo:         cfg.GitHubRepo,
@@ -132,10 +186,11 @@ func (t *IssueTracker) Search(ctx context.Context, query string) ([]IssueSummary
 }
 
 // Create files the draft and returns the new issue's URL. threadLink is the
-// Discord thread it came from. Issues are public, so the reporter is not
+// Discord thread it came from. images are the draft's attachments already
+// copied to the media store, and missing counts those that couldn't be. Issues are public, so the reporter is not
 // named; the thread shows who it was to anyone in the Discord server, and the
 // bot's log records their user ID with the issue URL.
-func (t *IssueTracker) Create(ctx context.Context, draft IssueDraft, threadLink string) (string, error) {
+func (t *IssueTracker) Create(ctx context.Context, draft IssueDraft, threadLink string, images []IssueImage, missing int) (string, error) {
 	labels := append([]string{}, t.labels...)
 	chosen, err := checkLabels(draft.Labels, t.labelChoices)
 	if err != nil {
@@ -154,7 +209,7 @@ func (t *IssueTracker) Create(ctx context.Context, draft IssueDraft, threadLink 
 
 	labels = append(labels, chosen...)
 
-	body := strings.TrimSpace(draft.Body) + fmt.Sprintf(
+	body := strings.TrimSpace(draft.Body) + imagesSection(images, missing) + fmt.Sprintf(
 		"\n\n---\n_Reported on Discord via the stats bot. Discussion: [Discord thread](%s)_", threadLink)
 
 	issue, _, err := t.client.Issues.Create(ctx, t.owner, t.repo, github.CreateIssueRequest{
@@ -166,4 +221,20 @@ func (t *IssueTracker) Create(ctx context.Context, draft IssueDraft, threadLink 
 		return "", fmt.Errorf("creating GitHub issue: %w", err)
 	}
 	return issue.GetHTMLURL(), nil
+}
+
+// imagesSection embeds the reporter's screenshots after the issue body.
+func imagesSection(images []IssueImage, missing int) string {
+	if len(images) == 0 && missing == 0 {
+		return ""
+	}
+	var b strings.Builder
+	b.WriteString("\n\n### Screenshots\n")
+	for _, img := range images {
+		fmt.Fprintf(&b, "\n![%s](%s)\n", img.Name, img.URL)
+	}
+	if missing > 0 {
+		fmt.Fprintf(&b, "\n_%d more couldn't be copied here; see the Discord thread._\n", missing)
+	}
+	return strings.TrimRight(b.String(), "\n")
 }

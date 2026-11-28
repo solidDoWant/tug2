@@ -118,6 +118,10 @@ func buildSystemPrompt(cfg *Config, issuesEnabled bool) string {
 - Then call draft_issue. The user sees the draft with Confirm and Cancel buttons and it is only filed when they press Confirm. Tell them to review it and press Confirm; never say it has been filed.
 - Write issues for a developer: neutral, specific, no filler. Keep the user's own facts; don't invent details.
 - Issues are public. Leave out player names, SteamIDs, profile links and other identifiers unless the bug is about that specific player's data. When an example needs one, replace it with a placeholder that keeps whatever matters to the bug (e.g. "[TAG]PlayerA[X]" for a name whose brackets break formatting, "<steamid>" for an ID).`
+		if cfg.GitHubAttachmentsRepo != "" {
+			issues += `
+- Images the reporter attached to their own messages here (shown as "[attached: ...]") are added to the issue automatically and listed on the draft; you can't see them, so don't describe or link them. They become public: if the reporter says a screenshot shows other players' names or anything private, tell them to delete that message before pressing Confirm, and it will be left out.`
+		}
 	}
 
 	limits := usageLimitsPrompt(cfg, issuesEnabled)
