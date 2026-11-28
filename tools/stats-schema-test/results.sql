@@ -139,3 +139,10 @@ END $$;
 -- Mark two rounds as computed by an older definition: the next boot (run.sh re-applies
 -- stats_03_results.sql) must recompute them.
 UPDATE round_results_done SET def_hash = 'old' WHERE round_id IN (SELECT round_id FROM sr WHERE n IN (1, 4));
+-- And a round still going in the latest map run, cached as at a shutdown mid-round: out of date too.
+UPDATE rounds SET ended_at = NULL, winner = NULL, end_reason = NULL WHERE round_id = (SELECT round_id FROM sr WHERE n = 6);
+UPDATE round_results_done SET def_hash = 'old' WHERE round_id = (SELECT round_id FROM sr WHERE n = 6);
+DO $$ BEGIN
+    ASSERT (SELECT map_run_id FROM rounds WHERE round_id = (SELECT round_id FROM sr WHERE n = 6)) = (SELECT max(map_run_id) FROM map_runs),
+           'the unfinished round is in the latest map run';
+END $$;
