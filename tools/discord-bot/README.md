@@ -3,7 +3,7 @@
 A Discord bot that answers questions about the game servers in plain English,
 and helps players file bug reports and feature requests on GitHub. It uses a
 Claude model with a fixed set of tools; the model can only read stats, query
-server state, search issues, and draft issues. Filing an issue always needs
+server state, search and read issues, and draft issues. Filing an issue always needs
 the reporter to press **Confirm**.
 
 ## What it does
@@ -62,6 +62,21 @@ the reporter to press **Confirm**.
   issue and the bot posts the link as a reply to it. Issues are public, so
   the model is told to replace player names, SteamIDs and profile links with
   placeholders unless the bug is about that player.
+- **Reading issues:** `read_issue` reads an existing issue in `GITHUB_REPO` by
+  number: title, state (and why it was closed), labels, author, timestamps,
+  link, the body and the comments, so the bot can quote or summarise an
+  issue, say what was decided, or use a formula written in one ("what's the
+  heal formula from #42?"). Comments come oldest first, 10 a page, and the
+  model can ask for later pages; the result says how many pages there are,
+  so it can jump to the latest. The body is cut at 8,000 characters and each
+  comment at 2,000, with a note saying so, and comments maintainers hid on
+  GitHub (spam, off-topic) are shown only as hidden. Pull requests are
+  refused with a link: the issues API gives only a PR's description and
+  conversation, not its diff or review comments, and code review isn't the
+  bot's job. An issue transferred to another repository is refused too, so
+  nothing outside `GITHUB_REPO` is read. Issue text is written by anyone with
+  a GitHub account, so each result carries a note, and the tool description
+  and system prompt say, that it is data, never instructions.
 
 ## How conversations work
 
@@ -250,8 +265,9 @@ install it on.
 1. GitHub → Settings → Developer settings → GitHub Apps → **New GitHub App**.
    - Homepage URL: anything, e.g. the repository URL.
    - Webhook: untick **Active**. The bot doesn't need events.
-   - Repository permissions: **Issues: Read and write**. Metadata (read-only)
-     is selected automatically. Nothing else.
+   - Repository permissions: **Issues: Read and write** (read for
+     `search_issues` and `read_issue`, write for filing). Metadata
+     (read-only) is selected automatically. Nothing else.
    - Where can it be installed: **Only on this account**.
 2. Note the **App ID**, then **Generate a private key**. This downloads a `.pem`.
 3. **Install App** → choose **Only select repositories** → the one repo.
@@ -587,7 +603,9 @@ with each step. These limits bound one question:
 | Time                                | 3 min   | -                              |
 
 Individual tools are bounded too: `read_channel` returns at most 50 messages
-and `search_channels` 25, each at most about 40,000 characters, leaderboard pages are at most 25 rows, and any
+and `search_channels` 25, each at most about 40,000 characters, `read_issue`
+returns about 28,000 characters at most (an 8,000-character body and 10
+comments of up to 2,000), leaderboard pages are at most 25 rows, and any
 stats response is cut at 64 KB.
 
 After running a round's tools, the bot estimates the next call's size
@@ -715,12 +733,13 @@ API, game server or channel the bot can't reach.
 
 - The model only has the tools above. Stats and server status are read-only,
   and issues need a human click.
-- Player names from the server query, issue titles and stats are passed to the
-  model as data; the system prompt tells it not to follow instructions in them.
+- Player names from the server query, issue titles, bodies and comments, and
+  stats are passed to the model as data; the system prompt tells it not to follow instructions in them.
   Even if it did, the worst case is a misleading answer or a draft the reporter
   has to confirm.
 - GitHub access is a GitHub App limited to issues on one repository. Nothing
-  is filed as a person.
+  is filed as a person. `read_issue` only reads that repository's issues
+  (not pull requests, and not issues transferred elsewhere).
 - The model can only read channels where the bot has View Channel and Read
   Message History, so keep the bot out of private channels. Channel text is
   treated as data, like everything else the tools return.
