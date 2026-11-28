@@ -1,7 +1,12 @@
--- Read access for the Discord bot's query_stats tool (tools/discord-bot), which runs SQL written
--- by an LLM against a read replica as the "discord-bot" role. The role is created by the infra
--- repo; this grants it SELECT on the tables below, in this server's own schema, and revokes it
--- from every other table there.
+-- Read access for the Discord bot (tools/discord-bot), which reads a read replica as the
+-- "discord-bot" role: query_stats runs SQL written by an LLM against the stats database, and
+-- get_saved_loadouts reads the loadoutsaver database. The role is created by the infra repo; this
+-- grants it SELECT on the tables below, in this server's own schema, and revokes it from every
+-- other table there.
+--
+-- One list for every database the bot reads, so there is one place to see what it can read. Each
+-- database lists this file last in its own block of database-migrations.cfg ("insurgency-stats"
+-- and "loadoutsaver"); a name that is not a table in that database matches nothing.
 --
 -- Only list tables with nothing private in them. Never add connection_log: it holds players' IP
 -- addresses. The bot describes the tables it can read to the model from their COMMENTs, so give a
@@ -36,7 +41,12 @@ DECLARE
         'smoke_warning_seen',
         'gg2_messages_rotating_player',
         'gg2_messages_rotating_admin',
-        'gg2_messages_join_player'
+        'gg2_messages_join_player',
+        -- loadoutsaver database (LoadoutSaverSlots). Not `loadouts`, the legacy table, whose items
+        -- are theater ids that only the theater they were saved under can name.
+        'loadouts_slots',
+        'loadout_items',
+        'theater_items'
     ];
     t text;
 BEGIN
