@@ -24,6 +24,7 @@ public Plugin myinfo =
 #include <discord>
 #undef REQUIRE_PLUGIN
 #include <gg2_hint>
+#include <gg2_stats>
 #define REQUIRE_PLUGIN
 
 const int   TEAM_SPECTATE     = 1;
@@ -59,6 +60,7 @@ char          distantArtillerySound[]    = "tug/arty_distant_1.wav";
 
 // Global forward for other plugins to hook fire support calls
 GlobalForward FireSupportCalledForward;
+GlobalForward StatsCallResultForward, StatsRefundForward;    // gg2_stats2 (include/gg2_stats.inc)
 
 // Support type configuration
 enum struct SupportType
@@ -208,6 +210,9 @@ public void OnPluginStart()
         Param_Cell     // supportType
     );
 
+    StatsCallResultForward = new GlobalForward("FireSupport_OnCallResult", ET_Ignore, Param_Cell, Param_String, Param_Array, Param_Cell, Param_String);
+    StatsRefundForward     = new GlobalForward("FireSupport_OnRefund", ET_Ignore, Param_Cell);
+
     // Load translations
     LoadTranslations("firesupport.phrases");
 
@@ -288,6 +293,7 @@ public void OnEntityDestroyed(int entity)
             int client      = pack.ReadCell();
             pack.ReadCell();    // team
             int supportType = pack.ReadCell();
+            SendStatsCallResult(client, supportType, NULL_VECTOR, false, "marker_destroyed");
             RefundPlayerCall(client, supportType);
             delete pack;
             gPendingFireSupport[entity] = null;
@@ -602,6 +608,7 @@ public Action Event_WeaponFire(Event event, const char[] name, bool dontBroadcas
     // landed as a plain smoke with no word of why; the player is now told (and see Timer_ShowStatus).
     if (!IsEnabledTeam[team][supportType])
     {
+        SendStatsCallResult(client, supportType, NULL_VECTOR, false, "team_cooldown");
         if (!IsFakeClient(client))
             CPrintToChat(client, "{olivedrab}[Fire Support]{default} Your team can't call this again for %d second(s); no strike called.",
                          RoundToCeil(gTeamReadyAt[team][supportType] - GetGameTime()));
@@ -612,6 +619,7 @@ public Action Event_WeaponFire(Event event, const char[] name, bool dontBroadcas
     int maxCount = (team == TEAM_SECURITY) ? gSupportTypes[supportType].securityCount : gSupportTypes[supportType].insurgentCount;
     if (maxCount > 0 && CountAvailableSupport[team][supportType] < 1)
     {
+        SendStatsCallResult(client, supportType, NULL_VECTOR, false, "team_limit");
         if (!IsFakeClient(client))
             CPrintToChat(client, "{olivedrab}[Fire Support]{default} Your team has used all its strikes this round; no strike called.");
         return Plugin_Handled;
@@ -620,6 +628,7 @@ public Action Event_WeaponFire(Event event, const char[] name, bool dontBroadcas
     // The marker still lands as a plain smoke grenade; only the strike is withheld
     if (IsPlayerOnCooldown(client))
     {
+        SendStatsCallResult(client, supportType, NULL_VECTOR, false, "player_cooldown");
         return Plugin_Handled;
     }
     StartPlayerCooldown(client, supportType);
@@ -779,6 +788,7 @@ public Action Timer_FindThrownGrenade(Handle timer, DataPack pack)
     if (grenadeEntity == -1)
     {
         // Couldn't find the grenade, fire support fails
+        SendStatsCallResult(client, supportType, NULL_VECTOR, false, "marker_lost");
         RefundPlayerCall(client, supportType);
         PlayConfigSound(client, team, gSupportTypes[supportType].failSound);
         PrintMessageToTeam(team, gSupportTypes[supportType].failMessage);
@@ -1135,6 +1145,7 @@ public bool CallFireSupport(int client, float ground[3], int supportType, int te
 
         // Track stats and notify external systems
         add_throw_to_db(client, supportType, team);
+        SendStatsCallResult(client, supportType, ground, true, "");
         SendFireSupportForward(client, team, supportType);
         SendDiscordNotification(client, supportType);
 
@@ -1161,6 +1172,7 @@ public bool CallFireSupport(int client, float ground[3], int supportType, int te
         return true;
     }
 
+    SendStatsCallResult(client, supportType, ground, true, "no_sky");
     return false;
 }
 
@@ -1239,6 +1251,10 @@ float GetPlayerCooldown(int client, int supportType)
 // A call that never turned into a strike: hand back the cooldown and take it off the tally.
 void RefundPlayerCall(int client, int supportType)
 {
+    Call_StartForward(StatsRefundForward);
+    Call_PushCell(client);
+    Call_Finish();
+
     gPlayerNextCall[client] = 0.0;
     if (gPlayerCalls[client][supportType] > 0)
         gPlayerCalls[client][supportType]--;
@@ -1873,6 +1889,20 @@ void add_throw_to_db(int client, int supportType, int team)
 // ============================================================================
 // Global Forward Functions
 // ============================================================================
+
+void SendStatsCallResult(int client, int supportType, const float target[3], bool hasTarget, const char[] failure)
+{
+    float pos[3];
+    if (hasTarget)
+        pos = target;
+    Call_StartForward(StatsCallResultForward);
+    Call_PushCell(client);
+    Call_PushString(gSupportTypes[supportType].weapon);
+    Call_PushArray(pos, 3);
+    Call_PushCell(hasTarget);
+    Call_PushString(failure);
+    Call_Finish();
+}
 
 void SendFireSupportForward(int client, int team, int supportType)
 {
