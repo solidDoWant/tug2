@@ -143,42 +143,60 @@ INSERT INTO kills (kill_id, round_id, killed_at, victim_steam_id, victim_bot_nam
                    victim_x, victim_y, victim_z, attacker_steam_id, attacker_bot_name, attacker_team,
                    attacker_bot_class_id, attacker_x, attacker_y, attacker_z, assister_steam_id, weapon_name, hitgroup,
                    headshot, domination, revenge, savior, offensive, defensive, damagebits, customkill,
-                   attacker_stance, attacker_aim) VALUES
+                   attacker_stance, attacker_aim, damage) VALUES
     (1, 1, '2026-11-25 17:02Z', NULL, 'Rifleman Jones', 'insurgents', 1, 100, 200, 10,
-     76561198000000001, NULL, 'security', NULL, 150, 260, 10, NULL, 'm4a1', 'head', true, false, false, false, true, false, 2, 0, 'crouched', 'sights'),
+     76561198000000001, NULL, 'security', NULL, 150, 260, 10, NULL, 'm4a1', 'head', true, false, false, false, true, false, 2, 0, 'crouched', 'sights', 100),
     (2, 1, '2026-11-25 17:03Z', NULL, 'Rifleman Smith', 'insurgents', 1, 110, 210, 10,
-     76561198000000001, NULL, 'security', NULL, 150, 260, 10, NULL, 'm4a1', 'chest', false, false, false, false, true, false, 2, 0, 'standing', 'hip'),
+     76561198000000001, NULL, 'security', NULL, 150, 260, 10, NULL, 'm4a1', 'chest', false, false, false, false, true, false, 2, 0, 'standing', 'hip', 100),
     (3, 1, '2026-11-25 17:04Z', NULL, 'Rifleman Brown', 'insurgents', 1, 120, 220, 12,
-     76561198000000004, NULL, 'security', NULL, 160, 270, 12, 76561198000000001, 'ak74', 'stomach', false, false, false, false, false, true, 2, 0, 'prone', 'sights'),
+     76561198000000004, NULL, 'security', NULL, 160, 270, 12, 76561198000000001, 'ak74', 'stomach', false, false, false, false, false, true, 2, 0, 'prone', 'sights', 100),
     (4, 1, '2026-11-25 17:05Z', 76561198000000001, NULL, 'security', NULL, 150, 260, 10,
-     NULL, 'Rifleman Jones', 'insurgents', 1, 90, 190, 10, NULL, 'ak74', 'chest', false, false, false, false, false, false, 2, 0, NULL, NULL),
+     NULL, 'Rifleman Jones', 'insurgents', 1, 90, 190, 10, NULL, 'ak74', 'chest', false, false, false, false, false, false, 2, 0, NULL, NULL, 100),
     (5, 1, '2026-11-25 17:06Z', 76561198000000002, NULL, 'security', NULL, 155, 265, 10,
-     76561198000000001, NULL, 'security', NULL, 150, 260, 10, NULL, 'm4a1', 'right_leg', false, false, false, false, false, false, 2, 0, 'standing', 'hip'),
+     76561198000000001, NULL, 'security', NULL, 150, 260, 10, NULL, 'm4a1', 'right_leg', false, false, false, false, false, false, 2, 0, 'standing', 'hip', 100),
     (6, 1, '2026-11-25 17:08Z', 76561198000000002, NULL, 'security', NULL, 155, 265, 10,
-     76561198000000002, NULL, 'security', NULL, 155, 265, 10, NULL, 'grenade_m67', 'generic', false, false, false, false, false, false, 64, 0, 'standing', 'hip'),
+     76561198000000002, NULL, 'security', NULL, 155, 265, 10, NULL, 'grenade_m67', 'generic', false, false, false, false, false, false, 64, 0, 'standing', 'hip', 100),
     (7, 1, '2026-11-25 17:09Z', 76561198000000004, NULL, 'security', NULL, 170, 280, -50,
-     NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, false, false, false, false, false, false, 32, 0, NULL, NULL),
+     NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, false, false, false, false, false, false, 32, 0, NULL, NULL, 28),
     (8, 2, '2026-11-25 17:20Z', NULL, 'Rifleman Jones', 'insurgents', 1, 300, 400, 0,
-     76561198000000002, NULL, 'security', NULL, 320, 420, 0, NULL, 'ak74', 'head', true, false, false, false, true, false, 2, 0, 'standing', 'sights'),
+     76561198000000002, NULL, 'security', NULL, 320, 420, 0, NULL, 'ak74', 'head', true, false, false, false, true, false, 2, 0, 'standing', 'sights', 100),
     (9, 2, '2026-11-25 17:25Z', 76561198000000004, NULL, 'security', NULL, 330, 430, 0,
-     NULL, 'Rifleman Smith', 'insurgents', 1, 350, 450, 0, NULL, 'ak74', 'chest', false, false, false, false, false, false, 2, 0, NULL, NULL),
+     NULL, 'Rifleman Smith', 'insurgents', 1, 350, 450, 0, NULL, 'ak74', 'chest', false, false, false, false, false, false, 2, 0, NULL, NULL, 100),
     (10, 3, '2026-11-26 00:06Z', NULL, 'Rifleman Lee', 'insurgents', 1, 500, 600, 5,
-     76561198000000001, NULL, 'security', NULL, 520, 620, 5, NULL, 'm4a1', 'chest', false, false, false, false, true, false, 2, 0, 'standing', 'sights');
+     76561198000000001, NULL, 'security', NULL, 520, 620, 5, NULL, 'm4a1', 'chest', false, false, false, false, true, false, 2, 0, 'standing', 'sights', 100);
 INSERT INTO team_kill_forgives VALUES (5, '2026-11-25 17:06:10Z');
 
-INSERT INTO v2_player_rounds (round_id, steam_id, score, capture_ticks, suppressions, times_suppressed, damage_taken) VALUES
-    (1, 76561198000000001, 50, 4, 3, 1, 80), (1, 76561198000000002, 20, 4, 1, 0, 100),
-    (1, 76561198000000004, 15, 0, 0, 2, 100), (2, 76561198000000001, 30, 0, 2, 0, 0),
-    (2, 76561198000000002, 25, 0, 0, 1, 0), (2, 76561198000000004, 5, 0, 0, 0, 100),
-    (3, 76561198000000001, 10, 0, 0, 0, 0);
+INSERT INTO v2_player_rounds (round_id, steam_id, score, capture_ticks, suppressions, times_suppressed) VALUES
+    (1, 76561198000000001, 50, 4, 3, 1), (1, 76561198000000002, 20, 4, 1, 0),
+    (1, 76561198000000004, 15, 0, 0, 2), (2, 76561198000000001, 30, 0, 2, 0),
+    (2, 76561198000000002, 25, 0, 0, 1), (2, 76561198000000004, 5, 0, 0, 0),
+    (3, 76561198000000001, 10, 0, 0, 0);
 INSERT INTO v2_player_round_weapons (round_id, steam_id, weapon_name, shots, shots_hit_enemy, shots_hit_friendly,
-                                  hits_head, hits_chest, hits_stomach, hits_arms, hits_legs, damage_enemy,
-                                  damage_friendly, reloads, deploys, seconds_drawn) VALUES
-    (1, 76561198000000001, 'm4a1', 600, 150, 2, 10, 60, 30, 30, 20, 3000, 40, 20, 3, 800),
-    (1, 76561198000000004, 'ak74', 100, 30, 0, 2, 15, 5, 5, 3, 600, 0, 4, 1, 850),
-    (2, 76561198000000001, 'm4a1', 300, 60, 0, 5, 30, 10, 10, 5, 1200, 0, 10, 1, 700),
-    (2, 76561198000000002, 'ak74', 200, 50, 1, 6, 20, 10, 10, 4, 1000, 25, 8, 1, 800),
-    (3, 76561198000000001, 'm4a1', 50, 10, 0, 1, 5, 2, 1, 1, 200, 0, 2, 1, 500);
+                                  reloads, deploys, seconds_drawn) VALUES
+    (1, 76561198000000001, 'm4a1', 600, 150, 2, 20, 3, 800),
+    (1, 76561198000000004, 'ak74', 100, 30, 0, 4, 1, 850),
+    (2, 76561198000000001, 'm4a1', 300, 60, 0, 10, 1, 700),
+    (2, 76561198000000002, 'ak74', 200, 50, 1, 8, 1, 800),
+    (3, 76561198000000001, 'm4a1', 50, 10, 0, 2, 1, 500);
+-- Hits that did not kill: per player, weapon and round, so many on each body part at 20 damage each,
+-- and one on a teammate; plus a fall. With the kills' killing blows these make the damage totals.
+INSERT INTO hits (round_id, hit_at, victim_steam_id, victim_bot_name, victim_team, victim_bot_class_id, attacker_steam_id,
+                  attacker_team, weapon_name, hitgroup, damage, health_after, damagebits, attacker_stance, attacker_aim)
+SELECT h.round_id, r.started_at + (row_number() OVER ()) * interval '1 second', NULL, 'Rifleman Jones', 'insurgents', 1,
+       h.steam_id, 'security', h.weapon_name, g.hitgroup::hitgroup, 20, 80, 2, 'standing', 'sights'
+FROM (VALUES (1, 76561198000000001, 'm4a1', 10, 60, 30, 30, 20), (1, 76561198000000004, 'ak74', 2, 15, 5, 5, 3),
+             (2, 76561198000000001, 'm4a1', 5, 30, 10, 10, 5), (2, 76561198000000002, 'ak74', 6, 20, 10, 10, 4),
+             (3, 76561198000000001, 'm4a1', 1, 5, 2, 1, 1)) h(round_id, steam_id, weapon_name, head, chest, stomach, arms, legs)
+JOIN rounds r USING (round_id)
+CROSS JOIN LATERAL (SELECT 'head' AS hitgroup, generate_series(1, h.head) UNION ALL SELECT 'chest', generate_series(1, h.chest)
+                    UNION ALL SELECT 'stomach', generate_series(1, h.stomach) UNION ALL SELECT 'left_arm', generate_series(1, h.arms)
+                    UNION ALL SELECT 'right_leg', generate_series(1, h.legs)) g;
+INSERT INTO hits (round_id, hit_at, victim_steam_id, victim_team, attacker_steam_id, attacker_team, weapon_name, hitgroup,
+                  damage, health_after, damagebits, attacker_stance, attacker_aim) VALUES
+    (1, '2026-11-25 17:05:30Z', 76561198000000002, 'security', 76561198000000001, 'security', 'm4a1', 'chest', 40, 60, 2, 'standing', 'hip'),
+    (2, '2026-11-25 17:21Z', 76561198000000001, 'security', 76561198000000002, 'security', 'ak74', 'left_arm', 25, 75, 2, 'crouched', 'sights');
+INSERT INTO hits (round_id, hit_at, victim_steam_id, victim_team, hitgroup, damage, health_after, damagebits) VALUES
+    (1, '2026-11-25 17:01Z', 76561198000000001, 'security', 'generic', 12, 88, 32);
 
 INSERT INTO revives (revive_id, round_id, started_at, revived_at, reviver_steam_id, revived_steam_id, method) VALUES
     (1, 1, '2026-11-25 17:06:20Z', '2026-11-25 17:06:30Z', 76561198000000001, 76561198000000002, 'defib'),

@@ -49,7 +49,7 @@ DECLARE
         'v2_maps', 'game_modes', 'theaters', 'weapon_types', 'weapons', 'bot_classes', 'items', 'players', 'sessions',
         'name_changes', 'server_builds', 'server_boots', 'map_runs', 'rounds', 'survival_levels',
         'counterattacks', 'v2_player_rounds', 'v2_player_round_weapons', 'player_spans', 'spawns',
-        'spawn_items', 'kills', 'team_kill_forgives', 'revives', 'revive_helpers', 'heals',
+        'spawn_items', 'kills', 'hits', 'team_kill_forgives', 'revives', 'revive_helpers', 'heals',
         'heal_holds', 'v2_fire_support_calls', 'objective_events', 'objective_participants'
     ];
     have_v2 boolean := to_regproc('stats_round_id') IS NOT NULL;
