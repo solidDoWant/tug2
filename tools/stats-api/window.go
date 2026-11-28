@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"regexp"
@@ -9,19 +8,12 @@ import (
 	"time"
 )
 
-// Stats over a period (issue #10). The lifetime totals stay the default; with
-// ?period= or ?since=/?until= an endpoint sums the per-round history the
-// plugins record next to them instead:
-//
-//	players, player weapons, weapons, accuracy  player_rounds, player_round_weapons (gg2_mstats2)
-//	medics                                      medic_rounds (gg2_medic_tracker)
-//	teamkills, teamkill weapons                 player_tk_logs (gg2_teamkill)
-//	fire support                                fire_support_calls (FireSupport)
-//
-// History only exists from when each plugin started recording it, so a
-// windowed response says where its data starts (WindowInfo.HistorySince); a
-// window reaching back before that is incomplete, and lifetime totals are the
-// only record of earlier play.
+// Stats over a period. The lifetime views are the default; with ?period= or
+// ?since=/?until= an endpoint sums the per-round views over their `at` column
+// instead (v_player_round_stats, v_player_round_weapon_stats), or filters the
+// event rows it reads on their own time. Per-round history reaches back to
+// 2026-11 for the core stats and 2025-12 for team kills; earlier play exists
+// only in the lifetime totals.
 
 // PeriodInput is the shared time-window query for endpoints that support one.
 type PeriodInput struct {
@@ -39,10 +31,14 @@ type Window struct {
 type WindowInfo struct {
 	Since time.Time `json:"since"`
 	Until time.Time `json:"until"`
-	// HistorySince is the earliest time the history behind this endpoint has
-	// data for, or null if it has none yet. A window starting before it only
-	// covers the part from then on.
-	HistorySince *time.Time `json:"history_since"`
+}
+
+// info describes w for a response, or nil for all time.
+func (w *Window) info() *WindowInfo {
+	if w == nil {
+		return nil
+	}
+	return &WindowInfo{Since: w.Since, Until: w.Until}
 }
 
 var errWindow = errors.New("invalid time window")
@@ -99,47 +95,13 @@ func parseWindowTime(s string) (time.Time, error) {
 	return time.Time{}, fmt.Errorf("%w: %q is not a date (YYYY-MM-DD) or RFC 3339 time", errWindow, s)
 }
 
-// sqlTime formats a bound as an absolute time (RFC 3339 in UTC), sent as text
-// and cast to timestamptz in SQL.
-func sqlTime(t time.Time) string {
-	return t.UTC().Format(time.RFC3339Nano)
-}
-
 // bind appends the window's bounds to args and returns a function that
-// restricts a timestamp column to the window, for use as many times as a
-// query needs. The columns hold wall-clock times in the session's time zone
-// (see timezone.go), so each bound is converted to that zone once, in SQL,
-// leaving the column bare for its index.
+// restricts a timestamptz column to the window, for use as many times as a
+// query needs.
 func (w *Window) bind(args *[]any) func(column string) string {
-	*args = append(*args, sqlTime(w.Since), sqlTime(w.Until))
+	*args = append(*args, w.Since, w.Until)
 	since, until := len(*args)-1, len(*args)
 	return func(column string) string {
-		return fmt.Sprintf("(%s >= $%d::timestamptz::timestamp AND %s < $%d::timestamptz::timestamp)", column, since, column, until)
+		return fmt.Sprintf("(%s >= $%d::timestamptz AND %s < $%d::timestamptz)", column, since, column, until)
 	}
-}
-
-// historySources maps an endpoint family to the earliest-row query of the
-// history it reads.
-var historySources = map[string]string{
-	"players":     `SELECT MIN(recorded_at) FROM player_rounds`,
-	"medics":      `SELECT MIN(recorded_at) FROM medic_rounds`,
-	"teamkills":   `SELECT MIN(created_at) FROM player_tk_logs`,
-	"firesupport": `SELECT MIN(called_at) FROM fire_support_calls`,
-}
-
-// WindowInfo describes w for a response, with where source's history starts.
-func (s *Store) WindowInfo(ctx context.Context, w *Window, source string) (*WindowInfo, error) {
-	if w == nil {
-		return nil, nil
-	}
-	info := &WindowInfo{Since: w.Since, Until: w.Until}
-	var first *time.Time
-	if err := s.pool.QueryRow(ctx, historySources[source]).Scan(&first); err != nil {
-		return nil, err
-	}
-	if first != nil {
-		t := first.UTC()
-		info.HistorySince = &t
-	}
-	return info, nil
 }

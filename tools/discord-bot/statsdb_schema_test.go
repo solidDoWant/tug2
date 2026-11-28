@@ -118,20 +118,24 @@ func TestRefreshQueryStatsDoc(t *testing.T) {
 	}
 }
 
-// grantedTables reads the allowed table list from discord_bot_grants.sql.
+// grantedTables reads the table lists from discord_bot_grants.sql: the ones
+// granted everywhere, the old stats tables and the stats v2 ones (each granted
+// where it applies).
 func grantedTables(t *testing.T) []string {
 	t.Helper()
 	sql, err := os.ReadFile(filepath.Join(pgsqlScripts, "discord_bot_grants.sql"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	list := regexp.MustCompile(`(?s)allowed text\[\] := ARRAY\[(.*?)\];`).FindSubmatch(sql)
-	if list == nil {
-		t.Fatal("no allowed table list in discord_bot_grants.sql")
-	}
 	var tables []string
-	for _, m := range regexp.MustCompile(`'([a-z0-9_]+)'`).FindAllSubmatch(list[1], -1) {
-		tables = append(tables, string(m[1]))
+	for _, name := range []string{"allowed", "old_stats", "v2"} {
+		list := regexp.MustCompile(`(?s)` + name + ` text\[\] := ARRAY\[(.*?)\];`).FindSubmatch(sql)
+		if list == nil {
+			t.Fatalf("no %s table list in discord_bot_grants.sql", name)
+		}
+		for _, m := range regexp.MustCompile(`'([a-z0-9_]+)'`).FindAllSubmatch(list[1], -1) {
+			tables = append(tables, string(m[1]))
+		}
 	}
 	return tables
 }
@@ -260,6 +264,21 @@ func TestSchemaFromMigrations(t *testing.T) {
 	for server, schema := range map[string]string{"main": "public", "test": "insurgency-test"} {
 		if schemas[server], err = db.Schema(ctx, schema); err != nil {
 			t.Fatal(err)
+		}
+	}
+	// Stats v2 (issue #44): a server that records it shows the v2 tables and v_* views, which
+	// include the old history, instead of the old stats tables; old_* views are plumbing.
+	for server, v2 := range map[string]bool{"main": false, "test": true} {
+		has := map[string]bool{}
+		for _, table := range schemas[server] {
+			has[table.Name] = true
+			if strings.HasPrefix(table.Name, "old_") {
+				t.Errorf("%s: the bot can read %s: old_* views must not be granted", server, table.Name)
+			}
+		}
+		if has["kills"] != v2 || has["v_player_lifetime"] != v2 || has["player_stats"] == v2 {
+			t.Errorf("%s: stats v2 = %v, but the bot sees kills=%v v_player_lifetime=%v player_stats=%v",
+				server, v2, has["kills"], has["v_player_lifetime"], has["player_stats"])
 		}
 	}
 	doc := renderSchemaDoc([]string{"main", "test"}, schemas)

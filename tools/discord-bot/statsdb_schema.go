@@ -36,8 +36,10 @@ const schemaDocLoading = "The table descriptions haven't loaded yet. List the ta
 
 const (
 	schemaDocHeader = "Tables (PostgreSQL; each server has its own copy, selected by the server parameter, so never schema-qualify names). " +
-		"Each table and column is described below; timestamps are UTC (timestamp without time zone)."
-	schemaDocFooter = "Counts are lifetime totals per server. For K/D, divide by NULLIF(deaths, 0) and say how you treated players with no deaths; " +
+		"Each table and column is described below; timestamps are shown in UTC."
+	schemaDocFooter = "Where the v_* views exist (stats v2), use them for any total: v_player_lifetime for all-time totals, v_player_round_stats summed over at for a period, " +
+		"v_kills (not kills) for counting deaths by kind; nothing derived is stored in the tables. Otherwise counts are lifetime totals per server. " +
+		"For K/D, divide by NULLIF(deaths, 0) and say how you treated players with no deaths; " +
 		"for averages, consider leaving out players with very few kills or deaths and say so."
 )
 

@@ -50,10 +50,10 @@ func TestWindowBind(t *testing.T) {
 	w := &Window{Since: time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC), Until: time.Date(2026, 11, 2, 3, 4, 5, 0, time.UTC)}
 	args := []any{"x"}
 	in := w.bind(&args)
-	if got := in("r.recorded_at"); got != "(r.recorded_at >= $2::timestamptz::timestamp AND r.recorded_at < $3::timestamptz::timestamp)" {
+	if got := in("s.at"); got != "(s.at >= $2::timestamptz AND s.at < $3::timestamptz)" {
 		t.Errorf("cond = %s", got)
 	}
-	if len(args) != 3 || args[1] != "2026-11-01T00:00:00Z" || args[2] != "2026-11-02T03:04:05Z" {
+	if len(args) != 3 || args[1] != w.Since || args[2] != w.Until {
 		t.Errorf("args = %v", args)
 	}
 }

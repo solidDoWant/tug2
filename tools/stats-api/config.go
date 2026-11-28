@@ -31,7 +31,7 @@ type Config struct {
 	WriteTimeout time.Duration
 
 	// CacheControl is the Cache-Control header stamped on successful (2xx) GET
-	// responses to /api/v1/* so a shared cache (a CDN such as Cloudflare) can
+	// responses to /api/v2/* so a shared cache (a CDN such as Cloudflare) can
 	// serve repeated reads without hitting the origin. An empty value disables
 	// the header entirely. The default keeps shared caches no more than ~60s
 	// stale, which is the intended freshness floor for this data.

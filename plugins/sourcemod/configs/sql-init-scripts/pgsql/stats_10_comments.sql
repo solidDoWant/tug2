@@ -17,6 +17,7 @@ COMMENT ON VIEW v_players IS 'Every known player with current name and first/las
 COMMENT ON VIEW v_rounds IS 'Every round with its map: v2 rounds plus old results before the cutover (map, end time and winner only).';
 COMMENT ON VIEW v_maps IS 'Per map: rounds, results, play time and when last played.';
 COMMENT ON VIEW v_team_kills IS 'Every team kill: v2 plus old logged ones before the cutover.';
+COMMENT ON VIEW v_fire_support_calls IS 'Every fire support call (failed ones too): v2 plus old logged ones before the cutover (time and caller only).';
 COMMENT ON VIEW v_bot_weapon_kills IS 'Kills of human players by bots, per bot name and weapon, all time.';
 
 DO $$
@@ -95,7 +96,8 @@ BEGIN
           AND a.attnum > 0 AND NOT a.attisdropped
     LOOP
         -- Views that repeat a table's columns reuse their descriptions.
-        base := CASE r.relname WHEN 'v_kills' THEN 'kills'::regclass WHEN 'v_hits' THEN 'hits'::regclass END;
+        base := CASE r.relname WHEN 'v_kills' THEN 'kills'::regclass WHEN 'v_hits' THEN 'hits'::regclass
+                               WHEN 'v_fire_support_calls' THEN 'v2_fire_support_calls'::regclass END;
         IF base IS NOT NULL AND EXISTS (SELECT 1 FROM pg_attribute WHERE attrelid = base AND attname = r.attname) THEN
             EXECUTE format('COMMENT ON COLUMN %I.%I IS %L', r.relname, r.attname,
                            col_description(base, (SELECT attnum FROM pg_attribute WHERE attrelid = base AND attname = r.attname)));
