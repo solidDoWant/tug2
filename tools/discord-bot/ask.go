@@ -93,7 +93,7 @@ func (b *Bot) onAsk(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	if !slices.Contains(b.cfg.ChannelIDs, i.ChannelID) {
 		ch, _ = b.channel(i.ChannelID)
 	}
-	threadID, ok := route(b.cfg.ChannelIDs, s.State.User.ID, i.ChannelID, ch, true)
+	threadID, ok := route(b.cfg.ChannelIDs, s.State.User.ID, i.ChannelID, ch, true, nil)
 	if !ok {
 		b.ephemeral(i, askElsewhereMessage(botChannelsIn(s, b.cfg.ChannelIDs, i.GuildID)))
 		return

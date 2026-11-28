@@ -344,18 +344,23 @@ func TestRouteMultipleChannels(t *testing.T) {
 	thread := func(id, parent, owner string) *discordgo.Channel {
 		return &discordgo.Channel{ID: id, ParentID: parent, OwnerID: owner, Type: discordgo.ChannelTypeGuildPublicThread}
 	}
+	notPosted := func(string) bool { return false } // the bot hasn't joined any user thread
 	for _, c := range botChans {
-		if id, ok := route(botChans, bot, c, nil, true); !ok || id != "" {
+		if id, ok := route(botChans, bot, c, nil, true, notPosted); !ok || id != "" {
 			t.Errorf("mention in bot channel %s: (%q, %v)", c, id, ok)
 		}
 	}
-	if id, ok := route(botChans, bot, "300", thread("300", "101", bot), false); !ok || id != "300" {
+	if id, ok := route(botChans, bot, "300", thread("300", "101", bot), false, notPosted); !ok || id != "300" {
 		t.Errorf("follow-up in a bot thread of the second channel: (%q, %v)", id, ok)
 	}
-	if _, ok := route(botChans, bot, "301", thread("301", "101", user), false); ok {
+	if _, ok := route(botChans, bot, "301", thread("301", "101", user), false, notPosted); ok {
 		t.Error("unaddressed message in a user thread of the second channel was answered")
 	}
-	if _, ok := route(botChans, bot, "555", &discordgo.Channel{ID: "555", Type: discordgo.ChannelTypeGuildText}, true); ok {
+	posted := func(string) bool { return true }
+	if id, ok := route(botChans, bot, "301", thread("301", "101", user), false, posted); !ok || id != "301" {
+		t.Errorf("follow-up in a user thread of the second channel the bot has joined: (%q, %v)", id, ok)
+	}
+	if _, ok := route(botChans, bot, "555", &discordgo.Channel{ID: "555", Type: discordgo.ChannelTypeGuildText}, true, notPosted); ok {
 		t.Error("mention in an unlisted channel was answered")
 	}
 }
@@ -410,25 +415,46 @@ func TestRoute(t *testing.T) {
 		channelID string
 		ch        *discordgo.Channel
 		mentioned bool
+		posted    bool // the bot has posted in the thread
 		thread    string
 		ok        bool
 	}{
-		{"bot channel mention starts a thread", botChan, nil, true, "", true},
-		{"bot channel without mention", botChan, nil, false, "", false},
-		{"bot thread follow-up", "200", thread("200", botChan, bot), false, "200", true},
-		{"user thread mention", "201", thread("201", botChan, user), true, "201", true},
-		{"user thread without mention", "201", thread("201", botChan, user), false, "201", false},
-		{"private user thread mention", "202", &discordgo.Channel{ID: "202", ParentID: botChan, OwnerID: user, Type: discordgo.ChannelTypeGuildPrivateThread}, true, "202", true},
-		{"thread in another channel", "203", thread("203", "555", user), true, "", false},
-		{"other channel", "555", &discordgo.Channel{ID: "555", Type: discordgo.ChannelTypeGuildText}, true, "", false},
+		{"bot channel mention starts a thread", botChan, nil, true, false, "", true},
+		{"bot channel without mention", botChan, nil, false, false, "", false},
+		{"bot thread follow-up", "200", thread("200", botChan, bot), false, false, "200", true},
+		{"user thread mention", "201", thread("201", botChan, user), true, false, "201", true},
+		{"user thread without mention", "201", thread("201", botChan, user), false, false, "201", false},
+		{"user thread follow-up after the bot joined", "201", thread("201", botChan, user), false, true, "201", true},
+		{"private user thread mention", "202", &discordgo.Channel{ID: "202", ParentID: botChan, OwnerID: user, Type: discordgo.ChannelTypeGuildPrivateThread}, true, false, "202", true},
+		{"thread in another channel", "203", thread("203", "555", user), true, true, "", false},
+		{"other channel", "555", &discordgo.Channel{ID: "555", Type: discordgo.ChannelTypeGuildText}, true, true, "", false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, ok := route([]string{botChan}, bot, tt.channelID, tt.ch, tt.mentioned)
+			postedIn := func(id string) bool {
+				if id != tt.ch.ID {
+					t.Errorf("postedIn(%q), want the message's thread %q", id, tt.ch.ID)
+				}
+				return tt.posted
+			}
+			got, ok := route([]string{botChan}, bot, tt.channelID, tt.ch, tt.mentioned, postedIn)
 			if got != tt.thread || ok != tt.ok {
 				t.Errorf("route = (%q, %v), want (%q, %v)", got, ok, tt.thread, tt.ok)
 			}
 		})
+	}
+}
+
+func TestHasPostFrom(t *testing.T) {
+	const bot = "900"
+	user := &discordgo.User{ID: "901"}
+	msgs := []*discordgo.Message{{Author: user}, {}, {Author: user}}
+	if hasPostFrom(msgs, bot) {
+		t.Error("thread with only user messages counted as joined")
+	}
+	msgs = append(msgs, &discordgo.Message{Author: &discordgo.User{ID: bot, Bot: true}})
+	if !hasPostFrom(msgs, bot) {
+		t.Error("thread with a bot reply not counted as joined")
 	}
 }
 

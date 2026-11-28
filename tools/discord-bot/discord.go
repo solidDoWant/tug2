@@ -140,8 +140,9 @@ func addressesBot(m *discordgo.Message, botID string) bool {
 }
 
 // onMessage answers an @mention or reply to the bot in a configured channel
-// by starting a thread, any message in a thread the bot started there, and an
-// @mention or reply to the bot in a thread someone else started there.
+// by starting a thread, any message in a thread the bot started there or has
+// already posted in, and an @mention or reply to the bot in any other thread
+// there.
 func (b *Bot) onMessage(s *discordgo.Session, m *discordgo.MessageCreate) {
 	if m.Author == nil || m.Author.Bot || m.GuildID == "" {
 		return
@@ -154,7 +155,7 @@ func (b *Bot) onMessage(s *discordgo.Session, m *discordgo.MessageCreate) {
 			return
 		}
 	}
-	threadID, ok := route(b.cfg.ChannelIDs, s.State.User.ID, m.ChannelID, ch, b.mentionsMe(m.Message))
+	threadID, ok := route(b.cfg.ChannelIDs, s.State.User.ID, m.ChannelID, ch, b.mentionsMe(m.Message), b.postedIn)
 	if !ok {
 		return
 	}
@@ -177,16 +178,47 @@ func (b *Bot) onMessage(s *discordgo.Session, m *discordgo.MessageCreate) {
 // are the configured bot channels. mentioned means the message is addressed
 // to the bot: an @mention or a reply to it. In a bot channel it answers those
 // in a new thread (threadID ""). In a thread of a bot channel it answers
-// every message if the bot started the thread, and only those addressed to it
-// if someone else did, since people may be talking among themselves there. Elsewhere it ignores the message.
-func route(botChannelIDs []string, botUserID, channelID string, ch *discordgo.Channel, mentioned bool) (threadID string, ok bool) {
+// every message if the bot started the thread or has joined the conversation
+// (postedIn: it has a message among the thread's recent history, i.e.
+// someone mentioned it there before), and otherwise only those addressed to
+// it. In either kind of thread the model still stays silent when a message
+// isn't meant for it. postedIn is called only when needed, since it reads the
+// thread. Elsewhere it ignores the message.
+func route(botChannelIDs []string, botUserID, channelID string, ch *discordgo.Channel, mentioned bool, postedIn func(threadID string) bool) (threadID string, ok bool) {
 	if slices.Contains(botChannelIDs, channelID) {
 		return "", mentioned
 	}
 	if ch == nil || !ch.IsThread() || !slices.Contains(botChannelIDs, ch.ParentID) {
 		return "", false
 	}
-	return ch.ID, ch.OwnerID == botUserID || mentioned
+	return ch.ID, ch.OwnerID == botUserID || mentioned || postedIn(ch.ID)
+}
+
+// postedIn reports whether the bot has a message among a thread's recent
+// history (the HISTORY_MESSAGES it would read to answer). The bot keeps no
+// state, so this is how it knows it was brought into a thread someone else
+// started. A reply that has scrolled out of that window is no longer context
+// either, so the bot goes back to answering only mentions there.
+func (b *Bot) postedIn(threadID string) bool {
+	msgs, err := b.session.ChannelMessages(threadID, b.historyLimit(), "", "", "")
+	if err != nil {
+		slog.Warn("reading thread to check for the bot's replies", "thread", threadID, "err", err)
+		return false
+	}
+	return hasPostFrom(msgs, b.session.State.User.ID)
+}
+
+// hasPostFrom reports whether any of msgs was written by userID.
+func hasPostFrom(msgs []*discordgo.Message, userID string) bool {
+	return slices.ContainsFunc(msgs, func(m *discordgo.Message) bool { return m.Author != nil && m.Author.ID == userID })
+}
+
+// historyLimit is how many of a thread's messages are read as history.
+func (b *Bot) historyLimit() int {
+	if limit := b.cfg.HistoryMessages; limit > 0 && limit <= 100 {
+		return limit
+	}
+	return 100
 }
 
 func (b *Bot) startQuestion(userID string) bool {
@@ -413,11 +445,7 @@ func (b *Bot) history(threadID string) ([]Turn, error) {
 		msgs = append(msgs, starter)
 	}
 
-	limit := b.cfg.HistoryMessages
-	if limit <= 0 || limit > 100 {
-		limit = 100
-	}
-	recent, err := b.session.ChannelMessages(threadID, limit, "", "", "")
+	recent, err := b.session.ChannelMessages(threadID, b.historyLimit(), "", "", "")
 	if err != nil {
 		return nil, err
 	}
