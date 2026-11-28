@@ -25,6 +25,19 @@ JOIN rounds r USING (round_id)
 LEFT JOIN bot_classes vc ON vc.bot_class_id = k.victim_bot_class_id
 LEFT JOIN bot_classes ac ON ac.bot_class_id = k.attacker_bot_class_id;
 
+-- hits that did not kill (the killing blow is in v_kills), plus the bots' class names, whether the round
+-- was live, and the hit's kind as for a kill ('team_kill' is a hit on a teammate).
+CREATE OR REPLACE VIEW v_hits AS
+SELECT h.*,
+       vc.class_template AS victim_bot_class, ac.class_template AS attacker_bot_class,
+       (r.live_at IS NOT NULL AND h.hit_at >= r.live_at
+            AND (r.ended_at IS NULL OR h.hit_at <= r.ended_at)) AS during_live,
+       stats_kill_kind(h.attacker_steam_id, h.attacker_bot_name, h.victim_steam_id, h.attacker_team, h.victim_team) AS kind
+FROM hits h
+JOIN rounds r USING (round_id)
+LEFT JOIN bot_classes vc ON vc.bot_class_id = h.victim_bot_class_id
+LEFT JOIN bot_classes ac ON ac.bot_class_id = h.attacker_bot_class_id;
+
 -- Per-round results (stats_03_results.sql): cached rows plus the rounds not cached, computed live: exact at any moment.
 CREATE OR REPLACE VIEW player_round_results_current AS
 SELECT * FROM player_round_results

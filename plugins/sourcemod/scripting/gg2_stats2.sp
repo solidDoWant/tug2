@@ -72,15 +72,17 @@ enum
     T_FIRE,
     T_LEVELS,
     T_COUNTERATTACKS,
+    T_HITS,
     T_COUNT
 };
 
 char g_tableInsert[T_COUNT][] = {
-    "INSERT INTO kills (round_id, killed_at, victim_steam_id, victim_bot_name, victim_team, victim_bot_class_id, victim_x, victim_y, victim_z, attacker_steam_id, attacker_bot_name, attacker_team, attacker_bot_class_id, attacker_x, attacker_y, attacker_z, assister_steam_id, assister_bot_name, weapon_name, hitgroup, headshot, domination, revenge, savior, offensive, defensive, damagebits, customkill, attacker_stance, attacker_aim) VALUES ",
+    "INSERT INTO kills (round_id, killed_at, victim_steam_id, victim_bot_name, victim_team, victim_bot_class_id, victim_x, victim_y, victim_z, attacker_steam_id, attacker_bot_name, attacker_team, attacker_bot_class_id, attacker_x, attacker_y, attacker_z, assister_steam_id, assister_bot_name, weapon_name, hitgroup, headshot, domination, revenge, savior, offensive, defensive, damagebits, customkill, attacker_stance, attacker_aim, damage) VALUES ",
     "INSERT INTO player_spans (round_id, steam_id, started_at, ended_at, team, squad, squad_slot, class_template) VALUES ",
     "INSERT INTO v2_fire_support_calls (round_id, called_at, steam_id, support_type, target_x, target_y, target_z, failure_reason, refunded_at) VALUES ",
     "INSERT INTO survival_levels (round_id, level, reached_at) VALUES ",
-    "INSERT INTO counterattacks (round_id, control_point, started_at, ended_at, finale) VALUES "
+    "INSERT INTO counterattacks (round_id, control_point, started_at, ended_at, finale) VALUES ",
+    "INSERT INTO hits (round_id, hit_at, victim_steam_id, victim_bot_name, victim_team, victim_bot_class_id, victim_x, victim_y, victim_z, attacker_steam_id, attacker_bot_name, attacker_team, attacker_bot_class_id, attacker_x, attacker_y, attacker_z, weapon_name, hitgroup, damage, health_after, damagebits, attacker_stance, attacker_aim) VALUES "
 };
 
 char g_tableSuffix[T_COUNT][] = {
@@ -88,7 +90,8 @@ char g_tableSuffix[T_COUNT][] = {
     " ON CONFLICT DO NOTHING",
     "",
     " ON CONFLICT DO NOTHING",
-    " ON CONFLICT DO NOTHING"
+    " ON CONFLICT DO NOTHING",
+    ""
 };
 
 ArrayList g_rows[T_COUNT];    // VALUES tuples, each without its leading "((SELECT id FROM r), "
@@ -123,6 +126,8 @@ int   g_round;                // current round number; 0 = no round yet on this 
 float g_roundStart;
 bool  g_roundHumans;          // a human was on a team this round, so the round is written at all
 bool  g_roundOver;            // round_end fired; no spans until the next round_start
+bool  g_resuming;             // late load: waiting for the database to say which map run, round and sessions are open
+bool  g_skipMapStart;         // late load: OnMapStart follows OnPluginStart, but this map is already under way
 bool  g_closingRound;         // CloseAllAndFlush: the round's last rows (map end, next round, unload)
 float g_roundLive;            // engine time play started (round_freeze_end); 0 = not yet
 char  g_roundKey[1024];       // stats_round_id(...) for the current round
@@ -156,8 +161,16 @@ int   g_suppressions[MAXPLAYERS + 1];
 int   g_timesSuppressed[MAXPLAYERS + 1];
 int   g_enemiesFlashed[MAXPLAYERS + 1];
 int   g_teammatesFlashed[MAXPLAYERS + 1];
-int   g_damageTaken[MAXPLAYERS + 1];
-int   g_fallDamage[MAXPLAYERS + 1];
+// The health the killing blow took, from its player_hurt, for the kill row that player_death writes
+// next in the same tick.
+int   g_killDamage[MAXPLAYERS + 1];
+int   g_killDamageTick[MAXPLAYERS + 1] = { -1, ... };
+// Health just before the latest hit, and the tick it was read in. On a killing blow player_hurt's
+// dmg_health is the whole uncapped damage (561050 for one rifle headshot on test), so damage is
+// counted as health lost instead: the before value comes from OnTakeDamage, which runs in the same
+// tick just before the game applies the hit and fires player_hurt.
+int   g_healthBefore[MAXPLAYERS + 1];
+int   g_healthBeforeTick[MAXPLAYERS + 1] = { -1, ... };
 // What the game's round stats held at the last flush (they are cumulative within a round)
 int   g_lastScore[MAXPLAYERS + 1];
 int   g_lastCaptureTicks[MAXPLAYERS + 1];
@@ -169,13 +182,6 @@ enum
     W_SHOTS = 0,
     W_HIT_ENEMY,
     W_HIT_FRIENDLY,
-    W_HEAD,
-    W_CHEST,
-    W_STOMACH,
-    W_ARMS,
-    W_LEGS,
-    W_DMG_ENEMY,
-    W_DMG_FRIENDLY,
     W_RELOADS,
     W_DEPLOYS,
     W_MS_DRAWN,
@@ -245,7 +251,6 @@ public void OnPluginStart()
     HookEvent("player_death", Event_PlayerDeath, EventHookMode_Pre);
     HookEvent("player_hurt", Event_PlayerHurt);
     HookEvent("player_suppressed", Event_PlayerSuppressed);
-    HookEvent("player_falldamage", Event_PlayerFallDamage);
     HookEvent("player_blind", Event_PlayerBlind);
     HookEvent("player_disconnect", Event_PlayerDisconnect, EventHookMode_Pre);
     HookEvent("player_changename", Event_PlayerChangeName);
@@ -259,22 +264,78 @@ public void OnPluginStart()
     HookEvent("controlpoint_neutralized", Event_ControlPointNeutralized);
     HookEvent("object_destroyed", Event_ObjectDestroyed);
 
+    RegServerCmd("sm_stats2_status", Cmd_Status, "Prints gg2_stats2's recording state");
+
     CreateTimer(FLUSH_INTERVAL, Timer_Flush, _, TIMER_REPEAT);
     CreateTimer(1.0, Timer_Second, _, TIMER_REPEAT);
 
     Database.Connect(OnDatabaseConnected, "insurgency-stats");
     Database.Connect(OnAdminDatabaseConnected, "punitive-persistence");
 
-    // Late load: pick up the map and whoever is already here. The round number comes from the game.
-    if (IsServerProcessing() || GetClientCount(false) > 0)
+    // Late load: pick up the map, the round and whoever is already here. The round number comes from
+    // the game. The map and round start times are guesses until ResumeFromDatabase reads the real ones
+    // (game time stands still while the server is empty, so the map start can be minutes out), and
+    // nothing is written before then: rows recorded meanwhile wait in the buffers.
+    // A client in the game is the proof that the map has loaded and with it the gamerules entity, which
+    // GameRules_GetProp needs (it is a native error before then, e.g. when SourceMod reloads a changed
+    // plugin at a map change; gg2_hostname_rounds measured that looking the entity up does not work).
+    // A load mid-map with nobody in the game starts the map afresh at OnMapStart.
+    if (GetClientCount(true) > 0)
     {
+        g_skipMapStart = true;
+        g_resuming     = true;
+        // SteamIDs first: StartRound reads each human's round stats so far as the baseline.
+        for (int client = 1; client <= MaxClients; client++)
+            if (IsClientInGame(client))
+                SetClientSid(client);
         StartMap(GetEngineTime() - GetGameTime());
         if (GameRules_GetProp("m_iGameState") >= 3)
             StartRound(false);
         for (int client = 1; client <= MaxClients; client++)
-            if (IsClientInGame(client))
-                OnClientPostAdminCheck(client);
+            if (IsHuman(client) && HaveRound() && !g_roundOver && GetClientTeam(client) >= TEAM_SPECTATOR)
+                OpenSpan(client, GetClientTeam(client), GetEngineTime());
     }
+    for (int client = 1; client <= MaxClients; client++)
+        if (IsClientInGame(client))
+            OnClientPutInServer(client);
+}
+
+public Action Cmd_Status(int args)
+{
+    PrintToServer("[STATS2] ready=%d disabled=%d db=%d map_active=%d round=%d round_over=%d live=%d game_state=%d buffered=%d stmts=%d plain=%d",
+                  g_ready, g_disabled, g_db != null, g_mapActive, g_round, g_roundOver, IsLive(),
+                  GameRules_GetProp("m_iGameState"), g_bufferedRows, g_stmts.Length, g_plainStmts.Length);
+    PrintToServer("[STATS2] round key: %s", g_roundKey);
+    for (int client = 1; client <= MaxClients; client++)
+        if (IsClientInGame(client) && !IsFakeClient(client))
+            PrintToServer("[STATS2] client %d: human=%d team=%d", client, IsHuman(client), GetClientTeam(client));
+    return Plugin_Handled;
+}
+
+// Bots too: damage dealt to them is counted.
+public void OnClientPutInServer(int client)
+{
+    g_healthBeforeTick[client] = -1;
+    SDKHook(client, SDKHook_OnTakeDamage, OnTakeDamage_HealthBefore);
+}
+
+public Action OnTakeDamage_HealthBefore(int victim, int &attacker, int &inflictor, float &damage, int &damagetype)
+{
+    g_healthBefore[victim]     = GetClientHealth(victim);
+    g_healthBeforeTick[victim] = GetGameTickCount();
+    return Plugin_Continue;
+}
+
+// The health a player_hurt took away: dmg_health, capped at what the victim had left.
+int HealthLost(int victim, Event event)
+{
+    int dmg = event.GetInt("dmg_health");
+    if (g_healthBeforeTick[victim] == GetGameTickCount())
+    {
+        int lost = g_healthBefore[victim] - event.GetInt("health");
+        if (lost >= 0 && lost < dmg) dmg = lost;
+    }
+    return dmg;
 }
 
 public void OnPluginEnd()
@@ -372,8 +433,97 @@ public void OnTablesChecked(Database db, DBResultSet results, const char[] error
         return;
     }
     g_disabled = false;
-    g_ready = true;
     LogMessage("[STATS2] Recording into schema %s", schema);
+    if (g_resuming)
+        ResumeFromDatabase();
+    else
+        g_ready = true;
+}
+
+// Late load, part two: the map run and round this server already wrote, by this boot and map, and the
+// sessions still open. Times come back as seconds after the boot, which a float holds to the
+// millisecond; a Unix time in a float would be 2 minutes out.
+void ResumeFromDatabase()
+{
+    char map[140], q[1024];
+    Quote(g_map, map, sizeof(map));
+    Format(q, sizeof(q),
+           "SELECT extract(epoch FROM m.booted_at)::bigint, extract(epoch FROM m.started_at - m.booted_at)::float8, "
+         ... "extract(epoch FROM r.started_at - m.booted_at)::float8, extract(epoch FROM r.live_at - m.booted_at)::float8, "
+         ... "(r.ended_at IS NOT NULL)::int "
+         ... "FROM map_runs m LEFT JOIN rounds r ON r.map_run_id = m.map_run_id AND r.round_number = %d "
+         ... "WHERE m.booted_at BETWEEN to_timestamp(%d) - interval '5 seconds' AND to_timestamp(%d) + interval '5 seconds' "
+         ... "AND m.map_name = %s AND m.game_over_at IS NULL ORDER BY m.started_at DESC LIMIT 1",
+           g_round, g_bootUnix, g_bootUnix, map);
+    g_db.Query(OnResumeMapRun, q);
+}
+
+public void OnResumeMapRun(Database db, DBResultSet results, const char[] error, any data)
+{
+    if (results == null)
+    {
+        LogError("[STATS2] Late load: could not read the open map run (%s); recording under a new one", error);
+        FinishResume();
+        return;
+    }
+    if (results.FetchRow())
+    {
+        // The boot as first recorded, so times written from now on line up with the ones before.
+        g_bootUnix = results.FetchInt(0);
+        g_mapStart = results.FetchFloat(1);
+        if (!results.IsFieldNull(2))
+        {
+            g_roundStart = results.FetchFloat(2);
+            if (!results.IsFieldNull(3)) g_roundLive = results.FetchFloat(3);
+            if (results.FetchInt(4) != 0) g_roundOver = true;
+        }
+        if (g_round > 0) BuildRoundKey();
+    }
+
+    // Oldest first, so a player with more than one open session resumes the latest.
+    char q[300];
+    Format(q, sizeof(q),
+           "SELECT steam_id::text, extract(epoch FROM connected_at - to_timestamp(%d))::float8 FROM sessions "
+         ... "WHERE disconnected_at IS NULL AND connected_at >= to_timestamp(%d) - interval '5 seconds' ORDER BY connected_at",
+           g_bootUnix, g_bootUnix);
+    g_db.Query(OnResumeSessions, q);
+}
+
+public void OnResumeSessions(Database db, DBResultSet results, const char[] error, any data)
+{
+    if (results == null)
+        LogError("[STATS2] Late load: could not read open sessions (%s); starting new ones", error);
+    else
+    {
+        char sid[24];
+        while (results.FetchRow())
+        {
+            results.FetchString(0, sid, sizeof(sid));
+            g_sessionStart.SetValue(sid, results.FetchFloat(1));
+        }
+    }
+    FinishResume();
+}
+
+void FinishResume()
+{
+    g_resuming = false;
+    // Loaded with the round already live and no live time recorded: the game went live before this
+    // load, at a time nobody saw. This load is the earliest the round is known to be live, so it is
+    // written now, before a later load or the round end could only offer a later time.
+    if (HaveRound() && !g_roundOver && IsLive() && g_roundLive > 0.0)
+    {
+        char ts[64], stmt[200];
+        Ts(g_roundLive, ts, sizeof(ts));
+        Format(stmt, sizeof(stmt), "UPDATE rounds SET live_at = COALESCE(live_at, %s) WHERE round_id = (SELECT id FROM r)", ts);
+        AddStmt(stmt);
+    }
+    // Anyone without an open session gets one, as if they had just joined.
+    for (int client = 1; client <= MaxClients; client++)
+        if (IsHuman(client))
+            StartSessionIfNew(client);
+    g_ready = true;
+    LogMessage("[STATS2] Late load: resumed round %d", g_round);
 }
 
 public void OnAdminDatabaseConnected(Database db, const char[] error, any data)
@@ -739,6 +889,11 @@ public Action Timer_Retry(Handle timer, DataPack pack)
 
 public void OnMapStart()
 {
+    if (g_skipMapStart)
+    {
+        g_skipMapStart = false;
+        return;
+    }
     float now = GetEngineTime();
     g_loadSeconds = g_lastMapEnd >= 0.0 ? now - g_lastMapEnd : -1.0;
     StartMap(now);
@@ -993,18 +1148,34 @@ int Ins_ObjectiveResource_GetPropSafe(const char[] prop)
 
 public void OnClientPostAdminCheck(int client)
 {
+    if (!SetClientSid(client)) return;
+    // While a late load resumes, FinishResume starts the sessions once it knows which are open.
+    if (g_resuming) return;
+    // Joined mid-round already on a team: open their span.
+    if (StartSessionIfNew(client) && HaveRound() && !g_roundOver && GetClientTeam(client) >= TEAM_SPECTATOR)
+        OpenSpan(client, GetClientTeam(client), GetEngineTime());
+}
+
+// Clears the client's counters and reads their SteamID64. False for bots and unauthenticated players.
+bool SetClientSid(int client)
+{
     g_sid[client][0] = '\0';
     ResetClientCounters(client);
-    if (IsFakeClient(client)) return;
+    if (IsFakeClient(client)) return false;
     if (!GetClientAuthId(client, AuthId_SteamID64, g_sid[client], sizeof(g_sid[])) || !IsAllDigits(g_sid[client]))
     {
         g_sid[client][0] = '\0';
-        return;
+        return false;
     }
+    return true;
+}
 
-    // A new session unless this SteamID is already in one (a map change re-runs this callback).
+// A new session unless this SteamID is already in one (a map change re-runs OnClientPostAdminCheck).
+// True when it started one.
+bool StartSessionIfNew(int client)
+{
     float start;
-    if (g_sessionStart.GetValue(g_sid[client], start)) return;
+    if (g_sessionStart.GetValue(g_sid[client], start)) return false;
     start = GetEngineTime();
     g_sessionStart.SetValue(g_sid[client], start);
 
@@ -1030,10 +1201,7 @@ public void OnClientPostAdminCheck(int client)
                g_sid[client], ts, qip);
         g_adminDb.Query(OnAdminQuery, q);
     }
-
-    // Joined mid-round already on a team (late load): open their span.
-    if (HaveRound() && !g_roundOver && GetClientTeam(client) >= TEAM_SPECTATOR)
-        OpenSpan(client, GetClientTeam(client), GetEngineTime());
+    return true;
 }
 
 public void OnAdminQuery(Database db, DBResultSet results, const char[] error, any data)
@@ -1114,8 +1282,7 @@ void ResetClientCounters(int client)
     g_timesSuppressed[client]  = 0;
     g_enemiesFlashed[client]   = 0;
     g_teammatesFlashed[client] = 0;
-    g_damageTaken[client]      = 0;
-    g_fallDamage[client]       = 0;
+    g_killDamageTick[client]   = -1;
     g_lastScore[client]        = 0;
     g_lastCaptureTicks[client] = 0;
     g_lastResets[client]       = 0;
@@ -1301,6 +1468,8 @@ public Action Event_PlayerDeath(Event event, const char[] name, bool dontBroadca
     bool victimHuman   = IsHuman(victim);
     bool attackerHuman = IsHuman(attacker);
     if (!victimHuman && !attackerHuman) return Plugin_Continue;    // bot vs bot
+    // A human not yet authenticated has neither a SteamID nor a bot name: no row can name them.
+    if (!victimHuman && !IsFakeClient(victim)) return Plugin_Continue;
 
     char ts[64];
     Ts(GetEngineTime(), ts, sizeof(ts));
@@ -1344,17 +1513,23 @@ public Action Event_PlayerDeath(Event event, const char[] name, bool dontBroadca
     if (g_lastHitTick[victim] == GetGameTickCount() || g_lastHitTick[victim] == GetGameTickCount() - 1)
         HitgroupName(g_lastHitgroup[victim], hitgroup, sizeof(hitgroup));
 
+    // The killing blow's damage, when this death came from one (not, say, a team change).
+    char damage[12] = "NULL";
+    if (g_killDamageTick[victim] == GetGameTickCount())
+        IntToString(g_killDamage[victim], damage, sizeof(damage));
+    g_killDamageTick[victim] = -1;
+
     int flags = event.GetInt("deathflags");
     char tuple[1536];
     Format(tuple, sizeof(tuple),
-           "%s,%s,%s,%s,%s,%.1f,%.1f,%.1f,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%d,%d,%s,%s",
+           "%s,%s,%s,%s,%s,%.1f,%.1f,%.1f,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%d,%d,%s,%s,%s",
            ts, vsid, vbot, vteam, vcls,
            event.GetFloat("x"), event.GetFloat("y"), event.GetFloat("z"),
            asid, abot, ateam, acls, ax, ay, az, ssid, sbot, qweapon, hitgroup,
            (flags & 0x10) ? "true" : "false", (flags & 0x04) ? "true" : "false",
            (flags & 0x08) ? "true" : "false", (flags & 0x20) ? "true" : "false",
            (flags & 0x40) ? "true" : "false", (flags & 0x80) ? "true" : "false",
-           event.GetInt("damagebits"), event.GetInt("customkill"), stance, aim);
+           event.GetInt("damagebits"), event.GetInt("customkill"), stance, aim, damage);
     AddRow(T_KILLS, tuple);
     return Plugin_Continue;
 }
@@ -1432,51 +1607,87 @@ public void Event_PlayerHurt(Event event, const char[] name, bool dontBroadcast)
     int hitgroup = event.GetInt("hitgroup");
     g_lastHitgroup[victim] = hitgroup;
     g_lastHitTick[victim]  = GetGameTickCount();
+    if (!HaveRound()) return;
 
-    if (!HaveRound() || !IsLive()) return;
-    int dmg = event.GetInt("dmg_health");
-    if (IsHuman(victim)) g_damageTaken[victim] += dmg;
+    bool victimHuman   = IsHuman(victim);
+    bool attackerHuman = IsHuman(attacker);
+    if (!victimHuman && !attackerHuman) return;    // bot vs bot
+    // A human not yet authenticated has neither a SteamID nor a bot name: no row can name them.
+    if (!victimHuman && !IsFakeClient(victim)) return;
+    int dmg    = HealthLost(victim, event);
+    int health = event.GetInt("health");
 
-    if (!IsHuman(attacker) || attacker == victim) return;
-    bool friendly = GetClientTeam(victim) == GetClientTeam(attacker);
-
-    char weapon[64], name64[64];
-    event.GetString("weapon", weapon, sizeof(weapon));
-    StripWeaponPrefix(weapon, name64, sizeof(name64));
-    if (name64[0] == '\0') return;
-    int counts[W_COUNT];
-    GetWeaponCounts(attacker, name64, counts);
-    if (friendly)
+    // The killing blow is the kill row's damage; player_death follows in this tick.
+    if (health <= 0)
     {
-        counts[W_DMG_FRIENDLY] += dmg;
+        g_killDamage[victim]     = dmg;
+        g_killDamageTick[victim] = GetGameTickCount();
     }
     else
-    {
-        counts[W_DMG_ENEMY] += dmg;
-        switch (hitgroup)
-        {
-            case 1: counts[W_HEAD]++;
-            case 2: counts[W_CHEST]++;
-            case 3: counts[W_STOMACH]++;
-            case 4, 5: counts[W_ARMS]++;
-            case 6, 7: counts[W_LEGS]++;
-        }
-    }
-    g_weapons[attacker].SetArray(name64, counts, W_COUNT);
+        AddHitRow(victim, attacker, event, hitgroup, dmg, health);
 
     // Shot attribution, bullets only: this round's weapon_fire comes next in the same tick.
-    if (event.GetInt("damagebits") & DMG_BULLET)
+    if (!attackerHuman || attacker == victim || !IsLive() || !(event.GetInt("damagebits") & DMG_BULLET)) return;
+    bool friendly = GetClientTeam(victim) == GetClientTeam(attacker);
+    int tick = GetGameTickCount();
+    if (g_hitTick[attacker] != tick)
     {
-        int tick = GetGameTickCount();
-        if (g_hitTick[attacker] != tick)
-        {
-            g_hitTick[attacker]     = tick;
-            g_hitEnemy[attacker]    = false;
-            g_hitFriendly[attacker] = false;
-        }
-        if (friendly) g_hitFriendly[attacker] = true;
-        else g_hitEnemy[attacker] = true;
+        g_hitTick[attacker]     = tick;
+        g_hitEnemy[attacker]    = false;
+        g_hitFriendly[attacker] = false;
     }
+    if (friendly) g_hitFriendly[attacker] = true;
+    else g_hitEnemy[attacker] = true;
+}
+
+// One hits row: like a kill row, without the kill-only flags, plus the health left.
+void AddHitRow(int victim, int attacker, Event event, int hitgroup, int dmg, int health)
+{
+    char ts[64];
+    Ts(GetEngineTime(), ts, sizeof(ts));
+
+    char vsid[24] = "NULL", vbot[140] = "NULL", vteam[24] = "NULL", vcls[200] = "NULL";
+    char vx[16], vy[16], vz[16];
+    DescribeSide(victim, vsid, vbot, vteam, vcls);
+    float pos[3];
+    GetClientAbsOrigin(victim, pos);
+    FloatToString(pos[0], vx, sizeof(vx));
+    FloatToString(pos[1], vy, sizeof(vy));
+    FloatToString(pos[2], vz, sizeof(vz));
+
+    char asid[24] = "NULL", abot[140] = "NULL", ateam[24] = "NULL", acls[200] = "NULL";
+    char ax[16] = "NULL", ay[16] = "NULL", az[16] = "NULL", stance[16] = "NULL", aim[16] = "NULL";
+    if (attacker >= 1 && attacker <= MaxClients && IsClientInGame(attacker))
+    {
+        DescribeSide(attacker, asid, abot, ateam, acls);
+        GetClientAbsOrigin(attacker, pos);
+        FloatToString(pos[0], ax, sizeof(ax));
+        FloatToString(pos[1], ay, sizeof(ay));
+        FloatToString(pos[2], az, sizeof(az));
+        if (IsHuman(attacker))
+        {
+            AttackerStance(attacker, stance, sizeof(stance));
+            AttackerAim(attacker, aim, sizeof(aim));
+        }
+    }
+
+    char weapon[64], qweapon[140] = "NULL";
+    event.GetString("weapon", weapon, sizeof(weapon));
+    if (weapon[0] != '\0' && attacker >= 1)
+    {
+        char stripped[64];
+        StripWeaponPrefix(weapon, stripped, sizeof(stripped));
+        NoteWeapon(stripped);
+        Quote(stripped, qweapon, sizeof(qweapon));
+    }
+    char group[24] = "NULL";
+    HitgroupName(hitgroup, group, sizeof(group));
+
+    char tuple[1536];
+    Format(tuple, sizeof(tuple), "%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%d,%d,%d,%s,%s",
+           ts, vsid, vbot, vteam, vcls, vx, vy, vz, asid, abot, ateam, acls, ax, ay, az, qweapon, group,
+           dmg, health, event.GetInt("damagebits"), stance, aim);
+    AddRow(T_HITS, tuple);
 }
 
 void GetWeaponCounts(int client, const char[] weapon, int counts[W_COUNT])
@@ -1588,14 +1799,6 @@ public void Event_PlayerSuppressed(Event event, const char[] name, bool dontBroa
         g_suppressions[attacker]++;
     if (IsHuman(victim))
         g_timesSuppressed[victim]++;
-}
-
-public void Event_PlayerFallDamage(Event event, const char[] name, bool dontBroadcast)
-{
-    if (!HaveRound()) return;
-    int client = GetClientOfUserId(event.GetInt("userid"));
-    if (IsHuman(client))
-        g_fallDamage[client] += RoundToNearest(event.GetFloat("damage"));
 }
 
 // Flashes, matched exactly as gg2_teamflash does: every player_blind a flashbang causes fires in the
@@ -1932,30 +2135,26 @@ void EmitCounters(int client)
 
     bool hasWeapons = g_weapons[client] != null && g_weapons[client].Size > 0;
     if (dScore == 0 && dTicks == 0 && dResets == 0 && g_suppressions[client] == 0 && g_timesSuppressed[client] == 0
-        && g_enemiesFlashed[client] == 0 && g_teammatesFlashed[client] == 0 && g_damageTaken[client] == 0
-        && g_fallDamage[client] == 0 && !hasWeapons)
+        && g_enemiesFlashed[client] == 0 && g_teammatesFlashed[client] == 0 && !hasWeapons)
         return;
 
     NotePlayer(g_sid[client]);
     char stmt[2048];
     Format(stmt, sizeof(stmt),
-           "INSERT INTO v2_player_rounds AS p (round_id, steam_id, score, capture_ticks, objective_resets, suppressions, times_suppressed, enemies_flashed, teammates_flashed, damage_taken, fall_damage) "
-         ... "SELECT id, %s, %d, %d, %d, %d, %d, %d, %d, %d, %d FROM r ON CONFLICT (round_id, steam_id) DO UPDATE SET "
+           "INSERT INTO v2_player_rounds AS p (round_id, steam_id, score, capture_ticks, objective_resets, suppressions, times_suppressed, enemies_flashed, teammates_flashed) "
+         ... "SELECT id, %s, %d, %d, %d, %d, %d, %d, %d FROM r ON CONFLICT (round_id, steam_id) DO UPDATE SET "
          ... "score = p.score + EXCLUDED.score, capture_ticks = p.capture_ticks + EXCLUDED.capture_ticks, "
          ... "objective_resets = p.objective_resets + EXCLUDED.objective_resets, suppressions = p.suppressions + EXCLUDED.suppressions, "
          ... "times_suppressed = p.times_suppressed + EXCLUDED.times_suppressed, enemies_flashed = p.enemies_flashed + EXCLUDED.enemies_flashed, "
-         ... "teammates_flashed = p.teammates_flashed + EXCLUDED.teammates_flashed, damage_taken = p.damage_taken + EXCLUDED.damage_taken, "
-         ... "fall_damage = p.fall_damage + EXCLUDED.fall_damage",
+         ... "teammates_flashed = p.teammates_flashed + EXCLUDED.teammates_flashed",
            g_sid[client], dScore, dTicks, dResets, g_suppressions[client], g_timesSuppressed[client],
-           g_enemiesFlashed[client], g_teammatesFlashed[client], g_damageTaken[client], g_fallDamage[client]);
+           g_enemiesFlashed[client], g_teammatesFlashed[client]);
     AddStmt(stmt);
 
     g_suppressions[client]     = 0;
     g_timesSuppressed[client]  = 0;
     g_enemiesFlashed[client]   = 0;
     g_teammatesFlashed[client] = 0;
-    g_damageTaken[client]      = 0;
-    g_fallDamage[client]       = 0;
 
     if (!hasWeapons) return;
     // Statements are buffered in 4 KB slots (g_stmts), so the weapons go out in as many as needed.
@@ -1969,9 +2168,8 @@ void EmitCounters(int client)
         g_weapons[client].GetArray(weapon, c, W_COUNT);
         NoteWeapon(weapon);
         Quote(weapon, qweapon, sizeof(qweapon));
-        Format(row, sizeof(row), "(%s,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d)", qweapon,
-               c[W_SHOTS], c[W_HIT_ENEMY], c[W_HIT_FRIENDLY], c[W_HEAD], c[W_CHEST], c[W_STOMACH], c[W_ARMS],
-               c[W_LEGS], c[W_DMG_ENEMY], c[W_DMG_FRIENDLY], c[W_RELOADS], c[W_DEPLOYS], RoundToNearest(c[W_MS_DRAWN] / 1000.0));
+        Format(row, sizeof(row), "(%s,%d,%d,%d,%d,%d,%d)", qweapon,
+               c[W_SHOTS], c[W_HIT_ENEMY], c[W_HIT_FRIENDLY], c[W_RELOADS], c[W_DEPLOYS], RoundToNearest(c[W_MS_DRAWN] / 1000.0));
         if (values[0] != '\0' && strlen(values) + strlen(row) + 2 >= sizeof(values))
         {
             EmitWeaponRows(client, values);
@@ -1989,13 +2187,10 @@ void EmitWeaponRows(int client, const char[] values)
 {
     char stmt[4096];
     Format(stmt, sizeof(stmt),
-           "INSERT INTO v2_player_round_weapons AS w (round_id, steam_id, weapon_name, shots, shots_hit_enemy, shots_hit_friendly, hits_head, hits_chest, hits_stomach, hits_arms, hits_legs, damage_enemy, damage_friendly, reloads, deploys, seconds_drawn) "
+           "INSERT INTO v2_player_round_weapons AS w (round_id, steam_id, weapon_name, shots, shots_hit_enemy, shots_hit_friendly, reloads, deploys, seconds_drawn) "
          ... "SELECT r.id, %s, v.* FROM r, (VALUES %s) v ON CONFLICT (round_id, steam_id, weapon_name) DO UPDATE SET "
          ... "shots = w.shots + EXCLUDED.shots, shots_hit_enemy = w.shots_hit_enemy + EXCLUDED.shots_hit_enemy, "
-         ... "shots_hit_friendly = w.shots_hit_friendly + EXCLUDED.shots_hit_friendly, hits_head = w.hits_head + EXCLUDED.hits_head, "
-         ... "hits_chest = w.hits_chest + EXCLUDED.hits_chest, hits_stomach = w.hits_stomach + EXCLUDED.hits_stomach, "
-         ... "hits_arms = w.hits_arms + EXCLUDED.hits_arms, hits_legs = w.hits_legs + EXCLUDED.hits_legs, "
-         ... "damage_enemy = w.damage_enemy + EXCLUDED.damage_enemy, damage_friendly = w.damage_friendly + EXCLUDED.damage_friendly, "
+         ... "shots_hit_friendly = w.shots_hit_friendly + EXCLUDED.shots_hit_friendly, "
          ... "reloads = w.reloads + EXCLUDED.reloads, deploys = w.deploys + EXCLUDED.deploys, seconds_drawn = w.seconds_drawn + EXCLUDED.seconds_drawn",
            g_sid[client], values);
     AddStmt(stmt);

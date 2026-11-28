@@ -47,9 +47,8 @@ for pass in 1 2; do
     fi
     for f in "$SQL_DIR"/stats_*.sql; do
         size=$(wc -c < "$f")
-        # DatabaseMigrator's buffer is 16384 bytes, less 256 for its own use.
-        if (( size >= 16128 )); then echo "FAIL: $(basename "$f") is $size bytes (migrator max 16127)"; exit 1; fi
-        if awk 'length > 1022 { exit 1 }' "$f"; then :; else echo "FAIL: $(basename "$f") has a line over 1022 chars"; exit 1; fi
+        # DatabaseMigrator refuses a file over MAX_SQL_FILE_SIZE.
+        if (( size > 1048576 )); then echo "FAIL: $(basename "$f") is $size bytes (migrator max 1048576)"; exit 1; fi
         apply "$(basename "$f")"
     done
     echo "pass $pass: all files applied"

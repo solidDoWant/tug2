@@ -67,9 +67,22 @@ CREATE TABLE IF NOT EXISTS player_round_weapon_results (
     steam_id    BIGINT NOT NULL REFERENCES players,
     weapon_name TEXT NOT NULL REFERENCES weapons,
     kills       INTEGER NOT NULL,
+    hits_head       INTEGER NOT NULL DEFAULT 0,
+    hits_chest      INTEGER NOT NULL DEFAULT 0,
+    hits_stomach    INTEGER NOT NULL DEFAULT 0,
+    hits_arms       INTEGER NOT NULL DEFAULT 0,
+    hits_legs       INTEGER NOT NULL DEFAULT 0,
+    damage_enemy    INTEGER NOT NULL DEFAULT 0,
+    damage_friendly INTEGER NOT NULL DEFAULT 0,
     PRIMARY KEY (round_id, steam_id, weapon_name)
 );
 CREATE INDEX IF NOT EXISTS idx_player_round_weapon_results_steam_id ON player_round_weapon_results (steam_id);
+-- Hits and damage joined the cache with the hits table; a boot then recomputes every round (the
+-- definitions' hash changes), so the defaults never stay.
+ALTER TABLE player_round_weapon_results ADD COLUMN IF NOT EXISTS hits_head INTEGER NOT NULL DEFAULT 0,
+    ADD COLUMN IF NOT EXISTS hits_chest INTEGER NOT NULL DEFAULT 0, ADD COLUMN IF NOT EXISTS hits_stomach INTEGER NOT NULL DEFAULT 0,
+    ADD COLUMN IF NOT EXISTS hits_arms INTEGER NOT NULL DEFAULT 0, ADD COLUMN IF NOT EXISTS hits_legs INTEGER NOT NULL DEFAULT 0,
+    ADD COLUMN IF NOT EXISTS damage_enemy INTEGER NOT NULL DEFAULT 0, ADD COLUMN IF NOT EXISTS damage_friendly INTEGER NOT NULL DEFAULT 0;
 
 -- The kind of a death: the one definition, used by v_kills and the cache. It reads no tables, so it
 -- is left without a pinned search_path: a SET clause would stop it being inlined, and it would then
@@ -95,16 +108,34 @@ SELECT k.round_id, k.killed_at, k.attacker_steam_id, k.victim_steam_id, k.assist
 FROM kills k WHERE k.round_id = ANY (p_rounds)
 $f$;
 
+-- Every hit of the given rounds, once: the hits table, and each kill's killing blow. kind is a kill's
+-- kind (stats_kill_kind) applied to the hit: 'team_kill' is a hit on a teammate.
+CREATE OR REPLACE FUNCTION stats_round_hits(p_rounds BIGINT[])
+RETURNS TABLE (round_id BIGINT, hit_at TIMESTAMPTZ, attacker_steam_id BIGINT, victim_steam_id BIGINT,
+               weapon_name TEXT, hitgroup hitgroup, damage INTEGER, damagebits INTEGER, fatal BOOLEAN, kind TEXT)
+LANGUAGE sql STABLE AS $f$
+SELECT h.round_id, h.hit_at, h.attacker_steam_id, h.victim_steam_id, h.weapon_name, h.hitgroup, h.damage, h.damagebits, false,
+       stats_kill_kind(h.attacker_steam_id, h.attacker_bot_name, h.victim_steam_id, h.attacker_team, h.victim_team)
+FROM hits h WHERE h.round_id = ANY (p_rounds)
+UNION ALL
+SELECT k.round_id, k.killed_at, k.attacker_steam_id, k.victim_steam_id, k.weapon_name, k.hitgroup, k.damage, k.damagebits, true,
+       stats_kill_kind(k.attacker_steam_id, k.attacker_bot_name, k.victim_steam_id, k.attacker_team, k.victim_team)
+FROM kills k WHERE k.round_id = ANY (p_rounds) AND k.damage IS NOT NULL
+$f$;
+
 -- One row per player per round for the given rounds: the definition of every per-round stat.
 CREATE OR REPLACE FUNCTION stats_round_results(p_rounds BIGINT[])
 RETURNS SETOF player_round_results
 LANGUAGE sql STABLE AS $f$
 WITH vk AS MATERIALIZED (SELECT * FROM stats_round_kills(p_rounds)),
+vh AS MATERIALIZED (SELECT * FROM stats_round_hits(p_rounds)),
 keys AS (
     SELECT round_id, steam_id FROM player_spans WHERE round_id = ANY (p_rounds)
     UNION SELECT round_id, steam_id FROM v2_player_rounds WHERE round_id = ANY (p_rounds)
     UNION SELECT round_id, attacker_steam_id FROM vk WHERE attacker_steam_id IS NOT NULL
     UNION SELECT round_id, victim_steam_id FROM vk WHERE victim_steam_id IS NOT NULL
+    UNION SELECT round_id, attacker_steam_id FROM vh WHERE attacker_steam_id IS NOT NULL
+    UNION SELECT round_id, victim_steam_id FROM vh WHERE victim_steam_id IS NOT NULL
 ),
 kk AS (
     SELECT round_id, attacker_steam_id AS steam_id,
@@ -172,13 +203,17 @@ he AS (SELECT round_id, healer_steam_id AS steam_id, count(*) FILTER (WHERE to_f
 fs AS (SELECT round_id, steam_id, count(*) FILTER (WHERE failure_reason IS NULL) AS fire_support_calls
        FROM v2_fire_support_calls WHERE round_id = ANY (p_rounds) GROUP BY 1, 2),
 wp AS (SELECT round_id, steam_id, sum(shots) AS shots, sum(shots_hit_enemy) AS shots_hit_enemy,
-              sum(shots_hit_friendly) AS shots_hit_friendly, sum(hits_head) AS headshot_hits,
-              sum(damage_enemy) AS damage_enemy
-       FROM v2_player_round_weapons WHERE round_id = ANY (p_rounds) GROUP BY 1, 2)
+              sum(shots_hit_friendly) AS shots_hit_friendly
+       FROM v2_player_round_weapons WHERE round_id = ANY (p_rounds) GROUP BY 1, 2),
+hg AS (SELECT round_id, attacker_steam_id AS steam_id, count(*) FILTER (WHERE hitgroup = 'head') AS headshot_hits,
+              sum(damage) AS damage_enemy
+       FROM vh WHERE kind = 'enemy' AND attacker_steam_id IS NOT NULL GROUP BY 1, 2),
+ht AS (SELECT round_id, victim_steam_id AS steam_id, sum(damage) AS damage_taken
+       FROM vh WHERE victim_steam_id IS NOT NULL GROUP BY 1, 2)
 SELECT k.round_id, k.steam_id, COALESCE(r.ended_at, r.started_at),
        COALESCE(kk.kills, 0)::int, COALESCE(kd.deaths, 0)::int, COALESCE(kd.suicides, 0)::int,
        COALESCE(kd.world_deaths, 0)::int, COALESCE(kk.team_kills, 0)::int, COALESCE(kd.team_killed, 0)::int,
-       COALESCE(ka.assists, 0)::int, COALESCE(kk.headshot_kills, 0)::int, COALESCE(wp.headshot_hits, 0)::int,
+       COALESCE(ka.assists, 0)::int, COALESCE(kk.headshot_kills, 0)::int, COALESCE(hg.headshot_hits, 0)::int,
        COALESCE(ob.caps, 0)::int, COALESCE(ob.cache_kills, 0)::int, COALESCE(pr.score, 0),
        (COALESCE(sp.present_at_end, false) AND r.winner = 'security')::int,
        (COALESCE(sp.present_at_end, false) AND r.winner IS NOT NULL AND r.winner <> 'security')::int,
@@ -187,7 +222,7 @@ SELECT k.round_id, k.steam_id, COALESCE(r.ended_at, r.started_at),
        COALESCE(he.heals, 0)::int, COALESCE(he.hp_healed, 0)::int, COALESCE(fs.fire_support_calls, 0)::int,
        COALESCE(pr.suppressions, 0), COALESCE(pr.times_suppressed, 0),
        COALESCE(wp.shots, 0)::int, COALESCE(wp.shots_hit_enemy, 0)::int, COALESCE(wp.shots_hit_friendly, 0)::int,
-       COALESCE(wp.damage_enemy, 0)::int, COALESCE(pr.damage_taken, 0),
+       COALESCE(hg.damage_enemy, 0)::int, COALESCE(ht.damage_taken, 0)::int,
        COALESCE(ks.first_n, 0)::int, COALESCE(ks.inside_n, 0)::int, COALESCE(ks.last_n, 0)::int,
        COALESCE(ks.died, false)
 FROM keys k
@@ -198,24 +233,46 @@ LEFT JOIN ob USING (round_id, steam_id) LEFT JOIN sp USING (round_id, steam_id)
 LEFT JOIN rv USING (round_id, steam_id) LEFT JOIN rd USING (round_id, steam_id)
 LEFT JOIN he USING (round_id, steam_id) LEFT JOIN fs USING (round_id, steam_id)
 LEFT JOIN wp USING (round_id, steam_id)
+LEFT JOIN hg USING (round_id, steam_id) LEFT JOIN ht USING (round_id, steam_id)
 LEFT JOIN v2_player_rounds pr USING (round_id, steam_id)
 $f$;
 
--- Kills of enemies per player and weapon for the given rounds.
+-- Per player and weapon for the given rounds: kills of enemies, hits on enemies by body part, and
+-- damage to enemies and to teammates.
 CREATE OR REPLACE FUNCTION stats_round_weapon_results(p_rounds BIGINT[])
 RETURNS SETOF player_round_weapon_results
 LANGUAGE sql STABLE AS $f$
-SELECT round_id, attacker_steam_id, weapon_name, count(*)::int
-FROM stats_round_kills(p_rounds)
-WHERE kind = 'enemy' AND attacker_steam_id IS NOT NULL AND weapon_name IS NOT NULL
-GROUP BY 1, 2, 3
+WITH k AS (
+    SELECT round_id, attacker_steam_id AS steam_id, weapon_name, count(*) AS kills
+    FROM stats_round_kills(p_rounds)
+    WHERE kind = 'enemy' AND attacker_steam_id IS NOT NULL AND weapon_name IS NOT NULL
+    GROUP BY 1, 2, 3
+), h AS (
+    SELECT round_id, attacker_steam_id AS steam_id, weapon_name,
+           count(*) FILTER (WHERE kind = 'enemy' AND hitgroup = 'head') AS hits_head,
+           count(*) FILTER (WHERE kind = 'enemy' AND hitgroup = 'chest') AS hits_chest,
+           count(*) FILTER (WHERE kind = 'enemy' AND hitgroup = 'stomach') AS hits_stomach,
+           count(*) FILTER (WHERE kind = 'enemy' AND hitgroup IN ('left_arm', 'right_arm')) AS hits_arms,
+           count(*) FILTER (WHERE kind = 'enemy' AND hitgroup IN ('left_leg', 'right_leg')) AS hits_legs,
+           COALESCE(sum(damage) FILTER (WHERE kind = 'enemy'), 0) AS damage_enemy,
+           COALESCE(sum(damage) FILTER (WHERE kind = 'team_kill'), 0) AS damage_friendly
+    FROM stats_round_hits(p_rounds)
+    WHERE attacker_steam_id IS NOT NULL AND weapon_name IS NOT NULL AND kind IN ('enemy', 'team_kill')
+    GROUP BY 1, 2, 3
+)
+SELECT round_id, steam_id, weapon_name, COALESCE(k.kills, 0)::int,
+       COALESCE(h.hits_head, 0)::int, COALESCE(h.hits_chest, 0)::int, COALESCE(h.hits_stomach, 0)::int,
+       COALESCE(h.hits_arms, 0)::int, COALESCE(h.hits_legs, 0)::int,
+       COALESCE(h.damage_enemy, 0)::int, COALESCE(h.damage_friendly, 0)::int
+FROM k FULL JOIN h USING (round_id, steam_id, weapon_name)
 $f$;
 
 -- Pin every function to this server's schema: never a fall-through to public.
 DO $$
 DECLARE f text;
 BEGIN
-    FOREACH f IN ARRAY ARRAY['stats_round_kills(bigint[])', 'stats_round_results(bigint[])', 'stats_round_weapon_results(bigint[])'] LOOP
+    FOREACH f IN ARRAY ARRAY['stats_round_kills(bigint[])', 'stats_round_hits(bigint[])', 'stats_round_results(bigint[])',
+                             'stats_round_weapon_results(bigint[])'] LOOP
         EXECUTE format('ALTER FUNCTION %s SET search_path = %I', f, current_schema());
     END LOOP;
 END $$;
@@ -225,6 +282,7 @@ CREATE OR REPLACE FUNCTION stats_results_hash() RETURNS TEXT
 LANGUAGE sql STABLE AS $f$
 SELECT md5(pg_get_functiondef('stats_kill_kind(bigint,text,bigint,team,team)'::regprocedure)
         || pg_get_functiondef('stats_round_kills(bigint[])'::regprocedure)
+        || pg_get_functiondef('stats_round_hits(bigint[])'::regprocedure)
         || pg_get_functiondef('stats_round_results(bigint[])'::regprocedure)
         || pg_get_functiondef('stats_round_weapon_results(bigint[])'::regprocedure))
 $f$;

@@ -15,8 +15,6 @@ CREATE TABLE IF NOT EXISTS v2_player_rounds (
     times_suppressed  INTEGER NOT NULL DEFAULT 0 CHECK (times_suppressed >= 0),
     enemies_flashed   INTEGER NOT NULL DEFAULT 0 CHECK (enemies_flashed >= 0),
     teammates_flashed INTEGER NOT NULL DEFAULT 0 CHECK (teammates_flashed >= 0),
-    damage_taken      INTEGER NOT NULL DEFAULT 0 CHECK (damage_taken >= 0),
-    fall_damage       INTEGER NOT NULL DEFAULT 0 CHECK (fall_damage >= 0),
     PRIMARY KEY (round_id, steam_id)
 );
 CREATE INDEX IF NOT EXISTS idx_player_rounds_steam_id ON v2_player_rounds (steam_id);
@@ -28,13 +26,6 @@ CREATE TABLE IF NOT EXISTS v2_player_round_weapons (
     shots              INTEGER NOT NULL DEFAULT 0 CHECK (shots >= 0),
     shots_hit_enemy    INTEGER NOT NULL DEFAULT 0 CHECK (shots_hit_enemy >= 0),
     shots_hit_friendly INTEGER NOT NULL DEFAULT 0 CHECK (shots_hit_friendly >= 0),
-    hits_head          INTEGER NOT NULL DEFAULT 0 CHECK (hits_head >= 0),
-    hits_chest         INTEGER NOT NULL DEFAULT 0 CHECK (hits_chest >= 0),
-    hits_stomach       INTEGER NOT NULL DEFAULT 0 CHECK (hits_stomach >= 0),
-    hits_arms          INTEGER NOT NULL DEFAULT 0 CHECK (hits_arms >= 0),
-    hits_legs          INTEGER NOT NULL DEFAULT 0 CHECK (hits_legs >= 0),
-    damage_enemy       INTEGER NOT NULL DEFAULT 0 CHECK (damage_enemy >= 0),
-    damage_friendly    INTEGER NOT NULL DEFAULT 0 CHECK (damage_friendly >= 0),
     reloads            INTEGER NOT NULL DEFAULT 0 CHECK (reloads >= 0),
     deploys            INTEGER NOT NULL DEFAULT 0 CHECK (deploys >= 0),
     seconds_drawn      INTEGER NOT NULL DEFAULT 0 CHECK (seconds_drawn >= 0),
@@ -42,6 +33,22 @@ CREATE TABLE IF NOT EXISTS v2_player_round_weapons (
     FOREIGN KEY (round_id, steam_id) REFERENCES v2_player_rounds
 );
 CREATE INDEX IF NOT EXISTS idx_player_round_weapons_weapon ON v2_player_round_weapons (weapon_name);
+
+-- Damage and hits by body part were counters here until the hits table (stats_02_events.sql) recorded
+-- every hit; they are now added up from it, so the counters go. The stats views that read them are
+-- dropped first and created again by stats_05..07 in this same boot.
+DO $$
+DECLARE v text;
+BEGIN
+    IF EXISTS (SELECT 1 FROM pg_attribute WHERE attrelid = 'v2_player_round_weapons'::regclass AND attname = 'damage_enemy' AND NOT attisdropped) THEN
+        FOR v IN SELECT viewname FROM pg_views WHERE schemaname = current_schema() AND (viewname LIKE 'v\_%' OR viewname LIKE '%\_current') LOOP
+            EXECUTE format('DROP VIEW IF EXISTS %I CASCADE', v);
+        END LOOP;
+        ALTER TABLE v2_player_round_weapons DROP COLUMN hits_head, DROP COLUMN hits_chest, DROP COLUMN hits_stomach,
+            DROP COLUMN hits_arms, DROP COLUMN hits_legs, DROP COLUMN damage_enemy, DROP COLUMN damage_friendly;
+        ALTER TABLE v2_player_rounds DROP COLUMN damage_taken, DROP COLUMN fall_damage;
+    END IF;
+END $$;
 
 -- The one way writers name a round. Every argument is something the game server already knows, so a
 -- plugin never waits on the database to learn an id: gg2_rounds formats this call and every writer

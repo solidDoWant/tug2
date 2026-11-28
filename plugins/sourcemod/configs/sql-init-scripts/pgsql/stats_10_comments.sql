@@ -5,6 +5,8 @@
 
 COMMENT ON VIEW v_cutover IS 'When v2 recording began on this server (its first map run). Old history is used before it.';
 COMMENT ON VIEW v_kills IS 'kills plus each side''s team and the kind of death. Use this, not kills, for counting.';
+COMMENT ON VIEW v_hits IS 'hits plus the bots'' class names, whether the round was live, and the kind of hit. Hits that did not kill; a killing blow is its v_kills row (kills.damage). Use this, not hits, for counting.';
+COMMENT ON COLUMN v_hits.kind IS 'enemy, team_kill (a hit on a teammate), suicide (own damage) or world (fall, fire, ...).';
 COMMENT ON VIEW v_killstreaks IS 'Best killstreak per player in v2 data: enemy kills between deaths, carried across rounds.';
 COMMENT ON VIEW v_player_round_stats IS 'One row per player per round: the stats over a period come from summing it over at. Old rows (source old, before the cutover) have no round_id and NULL where the old stats had no such number. Old medic, team kill and fire support history are separate rows.';
 COMMENT ON VIEW v_player_round_weapon_stats IS 'One row per player per weapon per round; old rows (source old) have no round_id.';
@@ -93,8 +95,7 @@ BEGIN
           AND a.attnum > 0 AND NOT a.attisdropped
     LOOP
         -- Views that repeat a table's columns reuse their descriptions.
-        base := CASE r.relname WHEN 'v_kills' THEN 'kills'::regclass
- END;
+        base := CASE r.relname WHEN 'v_kills' THEN 'kills'::regclass WHEN 'v_hits' THEN 'hits'::regclass END;
         IF base IS NOT NULL AND EXISTS (SELECT 1 FROM pg_attribute WHERE attrelid = base AND attname = r.attname) THEN
             EXECUTE format('COMMENT ON COLUMN %I.%I IS %L', r.relname, r.attname,
                            col_description(base, (SELECT attnum FROM pg_attribute WHERE attrelid = base AND attname = r.attname)));
@@ -117,7 +118,7 @@ COMMENT ON COLUMN round_results_done.round_id IS 'rounds.round_id.';
 COMMENT ON COLUMN round_results_done.def_hash IS 'stats_results_hash() when it was computed; a different one means out of date.';
 COMMENT ON COLUMN round_results_done.computed_at IS 'When it was computed.';
 COMMENT ON TABLE player_round_results IS 'Internal cache: each finished round''s per-player results, recomputable from the raw tables. Use v_player_round_stats.';
-COMMENT ON TABLE player_round_weapon_results IS 'Internal cache: each finished round''s kills per player and weapon. Use v_player_round_weapon_stats.';
+COMMENT ON TABLE player_round_weapon_results IS 'Internal cache: each finished round''s kills, hits and damage per player and weapon. Use v_player_round_weapon_stats.';
 COMMENT ON VIEW player_round_results_current IS 'Internal: player_round_results plus rounds not cached yet, computed live.';
 COMMENT ON VIEW player_round_weapon_results_current IS 'Internal: player_round_weapon_results plus rounds not cached yet, computed live.';
 DO $$
