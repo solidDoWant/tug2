@@ -3,7 +3,7 @@
 A Discord bot that answers questions about the game servers in plain English,
 and helps players file bug reports and feature requests on GitHub. It uses a
 Claude model with a fixed set of tools; the model can only read stats, query
-server state, search issues, and draft issues. Filing an issue always needs
+server state, suggest loadouts, search issues, and draft issues. Filing an issue always needs
 the reporter to press **Confirm**.
 
 ## What it does
@@ -20,6 +20,19 @@ the reporter to press **Confirm**.
   the Source server query (A2S) on the game port, so it needs no RCON password.
   Round and objective are parsed from the hostname that `gg2_hostname_rounds`
   writes for the server browser, so that plugin must be running.
+- **Loadout suggestions:** "give me a random sniper loadout", "a cheap medic
+  kit on test". The `random_loadout` tool makes random loadouts that the class
+  could actually buy on that server and mode: items it is sold, weapons that
+  fit the slots its gear gives, attachments that fit the weapon and each
+  other, all within the starting supply or a budget. They are text only:
+  nothing is applied in game, and the bot never ties them to a player. The
+  rules come from `theater_loadouts.json`, generated from the theaters the
+  servers load by [`tools/theater-build/loadouts.py`](../theater-build/loadouts.py)
+  (`make theater-build` at the repo root; `make theater-check`, run by every
+  server image build, and `TestLoadoutDataIsFresh` fail while it is stale), so
+  the bot needs no game files. That script lists which rules are read from the
+  theater and which are assumed. Item names are tidied theater names, since the
+  game's localisation files aren't in this repo.
 - **Using the API:** gives people links to the public stats API, its docs and
   curl examples. These come from a built-in endpoint reference that a test
   checks against the stats API's OpenAPI spec, so the bot doesn't invent

@@ -69,12 +69,14 @@ workshop-check:	## Fail if the committed Dockerfile does not match the lockfile.
 # The theaters the servers load are flattened from theaters/src/ and the vendored TUG theaters they
 # #base (theaters/vendor/), and committed under server config/. See tools/theater-build/build.py.
 .PHONY: theater-build
-theater-build:	## Regenerate the flattened theaters from theaters/src/ and theaters/vendor/.
+theater-build:	## Regenerate the flattened theaters (and the Discord bot's loadout data) from theaters/src/ and theaters/vendor/.
 	python3 "$(PROJECT_DIR)/tools/theater-build/build.py" build
+	python3 "$(PROJECT_DIR)/tools/theater-build/loadouts.py" build
 
 .PHONY: theater-check
-theater-check:	## Fail if a committed flattened theater does not match its sources.
+theater-check:	## Fail if a committed flattened theater (or the Discord bot's loadout data) does not match its sources.
 	python3 "$(PROJECT_DIR)/tools/theater-build/build.py" check
+	python3 "$(PROJECT_DIR)/tools/theater-build/loadouts.py" check
 
 FASTDL_SERVERS ?= test
 

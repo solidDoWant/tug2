@@ -17,6 +17,10 @@ make theater-build    # regenerate the flat theaters after editing theaters/src/
 make theater-check    # fail if a committed flat theater is stale (fastdl and server builds run it)
 ```
 
+`make theater-build` also regenerates `tools/discord-bot/theater_loadouts.json`, the classes, items,
+prices and slot rules the Discord bot's `random_loadout` tool suggests loadouts from
+(`tools/theater-build/loadouts.py`), so a theater change reaches the bot the next time it is built.
+
 `tools/survival-economy` and `tools/weapon-clone` edit generated blocks inside `theaters/src/`; run
 `make theater-build` after either.
 
