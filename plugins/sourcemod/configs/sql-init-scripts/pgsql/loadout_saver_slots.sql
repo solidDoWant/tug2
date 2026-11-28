@@ -183,6 +183,40 @@ CREATE TABLE IF NOT EXISTS loadouts_import_theater_ids (
 );
 
 -- =====================================================
+-- Comments
+-- =====================================================
+-- The Discord bot can read the three tables below (discord_bot_grants.sql) and its tests require a
+-- COMMENT on each of them and every column, so the description stays with the schema. The import
+-- tables and the legacy `loadouts` table are not granted and need none.
+--
+-- Timestamps are filled by CURRENT_TIMESTAMP into timestamp without time zone, so they hold the
+-- database server's local wall-clock time, not UTC.
+
+COMMENT ON TABLE theater_items IS 'Every theater item name this server has saved in a loadout, with a stable local id. Rows are never removed. Join loadout_items.item_id to id.';
+COMMENT ON COLUMN theater_items.id IS 'Local surrogate id, referenced by loadout_items.item_id. Not the theater''s own item id.';
+COMMENT ON COLUMN theater_items.category IS 'Item kind: 0 weapon (guns, melee and grenades), 1 weapon upgrade (attachment, optic, ammo type), 2 explosive, 3 gear (armor, vest, sling, night vision).';
+COMMENT ON COLUMN theater_items.name IS 'Theater item name, e.g. weapon_m4a1, optic_aimpoint, sec_heavy_armor.';
+COMMENT ON COLUMN theater_items.first_seen_at IS 'When this server first saved the item (database local time, not UTC).';
+
+COMMENT ON TABLE loadouts_slots IS 'Saved loadouts (LoadoutSaverSlots). A class loadout (name NULL) is one per player per class and is loaded on spawn; a named loadout is saved with !savelo <name> and loadable on any class. Items are in loadout_items.';
+COMMENT ON COLUMN loadouts_slots.id IS 'Loadout id, referenced by loadout_items.loadout_id.';
+COMMENT ON COLUMN loadouts_slots.steam_id IS 'Owner''s SteamID64.';
+COMMENT ON COLUMN loadouts_slots.class_template IS 'Player template (class) it was saved on, e.g. template_rifleman_security_coop.';
+COMMENT ON COLUMN loadouts_slots.name IS 'Name given with !savelo <name>, or NULL for the class loadout. Unique per player, case-insensitively.';
+COMMENT ON COLUMN loadouts_slots.created_at IS 'First saved (database local time, not UTC).';
+COMMENT ON COLUMN loadouts_slots.updated_at IS 'Last saved over (database local time, not UTC).';
+COMMENT ON COLUMN loadouts_slots.last_seen_at IS 'Last loaded or touched by the plugin (database local time, not UTC).';
+COMMENT ON COLUMN loadouts_slots.update_count IS 'How many times it has been saved.';
+
+COMMENT ON TABLE loadout_items IS 'The items in a saved loadout, one row each, in buy order. Gear and weapons have parent_ordinal NULL; an upgrade points at the ordinal of the weapon it is installed on.';
+COMMENT ON COLUMN loadout_items.loadout_id IS 'The loadout (loadouts_slots.id).';
+COMMENT ON COLUMN loadout_items.ordinal IS 'Position in buy order, 0..n-1 within the loadout.';
+COMMENT ON COLUMN loadout_items.item_id IS 'The item (theater_items.id).';
+COMMENT ON COLUMN loadout_items.slot IS 'Weapon slot for weapons: 0 primary, 1 secondary, 2 melee, 3 explosive; higher numbers are theater-defined. NULL for gear and upgrades.';
+COMMENT ON COLUMN loadout_items.parent_ordinal IS 'For an upgrade, the ordinal of the weapon it is installed on; NULL otherwise.';
+COMMENT ON COLUMN loadout_items.quantity IS 'How many times the item is bought (e.g. several grenades), not rounds held. 1 for most items.';
+
+-- =====================================================
 -- Maintenance Queries
 -- =====================================================
 

@@ -28,6 +28,10 @@ the reporter to press **Confirm**.
   `read_channel`/`search_channels` add `posted_unix`, and `query_stats` adds a
   `<column>_unix` column for each timestamp column. Code blocks and issue
   drafts (GitHub doesn't render the markup) get UTC times instead.
+- **Saved loadouts:** the loadouts a player saved in game with `!savelo`
+  (class and named ones: gear, and each weapon with its optics and
+  attachments), by SteamID or by name through `find_players`; see
+  [Saved loadouts](#saved-loadouts).
 - **Live server state:** map, players (names, scores, time connected), round
   number, objective progress, and whether the map vote is up. This comes from
   the Source server query (A2S) on the game port, so it needs no RCON password.
@@ -428,9 +432,34 @@ throwaway server, as it creates and drops its own roles and tables:
 
 ```sh
 docker run -d --rm --name statsdb-test -e POSTGRES_PASSWORD=admin -p 127.0.0.1:15499:5432 postgres:18
-STATSDB_TEST_ADMIN_URL="postgres://postgres:admin@127.0.0.1:15499/postgres?sslmode=disable" go test -run 'TestPostgresStatsDB|TestSchemaFromMigrations' ./...
+STATSDB_TEST_ADMIN_URL="postgres://postgres:admin@127.0.0.1:15499/postgres?sslmode=disable" go test -run 'TestPostgresStatsDB|TestPostgresLoadoutDB|TestSchemaFromMigrations' ./...
 docker rm -f statsdb-test
 ```
+
+## Saved loadouts
+
+With `LOADOUT_DB_URL` set, `get_saved_loadouts` lists what a player saved with
+`!savelo` on each server whose `loadout_db_schema` is set. LoadoutSaverSlots
+keeps these in its own database (`sourcemod-loadoutsaver`, the `loadoutsaver`
+entry in each server's `databases.cfg`), not the stats one, so this is a second
+connection: same role, certificate and replica as `STATS_DB_URL`, a different
+`dbname`. Each server's schema is the same one its stats tables use today
+(`public` on main, `insurgency-test` on test).
+
+The tool runs one fixed, parameterised query; the model never writes SQL
+against this database. It reads `loadouts_slots`, `loadout_items` and
+`theater_items`, which `discord_bot_grants.sql` grants per table, run last in
+each server's `loadoutsaver` migrations so the tables already exist. Nothing
+else there is readable, in particular not LoadoutSaver's legacy `loadouts`
+table, whose items are theater ids that only the theater they were saved
+under can name. The tool hands the model each loadout already assembled:
+gear, then each weapon with the upgrades installed on it (an upgrade row
+points at its weapon through `parent_ordinal`), with weapons named as the
+stats tools name them (`m4a1`) and upgrades and gear by their theater names.
+Times are converted from the database's local wall-clock time to UTC.
+
+The pool holds one connection, on top of `query_stats`'s two, and the role's
+`CONNECTION LIMIT` covers both, so it has to allow at least three.
 
 ## Deployment: run exactly one replica
 
@@ -486,6 +515,7 @@ liveness probe at `/livez` and readiness at `/readyz` on `HEALTH_ADDR`.
 | `USER_LIMITS` / `_FILE`         | _(empty)_          | Per-user overrides of the two limits above; see [Per-user limits](#per-user-limits).                                |
 | `CHANNEL_DESCRIPTIONS` / `_FILE` | _(empty)_         | Optional descriptions of channels for the model; see [Reading other channels](#reading-other-channels).              |
 | `STATS_DB_URL`                  | _(empty)_          | Read-only Postgres connection string for `query_stats`; see [SQL access](#sql-access). Empty disables the tool.     |
+| `LOADOUT_DB_URL`                | _(empty)_          | Read-only Postgres connection string for the loadoutsaver database, for `get_saved_loadouts`; see [Saved loadouts](#saved-loadouts). Empty disables the tool. |
 | `A2S_TIMEOUT_MS`                | `3000`             | Timeout for server queries.                                                                                         |
 | `HEALTH_ADDR`                   | `:8080`            | Serves `/livez` (process up) and `/readyz` (connected to Discord).                                                  |
 | `METRICS_ADDR`                  | `:9090`            | Serves Prometheus `/metrics`; see [Metrics and dashboard](#metrics-and-dashboard).                                  |
@@ -500,7 +530,8 @@ liveness probe at `/livez` and readiness at `/readyz` on `HEALTH_ADDR`.
     "stats_api_url": "http://stats-api-main.insurgency.svc",
     "public_stats_api_url": "https://stats.example.com",
     "query_address": "game.example.com:27000",
-    "stats_db_schema": "public"
+    "stats_db_schema": "public",
+    "loadout_db_schema": "public"
   },
   {
     "name": "test",
@@ -508,7 +539,8 @@ liveness probe at `/livez` and readiness at `/readyz` on `HEALTH_ADDR`.
     "stats_api_url": "http://stats-api-test.insurgency.svc",
     "public_stats_api_url": "https://test-stats.example.com",
     "query_address": "game.example.com:27001",
-    "stats_db_schema": "insurgency-test"
+    "stats_db_schema": "insurgency-test",
+    "loadout_db_schema": "insurgency-test"
   }
 ]
 ```
@@ -524,6 +556,9 @@ liveness probe at `/livez` and readiness at `/readyz` on `HEALTH_ADDR`.
   test is 27001, not Source's default 27015.
 - `stats_db_schema` is the server's schema in the `STATS_DB_URL` database, for
   `query_stats`. Leave it out to keep that server out of SQL access.
+- `loadout_db_schema` is the server's schema in the `LOADOUT_DB_URL` database,
+  for `get_saved_loadouts`. Leave it out to keep that server's saved loadouts
+  private.
 
 All configuration errors are reported together at startup.
 

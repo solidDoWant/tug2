@@ -162,17 +162,17 @@ func TestGrantedTablesHaveComments(t *testing.T) {
 	}
 }
 
-// migrationScripts lists one server's insurgency-stats migrations, in order,
-// from its database-migrations.cfg.
-func migrationScripts(t *testing.T, server string) []string {
+// migrationScripts lists one server's migrations for one database (its block
+// in database-migrations.cfg, e.g. "insurgency-stats"), in order.
+func migrationScripts(t *testing.T, server, database string) []string {
 	t.Helper()
 	cfg, err := os.ReadFile("../../server config/" + server + "/opt/insurgency-server/insurgency/addons/sourcemod/configs/database-migrations.cfg")
 	if err != nil {
 		t.Fatal(err)
 	}
-	block := regexp.MustCompile(`(?s)"insurgency-stats"\s*\{(.*?)\}`).FindSubmatch(cfg)
+	block := regexp.MustCompile(`(?s)"` + regexp.QuoteMeta(database) + `"\s*\{(.*?)\}`).FindSubmatch(cfg)
 	if block == nil {
-		t.Fatalf("%s: no insurgency-stats migrations", server)
+		t.Fatalf("%s: no %s migrations", server, database)
 	}
 	var files []string
 	for line := range strings.SplitSeq(string(block[1]), "\n") {
@@ -183,10 +183,122 @@ func migrationScripts(t *testing.T, server string) []string {
 	return files
 }
 
-// TestSchemaFromMigrations runs both servers' real migrations, as their own
-// roles and the way DatabaseMigrator does (each file in one transaction, every
-// start), then loads the tables as the bot and checks what the model would see.
-// Like TestPostgresStatsDB it needs STATSDB_TEST_ADMIN_URL.
+// migratedDB is a throwaway database laid out like production, with both
+// servers' real migrations for one database applied.
+type migratedDB struct {
+	name string
+	// urlFor connects to it as a role (password "pw").
+	urlFor func(role string) string
+}
+
+// migrationRoles creates the game servers' roles and the bot's, dropping the
+// given databases first so the roles own nothing. Needs STATSDB_TEST_ADMIN_URL.
+func migrationRoles(t *testing.T, ctx context.Context, admin *pgx.Conn, databases ...string) {
+	t.Helper()
+	var stmts []string
+	for _, db := range databases {
+		stmts = append(stmts, `DROP DATABASE IF EXISTS `+db+` WITH (FORCE)`)
+	}
+	stmts = append(stmts,
+		`DROP ROLE IF EXISTS insurgency`, `DROP ROLE IF EXISTS "insurgency-test"`, `DROP ROLE IF EXISTS "discord-bot"`,
+		`CREATE ROLE insurgency LOGIN PASSWORD 'pw'`,
+		`CREATE ROLE "insurgency-test" LOGIN PASSWORD 'pw'`,
+		`CREATE ROLE "discord-bot" LOGIN PASSWORD 'pw' CONNECTION LIMIT 3`)
+	for _, stmt := range stmts {
+		if err := execAll(ctx, admin, stmt); err != nil {
+			t.Fatalf("%s: %v", stmt, err)
+		}
+	}
+}
+
+func execAll(ctx context.Context, conn *pgx.Conn, sql string) error {
+	_, err := conn.PgConn().Exec(ctx, sql).ReadAll()
+	return err
+}
+
+// migrateDatabase creates dbName (main's role owns it and uses public; test's
+// role owns its own schema) and runs each server's migrations for block as
+// that server's role, the way DatabaseMigrator does: each file in one
+// transaction, twice, as every server start re-runs them. before lists
+// scripts to run first, per server, for tables production already has.
+func migrateDatabase(t *testing.T, ctx context.Context, adminURL, dbName, block string, before map[string][]string) migratedDB {
+	t.Helper()
+	admin, err := pgx.Connect(ctx, adminURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer admin.Close(ctx)
+	if err := execAll(ctx, admin, `CREATE DATABASE `+dbName+` OWNER insurgency`); err != nil {
+		t.Fatal(err)
+	}
+	cfg, _ := pgx.ParseConfig(adminURL)
+	db := migratedDB{name: dbName, urlFor: func(role string) string {
+		return fmt.Sprintf("postgres://%s:pw@%s:%d/%s?sslmode=disable", role, cfg.Host, cfg.Port, dbName)
+	}}
+	adminMig, err := pgx.Connect(ctx, strings.Replace(adminURL, "/"+cfg.Database+"?", "/"+dbName+"?", 1))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer adminMig.Close(ctx)
+	if err := execAll(ctx, adminMig, `CREATE SCHEMA "insurgency-test" AUTHORIZATION "insurgency-test"`); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, run := range []struct{ role, server string }{{"insurgency", "main"}, {"insurgency-test", "test"}} {
+		conn, err := pgx.Connect(ctx, db.urlFor(run.role))
+		if err != nil {
+			t.Fatal(err)
+		}
+		files := migrationScripts(t, run.server, block)
+		if filepath.Base(files[len(files)-1]) != "discord_bot_grants.sql" {
+			t.Errorf("%s %s: discord_bot_grants.sql must be the last migration", run.server, block)
+		}
+		var pre []string
+		for _, f := range before[run.server] {
+			pre = append(pre, filepath.Join(pgsqlScripts, f))
+		}
+		for pass := 1; pass <= 2; pass++ {
+			list := files
+			if pass == 1 {
+				list = append(pre, files...)
+			}
+			for _, f := range list {
+				sql, err := os.ReadFile(f)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if err := execAll(ctx, conn, "BEGIN;\n"+string(sql)+"\nCOMMIT;"); err != nil {
+					t.Errorf("%s pass %d: %s: %v", run.server, pass, filepath.Base(f), err)
+					execAll(ctx, conn, "ROLLBACK")
+				}
+			}
+		}
+		conn.Close(ctx)
+	}
+	return db
+}
+
+// botSchemaDoc renders what the bot can read in a migrated database.
+func botSchemaDoc(t *testing.T, ctx context.Context, db migratedDB) string {
+	t.Helper()
+	bot, err := NewPostgresStatsDB(db.urlFor("discord-bot"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer bot.Close()
+	schemas := map[string][]schemaTable{}
+	for server, schema := range map[string]string{"main": "public", "test": "insurgency-test"} {
+		if schemas[server], err = bot.Schema(ctx, schema); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return renderSchemaDoc([]string{"main", "test"}, schemas)
+}
+
+// TestSchemaFromMigrations runs both servers' real migrations for each
+// database the bot reads, as their own roles, then loads the tables as the
+// bot and checks what it would see. Like TestPostgresStatsDB it needs
+// STATSDB_TEST_ADMIN_URL.
 func TestSchemaFromMigrations(t *testing.T) {
 	adminURL := os.Getenv("STATSDB_TEST_ADMIN_URL")
 	if adminURL == "" {
@@ -198,84 +310,42 @@ func TestSchemaFromMigrations(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer admin.Close(ctx)
-	exec := func(conn *pgx.Conn, sql string) error {
-		_, err := conn.PgConn().Exec(ctx, sql).ReadAll()
-		return err
-	}
-	for _, stmt := range []string{
-		`DROP DATABASE IF EXISTS statsmig WITH (FORCE)`,
-		`DROP ROLE IF EXISTS insurgency`, `DROP ROLE IF EXISTS "insurgency-test"`, `DROP ROLE IF EXISTS "discord-bot"`,
-		`CREATE ROLE insurgency LOGIN PASSWORD 'pw'`,
-		`CREATE ROLE "insurgency-test" LOGIN PASSWORD 'pw'`,
-		`CREATE ROLE "discord-bot" LOGIN PASSWORD 'pw' CONNECTION LIMIT 2`,
-		`CREATE DATABASE statsmig OWNER insurgency`,
-	} {
-		if err := exec(admin, stmt); err != nil {
-			t.Fatalf("%s: %v", stmt, err)
-		}
-	}
-	cfg, _ := pgx.ParseConfig(adminURL)
-	urlFor := func(role string) string {
-		return fmt.Sprintf("postgres://%s:pw@%s:%d/statsmig?sslmode=disable", role, cfg.Host, cfg.Port)
-	}
-	adminMig, err := pgx.Connect(ctx, strings.Replace(adminURL, "/"+cfg.Database+"?", "/statsmig?", 1))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer adminMig.Close(ctx)
-	if err := exec(adminMig, `CREATE SCHEMA "insurgency-test" AUTHORIZATION "insurgency-test"`); err != nil {
-		t.Fatal(err)
-	}
+	migrationRoles(t, ctx, admin, "statsmig", "loadoutmig")
 
-	for _, run := range []struct{ role, server string }{{"insurgency", "main"}, {"insurgency-test", "test"}} {
-		conn, err := pgx.Connect(ctx, urlFor(run.role))
-		if err != nil {
-			t.Fatal(err)
-		}
-		files := migrationScripts(t, run.server)
-		if filepath.Base(files[len(files)-1]) != "discord_bot_grants.sql" {
-			t.Errorf("%s: discord_bot_grants.sql must be the last migration", run.server)
-		}
-		for pass := 1; pass <= 2; pass++ { // every server start re-runs them
-			for _, f := range files {
-				sql, err := os.ReadFile(f)
-				if err != nil {
-					t.Fatal(err)
-				}
-				if err := exec(conn, "BEGIN;\n"+string(sql)+"\nCOMMIT;"); err != nil {
-					t.Errorf("%s pass %d: %s: %v", run.server, pass, filepath.Base(f), err)
-					exec(conn, "ROLLBACK")
-				}
-			}
-		}
-		conn.Close(ctx)
-	}
+	stats := botSchemaDoc(t, ctx, migrateDatabase(t, ctx, adminURL, "statsmig", "insurgency-stats", nil))
+	// Main still has LoadoutSaver's legacy table, which must stay unreadable.
+	loadouts := botSchemaDoc(t, ctx, migrateDatabase(t, ctx, adminURL, "loadoutmig", "loadoutsaver",
+		map[string][]string{"main": {"loadout_saver.sql"}, "test": {"loadout_saver.sql"}}))
 
-	db, err := NewPostgresStatsDB(urlFor("discord-bot"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
-	schemas := map[string][]schemaTable{}
-	for server, schema := range map[string]string{"main": "public", "test": "insurgency-test"} {
-		if schemas[server], err = db.Schema(ctx, schema); err != nil {
-			t.Fatal(err)
+	for name, doc := range map[string]string{"insurgency-stats": stats, "loadoutsaver": loadouts} {
+		if n := strings.Count(doc, undocumented); n > 0 {
+			t.Errorf("%s: %d tables or columns have no COMMENT:\n%s", name, n, doc)
 		}
-	}
-	doc := renderSchemaDoc([]string{"main", "test"}, schemas)
-	if n := strings.Count(doc, undocumented); n > 0 {
-		t.Errorf("%d tables or columns have no COMMENT:\n%s", n, doc)
-	}
-	if strings.Contains(doc, "connection_log") || strings.Contains(doc, "ip_address") {
-		t.Error("the bot can see connection_log")
+		if strings.Contains(doc, "connection_log") || strings.Contains(doc, "ip_address") {
+			t.Errorf("%s: the bot can see connection_log", name)
+		}
 	}
 	for _, table := range grantedTables(t) {
-		if !strings.Contains(doc, "\n- "+table+" ") && !strings.Contains(doc, "\n- "+table+":") {
-			t.Errorf("granted table %s missing from the doc", table)
+		in := func(doc string) bool {
+			return strings.Contains(doc, "\n- "+table+" ") || strings.Contains(doc, "\n- "+table+":")
+		}
+		if !in(stats) && !in(loadouts) {
+			t.Errorf("granted table %s missing from both databases' docs", table)
 		}
 	}
-	if !strings.Contains(doc, "\n- smoke_warning_seen (only on test):") {
-		t.Errorf("smoke_warning_seen should be test-only:\n%s", doc)
+	if !strings.Contains(stats, "\n- smoke_warning_seen (only on test):") {
+		t.Errorf("smoke_warning_seen should be test-only:\n%s", stats)
 	}
-	t.Logf("doc is %d bytes:\n%s", len(doc), doc)
+	for _, table := range []string{"loadouts_slots", "loadout_items", "theater_items"} {
+		if !strings.Contains(loadouts, "\n- "+table+": ") {
+			t.Errorf("loadoutsaver: %s should be readable on both servers:\n%s", table, loadouts)
+		}
+	}
+	for _, hidden := range []string{"\n- loadouts:", "\n- loadouts ", "loadouts_slots_imports", "loadouts_import_theater_ids"} {
+		if strings.Contains(loadouts, hidden) {
+			t.Errorf("loadoutsaver: the bot can see %q:\n%s", strings.TrimSpace(hidden), loadouts)
+		}
+	}
+	t.Logf("stats doc is %d bytes:\n%s", len(stats), stats)
+	t.Logf("loadouts doc is %d bytes:\n%s", len(loadouts), loadouts)
 }

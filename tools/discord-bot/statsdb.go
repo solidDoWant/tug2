@@ -67,26 +67,33 @@ type PostgresStatsDB struct {
 // NewPostgresStatsDB sets up the pool. It does not connect: the first query
 // does, so a database outage only affects query_stats, not startup.
 func NewPostgresStatsDB(databaseURL string) (*PostgresStatsDB, error) {
+	pool, err := newReadOnlyPool(databaseURL, "STATS_DB_URL", statsDBMaxConns)
+	if err != nil {
+		return nil, err
+	}
+	return &PostgresStatsDB{pool: pool}, nil
+}
+
+// newReadOnlyPool is the small pgx pool behind each of the bot's database
+// connections. envName names the setting in errors. The role's CONNECTION
+// LIMIT covers every pool together, so keep maxConns within it.
+func newReadOnlyPool(databaseURL, envName string, maxConns int32) (*pgxpool.Pool, error) {
 	cfg, err := pgxpool.ParseConfig(databaseURL)
 	if err != nil {
-		return nil, fmt.Errorf("parsing STATS_DB_URL: %w", err)
+		return nil, fmt.Errorf("parsing %s: %w", envName, err)
 	}
 	enableTLSReload(&cfg.ConnConfig.Config, databaseURL)
 	// Extended protocol with an unnamed statement: one statement per query, and
 	// nothing cached on the server between queries.
 	cfg.ConnConfig.DefaultQueryExecMode = pgx.QueryExecModeExec
-	cfg.MaxConns = statsDBMaxConns
+	cfg.MaxConns = maxConns
 	cfg.MinConns = 0
 	cfg.MaxConnIdleTime = 5 * time.Minute
 	cfg.AfterConnect = useSessionTimeZone
 	if cfg.ConnConfig.RuntimeParams["application_name"] == "" {
 		cfg.ConnConfig.RuntimeParams["application_name"] = "discord-bot"
 	}
-	pool, err := pgxpool.NewWithConfig(context.Background(), cfg)
-	if err != nil {
-		return nil, err
-	}
-	return &PostgresStatsDB{pool: pool}, nil
+	return pgxpool.NewWithConfig(context.Background(), cfg)
 }
 
 func (d *PostgresStatsDB) Close() { d.pool.Close() }

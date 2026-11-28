@@ -33,6 +33,10 @@ type GameServer struct {
 	// in the STATS_DB_URL database, for the query_stats tool. Empty leaves the
 	// server out of query_stats.
 	StatsDBSchema string `json:"stats_db_schema"`
+	// LoadoutDBSchema is the Postgres schema holding this server's saved
+	// loadouts in the LOADOUT_DB_URL database, for get_saved_loadouts. Empty
+	// leaves the server out of it.
+	LoadoutDBSchema string `json:"loadout_db_schema"`
 }
 
 // UserLimit overrides the default limits for one Discord user. A nil field
@@ -55,6 +59,10 @@ type Config struct {
 	// stats database (query_stats). Empty disables the tool. Unset parts come
 	// from the libpq PG* environment variables.
 	StatsDBURL string
+
+	// LoadoutDBURL is the read-only connection string for the loadoutsaver
+	// database (get_saved_loadouts). Empty disables the tool.
+	LoadoutDBURL string
 
 	// Servers is keyed by GameServer.Name; ServerOrder keeps the configured
 	// order for prompts and tool enums, and its first entry is the default.
@@ -181,6 +189,7 @@ func ParseConfig() (*Config, error) {
 		FeatureLabel: getEnv("GITHUB_FEATURE_LABEL", "enhancement"),
 		HealthAddr:   getEnv("HEALTH_ADDR", ":8080"),
 		StatsDBURL:   getEnv("STATS_DB_URL", ""),
+		LoadoutDBURL: getEnv("LOADOUT_DB_URL", ""),
 		MetricsAddr:  getEnv("METRICS_ADDR", ":9090"),
 		Servers:      map[string]GameServer{},
 	}
@@ -254,6 +263,7 @@ func ParseConfig() (*Config, error) {
 			s.StatsAPIURL = strings.TrimRight(s.StatsAPIURL, "/")
 			s.PublicStatsAPIURL = strings.TrimRight(strings.TrimSpace(s.PublicStatsAPIURL), "/")
 			s.StatsDBSchema = strings.TrimSpace(s.StatsDBSchema)
+			s.LoadoutDBSchema = strings.TrimSpace(s.LoadoutDBSchema)
 			switch {
 			case s.Name == "":
 				errs = append(errs, errors.New("SERVERS: every server needs a name"))
@@ -523,6 +533,21 @@ func (c *Config) statsDBServers() []string {
 	}
 	for _, name := range c.ServerOrder {
 		if c.Servers[name].StatsDBSchema != "" {
+			out = append(out, name)
+		}
+	}
+	return out
+}
+
+// loadoutDBServers are the servers get_saved_loadouts can read: those with a
+// loadout schema, when the database is configured at all.
+func (c *Config) loadoutDBServers() []string {
+	var out []string
+	if c.LoadoutDBURL == "" {
+		return nil
+	}
+	for _, name := range c.ServerOrder {
+		if c.Servers[name].LoadoutDBSchema != "" {
 			out = append(out, name)
 		}
 	}
