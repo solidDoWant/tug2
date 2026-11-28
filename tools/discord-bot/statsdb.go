@@ -77,6 +77,7 @@ func NewPostgresStatsDB(databaseURL string) (*PostgresStatsDB, error) {
 	cfg.MaxConns = statsDBMaxConns
 	cfg.MinConns = 0
 	cfg.MaxConnIdleTime = 5 * time.Minute
+	cfg.AfterConnect = useSessionTimeZone
 	if cfg.ConnConfig.RuntimeParams["application_name"] == "" {
 		cfg.ConnConfig.RuntimeParams["application_name"] = "discord-bot"
 	}
@@ -151,8 +152,17 @@ func readRows(ctx context.Context, tx pgx.Tx, sql string) (*QueryResult, error) 
 	}
 	defer rows.Close()
 	res := &QueryResult{Rows: [][]any{}}
-	for _, f := range rows.FieldDescriptions() {
+	// Each timestamp column also comes as Unix seconds, appended after the
+	// query's own columns, for Discord's <t:...> markup.
+	var timeCols []int
+	for i, f := range rows.FieldDescriptions() {
 		res.Columns = append(res.Columns, f.Name)
+		if f.DataTypeOID == pgtype.TimestampOID || f.DataTypeOID == pgtype.TimestamptzOID {
+			timeCols = append(timeCols, i)
+		}
+	}
+	for _, i := range timeCols {
+		res.Columns = append(res.Columns, res.Columns[i]+"_unix")
 	}
 	size := 0
 	for rows.Next() {
@@ -165,10 +175,18 @@ func readRows(ctx context.Context, tx pgx.Tx, sql string) (*QueryResult, error) 
 		if err != nil {
 			return nil, err
 		}
-		row := make([]any, len(vals))
+		row := make([]any, len(vals), len(vals)+len(timeCols))
 		for i, v := range vals {
 			row[i] = jsonValue(v)
 			size += len(fmt.Sprint(row[i])) + 3
+		}
+		for _, i := range timeCols {
+			var unix any
+			if t, ok := vals[i].(time.Time); ok {
+				unix = t.Unix()
+			}
+			row = append(row, unix)
+			size += 13
 		}
 		res.Rows = append(res.Rows, row)
 	}

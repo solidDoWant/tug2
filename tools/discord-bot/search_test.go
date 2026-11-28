@@ -80,7 +80,7 @@ func TestSearchChannels(t *testing.T) {
 		t.Fatalf("result = %+v", got)
 	}
 	m := got.Messages[0]
-	if m.Channel != "main-ingame" || m.PostedUTC != "2026-11-10 06:37" || m.Link != "https://discord.com/channels/42/11/100" || !strings.Contains(m.Content, "Banned") {
+	if m.Channel != "main-ingame" || m.PostedUTC != "2026-11-10 06:37" || m.PostedUnix != at.Unix() || m.Link != "https://discord.com/channels/42/11/100" || !strings.Contains(m.Content, "Banned") {
 		t.Errorf("first match = %+v", m)
 	}
 

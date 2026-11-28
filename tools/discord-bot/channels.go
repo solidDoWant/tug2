@@ -177,13 +177,15 @@ func resolveChannel(readable []ReadableChannel, ref string) (ReadableChannel, er
 // ChannelMessage is one message as the model sees it.
 type ChannelMessage struct {
 	// Channel names the channel in search results, which span several.
-	Channel   string   `json:"channel,omitempty"`
-	PostedUTC string   `json:"posted_utc"`
-	Author    string   `json:"author"`
-	Content   string   `json:"content,omitempty"`
-	Embeds    []string `json:"embeds,omitempty"`
-	Files     []string `json:"files,omitempty"`
-	Link      string   `json:"link"`
+	Channel   string `json:"channel,omitempty"`
+	PostedUTC string `json:"posted_utc"`
+	// PostedUnix is the same time for Discord's <t:...> markup.
+	PostedUnix int64    `json:"posted_unix"`
+	Author     string   `json:"author"`
+	Content    string   `json:"content,omitempty"`
+	Embeds     []string `json:"embeds,omitempty"`
+	Files      []string `json:"files,omitempty"`
+	Link       string   `json:"link"`
 }
 
 // Bounds on what one read can put into the model's context.
@@ -268,9 +270,10 @@ func readChannel(ctx context.Context, reader messageReader, guildID string, ch R
 // message with nothing to show.
 func toChannelMessage(m *discordgo.Message, guildID, channelID string, channelName func(string) string) (ChannelMessage, bool) {
 	cm := ChannelMessage{
-		PostedUTC: m.Timestamp.UTC().Format("2006-01-02 15:04"),
-		Content:   withForwarded(truncate(strings.TrimSpace(m.Content), maxMessageChars), m, channelName),
-		Link:      fmt.Sprintf("https://discord.com/channels/%s/%s/%s", guildID, channelID, m.ID),
+		PostedUTC:  m.Timestamp.UTC().Format("2006-01-02 15:04"),
+		PostedUnix: m.Timestamp.Unix(),
+		Content:    withForwarded(truncate(strings.TrimSpace(m.Content), maxMessageChars), m, channelName),
+		Link:       fmt.Sprintf("https://discord.com/channels/%s/%s/%s", guildID, channelID, m.ID),
 	}
 	if m.Author != nil {
 		cm.Author = m.Author.Username
